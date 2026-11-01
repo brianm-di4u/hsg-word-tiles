@@ -6,6 +6,7 @@ const CENTER = 112;
 export const tests = [
   {
     name: 'a bonus word shows its toast and fact card, and signs the Register',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await ready(t);
       await t.page.evaluate(() => localStorage.removeItem('hs-letters-register-v1'));
@@ -39,6 +40,7 @@ export const tests = [
   },
   {
     name: 'claiming a Featured Spring',
+    browsers: ['chromium', 'firefox', 'webkit'],
     viewports: ['desktop'],
     async run(t) {
       await ready(t);

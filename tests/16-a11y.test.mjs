@@ -37,6 +37,7 @@ export const tests = [
   },
   {
     name: 'live region announces each play',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await ready(t);
       await t.game('newGame', { seed: 2 });
@@ -52,6 +53,7 @@ export const tests = [
   },
   {
     name: 'reduced motion: no flying tiles, feedback still shown',
+    browsers: ['chromium', 'firefox', 'webkit'],
     reducedMotion: true,
     async run(t) {
       await ready(t);
@@ -68,6 +70,7 @@ export const tests = [
   },
   {
     name: 'text size 130% keeps the layout',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await ready(t);
       await t.page.evaluate(() => { const s = JSON.parse(localStorage.getItem('hs-letters-settings-v1') || '{}'); s.text = 1.3; localStorage.setItem('hs-letters-settings-v1', JSON.stringify(s)); });

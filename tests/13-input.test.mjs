@@ -13,6 +13,7 @@ async function start(t, rack) {
 export const tests = [
   {
     name: 'mouse: drag rack tiles to the board, drag one back, reorder the rack',
+    browsers: ['chromium', 'firefox', 'webkit'],
     viewports: ['desktop'],
     async run(t) {
       await start(t, 'SPRINGE');
@@ -113,6 +114,7 @@ export const tests = [
   },
   {
     name: 'keyboard: cursor, typing, direction, backspace and enter',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await start(t, 'STEAMXQ');
       await t.page.focus('#board');

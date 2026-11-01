@@ -4,16 +4,18 @@
 // Usage:
 //   node shared/test-harness/run.mjs games/<slug> [--milestone m1] [--viewport desktop|mobile|both]
 //                                               [--only <substring>] [--file <substring>] [--headed] [--no-gallery]
-//                                               [--gpu] [--file-url] [--slow] [--clean]
+//                                               [--gpu] [--file-url] [--slow] [--clean] [--browser chromium|firefox|webkit]
 //   node shared/test-harness/run.mjs smoke
 //
 // Discovers games/<slug>/tests/*.test.mjs. Each test file exports:
 //   export const tests = [{ name, viewports?: ['desktop','mobile'], allowConsoleErrors?: false,
 //                           url?: 'index.html?x=1', initScript?: () => {...}, fileUrl?: false, slow?: false,
-//                           node?: false, run: async (t) => { ... } }]
+//                           node?: false, browsers?: ['chromium'], run: async (t) => { ... } }]
+// Firefox and WebKit runs (--browser) take only tests that list that engine in `browsers`; Firefox has no mobile
+// emulation, so it runs desktop viewports only. CDP helpers (touchDrag, tap, frameCost, cpuThrottle) need Chromium.
 // See README.md in this folder for the `t` API. HS_GPU=1 in the environment is the same as --gpu.
 
-import { chromium } from 'playwright';
+import { chromium, firefox, webkit } from 'playwright';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,7 +38,7 @@ const MIME = {
 
 function parseArgs(argv) {
   const a = { target: null, milestone: 'latest', viewport: 'both', only: null, file: null, headed: false, gallery: true,
-    gpu: process.env.HS_GPU === '1', fileUrl: false, slow: false, clean: false };
+    gpu: process.env.HS_GPU === '1', fileUrl: false, slow: false, clean: false, browser: 'chromium' };
   for (let i = 0; i < argv.length; i++) {
     const v = argv[i];
     if (v === '--milestone') a.milestone = argv[++i];
@@ -49,6 +51,7 @@ function parseArgs(argv) {
     else if (v === '--file-url') a.fileUrl = true;
     else if (v === '--slow') a.slow = true;
     else if (v === '--clean') a.clean = true;
+    else if (v === '--browser') a.browser = argv[++i];
     else if (!a.target) a.target = v;
   }
   if (!a.target) {
@@ -328,8 +331,12 @@ async function runNodeTest(test, milestone) {
 }
 
 export async function runSuite({ gameDir, testDir, milestone = 'latest', viewport = 'both', only = null, file = null, headed = false, gallery = true,
-  gpu = false, fileUrl = false, slow = false, clean = false }) {
+  gpu = false, fileUrl = false, slow = false, clean = false, browser: engine = 'chromium' }) {
   let tests = await loadTests(testDir, only, file);
+  if (engine !== 'chromium') {
+    tests = tests.filter((x) => !x.node && (x.browsers || ['chromium']).includes(engine));
+    milestone = `${milestone}-${engine}`;
+  }
   if (!tests.length) { console.error(`no tests found in ${testDir}`); return { ok: false }; }
   // Slow tests (long balance sims) run only when asked for, or at the final milestone.
   const runSlow = slow || milestone === 'final';
@@ -340,9 +347,10 @@ export async function runSuite({ gameDir, testDir, milestone = 'latest', viewpor
   const server = await startServer();
   const origin = `http://127.0.0.1:${server.address().port}`;
   const relGame = path.relative(ROOT, gameDir).replace(/\\/g, '/');
-  const browser = await chromium.launch({ headless: !headed, args: gpu ? GPU_ARGS : [] });
+  const browser = await ({ chromium, firefox, webkit })[engine].launch({ headless: !headed, args: gpu && engine === 'chromium' ? GPU_ARGS : [] });
   if (gpu) console.log('gpu: Chromium launched with ' + GPU_ARGS.join(' '));
-  const vps = viewport === 'both' ? ['desktop', 'mobile'] : [viewport];
+  if (engine !== 'chromium') console.log(`${engine}: ${tests.length} test(s) opted in`);
+  const vps = (viewport === 'both' ? ['desktop', 'mobile'] : [viewport]).filter((v) => engine !== 'firefox' || v === 'desktop');
   const repDir = path.join(gameDir, 'screenshots', milestone);
   if (clean && !only && !file) {
     // Delete files, not folders: a Windows shell sitting in a folder locks it (EBUSY).
@@ -390,6 +398,7 @@ export async function runSuite({ gameDir, testDir, milestone = 'latest', viewpor
       const shotDir = path.join(gameDir, 'screenshots', milestone, vpName);
       const t = makeT({ page, viewportName: vpName, shotDir, milestone, origin, results, test });
       t.fileUrl = asFile;
+      t.browser = engine;
       t.gpu = gpu;
       const rel = test.url || 'index.html';
       const q = rel.search(/[?#]/);
@@ -449,6 +458,6 @@ if (isMain) {
   const a = parseArgs(process.argv.slice(2));
   const gameDir = a.target === 'smoke' ? path.join(HERE, 'smoke') : path.resolve(ROOT, a.target);
   const { ok } = await runSuite({ gameDir, testDir: path.join(gameDir, 'tests'), milestone: a.milestone, viewport: a.viewport, only: a.only, file: a.file, headed: a.headed, gallery: a.gallery,
-    gpu: a.gpu, fileUrl: a.fileUrl, slow: a.slow, clean: a.clean });
+    gpu: a.gpu, fileUrl: a.fileUrl, slow: a.slow, clean: a.clean, browser: a.browser });
   process.exit(ok ? 0 : 1);
 }
