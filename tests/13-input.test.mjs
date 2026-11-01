@@ -1,4 +1,4 @@
-// Real input: mouse drag and drop, touch drag with auto-zoom and the loupe, tap to place, dragging a staged
+// Real input: mouse drag and drop, touch drag with the lifted tile and snapped ghost, tap to place, dragging a staged
 // tile back, reordering the rack, and a whole play made with the keyboard.
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const N = 15, CENTER = 112;
@@ -45,7 +45,7 @@ export const tests = [
     },
   },
   {
-    name: 'touch: tap the board to zoom, drag with the loupe, tap to recall',
+    name: 'touch: no auto-zoom, the lifted tile lands on its ghost square, tap to recall',
     viewports: ['mobile'],
     async run(t) {
       await start(t, 'SPRINGE');
@@ -53,45 +53,62 @@ export const tests = [
       await t.tap(c);
       await t.waitIdle();
       let s = await t.state();
-      t.expect(s.view.zoom > 1.5, `tap zooms in (zoom ${s.view.zoom.toFixed(2)})`);
-      await t.shot('13-zoomed');
-      // drag S onto the centre; the game places the tile under the finger's tile, which sits above the finger
+      t.equal(s.view.zoom, 1, 'tapping the board does not zoom');
+      // the tile floats `lift` px above the finger and lands on the square under the tile, not the finger
+      const lift = await t.game('act', 'dragLift');
       const tile = await t.game('act', 'rackTile', 0);
-      const target = await t.game('act', 'screen', CENTER);
-      const cell = (await t.game('act', 'cell', CENTER + 1))[0] - (await t.game('act', 'cell', CENTER))[0];
-      await t.touchDrag([tile[0], tile[1]], [target[0], target[1] + cell * 0.45], { steps: 14, holdEndMs: 120 });
+      await t.touchDrag([tile[0], tile[1]], [c[0], c[1] + lift], { steps: 14, holdEndMs: 120 });
       s = await t.state();
       t.equal(s.staged.length, 1, 'tile placed by touch');
       t.equal(s.staged[0] && s.staged[0].i, CENTER, 'on the square under the lifted tile');
+      t.equal(s.view.zoom, 1, 'the board never zoomed');
       // tap the staged tile: back to the rack
-      await t.tap(await t.game('act', 'screen', CENTER));
+      await t.tap(c);
       s = await t.state();
       t.equal(s.staged.length, 0, 'tap recalls');
       // tap-to-place: tap a rack tile, then a square
       const r0 = await t.game('act', 'rackTile', 0);
       await t.tap([r0[0], r0[1]]);
-      await t.tap(await t.game('act', 'screen', CENTER));
+      await t.tap(c);
       s = await t.state();
       t.equal(s.staged.length, 1, 'tap a tile, tap a square');
     },
   },
   {
-    name: 'touch: the loupe shows while dragging',
+    name: 'touch: snapped ghost, target hysteresis, taken squares send the tile back',
     viewports: ['mobile'],
     async run(t) {
       await start(t, 'SPRINGE');
-      await t.game('act', 'zoom', 1.9, 8, 8);
-      const tile = await t.game('act', 'rackTile', 2);
-      const target = await t.game('act', 'screen', CENTER + 1);
+      await t.game('act', 'stage', [{ l: 'S', i: CENTER }]);
+      const lift = await t.game('act', 'dragLift');
+      const a = await t.game('act', 'screen', CENTER + 1), b = await t.game('act', 'screen', CENTER + 2);
+      const cell = b[0] - a[0];
+      const tile = await t.game('act', 'rackTile', 0);
       const cdp = await t.page.context().newCDPSession(t.page);
       const pt = (x, y) => [{ x, y, id: 1 }];
+      const move = async (x, y) => { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(x, y) }); await t.waitFrames(2); };
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(tile[0], tile[1]) });
-      for (let k = 1; k <= 12; k++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(tile[0] + (target[0] - tile[0]) * k / 12, tile[1] + (target[1] + 20 - tile[1]) * k / 12) });
+      for (let k = 1; k <= 12; k++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(tile[0] + (a[0] - tile[0]) * k / 12, tile[1] + (a[1] + lift - tile[1]) * k / 12) });
       await t.waitFrames(3);
-      await t.shot('13-loupe', { wait: false });
+      let s = await t.state();
+      t.equal(s.drag && s.drag.target, CENTER + 1, 'the ghost sits on the square under the tile');
+      t.expect(s.view.zoom === 1, 'no zoom while dragging');
+      await t.shot('13-drag-ghost', { wait: false });
+      await move(a[0] + cell * 0.55, a[1] + lift);
+      s = await t.state();
+      t.equal(s.drag && s.drag.target, CENTER + 1, 'just past the edge of the square: the target holds');
+      await move(a[0] + cell, a[1] + lift);
+      s = await t.state();
+      t.equal(s.drag && s.drag.target, CENTER + 2, 'a whole square on: the target moves');
+      const c = await t.game('act', 'screen', CENTER);
+      await move(c[0], c[1] + lift);
+      s = await t.state();
+      t.equal(s.drag && s.drag.blocked, CENTER, 'over a taken square: blocked');
+      t.equal(s.drag && s.drag.target, null, 'no target on a taken square');
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-      const s = await t.state();
-      t.equal(s.staged.length, 1, 'dropped');
+      s = await t.state();
+      t.equal(s.staged.length, 1, 'nothing new staged');
+      t.equal(s.order.length, 6, 'the tile went back to the rack');
     },
   },
   {

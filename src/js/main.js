@@ -24,10 +24,9 @@ const G = {
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
   preview: null, hint: null, last: new Set(), anim: new Map(), animUntil: 0,
   aiBusy: false, aiTimer: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
-  drag: null, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
+  drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
 };
 window.__G = G;
-const PLAY_ZOOM = 1.9;
 
 // ---------- settings ----------
 const reduced = () => G.settings.motion === 'reduce' || (G.settings.motion === 'system' && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -465,7 +464,7 @@ function renderRack() {
   const size = rackTileSize();
   el.style.setProperty('--tile', size + 'px');
   el.classList.toggle('dim', dim);
-  el.innerHTML = order.map((k, pos) => `<button class="rtile ${G.selected === k ? 'sel' : ''}" data-k="${k}" data-pos="${pos}" aria-label="${rack[k] === '?' ? 'Blank tile' : `${rack[k]}, ${E.tileValue(rack[k])} points`}" aria-pressed="${G.selected === k}" ${dim ? 'tabindex="-1" disabled' : ''}><canvas width="${Math.round(size * dpr())}" height="${Math.round(size * dpr())}"></canvas></button>`).join('')
+  el.innerHTML = order.map((k, pos) => `<button class="rtile ${G.selected === k ? 'sel' : ''}"${G.returning === k ? ' style="visibility:hidden"' : ''} data-k="${k}" data-pos="${pos}" aria-label="${rack[k] === '?' ? 'Blank tile' : `${rack[k]}, ${E.tileValue(rack[k])} points`}" aria-pressed="${G.selected === k}" ${dim ? 'tabindex="-1" disabled' : ''}><canvas width="${Math.round(size * dpr())}" height="${Math.round(size * dpr())}"></canvas></button>`).join('')
     + Array.from({ length: Math.max(0, RACK - order.length) }, () => '<span class="rslot" aria-hidden="true"></span>').join('');
   el.querySelectorAll('.rtile').forEach((b) => {
     const l = rack[+b.dataset.k];
@@ -492,7 +491,7 @@ function renderPreview() {
     } else { html = esc(p.error); cls = 'bad'; }
   } else if (G.hoverInfo) html = G.hoverInfo;
   else if (G.lastLine) html = esc(G.lastLine);
-  else html = cur().kind === 'human' ? (G.s.move === 0 ? (isNarrow() ? 'Start on the centre square. Tap the board to zoom in.' : 'Start on the Display Spring in the centre.') : (isNarrow() ? 'Drag tiles to the board. Tap the board to zoom.' : 'Drag tiles to the board to make a word.')) : '';
+  else html = cur().kind === 'human' ? (G.s.move === 0 ? (isNarrow() ? 'Start on the centre square.' : 'Start on the Display Spring in the centre.') : (isNarrow() ? 'Drag tiles to the board.' : 'Drag tiles to the board to make a word.')) : '';
   el.className = cls; el.innerHTML = html;
 }
 
@@ -667,7 +666,6 @@ function frame(now) {
     c2.setTransform(R.view.dpr, 0, 0, R.view.dpr, 0, 0);
     R.drawMinimap(c2, G.s.board, G.staged, [R.view.cx - wCells / 2, R.view.cy - hCells / 2, wCells, hCells]);
   }
-  if (G.drag && G.drag.loupe) R.drawLoupe(c2, d, G.drag.bx, G.drag.by, G.drag.hover, G.drag.target === -2);
   if (G.anim.size && now < G.animUntil + 50) draw();
   else if (G.anim.size) G.anim.clear();
   if (G.viewAnim) stepViewAnim(now);
@@ -680,7 +678,7 @@ function drawData(now) {
     goodCells: p && p.ok ? [...new Set(p.words.flatMap((w) => w.cells))] : null,
     badCells: p && !p.ok && p.words ? p.words.filter((w) => w.w === p.badWord).flatMap((w) => w.cells) : null,
     target: G.drag && G.drag.active ? G.drag.target : null, dragFrom: G.drag && G.drag.from === 'board' && G.drag.active ? G.drag.i : null,
-    dragTile: G.drag && G.drag.active ? G.drag.tile : null,
+    dragTile: G.drag && G.drag.active ? G.drag.tile : null, blocked: G.drag && G.drag.active ? G.drag.blocked : null,
     anim: G.anim, now,
   };
 }
@@ -699,10 +697,6 @@ function stepViewAnim(now) {
   if (k >= 1) { G.viewAnim = null; layout(); } else draw();
 }
 const pxPerCell = () => (B3.B3.on ? B3.cellPx() : R.scale());
-function zoomAt(x, y, zoom) {
-  const [bx, by] = (B3.B3.on && B3.boardAt(x, y)) || R.toBoard(x, y);
-  animateView(zoom, bx, by);
-}
 
 // ---------- steam effects (ambient; not part of isIdle) ----------
 const steam = { parts: [], last: 0, on: false, emit: 0 };
@@ -741,7 +735,6 @@ function steamLoop(now) {
 // ---------- pointer input ----------
 function boardPoint(e) { const r = $('#board').getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 function pick(x, y) { return B3.B3.on ? B3.cellAt(x, y) : R.cellAt(x, y); }
-function overBoard(e) { const r = $('#boardwrap').getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; }
 
 function rackDown(e, k) {
   if (!humanCanAct() || e.button > 0) return;
@@ -785,6 +778,63 @@ function hoverSquare(e) {
   if (info !== G.hoverInfo) { G.hoverInfo = info; renderPreview(); }
 }
 
+// Dragging works like the block puzzle's: on touch the tile floats well clear of the finger at about the size of a
+// board square, it lands on the square under the tile's centre (not under the finger), and that square shows a
+// snapped ghost. The board never zooms by itself.
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+function dragGeom(d) {
+  if (!d.touch) return { size: Math.max(40, rackTileSize()), lift: 0 };
+  const cell = pxPerCell();
+  return { size: Math.round(clamp(cell * 1.15, 32, 64)), lift: Math.round(clamp(cell * 1.6, 56, 84)) };
+}
+// the square under a board-canvas point, also snapping to the edge squares from up to half a square outside the grid
+function squareNear(x, y) {
+  if (x < 0 || y < 0 || x > R.view.W || y > R.view.H) return -1;
+  const b = B3.B3.on ? B3.boardAt(x, y) : R.toBoard(x, y);
+  if (!b) return -1;
+  const c = b[0] - R.FRAME, r = b[1] - R.FRAME;
+  if (c < -0.5 || r < -0.5 || c > N + 0.5 || r > N + 0.5) return -1;
+  return clamp(Math.floor(r), 0, N - 1) * N + clamp(Math.floor(c), 0, N - 1);
+}
+function inRackbar(e) { const r = $('#rackbar').getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; }
+function updateDragTarget(d, e) {
+  const r = $('#board').getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - d.lift - r.top;   // the tile's centre on the board canvas
+  let i = inRackbar(e) ? -1 : squareNear(x, y);
+  // hysteresis: stay on the current square until the tile is well into the next one, so small squares don't flicker
+  if (i >= 0 && d.hover >= 0 && i !== d.hover) {
+    const [cx, cy] = R.cellCenter(d.hover), m = pxPerCell() * 0.62;
+    if (Math.abs(x - cx) < m && Math.abs(y - cy) < m) i = d.hover;
+  }
+  d.hover = i;
+  const taken = i >= 0 && (G.s.board[i] || G.staged.some((t) => t.i === i));
+  d.target = i >= 0 && !taken ? i : null;
+  d.blocked = taken ? i : null;
+  if (i >= 0) edgePan(x, y);
+}
+function placeGhost(d, x, y) { $('#ghost').style.transform = `translate(${x - d.size / 2}px, ${y - d.lift - d.size / 2}px)`; }
+// a tile that missed the board flies back to its place on the rack
+function returnToRack(d) {
+  G.order.push(d.k);
+  const gh = $('#ghost');
+  if (!animOn()) { gh.hidden = true; updatePreview(); renderGame(); return; }
+  G.returning = d.k;
+  updatePreview(); renderGame();
+  const el = document.querySelector(`#rack .rtile[data-k="${d.k}"]`);
+  if (!el) { endReturn(); return; }
+  const b = el.getBoundingClientRect();
+  gh.style.transition = 'transform 0.2s ease-out, scale 0.2s ease-out';
+  gh.style.transform = `translate(${b.left + b.width / 2 - d.size / 2}px, ${b.top + b.height / 2 - d.size / 2}px)`;
+  gh.style.scale = String(b.width / d.size);
+  G.returnTimer = setTimeout(endReturn, 210);
+}
+function endReturn() {
+  clearTimeout(G.returnTimer);
+  $('#ghost').hidden = true;
+  if (G.returning == null) return;
+  G.returning = null; renderRack();
+}
+
 function onMove(e) {
   hoverSquare(e);
   const d = G.drag;
@@ -807,30 +857,26 @@ function onMove(e) {
   }
   if (!d.active && dist > 6) {
     d.active = true;
+    endReturn();
     if (d.from === 'board') G.staged = G.staged.filter((t) => t.i !== d.i);
     else G.order = G.order.filter((x) => x !== d.k);
+    Object.assign(d, dragGeom(d), { hover: -1, target: null, blocked: null });
     const gh = $('#ghost');
-    const size = d.touch ? Math.round(pxPerCell() * 1.15) : rackTileSize();
-    gh.width = gh.height = Math.round(Math.max(size, 40) * dpr());
-    gh.style.width = gh.style.height = Math.max(size, 40) + 'px';
+    gh.width = gh.height = Math.round(d.size * dpr());
+    gh.style.width = gh.style.height = d.size + 'px';
     gh.getContext('2d').drawImage(R.tileSprite(d.tile.l, d.tile.blank, gh.width, 'staged'), 0, 0);
+    // it grows from the size it was picked up at (a rack tile or a board square) to its drag size
+    const from = d.from === 'rack' ? rackTileSize() : pxPerCell();
+    gh.style.transition = 'none'; gh.style.scale = String(from / d.size);
+    placeGhost(d, e.clientX, e.clientY);
     gh.hidden = false;
+    void gh.offsetWidth;
+    gh.style.transition = animOn() ? 'scale 0.12s ease-out' : 'none'; gh.style.scale = '1';
     renderRack(); updatePreview(); renderPreview();
   }
   if (!d.active) return;
-  const gh = $('#ghost'), gs = gh.offsetWidth;
-  const lift = d.touch ? gs * 0.9 : gs * 0.5;
-  gh.style.transform = `translate(${e.clientX - gs / 2}px, ${e.clientY - lift}px)`;
-  if (overBoard(e)) {
-    // on a phone, entering the board zooms to play size around the finger
-    if (d.touch && isNarrow() && R.view.zoom < 1.2 && !G.viewAnim) { const [x, y] = boardPoint(e); zoomAt(x, y, PLAY_ZOOM); }
-    const [x, y] = boardPoint(e);
-    const ty = d.touch ? y - gs * 0.4 : y;   // the tile sits above the finger
-    d.hover = pick(x, ty);
-    d.target = d.hover >= 0 && (G.s.board[d.hover] || G.staged.some((t) => t.i === d.hover)) ? -2 : d.hover;
-    d.bx = x; d.by = ty; d.loupe = d.touch;
-    edgePan(x, y);
-  } else { d.target = null; d.loupe = false; }
+  placeGhost(d, e.clientX, e.clientY);
+  updateDragTarget(d, e);
   draw();
 }
 function edgePan(x, y) {
@@ -848,18 +894,14 @@ function onUp(e) {
   const d = G.drag;
   if (!d || e.pointerId !== d.id) return;
   G.drag = null;
-  $('#ghost').hidden = true;
   if (d.active && d.from !== 'pan') {
-    const k = d.k;
-    let placed = false;
-    if (overBoard(e) && d.target >= 0) placed = stage(k, d.target, d.tile.blank ? d.tile.l : null);
-    if (!placed) {
-      // back to the rack, at the drop position when dropped on the rack
-      const pos = rackPosAt(e.clientX, e.clientY);
-      G.order.splice(pos != null ? pos : G.order.length, 0, k);
-      if (d.from === 'board') sfx('recall');
-      updatePreview(); renderGame();
-    }
+    // drop on exactly the square the ghost showed
+    if (d.target != null && stage(d.k, d.target, d.tile.blank ? d.tile.l : null)) { $('#ghost').hidden = true; draw(); return; }
+    // back to the rack, at the drop position when dropped on the rack
+    const pos = rackPosAt(e.clientX, e.clientY);
+    if (d.from === 'board' || d.blocked != null) sfx(d.blocked != null ? 'error' : 'recall');
+    if (pos != null) { $('#ghost').hidden = true; G.order.splice(pos, 0, d.k); updatePreview(); renderGame(); }
+    else returnToRack(d);
     draw();
     return;
   }
@@ -870,7 +912,6 @@ function onUp(e) {
   const [x, y] = boardPoint(e);
   const i = pick(x, y);
   if (G.selected != null && humanCanAct() && i >= 0) { stage(G.selected, i); return; }
-  if (d.touch && isNarrow() && R.view.zoom < 1.2) { zoomAt(x, y, PLAY_ZOOM); return; }
   if (i >= 0 && humanCanAct()) {
     if (G.cursor.on && G.cursor.i === i) G.cursor.dir = G.cursor.dir === 1 ? N : 1;
     G.cursor.i = i; G.cursor.on = !d.touch; draw();
@@ -945,7 +986,7 @@ function wireStatic() {
   b.addEventListener('pointerdown', boardDown);
   window.addEventListener('pointermove', onMove, { passive: false });
   window.addEventListener('pointerup', onUp);
-  window.addEventListener('pointercancel', (e) => { G.pointers.delete(e.pointerId); if (G.drag && G.drag.id === e.pointerId) { const d = G.drag; G.drag = null; $('#ghost').hidden = true; if (d.active && d.from !== 'pan') { G.order.push(d.k); renderGame(); } } G.pinch = null; });
+  window.addEventListener('pointercancel', (e) => { G.pointers.delete(e.pointerId); if (G.drag && G.drag.id === e.pointerId) { const d = G.drag; G.drag = null; if (d.active && d.from !== 'pan') returnToRack(d); draw(); } G.pinch = null; });
   b.addEventListener('focus', () => { if (humanCanAct()) { G.cursor.on = true; draw(); } });
   b.addEventListener('blur', () => { G.cursor.on = false; draw(); });
   document.addEventListener('keydown', onKey);
@@ -963,6 +1004,7 @@ window.__game = {
   getState() {
     return JSON.parse(JSON.stringify({ scene: G.scene, dialog: G.dialog, game: G.s, staged: G.staged, order: G.order, preview: G.preview, settings: G.settings,
       view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, ready: G.ready, privacy: G.privacy,
+      drag: G.drag && G.drag.active ? { from: G.drag.from, target: G.drag.target, blocked: G.drag.blocked, lift: G.drag.lift, size: G.drag.size } : null,
       ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
   },
   setState(o) {
@@ -1013,6 +1055,7 @@ window.__game = {
       case 'open': openDialog(a[0], a[0] === 'fact' ? { entry: G.lex.byId.get(a[1]), form: a[2] } : a[1]); return true;
       case 'fact': openFact(a[0], a[1]); return true;
       case 'close': closeDialog(); return true;
+      case 'dragLift': return dragGeom({ touch: true }).lift;
       case 'zoom': R.view.zoom = a[0]; if (a[1] != null) { R.view.cx = a[1]; R.view.cy = a[2]; } R.clampView(); layout(); return true;
       case 'reveal': G.revealed = G.s.cur; G.privacy = false; renderGame(); return true;
       case 'hint': await doHint(); return G.staged.length;
