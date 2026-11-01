@@ -369,7 +369,7 @@ export function boardTexture(theme) {
 }
 export const invalidateBoardTexture = () => { boardKey = ''; };
 
-// One frame: board, tiles and overlays. d = { board, staged, last, hint, cursor, badCells, goodCells, target, anim, theme, hideTiles }
+// One frame: board, tiles and overlays. d = { board, staged, last, hint, cursor, badCells, goodCells, target, blocked, dragTile, anim, theme, hideTiles }
 export function drawFrame(ctx, d) {
   const { W, H, dpr } = view;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -420,9 +420,20 @@ export function drawFrame(ctx, d) {
   if (d.goodCells) outline(d.goodCells, 'rgba(42,157,143,0.95)', lw(0.06));
   if (d.badCells) outline(d.badCells, 'rgba(178,40,28,0.95)', lw(0.07));
   if (!d.mode3d) for (const t of d.staged || []) drawTile(t.i, t, 'staged', d.dragFrom === t.i ? 0.35 : 1, cellPx * 0.04);
+  // while dragging: the tile seated, translucent, in the square it will land on (projected, so it also sits on the
+  // 3D board), or a red dashed outline when that square is taken
   if (d.target != null && d.target >= 0) {
-    ctx.save(); ctx.setLineDash([lw(0.18), lw(0.1)]); ctx.strokeStyle = '#D9A23A'; ctx.lineWidth = lw(0.08);
-    poly(ctx, quad(d.target, 0.05)); ctx.stroke(); ctx.fillStyle = 'rgba(217,162,58,0.18)'; ctx.fill(); ctx.restore();
+    const q = quad(d.target, 0.04), xs = q.map((p) => p[0]), ys = q.map((p) => p[1]);
+    const x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(...xs) - x0, h = Math.max(...ys) - y0;
+    ctx.save();
+    ctx.fillStyle = 'rgba(217,162,58,0.22)'; poly(ctx, q); ctx.fill();
+    if (d.dragTile) { ctx.globalAlpha = 0.6; ctx.drawImage(tileSprite(d.dragTile.l, d.dragTile.blank, Math.round(Math.max(w, h) * view.dpr), 'staged'), x0, y0, w, h); ctx.globalAlpha = 1; }
+    ctx.strokeStyle = '#F0D57A'; ctx.lineWidth = lw(0.09); poly(ctx, q); ctx.stroke();
+    ctx.restore();
+  }
+  if (d.blocked != null && d.blocked >= 0) {
+    ctx.save(); ctx.setLineDash([lw(0.18), lw(0.1)]); ctx.strokeStyle = 'rgba(178,40,28,0.95)'; ctx.lineWidth = lw(0.09);
+    poly(ctx, quad(d.blocked, 0.05)); ctx.stroke(); ctx.restore();
   }
   if (d.cursor) {
     ctx.strokeStyle = '#2B4C9B'; ctx.lineWidth = lw(0.09);
@@ -453,40 +464,4 @@ export function drawMinimap(ctx, board, staged, rect) {
   ctx.strokeStyle = '#F0D57A'; ctx.lineWidth = 2.5; ctx.strokeRect(rx, ry, rect[2] * k, rect[3] * k);
   ctx.strokeStyle = 'rgba(20,14,8,0.8)'; ctx.lineWidth = 1; ctx.strokeRect(rx - 1.5, ry - 1.5, rect[2] * k + 3, rect[3] * k + 3);
   ctx.restore();
-}
-
-// The loupe: a magnified view of the square under the finger, drawn above it (from the board texture, so it is the
-// same in 2D and 3D).
-export function drawLoupe(ctx, d, px, py, i, taken) {
-  if (i < 0) return;
-  const R0 = 60;
-  // magnify the square to 1.6 times its size on screen (at least two squares across at overview)
-  const onScreen = d.cellPx || scale();
-  const cellsAcross = Math.max(1.4, Math.min(3, (R0 * 2) / (onScreen * 1.6)));
-  const lx = Math.max(R0 + 4, Math.min(view.W - R0 - 4, px)), ly = Math.max(R0 + 4, py - 120);
-  const tex = boardTexture(d.theme), tc = tex.width / U;
-  const bx = FRAME + (i % N) + 0.5, by = FRAME + Math.floor(i / N) + 0.5;
-  const cellOnLoupe = (R0 * 2) / cellsAcross;
-  ctx.save();
-  ctx.beginPath(); ctx.arc(lx, ly, R0, 0, Math.PI * 2); ctx.closePath();
-  ctx.fillStyle = '#F2EFE8'; ctx.fill(); ctx.clip();
-  const src = cellsAcross * tc;
-  ctx.drawImage(tex, (bx - cellsAcross / 2) * tc, (by - cellsAcross / 2) * tc, src, src, lx - R0, ly - R0, R0 * 2, R0 * 2);
-  // the lamp-lit board is warmer than its raw texture
-  ctx.fillStyle = 'rgba(255,214,160,0.16)'; ctx.fillRect(lx - R0, ly - R0, R0 * 2, R0 * 2);
-  const t = d.board[i];
-  if (t) ctx.drawImage(tileSprite(t.l, t.blank, cellOnLoupe * view.dpr, 'board'), lx - cellOnLoupe / 2, ly - cellOnLoupe / 2, cellOnLoupe, cellOnLoupe);
-  else if (d.dragTile) { ctx.globalAlpha = 0.9; ctx.drawImage(tileSprite(d.dragTile.l, d.dragTile.blank, cellOnLoupe * view.dpr, 'staged'), lx - cellOnLoupe / 2, ly - cellOnLoupe / 2, cellOnLoupe, cellOnLoupe); ctx.globalAlpha = 1; }
-  ctx.strokeStyle = taken ? 'rgba(178,40,28,0.95)' : '#D9A23A'; ctx.lineWidth = 3;
-  roundRect(ctx, lx - cellOnLoupe / 2 - 2, ly - cellOnLoupe / 2 - 2, cellOnLoupe + 4, cellOnLoupe + 4, cellOnLoupe * 0.16); ctx.stroke();
-  ctx.restore();
-  ctx.strokeStyle = '#B8902F'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(lx, ly, R0, 0, Math.PI * 2); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,240,190,0.8)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(lx, ly, R0 - 3, Math.PI * 1.1, Math.PI * 1.6); ctx.stroke();
-  if (taken) {
-    const tw = 62, th = 20;
-    let tx = lx - tw / 2, ty = ly - R0 - th + 8;
-    if (ty < 4) { ty = ly - th / 2; tx = lx + R0 + tw + 6 < view.W ? lx + R0 - 6 : lx - R0 - tw + 6; }
-    ctx.fillStyle = '#8E3622'; roundRect(ctx, tx, ty, tw, th, 10); ctx.fill();
-    ctx.fillStyle = '#FFF'; ctx.font = `700 11px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('TAKEN', tx + tw / 2, ty + th / 2 + 1);
-  }
 }

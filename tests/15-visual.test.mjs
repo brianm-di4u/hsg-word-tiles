@@ -69,20 +69,20 @@ export const tests = [
     },
   },
   {
-    name: 'visual: phone play zoom and loupe',
+    name: 'visual: phone drag ghost',
     viewports: ['mobile'],
     async run(t) {
       await ready(t);
       await midGame(t, 8);
-      await t.game('act', 'zoom', 1.9, 8, 8);
+      const lift = await t.game('act', 'dragLift');
       const tile = await t.game('act', 'rackTile', 1);
       const target = await t.game('act', 'screen', CENTER - 16);
       const cdp = await t.page.context().newCDPSession(t.page);
       const pt = (x, y) => [{ x, y, id: 1 }];
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(tile[0], tile[1]) });
-      for (let k = 1; k <= 12; k++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(tile[0] + (target[0] - tile[0]) * k / 12, tile[1] + (target[1] + 24 - tile[1]) * k / 12) });
+      for (let k = 1; k <= 12; k++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(tile[0] + (target[0] - tile[0]) * k / 12, tile[1] + (target[1] + lift - tile[1]) * k / 12) });
       await t.waitFrames(4);
-      await t.shot('v10-loupe', { wait: false });
+      await t.shot('v10-drag-ghost', { wait: false });
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     },
   },

@@ -79,9 +79,14 @@ one more letter clears, never past `length − 2` letters shown. Once claimed, t
 - **Pointer (mouse and touch):** drag a rack tile onto a square; drag a staged tile to move it or back
   to the rack; tap a rack tile then tap a square; tap a staged tile to recall it. Drops act on
   `pointerup` (touch quirk in LESSONS). A blank asks for its letter in a small dialog.
-- **Phone board:** at 390 px the board overview is 26 px a square (read only). Tapping the board or
-  starting a drag zooms to play zoom (≈49 px squares) around the finger; pinch 1×–2.4×; one finger pans
-  when not dragging; auto-pan near edges while dragging; a loupe above the finger shows the square under it.
+- **Touch drag (after the block puzzle):** the board never zooms by itself. A dragged tile grows from its
+  rack size to about a board square (1.15 squares, 32–64 px) in 120 ms and floats 1.6 squares (56–84 px)
+  above the finger. It lands on the square under the tile's centre, not the finger, and that square shows
+  the tile seated and translucent with a gold outline (red dashed outline when taken). The target holds
+  until the tile is 0.62 of a square past that square's centre, so 25 px phone squares don't flicker, and
+  a tile up to half a square outside the grid snaps to the edge square. With the finger on the rack it
+  reorders the rack instead. A missed drop flies back to the rack (200 ms). Pinch 1×–2.4× is optional;
+  one finger pans when zoomed; auto-pan near edges while dragging when zoomed.
 - **Keyboard:** arrow keys move a board cursor; letters place rack tiles at the cursor and advance it;
   Space flips direction (→ / ↓); Backspace recalls the last staged tile; Enter plays; Esc recalls all;
   S swap, P pass, H hint, ? help, M menu. Every button is reachable with Tab.
@@ -89,7 +94,7 @@ one more letter clears, never past `length − 2` letters shown. Once claimed, t
 ## 5. Rendering
 - **Layers:** (1) WebGL canvas: the board slab on a bathhouse counter, placed and staged tiles as one
   `InstancedMesh` of the Blender tile with a letter atlas; (2) 2D overlay canvas: cursor, previews,
-  drag ghost, loupe, steam; (3) DOM: rack, HUD, dialogs.
+  snapped drop ghost, steam; (3) DOM: rack, HUD, dialogs.
 - **2D fallback:** the same board texture drawn flat with tile sprites, used when WebGL is missing,
   with `?gl=0`, on software GL, or when the frame watchdog sees slow frames (Barons `probe()`).
 - The board texture (`render2d.js`) is drawn once per theme/size: marble, terrazzo border, brass
