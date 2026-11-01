@@ -2,6 +2,7 @@
 export const tests = [
   {
     name: 'boots and loads the dictionary',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
       const s = await t.state();
@@ -14,6 +15,7 @@ export const tests = [
   },
   {
     name: 'every screen renders',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
       for (const [k, name] of [['02', 'setup'], ['03', 'help'], ['04', 'settings'], ['05', 'register'], ['06', 'about']]) {
@@ -25,6 +27,7 @@ export const tests = [
   },
   {
     name: 'a game against the computer starts',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
       await t.game('newGame', { seed: 11, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'hollis' }] });

@@ -35,11 +35,15 @@ function fallBack(why) {
   for (const [id, p] of aiClient.pending) { aiClient.pending.delete(id); p({ type: 'retry', id }); }
 }
 
+// A Worker that stops answering (iOS can kill one in the background without an error) would leave the AI and the
+// hint waiting forever, so a call with no answer in CALL_MS hands everything to the main thread.
+const CALL_MS = 8000;
 function call(msg) {
   return new Promise((res) => {
     const id = ++aiClient.seq;
-    aiClient.pending.set(id, res);
-    aiClient.worker.postMessage({ ...msg, id });
+    const timer = setTimeout(() => fallBack('timeout'), CALL_MS);
+    aiClient.pending.set(id, (r) => { clearTimeout(timer); res(r); });
+    try { aiClient.worker.postMessage({ ...msg, id }); } catch (e) { fallBack('post failed'); }
   });
 }
 

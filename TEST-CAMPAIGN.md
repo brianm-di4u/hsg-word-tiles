@@ -17,6 +17,8 @@ for every defect fixed (`DEV-PLAN.md` §5 is the defect log).
 | `tests/10-smoke` … `18-perf`, `20-board3d` | Browser | Boot, screens (and the whole game from file://), the core loop, modes, real input, Hot Springs UI, contrast, saves, performance, 3D and 2D boards |
 | `tests/19-statefuzz` | Browser, slow | Seeded random walks (400 steps per viewport: staging junk, recall, play, swap, pass, shuffle, hint, `setState` round-trips, reload and Continue) checked after every step: tiles conserved (98), scores equal the ledger, turn order, staging consistent, refused plays change nothing, the save matches the board |
 | `tests/15-visual` | Browser, GPU | The fixed capture set for the visual review loops |
+| `tests/22-input-robust` | Browser | v1.1.1, after iPhone/iPad reports of stuck tiles: every way a drag can end without a drop (cancelled touch, lost capture, blur, hidden tab, mouse released outside the window), second fingers, a touch that never ended, a blank's letter dialog cancelled, staging under a pending hint, a drag outliving the turn, a dialog or the screen, a Worker that dies silently, rack and board sizes from 320 px to tablets and sideways phones, edge and zoomed drops, the 3D board, fast taps and rotation mid-drag. After each case: no drag alive, no ghost, every rack tile on the rack or staged once, no square holding two tiles |
+| `tests/19-statefuzz` "input fuzz" | Browser, slow | v1.1.1: 160 seeded steps per viewport of real touch and mouse drags (with random cancels, blur, second fingers, Enter and Esc mid-drag), taps, legal plays made by dragging, recall, shuffle, rotation and passes, checked against the same invariants and the shadow model |
 
 ## Coverage matrix
 | Function | Engine (Node) | 2D | 3D | Desktop | Phone | Tests |
@@ -32,11 +34,18 @@ for every defect fixed (`DEV-PLAN.md` §5 is the defect log).
 | Touch: tap-zoom, drag with loupe, tap to place and recall | — | ✓ | ✓ (visual) | — | ✓ | 13, 15 |
 | Keyboard play | — | ✓ | — | ✓ | ✓ | 13 |
 | Picking through the 3D camera | — | — | ✓ | ✓ | ✓ | 20 |
+| Drag robustness: cancel, focus loss, lost capture, extra fingers, blank cancel, hint lock, turn change | — | ✓ | ✓ | ✓ | ✓ | 22, 19 (input fuzz) |
+| Firefox and WebKit (mouse, keyboard, play, modes, saves, a11y, robustness) | — | ✓ | — | ✓ | WebKit | `--browser firefox`, `--browser webkit` |
 | Offline (file://), 3D included | — | ✓ | ✓ | ✓ | ✓ | 10 (offline), `--file-url --gpu` run |
 | Contrast day and night, live region, reduced motion, text size | — | ✓ | — | ✓ | ✓ | 16 |
 | Size, frame cost, AI time at 4×, Worker fallback | — | ✓ | — | ✓ | ✓ | 18 |
 
 ## Results (latest runs)
+- v1.1.1 (stuck-tile fixes): full matrix on Chromium (`--milestone final`) 121/121; WebKit (`--browser webkit`)
+  58/58. Firefox's Playwright build does not start on this Windows machine (missing `mozglue` assembly), so the
+  Firefox opt-ins are untested.
+
+Earlier (v1.0.0):
 - Full matrix (`--milestone final`, Node, browser and slow tests): 99/99. GPU and file:// runs: pass.
 - Performance: `index.html` 1.15 MB; idle frame 0.15 ms, dragging 2.5 ms; dictionary 153 ms (864 ms at 4×);
   AI at 4× on the main thread (no Worker): Easy ≤ 33 ms, Medium ≤ 102 ms, Hard ≤ 42 ms per move in these games.

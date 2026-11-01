@@ -4,6 +4,7 @@ const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game
 export const tests = [
   {
     name: 'setup: seats, opponents and start',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await ready(t);
       await t.page.click('[data-go="setup"]');
@@ -27,6 +28,7 @@ export const tests = [
   },
   {
     name: 'pass and play hides the next rack until tapped',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await ready(t);
       await t.game('newGame', { seed: 4, seats: [{ kind: 'human', name: 'Ada' }, { kind: 'human', name: 'Bo' }] });
@@ -50,6 +52,7 @@ export const tests = [
   },
   {
     name: 'daily soak: same tiles on reload, ten turns, result saved',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await ready(t);
       await t.game('act', 'daily', '2026-11-01');
@@ -67,8 +70,11 @@ export const tests = [
       for (let k = 0; k < 10; k++) {
         const s = await t.state();
         if (s.game.over) break;
+        // the next turn has begun (slow software GL can outlast waitIdle's 5 s)
+        await t.page.waitForFunction(() => { const g = window.__G; return g.s.over || (!g.staged.length && performance.now() >= g.busyUntil && g.scene === 'game'); }, null, { timeout: 10000 });
         const [m] = await t.game('act', 'moves', 1);
         if (m) { await t.game('act', 'stage', m.tiles); await t.game('act', 'play'); } else await t.game('act', 'pass');
+        await t.page.waitForFunction((n) => window.__G.s.move > n, s.game.move, { timeout: 10000 }).catch(() => t.fail(`turn ${k + 1} did not land`));
         await t.waitIdle(5000);
       }
       await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 6000 });
@@ -82,6 +88,7 @@ export const tests = [
   },
   {
     name: 'continue resumes the saved game after a reload',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await ready(t);
       await t.game('newGame', { seed: 9 });

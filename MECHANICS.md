@@ -78,14 +78,22 @@ one more letter clears, never past `length − 2` letters shown. Once claimed, t
 ## 4. Input
 - **Pointer (mouse and touch):** drag a rack tile onto a square; drag a staged tile to move it or back
   to the rack; tap a rack tile then tap a square; tap a staged tile to recall it. Drops act on
-  `pointerup` (touch quirk in LESSONS). A blank asks for its letter in a small dialog.
+  `pointerup` (touch quirk in LESSONS). A blank asks for its letter in a small dialog; it stays on the rack
+  until a letter is picked, so Cancel leaves it there.
+- **A drag always ends with the tile somewhere.** A rack drag is captured on `#app` and the button it started
+  on stays in the page (hidden) until the drop, because iOS WebKit aims the whole touch at that node. A drag that
+  ends without a drop (a cancelled touch, lost capture, the page losing focus, a mouse released outside the
+  window, a new turn, a dialog, another screen) puts the tile back in its rack slot or on its square. Extra
+  fingers are ignored while a tile is held; a staged tile dropped on a taken square goes back to its own square.
 - **Touch drag (after the block puzzle):** the board never zooms by itself. A dragged tile grows from its
   rack size to about a board square (1.15 squares, 32–64 px) in 120 ms and floats 1.6 squares (56–84 px)
   above the finger. It lands on the square under the tile's centre, not the finger, and that square shows
   the tile seated and translucent with a gold outline (red dashed outline when taken). The target holds
   until the tile is 0.62 of a square past that square's centre, so 25 px phone squares don't flicker, and
-  a tile up to half a square outside the grid snaps to the edge square. With the finger on the rack it
-  reorders the rack instead. A missed drop flies back to the rack (200 ms). Pinch 1×–2.4× is optional;
+  a tile up to half a square outside the grid snaps to the edge square. Where the tile is decides, not the finger:
+  with the finger on the rack a tile still over the grid lands on the board (short phones' bottom rows sit right
+  above the rack), otherwise it reorders the rack. A missed drop flies back to its rack slot (200 ms). Tiles placed
+  while the computer's tiles are still landing stay put. Pinch 1×–2.4× is optional;
   one finger pans when zoomed; auto-pan near edges while dragging when zoomed.
 - **Keyboard:** arrow keys move a board cursor; letters place rack tiles at the cursor and advance it;
   Space flips direction (→ / ↓); Backspace recalls the last staged tile; Enter plays; Esc recalls all;

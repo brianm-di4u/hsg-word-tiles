@@ -4,6 +4,7 @@ const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game
 export const tests = [
   {
     name: 'works when localStorage throws',
+    browsers: ['chromium', 'firefox', 'webkit'],
     initScript: () => { const no = () => { throw new Error('storage blocked'); }; Object.defineProperty(window, 'localStorage', { get: no }); },
     async run(t) {
       await ready(t);
@@ -22,6 +23,7 @@ export const tests = [
   },
   {
     name: 'a corrupt save is ignored',
+    browsers: ['chromium', 'firefox', 'webkit'],
     initScript: () => { try { localStorage.setItem('hs-letters-save-v1', '{"v":1,"board":'); } catch (e) { /* none */ } },
     async run(t) {
       await ready(t);
@@ -33,6 +35,7 @@ export const tests = [
   },
   {
     name: 'quit to title keeps the game for Continue',
+    browsers: ['chromium', 'firefox', 'webkit'],
     viewports: ['desktop'],
     async run(t) {
       await ready(t);

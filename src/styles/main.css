@@ -196,6 +196,7 @@ body.theme-dark .btn.primary small { color: #2A2310; }
 .rtile, .rslot { width: var(--tile); height: var(--tile); flex: none; }
 .rtile { padding: 0; border: 0; background: none; border-radius: 9px; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.45)); transition: transform 0.12s; touch-action: none; }
 .rtile canvas { width: 100%; height: 100%; display: block; pointer-events: none; }
+.rtile.lifted { display: none; }
 .rtile.sel { transform: translateY(-8px); filter: drop-shadow(0 0 6px rgba(240, 213, 122, 0.95)) drop-shadow(0 6px 4px rgba(0, 0, 0, 0.45)); }
 .rslot { border-radius: 9px; background: rgba(0, 0, 0, 0.18); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4); }
 #ghost { position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.45)); }
@@ -383,7 +384,7 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
 .wchip small { font: 700 0.75rem var(--f-ui); }
 
 /* ---------- phones and portrait ---------- */
-@media (max-width: 860px), (max-aspect-ratio: 1/1) {
+@media (max-width: 860px), (max-aspect-ratio: 1/1), (max-height: 520px) {
   #app {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto auto auto auto auto auto minmax(0, 1fr);
@@ -432,3 +433,15 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   .plaque .pcat { display: block; } .plaque .pcat svg { width: 15px; height: 15px; }
 }
 @media (max-width: 380px) { .plaque { padding: 4px 3px; } }
+/* ---------- phones held sideways: the board fills the height on the left, the controls stack on the right ---------- */
+@media (max-height: 520px) and (min-aspect-ratio: 1/1) {
+  #app {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto auto minmax(0, 1fr);
+    grid-template-areas: "board top" "board scores" "board springs" "board preview" "board rack" "board actions" "board ledger";
+    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  }
+  #boardwrap { --side: calc(100dvh - max(6px, env(safe-area-inset-top)) - max(6px, env(safe-area-inset-bottom))); width: var(--side); height: var(--side); align-self: start; justify-self: start; }
+  #rackbar { padding: 6px 4px 10px; }
+  .abtn { min-height: 40px; }
+}

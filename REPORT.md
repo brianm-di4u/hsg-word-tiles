@@ -77,6 +77,25 @@ score from 43 to a best of **52.5/80**. Tiles and type and Hot Springs identity 
 six categories ended at 6–6.75. The campaign stopped at its six-loop cap, followed by an unscored defect pass. Details
 and the remaining gaps: `VISUAL-REPORT.md`, `reviews/HISTORY.md`.
 
+## v1.1.1: stuck tiles
+Players on iPhone and iPad reported tiles that got stuck: lifted but never landing, or gone from the rack. A new
+robustness suite (`tests/22-input-robust`, 20 tests) and a real-pointer input fuzz (`19-statefuzz`, 160 steps per
+viewport) reproduced 14 defects (`DEV-PLAN.md` §5, #24–#37); 13 of the first 18 tests failed on v1.1.0. The main
+one: starting a drag rebuilt the rack and removed the button under the finger, and WebKit sends the rest of that
+touch to the removed node, so the release never arrived. Drags are now captured on a lasting element, every way a
+drag can end without a drop puts the tile back where it came from, extra fingers are ignored while a tile is held,
+and a Worker that dies silently falls back to the main thread after 8 s. Also fixed: tiles placed while the
+computer's tiles were landing snapped back; the bottom rows were out of reach on 375×667 and smaller phones; rack
+tiles were stuck at 40 px on phones; sideways phones squeezed the board to 60 px (they now get a board-left layout).
+- Full matrix (`--milestone final`, Chromium, slow tests included): **121/121**. WebKit (`--browser webkit`, the
+  engine-neutral suites, 58 runs): **58/58**. An independent Codex review found three more issues, all fixed.
+- Staging a tile now costs 1.4 ms (median, stage + recall) since it redraws only the rack, actions and preview;
+  dragging 3.2 ms per frame, idle 1.2 ms.
+- Firefox could not run here: Playwright's Firefox build fails to start on this Windows build (a missing `mozglue`
+  side-by-side assembly), so `--browser firefox` is wired up but untested. Real iOS devices were not available;
+  WebKit on Windows and the "stays attached" check (the pressed button must stay in the page and `#app` must hold
+  the capture) stand in for them.
+
 ## Known gaps
 - The visual gate was not met (best 52.5/80; board materials, phone layout and small defects score 6–6.25). The
   likeliest next step is a fully painted board face, as Barons has.

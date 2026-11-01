@@ -25,7 +25,9 @@ cd tools/dev && npm install && cd ../..   # build-time tools: esbuild, three, OF
 npm run data           # word lists → dictionary, tiles, board layout; lexicon and fact checks
 npm run build          # AI worker bundle, then src/ → index.html (edit src/, not index.html)
 npm test               # tests/*.test.mjs; screenshots land in screenshots/
+npm test -- --browser webkit   # the engine-neutral suites on WebKit (iOS's engine); also firefox
 ```
+WebKit and Firefox need `cd shared/test-harness && npx playwright install webkit firefox` once.
 
 | Tool | Does |
 |---|---|

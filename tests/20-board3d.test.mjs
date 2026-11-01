@@ -41,6 +41,7 @@ export const tests = [
   },
   {
     name: '2D board with ?gl=0',
+    browsers: ['chromium', 'firefox', 'webkit'],
     url: 'index.html?gl=0',
     async run(t) {
       await ready(t);

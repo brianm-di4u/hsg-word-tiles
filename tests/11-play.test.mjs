@@ -11,6 +11,7 @@ const N = 15;
 export const tests = [
   {
     name: 'live preview, an illegal play refused, then a good play and the reply',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await start(t);
       let s = await t.state();
@@ -43,6 +44,7 @@ export const tests = [
   },
   {
     name: 'blank tile asks for a letter',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await start(t, 5);
       const s = await t.state();
@@ -67,6 +69,7 @@ export const tests = [
   },
   {
     name: 'swap dialog and pass',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await start(t, 6);
       await t.page.keyboard.press('Shift+S');
@@ -91,6 +94,7 @@ export const tests = [
   },
   {
     name: 'hint stages a strong play',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await start(t, 8);
       const n = await t.game('act', 'hint');
@@ -103,6 +107,7 @@ export const tests = [
   },
   {
     name: 'autoplay finishes a game and shows the result',
+    browsers: ['chromium', 'firefox', 'webkit'],
     async run(t) {
       await start(t, 21);
       const r = await t.game('act', 'autoplay', 999);

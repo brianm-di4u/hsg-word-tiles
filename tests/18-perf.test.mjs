@@ -34,6 +34,18 @@ export const tests = [
       await t.page.mouse.up();
       t.log(`drag: ${JSON.stringify(d)}`);
       t.expect(d.taskMs < 12, `drag task ${d.taskMs} ms per frame`);
+      // staging a tile redraws only the rack, actions and preview (not the ledger and plaques)
+      await t.game('act', 'recall');
+      const st = await t.page.evaluate(async () => {
+        const g = window.__game, s = g.getState(), l = s.game.players[0].rack.find((x) => x !== '?'), ms = [];
+        for (let k = 0; k < 30; k++) {
+          const t0 = performance.now(); await g.act('stage', [{ l, i: 112 }]); await g.act('recall'); ms.push(performance.now() - t0);
+        }
+        ms.sort((a, b) => a - b);
+        return { median: +ms[15].toFixed(2), max: +ms[29].toFixed(2) };
+      });
+      t.log(`stage + recall: ${JSON.stringify(st)} ms`);
+      t.expect(st.median < 4, `stage + recall ${st.median} ms`);
     },
   },
   {
@@ -82,6 +94,7 @@ export const tests = [
   },
   {
     name: 'AI works without Workers (fallback)',
+    browsers: ['chromium', 'firefox', 'webkit'],
     url: 'index.html?worker=0',
     async run(t) {
       await ready(t);
