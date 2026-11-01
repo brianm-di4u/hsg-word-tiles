@@ -1,0 +1,260 @@
+{
+ "title": {
+  "file": "title.webp",
+  "w": 1600,
+  "h": 1000,
+  "bytes": 252002
+ },
+ "glass-w": {
+  "file": "glass-w.webp",
+  "w": 256,
+  "h": 256,
+  "bytes": 18408
+ },
+ "glass-h": {
+  "file": "glass-h.webp",
+  "w": 256,
+  "h": 256,
+  "bytes": 20224
+ },
+ "glass-s": {
+  "file": "glass-s.webp",
+  "w": 256,
+  "h": 256,
+  "bytes": 21682
+ },
+ "glass-b": {
+  "file": "glass-b.webp",
+  "w": 256,
+  "h": 256,
+  "bytes": 24358
+ },
+ "glass-c": {
+  "file": "glass-c.webp",
+  "w": 320,
+  "h": 320,
+  "bytes": 27560
+ },
+ "marble": {
+  "file": "marble.webp",
+  "w": 1024,
+  "h": 1024,
+  "bytes": 28850
+ },
+ "terrazzo": {
+  "file": "terrazzo.webp",
+  "w": 768,
+  "h": 768,
+  "bytes": 136708
+ },
+ "counter": {
+  "file": "counter.webp",
+  "w": 1600,
+  "h": 1066,
+  "bytes": 89456
+ },
+ "bath-superior": {
+  "file": "bath-superior.webp",
+  "w": 256,
+  "h": 256,
+  "bytes": 16282
+ },
+ "bath-hale": {
+  "file": "bath-hale.webp",
+  "w": 256,
+  "h": 256,
+  "bytes": 17590
+ },
+ "bath-maurice": {
+  "file": "bath-maurice.webp",
+  "w": 256,
+  "h": 256,
+  "bytes": 19734
+ },
+ "bath-fordyce": {
+  "file": "bath-fordyce.webp",
+  "w": 256,
+  "h": 256,
+  "bytes": 18540
+ },
+ "bath-quapaw": {
+  "file": "bath-quapaw.webp",
+  "w": 256,
+  "h": 256,
+  "bytes": 16520
+ },
+ "bath-ozark": {
+  "file": "bath-ozark.webp",
+  "w": 256,
+  "h": 256,
+  "bytes": 16148
+ },
+ "bath-buckstaff": {
+  "file": "bath-buckstaff.webp",
+  "w": 256,
+  "h": 256,
+  "bytes": 15644
+ },
+ "bath-lamar": {
+  "file": "bath-lamar.webp",
+  "w": 256,
+  "h": 256,
+  "bytes": 13860
+ },
+ "face-opal": {
+  "file": "face-opal.webp",
+  "w": 192,
+  "h": 192,
+  "bytes": 6528
+ },
+ "face-hollis": {
+  "file": "face-hollis.webp",
+  "w": 192,
+  "h": 192,
+  "bytes": 6084
+ },
+ "face-lucky": {
+  "file": "face-lucky.webp",
+  "w": 192,
+  "h": 192,
+  "bytes": 8406
+ },
+ "face-julian": {
+  "file": "face-julian.webp",
+  "w": 192,
+  "h": 192,
+  "bytes": 7200
+ },
+ "card-springs": {
+  "file": "card-springs.webp",
+  "w": 420,
+  "h": 560,
+  "bytes": 61402
+ },
+ "card-baths": {
+  "file": "card-baths.webp",
+  "w": 420,
+  "h": 560,
+  "bytes": 42302
+ },
+ "card-park": {
+  "file": "card-park.webp",
+  "w": 420,
+  "h": 560,
+  "bytes": 69750
+ },
+ "card-track": {
+  "file": "card-track.webp",
+  "w": 420,
+  "h": 560,
+  "bytes": 44638
+ },
+ "card-club": {
+  "file": "card-club.webp",
+  "w": 420,
+  "h": 560,
+  "bytes": 41032
+ },
+ "card-town": {
+  "file": "card-town.webp",
+  "w": 420,
+  "h": 560,
+  "bytes": 50896
+ },
+ "card-magnolia": {
+  "file": "card-magnolia.webp",
+  "w": 420,
+  "h": 560,
+  "bytes": 61788
+ },
+ "vig-arlington": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-buckstaff": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-eastman": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-fogel": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-fordyce": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-freebath": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-gators": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-hale": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-iqzoo": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-ohio": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-ostrich": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-railroad": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-southern": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-tower": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-vapors": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-waterco": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-watertax": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ },
+ "vig-whittington": {
+  "w": 320,
+  "h": 320,
+  "from": "Bathhouse Barons (hsg-property-game, MIT)"
+ }
+}

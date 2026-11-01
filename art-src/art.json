@@ -1,0 +1,236 @@
+{
+ "quality": 0.82,
+ "items": [
+  {
+   "name": "title",
+   "src": "title.png",
+   "w": 1600,
+   "h": 1000,
+   "quality": 0.8
+  },
+  {
+   "name": "glass-w",
+   "src": "glass-w.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "name": "glass-h",
+   "src": "glass-h.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "name": "glass-s",
+   "src": "glass-s.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "name": "glass-b",
+   "src": "glass-b.png",
+   "w": 256,
+   "h": 256
+  },
+  {
+   "name": "glass-c",
+   "src": "glass-c.png",
+   "w": 320,
+   "h": 320
+  },
+  {
+   "name": "marble",
+   "src": "marble.png",
+   "w": 1024,
+   "h": 1024,
+   "quality": 0.78
+  },
+  {
+   "name": "terrazzo",
+   "src": "terrazzo.png",
+   "w": 768,
+   "h": 768,
+   "quality": 0.78
+  },
+  {
+   "name": "counter",
+   "src": "counter.png",
+   "w": 1600,
+   "h": 1066,
+   "quality": 0.72
+  },
+  {
+   "name": "bath-superior",
+   "src": "bath-superior.png",
+   "w": 256,
+   "h": 256,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ]
+  },
+  {
+   "name": "bath-hale",
+   "src": "bath-hale.png",
+   "w": 256,
+   "h": 256,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ]
+  },
+  {
+   "name": "bath-maurice",
+   "src": "bath-maurice.png",
+   "w": 256,
+   "h": 256,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ]
+  },
+  {
+   "name": "bath-fordyce",
+   "src": "bath-fordyce.png",
+   "w": 256,
+   "h": 256,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ]
+  },
+  {
+   "name": "bath-quapaw",
+   "src": "bath-quapaw.png",
+   "w": 256,
+   "h": 256,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ]
+  },
+  {
+   "name": "bath-ozark",
+   "src": "bath-ozark.png",
+   "w": 256,
+   "h": 256,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ]
+  },
+  {
+   "name": "bath-buckstaff",
+   "src": "bath-buckstaff.png",
+   "w": 256,
+   "h": 256,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ]
+  },
+  {
+   "name": "bath-lamar",
+   "src": "bath-lamar.png",
+   "w": 256,
+   "h": 256,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ]
+  },
+  {
+   "name": "face-opal",
+   "src": "face-opal.png",
+   "w": 192,
+   "h": 192,
+   "quality": 0.8
+  },
+  {
+   "name": "face-hollis",
+   "src": "face-hollis.png",
+   "w": 192,
+   "h": 192,
+   "quality": 0.8
+  },
+  {
+   "name": "face-lucky",
+   "src": "face-lucky.png",
+   "w": 192,
+   "h": 192,
+   "quality": 0.8
+  },
+  {
+   "name": "face-julian",
+   "src": "face-julian.png",
+   "w": 192,
+   "h": 192,
+   "quality": 0.8
+  },
+  {
+   "name": "card-springs",
+   "src": "card-springs.png",
+   "w": 420,
+   "h": 560,
+   "quality": 0.76
+  },
+  {
+   "name": "card-baths",
+   "src": "card-baths.png",
+   "w": 420,
+   "h": 560,
+   "quality": 0.76
+  },
+  {
+   "name": "card-park",
+   "src": "card-park.png",
+   "w": 420,
+   "h": 560,
+   "quality": 0.76
+  },
+  {
+   "name": "card-track",
+   "src": "card-track.png",
+   "w": 420,
+   "h": 560,
+   "quality": 0.76
+  },
+  {
+   "name": "card-club",
+   "src": "card-club.png",
+   "w": 420,
+   "h": 560,
+   "quality": 0.76
+  },
+  {
+   "name": "card-town",
+   "src": "card-town.png",
+   "w": 420,
+   "h": 560,
+   "quality": 0.76
+  },
+  {
+   "name": "card-magnolia",
+   "src": "card-magnolia.png",
+   "w": 420,
+   "h": 560,
+   "quality": 0.76
+  }
+ ]
+}

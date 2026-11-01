@@ -1,0 +1,9 @@
+{
+  "words": 168295,
+  "common": 60360,
+  "blocked": 256,
+  "dawgEdges": 134076,
+  "packedKB": 322,
+  "nodeLoadMs": 613,
+  "listSha256": "1d08c57b319119040503efc6c1adc6d5a02cec850ef276cc13f0ae96d049040a"
+}

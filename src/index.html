@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bathhouse Letters</title>
+<meta name="description" content="An original crossword word-tile game set among the hot springs of Hot Springs, Arkansas: build words on a marble bathhouse board and find the town's words. Part of the open-source Hot Springs Games collection (MIT).">
+<meta name="theme-color" content="#2B1A10">
+<link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+<div id="app" hidden>
+  <header id="topbar">
+    <button id="b-menu" class="iconbtn" aria-label="Menu (Esc)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+    <div id="turnline" aria-live="off"></div>
+    <button id="b-sound" class="iconbtn" aria-label="Sound"></button>
+  </header>
+  <section id="scores" aria-label="Scores"></section>
+  <section id="springs" aria-label="Featured Springs"></section>
+  <div id="boardwrap">
+    <canvas id="gl" aria-hidden="true" hidden></canvas>
+    <canvas id="board" tabindex="0" role="application" aria-label="Game board, 15 by 15 squares. Use the arrow keys to move the cursor, type letters to place tiles, Space to switch direction and Enter to play."></canvas>
+    <canvas id="fx" aria-hidden="true"></canvas>
+    <button id="b-zoom" class="iconbtn small" aria-label="Show the whole board" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  </div>
+  <div id="preview" aria-hidden="true"></div>
+  <div id="toast" aria-hidden="true"></div>
+  <section id="ledger" aria-label="Steam ledger"><h2>Steam ledger</h2><ol id="log" class="log"></ol></section>
+  <div id="rackbar"><div id="rack" role="toolbar" aria-label="Your tiles"></div></div>
+  <div id="actions" role="toolbar" aria-label="Actions"></div>
+  <div id="privacy" hidden></div>
+</div>
+<main id="screen"></main>
+<div id="modal" hidden></div>
+<canvas id="ghost" aria-hidden="true" hidden></canvas>
+<div id="live" class="sr-only" aria-live="polite"></div>
+<!-- @inline ../data/dict.b64.txt as DICT_B64 -->
+<!-- @inline ../data/lexicon.game.json as LEXICON -->
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
