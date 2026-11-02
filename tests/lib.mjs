@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rawDir } from '../tools/raw-dir.mjs';
 import { loadDict } from '../src/js/dict.js';
 import { makeLexicon } from '../src/js/lexicon.js';
 
@@ -15,4 +16,4 @@ export async function ctx() {
   }
   return cache;
 }
-export const hasRaw = () => fs.existsSync(path.join(root, 'data/raw/enable1.txt'));
+export const hasRaw = () => fs.existsSync(path.join(rawDir(root), 'enable1.txt'));

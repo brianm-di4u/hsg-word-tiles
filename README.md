@@ -31,7 +31,7 @@ WebKit and Firefox need `cd shared/test-harness && npx playwright install webkit
 
 | Tool | Does |
 |---|---|
-| `tools/fetch-wordlists.mjs` | downloads ENABLE and SCOWL into `data/raw/` (git-ignored) with checksums |
+| `tools/fetch-wordlists.mjs` | downloads ENABLE and SCOWL (git-ignored) with checksums into the workspace's `reference/word-lists/`, or `data/raw/` outside it (`tools/raw-dir.mjs`) |
 | `tools/build-dict.mjs` | ENABLE minus `data/blocklist.txt`, SCOWL "common" flags → `data/dict.b64.txt` (front-coded, deflated) |
 | `tools/build-tiles.mjs`, `tools/build-layout.mjs` | the tile set from letter frequencies; the 15×15 spring board, checked |
 | `tools/check-lexicon.mjs`, `tools/check-facts.mjs`, `tools/build-data.mjs` | the Hot Springs words and their fact cards |
@@ -39,7 +39,6 @@ WebKit and Firefox need `cd shared/test-harness && npx playwright install webkit
 | `tools/ref-validator.mjs` | an independent rules reference for tests |
 | `tools/build-worker.mjs`, `build-three.mjs`, `build-fonts.mjs`, `build-art.mjs` | the AI worker, trimmed three.js, fonts, painted art |
 | `art-src/blender/pieces.py` | the 3D tile, frame, towels and bell (headless Blender) |
-| `tools/sync-repo.mjs` | copies the game into its standalone repo clone |
 
 Design docs: `PRD.md`, `MECHANICS.md`, `DEV-PLAN.md`, `SAMPLES.md`, `REPORT.md`, `VISUAL-PLAN.md`, `VISUAL-REPORT.md`,
 `TEST-CAMPAIGN.md`, `research/town-content.md`, `art-src/PROMPTS.md`.

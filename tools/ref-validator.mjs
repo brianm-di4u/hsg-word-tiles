@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rawDir } from './raw-dir.mjs';
 import { ROWS, BATHHOUSES } from '../src/js/layout.js';
 import { TILES } from '../src/js/tiles.js';
 
@@ -18,7 +19,7 @@ export function referenceWordSet() {
     if (l.startsWith('stem:')) stems.push(l.slice(5)); else exact.add(l);
   }
   const set = new Set();
-  for (const w of lines(path.join(root, 'data/raw/enable1.txt'))) {
+  for (const w of lines(path.join(rawDir(root), 'enable1.txt'))) {
     if (!/^[a-z]{2,15}$/.test(w) || exact.has(w) || stems.some((s) => w.startsWith(s))) continue;
     set.add(w.toUpperCase());
   }

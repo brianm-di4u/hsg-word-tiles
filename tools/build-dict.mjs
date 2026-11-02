@@ -9,10 +9,11 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { rawDir } from './raw-dir.mjs';
 import { loadDict, words as dictWords, walk, EOW, COMMON, encodeWordList } from '../src/js/dict.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const raw = path.join(root, 'data/raw');
+const raw = rawDir(root);
 const BUDGET_KB = 340;
 const lines = (f, enc = 'utf8') => fs.readFileSync(f, enc).split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
 

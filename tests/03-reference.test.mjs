@@ -14,7 +14,7 @@ export const tests = [
   {
     name: 'engine agrees with the reference on 50,000 plays', node: true,
     async run(t) {
-      if (!hasRaw()) { t.log('data/raw missing: run tools/fetch-wordlists.mjs (skipped)'); return; }
+      if (!hasRaw()) { t.log('raw word lists missing: run tools/fetch-wordlists.mjs (skipped)'); return; }
       const c = await ctx();
       const words = referenceWordSet();
       const themed = new Map();

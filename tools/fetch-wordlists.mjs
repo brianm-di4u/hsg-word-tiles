@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Downloads the raw word lists into data/raw/ (git-ignored) and checks their SHA-256.
+// Downloads the raw word lists (git-ignored; tools/raw-dir.mjs: the workspace's reference/word-lists/ or data/raw/)
+// and checks their SHA-256.
 // Only build-dict.mjs reads them; the game ships the packed dictionary in data/dict.b64.txt.
 //   node tools/fetch-wordlists.mjs
 //
@@ -11,9 +12,10 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { rawDir } from './raw-dir.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const raw = path.join(root, 'data/raw');
+const raw = rawDir(root);
 fs.mkdirSync(path.join(raw, 'scowl'), { recursive: true });
 
 const FILES = [

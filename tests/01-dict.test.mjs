@@ -23,7 +23,7 @@ export const tests = [
   {
     name: 'equals ENABLE minus the blocklist', node: true,
     async run(t) {
-      if (!hasRaw()) { t.log('data/raw missing: run tools/fetch-wordlists.mjs (skipped)'); return; }
+      if (!hasRaw()) { t.log('raw word lists missing: run tools/fetch-wordlists.mjs (skipped)'); return; }
       const { dict } = await ctx();
       const ref = referenceWordSet();
       const list = [...words(dict)];
