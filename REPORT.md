@@ -96,6 +96,15 @@ tiles were stuck at 40 px on phones; sideways phones squeezed the board to 60 px
   WebKit on Windows and the "stays attached" check (the pressed button must stay in the page and `#app` must hold
   the capture) stand in for them.
 
+## Update: repainted backgrounds (v1.2.0, 2026-11-02)
+
+The title painting was repainted and its alt text now describes the new picture. The new source PNGs replace the
+`art-src/art.json` sources (git-ignored; the workspace keeps copies of the old and new paintings in
+`reference/backgrounds/`) and were packed with the usual tools. Older descriptions of these paintings in
+VISUAL-REPORT.md refer to the previous art.
+
+`npm test`: 115/115 passed.
+
 ## Known gaps
 - The visual gate was not met (best 52.5/80; board materials, phone layout and small defects score 6–6.25). The
   likeliest next step is a fully painted board face, as Barons has.

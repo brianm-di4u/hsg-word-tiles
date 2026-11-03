@@ -46,7 +46,7 @@ export function titleHtml(o) {
   const hasArt = art.has('title');
   return `<div class="title ${hasArt ? 'painted' : ''}">
     <div class="title-card">
-      ${hasArt ? `<img class="title-art" src="${art.src('title')}" alt="Bathhouse Row at dusk, steam rising from the hillside behind it">` : '<div class="title-art vector" aria-hidden="true"></div>'}
+      ${hasArt ? `<img class="title-art" src="${art.src('title')}" alt="Bathhouse Row at sunset: bronze eagles on the gate piers and the tiled dome beyond">` : '<div class="title-art vector" aria-hidden="true"></div>'}
       <div class="title-words">
         <p class="kicker">A Hot Springs word game</p>
         <h1>Bathhouse<br><span>Letters</span></h1>
