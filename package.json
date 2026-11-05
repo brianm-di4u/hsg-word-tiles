@@ -8,6 +8,8 @@
     "setup": "cd shared/test-harness && npm install && npx playwright install chromium",
     "data": "node tools/fetch-wordlists.mjs && node tools/build-dict.mjs && node tools/build-tiles.mjs && node tools/build-layout.mjs && node tools/check-lexicon.mjs",
     "build": "node tools/build-worker.mjs && node shared/tools/inline.mjs .",
-    "test": "node shared/test-harness/run.mjs ."
+    "test": "node shared/test-harness/run.mjs .",
+    "test:save": "node --test tests-node/save.test.mjs",
+    "pretest": "npm run test:save"
   }
 }

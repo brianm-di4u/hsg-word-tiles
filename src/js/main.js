@@ -7,7 +7,7 @@ import { seedState } from './rng.js';
 import * as R from './render2d.js';
 import { audio, unlock, sfx } from './audio.js';
 import { art, loadArt } from './art.js';
-import { store, KEYS } from './storage.js';
+import { store, KEYS, createGameSaves } from './storage.js';
 import { startAi, aiMove, aiHint, aiClient } from './aiclient.js';
 import { PERSONAS, persona } from './personas.js';
 import * as B3 from './board3d.js';
@@ -62,8 +62,21 @@ async function boot() {
 }
 
 // ---------- saves, register, daily ----------
-const save = () => { if (G.s && !G.s.over) store.put(KEYS.save, G.s); else store.del(KEYS.save); };
-const loadSave = () => { const s = store.json(KEYS.save, null); return s && s.v === 1 && !s.over ? s : null; };
+const gameSaves = createGameSaves(() => window.localStorage, { categories: Object.keys(G.lex.categories) });
+const gameHandles = new WeakMap(), saveNotices = new WeakSet();
+function saveNotice(s, outcome) {
+  if (outcome.ok || !s || saveNotices.has(s)) return;
+  saveNotices.add(s);
+  toast({ kind: 'save', title: 'This game is not saved', sub: outcome.reason === 'conflict' || outcome.reason === 'untrusted-stamp'
+    ? 'The saved slot no longer matches this game. This game stays in this tab.'
+    : 'Storage is unavailable. This game stays in this tab; keep it open to continue.' });
+}
+function save(s = G.s) {
+  const outcome = gameSaves.save(gameHandles.get(s), s);
+  saveNotice(s, outcome);
+  return outcome;
+}
+const loadSave = () => gameSaves.read().game;
 const register = () => store.json(KEYS.register, {});
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 function dailyInfo() {
@@ -193,10 +206,13 @@ function wireScreen(name) {
 
 function go(where) {
   unlock();
-  if (where === 'continue') { const sv = loadSave(); if (sv) resumeGame(sv); return; }
+  if (where === 'continue') { const record = gameSaves.read(); if (record.game) resumeGame(record); return; }
   if (where === 'setup') { G.setup = defaultSetup(); showScene('setup'); return; }
   if (where === 'daily') { startDaily(); return; }
-  if (where === 'title' && G.scene === 'game') save();
+  if (where === 'title' && G.scene === 'game' && !save().ok) {
+    confirmDialog('Leave without saving?', 'This tab could not save its game. Stay here to keep playing, or leave without saving this game.', 'Leave', () => showScene('title'));
+    return;
+  }
   showScene(where);
 }
 function back() { showScene(G.back && G.back !== G.scene ? G.back : 'title'); }
@@ -204,32 +220,36 @@ function back() { showScene(G.back && G.back !== G.scene ? G.back : 'title'); }
 // ---------- starting games ----------
 function whenReady(f) { if (G.ready) f(); else { G.afterReady = f; showScene('title'); } }
 function newGame(opts) {
+  const intent = gameSaves.newIntent();
   whenReady(() => {
     const seed = G.nextSeed != null ? G.nextSeed : (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
     G.nextSeed = null;
     const s = E.createGame({ ...opts, seed }, G.lex);
     if (opts.hints === false) for (const p of s.players) p.hints = null;
     for (const p of s.players) if (p.kind !== 'human') p.hints = null;
-    beginGame(s);
+    beginGame(s, intent);
   });
 }
 function startDaily(date) {
+  const intent = gameSaves.newIntent();
   whenReady(() => {
     G.dailyDate = date || today();
     const s = E.createGame({ mode: 'daily', date: G.dailyDate, seats: [{ kind: 'human', name: 'You' }] }, G.lex);
     s.players[0].hints = null;
-    beginGame(s);
+    beginGame(s, intent);
   });
 }
-function resumeGame(sv) { whenReady(() => beginGame(sv)); }
-function beginGame(s) {
+function resumeGame(record) { whenReady(() => beginGame(record.game, record)); }
+function beginGame(s, intent) {
+  const handle = gameSaves.open(s, intent);
+  gameHandles.set(s, handle);
   G.s = s;
   G.staged = []; G.selected = null; G.hint = null; G.preview = null; G.anim.clear(); G.last = new Set(lastTiles(s));
   G.revealed = -1; G.lastHuman = -1; G.privacy = false;
   resetOrder();
   R.view.zoom = 1; R.view.cx = R.U / 2; R.view.cy = R.U / 2;
-  save();
   showScene('game');
+  saveNotice(s, gameSaves.status(handle));
   startTurn();
 }
 const lastTiles = (s) => { const e = [...s.log].reverse().find((x) => x.kind === 'play'); return e ? e.tiles.map((t) => t.i) : []; };
@@ -306,7 +326,7 @@ function afterAction(entry, fromAi) {
   }
   announce(entry);
   if (cur().kind === 'human' && !fromAi) G.lastHuman = s.cur;
-  save();
+  save(s);
   rollScores();
   const wait = G.fast ? 0 : (fromAi && animOn() ? Math.max(0, G.animUntil - performance.now()) + 250 : 150);
   G.busyUntil = performance.now() + wait;
@@ -316,7 +336,7 @@ function afterAction(entry, fromAi) {
 
 function finishGame() {
   const s = G.s;
-  save();
+  save(s);
   if (s.mode === 'daily') recordDaily();
   const humanWon = s.result.winners.some((k) => s.players[k].kind === 'human');
   sfx(humanWon || s.mode === 'daily' ? 'fanfare' : 'turn');
@@ -425,7 +445,7 @@ async function doHint() {
     if (k >= 0) { G.staged.push({ k, i: t.i, l: t.l, blank: t.blank }); G.order = G.order.filter((x) => x !== k); }
   }
   G.hint = null;
-  updatePreview(); save(); renderGame();
+  updatePreview(); save(s); renderGame();
   flash(`Spring Guide: ${m.words[0]} for ${m.score}. Play it, move the tiles, or take them back.`, 4000);
 }
 
@@ -1135,7 +1155,11 @@ window.__game = {
       ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
   },
   setState(o) {
-    if (o.game) { G.s = JSON.parse(JSON.stringify(o.game)); G.last = new Set(lastTiles(G.s)); resetOrder(); G.revealed = G.s.cur; G.privacy = false; }
+    if (o.game) {
+      const before = G.s, replacement = JSON.parse(JSON.stringify(o.game)), handle = gameHandles.get(before);
+      if (handle && gameSaves.replaceFixture(handle, before, replacement)) gameHandles.set(replacement, handle);
+      G.s = replacement; G.last = new Set(lastTiles(G.s)); resetOrder(); G.revealed = G.s.cur; G.privacy = false;
+    }
     if (o.scene) showScene(o.scene); else renderGame();
     if (o.staged) { for (const t of o.staged) { const k = cur().rack.findIndex((l, j) => (t.blank ? l === '?' : l === t.l) && !G.staged.some((x) => x.k === j)); if (k >= 0) { G.staged.push({ k, i: t.i, l: t.l, blank: !!t.blank }); G.order = G.order.filter((x) => x !== k); } } updatePreview(); renderGame(); }
     if (G.s && !G.s.over && cur().kind === 'ai' && G.scene === 'game') scheduleAi();
