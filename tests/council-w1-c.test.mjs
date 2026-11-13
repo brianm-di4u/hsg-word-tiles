@@ -63,4 +63,18 @@ export const tests = [
       t.expect(total > 100, 'the generator still finds plays (' + total + ')');
     },
   },
+  {
+    name: 'S6-02 small landscape phones keep the rack and the action buttons on screen',
+    viewports: ['desktop', 'mobile'],
+    async run(t) {
+      await live(t);
+      for (const [w, h] of [[568, 320], [640, 360], [667, 375], [844, 390], [844, 340], [926, 360]]) {
+        const m = await measure(t, w, h);
+        inside(t, m);
+        t.expect(Math.min(m.board.w, m.board.h) >= Math.min(w, h) * 0.55, w + 'x' + h + ': board still playable (' + Math.round(m.board.w) + 'x' + Math.round(m.board.h) + ')');
+        await t.shot('s6-02-' + w + 'x' + h);
+        t.expect(m.board.r <= m.rack.l + 0.5 || m.board.b <= m.rack.t + 0.5, w + 'x' + h + ': rack does not cover the board');
+      }
+    },
+  },
 ];
