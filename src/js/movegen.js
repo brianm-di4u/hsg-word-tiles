@@ -2,7 +2,7 @@
 // Across moves are generated on the board; down moves on its transpose with the same code. Each
 // move is scored as it is recorded, with the same rules as score.js (tests/04-movegen checks every
 // generated move against the engine). No DOM; runs in the AI worker and in Node.
-import { EOW, LAST, COMMON } from './dict.js';
+import { EOW, LAST, COMMON, BLOCKED } from './dict.js';
 import { N, SQUARE, VALUE, LETTER_MULT, WORD_MULT, FULL_SOAK, FEATURED_BONUS, CENTER, RACK } from './score.js';
 
 const ALL = (1 << 26) - 1;
@@ -131,6 +131,7 @@ export function generateMoves(d, board, rack, opts = {}) {
       }
       words.unshift(word);
       if (lex) { const en = lex.byForm.get(word); if (en) bonus += lex.bonusOf(en) * (anyBath ? 2 : 1); }
+      if (words.some((w) => BLOCKED.has(w))) return;
       if (commonOnly && !words.every((w) => w.length < freeLen || isCommonWord(w))) return;
       for (const f of featured) if (words.includes(f)) { feat = FEATURED_BONUS; break; }
       const full = placed === RACK ? FULL_SOAK : 0;

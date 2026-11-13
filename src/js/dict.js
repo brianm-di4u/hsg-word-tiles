@@ -158,8 +158,16 @@ export function walk(d, word, node = d.root) {
   return edge;
 }
 
+// Words the shipped word list still holds that the blocklist (data/blocklist.txt) now removes. The next
+// tools/build-dict.mjs run drops them from the data, after which this list is redundant. The same words
+// are listed in the blocklist file; keep the two in step.
+export const BLOCKED = new Set([
+  'RETARD', 'RETARDS', 'RETARDED', 'RETARDATE', 'RETARDATES', 'SPASTIC', 'SPASTICS', 'WHITEY', 'WHITEYS', 'MONGOLOID', 'MONGOLOIDS',
+  'JEWED', 'JEWING', 'POOFTER', 'POOFTERS', 'TURD', 'TURDS', 'PENIS', 'PENISES', 'VAGINA', 'VAGINAE', 'VAGINAS', 'SEMEN', 'SEMENS',
+]);
+
 export function has(d, word) {
-  if (!word) return false;
+  if (!word || BLOCKED.has(word)) return false;
   const e = walk(d, word);
   return e >= 0 && (d.edges[e] & EOW) !== 0;
 }

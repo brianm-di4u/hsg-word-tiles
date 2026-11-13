@@ -136,3 +136,31 @@ bitchily
 bitchiness
 bitcheries
 bitchery
+
+# Added in wave 1 (mirrored by BLOCKED in src/js/dict.js until the dictionary is rebuilt)
+# Slurs, with inflections (RETARDANT, RETARDATION, RETARDER and RETARDING stay: ordinary words)
+retard
+retards
+retarded
+retardate
+retardates
+spastic
+spastics
+whitey
+whiteys
+mongoloid
+mongoloids
+jewed
+jewing
+poofter
+poofters
+# Crude sexual or excretory words (VAGINAL and SEMINAL stay: ordinary adjectives)
+turd
+turds
+penis
+penises
+vagina
+vaginae
+vaginas
+semen
+semens
