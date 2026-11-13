@@ -181,7 +181,7 @@ function wireScreen(name) {
     scr.querySelector('[data-hints]').addEventListener('change', (e) => { st.hints = e.target.checked; });
     scr.querySelector('[data-start]').addEventListener('click', () => {
       G.settings.lastSetup = st; saveSettings();
-      newGame({ mode: 'play', seats: st.seats.map((x, k) => (x.kind === 'human' ? { kind: 'human', name: (x.name || '').trim() || (st.seats.filter((y) => y.kind === 'human').length > 1 ? `Player ${k + 1}` : 'You') } : { kind: 'ai', persona: x.persona, level: persona(x.persona).level, name: persona(x.persona).name })), hints: st.hints });
+      replaceSave(() => newGame({ mode: 'play', seats: st.seats.map((x, k) => (x.kind === 'human' ? { kind: 'human', name: (x.name || '').trim() || (st.seats.filter((y) => y.kind === 'human').length > 1 ? `Player ${k + 1}` : 'You') } : { kind: 'ai', persona: x.persona, level: persona(x.persona).level, name: persona(x.persona).name })), hints: st.hints }));
     });
   }
   if (name === 'help') scr.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { G.helpTab = b.dataset.tab; showScene('help'); scr.querySelector(`[data-tab="${G.helpTab}"]`).focus(); }));
@@ -208,12 +208,19 @@ function go(where) {
   unlock();
   if (where === 'continue') { const record = gameSaves.read(); if (record.game) resumeGame(record); return; }
   if (where === 'setup') { G.setup = defaultSetup(); showScene('setup'); return; }
-  if (where === 'daily') { startDaily(); return; }
+  if (where === 'daily') { replaceSave(() => startDaily()); return; }
   if (where === 'title' && G.scene === 'game' && !save().ok) {
     confirmDialog('Leave without saving?', 'This tab could not save its game. Stay here to keep playing, or leave without saving this game.', 'Leave', () => showScene('title'));
     return;
   }
   showScene(where);
+}
+// the single save slot holds one game: starting another (New game, Daily Soak) ends the one in progress, so ask first
+function replaceSave(start) {
+  const sv = loadSave();
+  if (!sv) { start(); return; }
+  const what = sv.mode === 'daily' ? 'your Daily Soak' : `your game with ${sv.players.map((p) => p.name).join(' and ')}`;
+  confirmDialog('Replace your game in progress?', `Starting a new game ends ${what} (move ${sv.move + 1}). It cannot be continued afterwards.`, 'Start new', start);
 }
 function back() { showScene(G.back && G.back !== G.scene ? G.back : 'title'); }
 
