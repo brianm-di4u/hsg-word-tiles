@@ -267,6 +267,9 @@ export function settingsHtml(st) {
   return `<div class="sheet settings">
     <header class="sheet-head"><h1>Settings</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     ${seg('sound', [[true, 'On'], [false, 'Off']], 'Sound')}
+    ${seg('fx', [[true, 'On'], [false, 'Off']], 'Sound effects')}
+    ${seg('music', [[true, 'On'], [false, 'Off']], 'Music')}
+    ${seg('amb', [[true, 'On'], [false, 'Off']], 'Ambience')}
     <div class="setrow"><span>Volume</span><input type="range" min="0" max="1" step="0.05" value="${st.vol}" data-vol aria-label="Volume"></div>
     ${seg('theme', [['auto', 'Auto'], ['light', 'Day'], ['dark', 'Night']], 'Theme')}
     ${seg('motion', [['system', 'Auto'], ['full', 'Full'], ['reduce', 'Reduced']], 'Motion')}

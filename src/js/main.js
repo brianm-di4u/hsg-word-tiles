@@ -5,7 +5,7 @@ import * as E from './engine.js';
 import { N, CENTER, RACK, FULL_SOAK, FEATURED_BONUS, SQUARE as SQUARES, BATHHOUSES as BATHS } from './score.js';
 import { seedState } from './rng.js';
 import * as R from './render2d.js';
-import { audio, unlock, sfx, pauseAudio, resumeAudio } from './audio.js';
+import { audio, unlock, sfx, pauseAudio, resumeAudio, setTune, holdAudio, releaseAudio, syncAudio, audioList, audioRender, renderCue, tuneName } from './audio.js';
 import { art, loadArt } from './art.js';
 import { store, KEYS, createGameSaves, validRegister, validDaily } from './storage.js';
 import { startAi, aiMove, aiHint, aiClient } from './aiclient.js';
@@ -19,7 +19,7 @@ const META = { words: 168295 };
 
 const G = {
   s: null, scene: 'title', back: 'title', dict: null, lex: makeLexicon(LEXICON), ready: false,
-  settings: { sound: true, vol: 0.35, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true },
+  settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true },
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
   preview: null, hint: null, last: new Set(), anim: new Map(), animUntil: 0,
@@ -34,7 +34,7 @@ const animOn = () => !reduced() && !G.fast;
 const dark = () => G.settings.theme === 'dark' || (G.settings.theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
 // stored settings are trusted field by field: a value of the wrong type or range is dropped and the stored copy rewritten
 const SETTING_OK = {
-  sound: (v) => typeof v === 'boolean', hints: (v) => typeof v === 'boolean',
+  sound: (v) => typeof v === 'boolean', fx: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean', amb: (v) => typeof v === 'boolean', hints: (v) => typeof v === 'boolean',
   vol: (v) => typeof v === 'number' && v >= 0 && v <= 1,
   theme: (v) => ['auto', 'light', 'dark'].includes(v), motion: (v) => ['system', 'full', 'reduce'].includes(v),
   text: (v) => [1, 1.15, 1.3].includes(v), board3d: (v) => ['auto', 'on', 'off'].includes(v), ai: (v) => ['normal', 'fast', 'instant'].includes(v),
@@ -54,7 +54,8 @@ function loadSettings() {
 function saveSettings() { store.put(KEYS.settings, G.settings); applySettings(); }
 function applySettings() {
   const st = G.settings;
-  audio.on = !!st.sound; audio.vol = st.vol;
+  audio.on = !!st.sound; audio.vol = st.vol; audio.fx = st.fx; audio.music = st.music; audio.amb = st.amb;
+  syncAudio();
   document.documentElement.style.setProperty('--ts', st.text);
   document.body.classList.toggle('theme-dark', dark());
   document.body.classList.toggle('reduce', reduced());
@@ -129,12 +130,29 @@ function recordDaily() {
   store.put(KEYS.daily, d);
 }
 
+// ---------- music and the bed ----------
+// the lobby tune on the title and setup, the table tune in play, the results tune after the last move; a sheet opened
+// from another screen keeps that screen's tune. The bag running dry quickens the table tune a little, and the steam
+// air of the bed thickens as the board fills.
+const SHEETS = ['help', 'settings', 'about', 'register'];
+const tuneFor = (name) => (SHEETS.includes(name) ? tuneFor(G.back) : name === 'game' ? 'table' : name === 'over' ? 'finale' : 'lobby');
+function moodUpdate() {
+  setTune(tuneFor(G.scene));
+  const k = audio.kit, s = G.s;
+  if (!k) return;
+  const live = s && !s.over && G.scene === 'game';
+  k.music.intensity(live && s.bag.length === 0 ? 0.7 : 0);
+  k.amb.set('steam', live ? Math.min(1, s.board.filter(Boolean).length / 90) : 0.3, 2);
+}
+const colPan = (i) => ((i % N) - 7) / 7 * 0.7;
+
 // ---------- scenes ----------
 function showScene(name, arg) {
   const prev = G.scene;
   if (name !== prev && !['help', 'settings', 'about', 'register'].includes(name)) G.back = name;
   if (['help', 'settings', 'about', 'register'].includes(name) && !['help', 'settings', 'about', 'register'].includes(prev)) G.back = prev;
   G.scene = name;
+  moodUpdate();
   cancelDrag(); G.pinch = null; G.pointers.clear();
   closeDialog(true);
   if (name !== 'game') { G.toastQ = []; hideToastNow(); }
@@ -208,7 +226,8 @@ function wireScreen(name) {
       const k = b.dataset.set, raw = b.dataset.val;
       G.settings[k] = raw === 'true' ? true : raw === 'false' ? false : isNaN(+raw) ? raw : +raw;
       saveSettings(); showScene('settings'); scr.querySelector(`[data-set="${k}"][data-val="${raw}"]`).focus();
-      if (k === 'sound' && G.settings.sound) { unlock(); sfx('place'); }
+      if (['sound', 'fx', 'music', 'amb'].includes(k)) unlock();
+      if (k === 'sound' && G.settings.sound) sfx('place');
       if (k === 'board3d') B3.want(G.settings.board3d);
     }));
     scr.querySelector('[data-vol]').addEventListener('input', (e) => { G.settings.vol = +e.target.value; saveSettings(); });
@@ -343,15 +362,16 @@ function afterAction(entry, fromAi) {
       const t0 = performance.now();
       entry.tiles.forEach((t, k) => G.anim.set(t.i, { t0: t0 + k * 90, dur: 320 }));
       G.animUntil = t0 + entry.tiles.length * 90 + 340;
-      entry.tiles.forEach((_, k) => setTimeout(() => sfx('place'), k * 90 + 200));
+      entry.tiles.forEach((t, k) => setTimeout(() => sfx('place', { pan: colPan(t.i), step: k }), k * 90 + 200 + Math.floor(Math.random() * 24)));
       tick();
-    } else sfx('play');
+    } else sfx('play', { pan: colPan(Math.round(entry.tiles.reduce((a, t) => a + (t.i % N), 0) / entry.tiles.length)) });
     celebrate(entry);
     try { recordRegister(entry); } catch (e) { /* the register is a keepsake: a failed write never stops the game */ }
   } else {
     sfx(entry.kind === 'swap' ? 'swap' : 'turn');
   }
   announce(entry);
+  moodUpdate();
   if (cur().kind === 'human' && !fromAi) G.lastHuman = s.cur;
   save(s);
   rollScores();
@@ -410,7 +430,7 @@ function stage(k, i, letter) {
   G.staged.push({ k, i, l: l === '?' ? letter : l, blank: l === '?' });
   G.order = G.order.filter((x) => x !== k);
   G.selected = null; G.hint = null;
-  sfx('place');
+  sfx('place', { pan: colPan(i) });
   updatePreview(); renderStaging();
   return true;
 }
@@ -665,6 +685,8 @@ function openDialog(name, arg) {
   else if (name === 'ledger') html = UI.ledgerHtml(G.s, G.lex);
   else if (name === 'fact') html = `<div class="dialog-wrap" role="dialog" aria-modal="true" aria-label="Hot Springs word card">${UI.factHtml(arg.entry, G.lex, arg.form, '<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div>')}</div>`;
   else if (name === 'confirm') html = `<div class="card dialog" role="dialog" aria-modal="true" aria-labelledby="cf-h"><h2 id="cf-h">${esc(arg.title)}</h2><p>${esc(arg.text)}</p><div class="dlg-btns"><button class="btn quiet" data-close>Cancel</button><button class="btn primary" data-ok>${esc(arg.ok)}</button></div></div>`;
+  if (G.dialog === 'pause' && name !== 'pause') releaseAudio('pause');
+  if (name === 'pause') holdAudio('pause');
   m.innerHTML = html; m.hidden = false; m.dataset.name = name; G.dialogAt = performance.now();
   m.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => closeDialog()));
   m.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { closeDialog(); go(b.dataset.go); }));
@@ -691,6 +713,7 @@ function openDialog(name, arg) {
 function closeDialog(silent) {
   const m = $('#modal');
   if (!G.dialog && m.hidden) return;
+  if (G.dialog === 'pause') releaseAudio('pause');
   G.dialog = null; G.blankCb = null; m.hidden = true; m.innerHTML = '';
   if (!silent) { const b = $('#board'); if (G.scene === 'game' && b) b.focus({ preventScroll: true }); }
 }
@@ -1207,6 +1230,12 @@ window.__game = {
     newGame({ mode: 'play', seats, hints: opts.hints !== false });
     return true;
   },
+  audioList() { return audioList(); },
+  audioRender(name, seconds = 30, wantWav = false) { return audioRender(name, seconds, !!wantWav); },
+  audioState() {
+    const k = audio.kit, i = k && k.music.info();
+    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, holds: [...audio.holds], tune: tuneName(), bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb };
+  },
   async act(name, ...a) {
     switch (name) {
       case 'stage': for (const t of a[0]) { const k = cur().rack.findIndex((l, j) => (t.blank ? l === '?' : l === t.l) && !G.staged.some((x) => x.k === j)); if (k < 0) return { ok: false, error: 'not on rack' }; stage(k, t.i, t.blank ? t.l : null); } return { ok: true, preview: G.preview };
@@ -1246,19 +1275,7 @@ window.__game = {
       case 'toast': toast(a[0]); return true;
       case 'has': return has(G.dict, a[0]);
       case 'b3': return B3.debug ? B3.debug() : null;
-      case 'renderSfx': {
-        // render one sound offline and measure it (nobody can listen in a test run)
-        const prev = { ctx: audio.ctx, on: audio.on, vol: audio.vol };
-        const off = new OfflineAudioContext(1, 44100 * 2, 44100);
-        audio.ctx = off; audio.on = true; audio.vol = a[1] ?? 0.35;
-        sfx(a[0]);
-        const buf = await off.startRendering();
-        Object.assign(audio, prev);
-        const d = buf.getChannelData(0);
-        let peak = 0, sum = 0, last = 0;
-        for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; sum += d[i] * d[i]; if (v > 0.001) last = i; }
-        return { peak: +peak.toFixed(3), rms: +Math.sqrt(sum / d.length).toFixed(4), ms: Math.round(last / 44.1) };
-      }
+      case 'renderSfx': return renderCue(a[0], a[1] ?? 0.35, a[2] || {});   // one sound offline, measured (nobody can listen in a test run)
       case 'timeAi': {
         // n AI turns at `level` from the current position, timed (the moves are applied outside the UI)
         const ms = [];
