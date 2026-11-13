@@ -5,7 +5,7 @@ import * as E from './engine.js';
 import { N, CENTER, RACK, FULL_SOAK, FEATURED_BONUS, SQUARE as SQUARES, BATHHOUSES as BATHS } from './score.js';
 import { seedState } from './rng.js';
 import * as R from './render2d.js';
-import { audio, unlock, sfx } from './audio.js';
+import { audio, unlock, sfx, pauseAudio, resumeAudio } from './audio.js';
 import { art, loadArt } from './art.js';
 import { store, KEYS, createGameSaves } from './storage.js';
 import { startAi, aiMove, aiHint, aiClient } from './aiclient.js';
@@ -270,7 +270,7 @@ const turnPrivacy = () => cur().kind === 'human' && humans() >= 2 && G.revealed 
 // ---------- turn flow ----------
 function startTurn() {
   const s = G.s;
-  clearTimeout(G.aiTimer);
+  clearTimeout(G.aiTimer); G.aiHeld = null;
   // a new turn drops any AI reply still on its way (it carries the old token) and any tile still in the air from an
   // earlier move; tiles the player placed while the last move's tiles were landing stay where they are
   G.aiToken++; G.aiBusy = false;
@@ -300,11 +300,13 @@ function scheduleAi() {
   };
   aiMove(s, cur().level).then((r) => {
     const wait = Math.max(0, delay - (performance.now() - t0));
-    G.aiTimer = setTimeout(() => {
+    const fire = () => {
       if (!live()) { if (token === G.aiToken) G.aiBusy = false; return; }
       s.rng.ai = r.rngAi;
       act(r.action);
-    }, wait);
+    };
+    // a hidden tab holds the reply (and its cue) until the player is back
+    G.aiTimer = setTimeout(() => { if (document.hidden) G.aiHeld = fire; else fire(); }, wait);
   }).catch((err) => { console.warn('AI failed, passing', err); if (live()) act({ type: 'pass' }); });
 }
 
@@ -1138,7 +1140,11 @@ function wireStatic() {
   // the page losing focus mid-drag (app switch, notification, alt-tab): the release may never arrive
   const away = () => { if (G.drag || G.pinch) { cancelDrag(); G.pinch = null; G.pointers.clear(); draw(); } };
   window.addEventListener('blur', away);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) away(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { away(); pauseAudio(); return; }
+    resumeAudio();
+    if (G.aiHeld) { const f = G.aiHeld; G.aiHeld = null; f(); }
+  });
   // iOS: no rubber-band scroll or page zoom while a tile or the board is held (they would cancel the touch)
   document.addEventListener('touchmove', (e) => { if (G.scene === 'game' && (G.drag || G.pinch)) e.preventDefault(); }, { passive: false });
   b.addEventListener('focus', () => { if (humanCanAct()) { G.cursor.on = true; draw(); } });

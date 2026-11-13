@@ -8,6 +8,10 @@ export function unlock() {
   try { const AC = window.AudioContext || window.webkitAudioContext; if (AC) audio.ctx = new AC(); } catch (e) { audio.ctx = null; }
 }
 
+// a hidden tab goes quiet: nothing should sound until the player is back
+export function pauseAudio() { if (audio.ctx && audio.ctx.state === 'running') audio.ctx.suspend().catch(() => {}); }
+export function resumeAudio() { if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume().catch(() => {}); }
+
 function tone(f, t0, dur, type = 'sine', g = 0.3, slide = 0) {
   const c = audio.ctx, o = c.createOscillator(), a = c.createGain();
   o.type = type; o.frequency.setValueAtTime(f, t0); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t0 + dur);

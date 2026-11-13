@@ -64,4 +64,34 @@ export const tests = [
       t.equal((await t.state()).scene, 'game', 'Daily starts straight away');
     },
   },
+  {
+    name: 'S5-18 a hidden tab silences audio and holds the computer reply',
+    viewports: ['desktop'],
+    initScript: () => {
+      window.__ctxs = [];
+      const AC = window.AudioContext;
+      window.AudioContext = class extends AC { constructor(...a) { super(...a); window.__ctxs.push(this); } };
+    },
+    async run(t) {
+      await ready(t);
+      await t.page.click('#screen [data-go="setup"]');
+      await t.game('newGame', { seed: 6 });
+      await t.waitIdle(5000);
+      const ctxState = () => t.page.evaluate(() => (window.__ctxs[0] ? window.__ctxs[0].state : 'none'));
+      t.equal(await ctxState(), 'running', 'the audio context is running while visible');
+      const hide = (hidden) => t.page.evaluate((h) => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => h }); document.dispatchEvent(new Event('visibilitychange')); }, hidden);
+      await t.page.evaluate(() => window.__game.act('pass'));
+      await hide(true);
+      await t.page.waitForTimeout(1800);
+      let s = await t.state();
+      t.equal(s.game.move, 1, 'the computer has not replied while hidden');
+      t.equal(s.aiThinking, true, 'its reply is held, not dropped');
+      t.equal(await ctxState(), 'suspended', 'audio is suspended while hidden');
+      await hide(false);
+      await t.waitIdle(10000);
+      s = await t.state();
+      t.expect(s.game.move >= 2, 'the computer replies once the tab is visible again');
+      t.equal(await ctxState(), 'running', 'audio resumes when visible');
+    },
+  },
 ];
