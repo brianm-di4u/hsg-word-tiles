@@ -94,4 +94,81 @@ export const tests = [
       t.equal(await ctxState(), 'running', 'audio resumes when visible');
     },
   },
+  {
+    name: 'S6-01 wrong-typed daily, register and settings values do not break the title or New game',
+    viewports: ['desktop'],
+    async run(t) {
+      const cases = [
+        ['daily days null', 'hs-letters-daily-v1', '{"days":null,"streak":1}'],
+        ['daily is an array', 'hs-letters-daily-v1', '[]'],
+        ['daily day entry', 'hs-letters-daily-v1', '{"days":{"2026-01-01":5},"streak":1,"last":null}'],
+        ['register is a number', 'hs-letters-register-v1', '5'],
+        ['register is a string', 'hs-letters-register-v1', '"abc"'],
+        ['register entry', 'hs-letters-register-v1', '{"SPRING":{"best":"x"}}'],
+        ['settings text string', 'hs-letters-settings-v1', '{"text":"abc","vol":"loud","theme":5,"motion":7}'],
+        ['settings vol 40', 'hs-letters-settings-v1', '{"vol":40,"sound":true}'],
+        ['settings is an array', 'hs-letters-settings-v1', '[1]'],
+        ['lastSetup empty seats', 'hs-letters-settings-v1', '{"lastSetup":{"seats":[]}}'],
+        ['lastSetup unknown persona', 'hs-letters-settings-v1', '{"lastSetup":{"seats":[{"kind":"human","name":""},{"kind":"ai","persona":"zzz"}],"hints":true}}'],
+        ['lastSetup not an object', 'hs-letters-settings-v1', '{"lastSetup":"x"}'],
+      ];
+      await ready(t);
+      for (const [label, key, val] of cases) {
+        await t.page.evaluate(() => localStorage.clear());
+        await t.page.evaluate(([k, v]) => localStorage.setItem(k, v), [key, val]);
+        await t.reload();
+        await ready(t);
+        t.expect(await t.page.$('#screen [data-go="setup"]'), label + ': the title shows New game');
+        const st = (await t.state()).settings;
+        t.expect(st.vol >= 0 && st.vol <= 1 && [1, 1.15, 1.3].includes(st.text) && ['auto', 'light', 'dark'].includes(st.theme), label + ': settings are sane');
+        await t.page.click('#screen [data-go="setup"]');
+        t.expect(await t.page.$('#screen [data-start]'), label + ': the setup screen renders');
+        await t.page.click('#screen [data-start]');
+        await t.waitIdle(5000);
+        t.equal((await t.state()).scene, 'game', label + ': New game starts');
+      }
+    },
+  },
+  {
+    name: 'S6-01 a wrong-typed register does not freeze the first Hot Springs play',
+    viewports: ['desktop'],
+    async run(t) {
+      const SPRING = [{ l: 'S', i: 109 }, { l: 'P', i: 110 }, { l: 'R', i: 111 }, { l: 'I', i: 112 }, { l: 'N', i: 113 }, { l: 'G', i: 114 }];
+      for (const val of ['5', '"abc"']) {
+        await ready(t);
+        await t.page.evaluate(() => localStorage.clear());
+        await t.page.evaluate((v) => localStorage.setItem('hs-letters-register-v1', v), val);
+        await t.reload();
+        await ready(t);
+        await t.game('newGame', { seed: 11 });
+        await t.waitIdle(5000);
+        const s = await t.state();
+        s.game.players[0].rack = 'SPRINGE'.split(''); s.game.cur = 0;
+        await t.game('setState', { game: s.game });
+        await t.game('act', 'stage', SPRING);
+        const r = await t.game('act', 'play');
+        t.expect(r.ok, 'the play is accepted with register ' + val);
+        await t.waitIdle(10000);
+        const after = await t.state();
+        t.expect(after.game.move >= 2, 'the computer replies (move ' + after.game.move + ') with register ' + val);
+        const saved = await t.page.evaluate(() => JSON.parse(localStorage.getItem('hs-letters-save-v1')).move);
+        t.equal(saved, after.game.move, 'the save matches the game with register ' + val);
+      }
+    },
+  },
+  {
+    name: 'S6-01 an uncaught error offers a way back to the title',
+    viewports: ['desktop'],
+    allowConsoleErrors: true,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 6 });
+      await t.waitIdle(5000);
+      await t.page.evaluate(() => { setTimeout(() => { throw new Error('council test error'); }, 0); });
+      await t.page.waitForSelector('#crash [data-crash]', { timeout: 3000 });
+      await t.page.click('#crash [data-crash]');
+      t.equal((await t.state()).scene, 'title', 'Back to title leaves the game');
+      t.equal(await t.page.$('#crash'), null, 'the notice goes away');
+    },
+  },
 ];

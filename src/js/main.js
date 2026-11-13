@@ -7,7 +7,7 @@ import { seedState } from './rng.js';
 import * as R from './render2d.js';
 import { audio, unlock, sfx, pauseAudio, resumeAudio } from './audio.js';
 import { art, loadArt } from './art.js';
-import { store, KEYS, createGameSaves } from './storage.js';
+import { store, KEYS, createGameSaves, validRegister, validDaily } from './storage.js';
 import { startAi, aiMove, aiHint, aiClient } from './aiclient.js';
 import { PERSONAS, persona } from './personas.js';
 import * as B3 from './board3d.js';
@@ -32,7 +32,25 @@ window.__G = G;
 const reduced = () => G.settings.motion === 'reduce' || (G.settings.motion === 'system' && matchMedia('(prefers-reduced-motion: reduce)').matches);
 const animOn = () => !reduced() && !G.fast;
 const dark = () => G.settings.theme === 'dark' || (G.settings.theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
-function loadSettings() { Object.assign(G.settings, store.json(KEYS.settings, {})); applySettings(); }
+// stored settings are trusted field by field: a value of the wrong type or range is dropped and the stored copy rewritten
+const SETTING_OK = {
+  sound: (v) => typeof v === 'boolean', hints: (v) => typeof v === 'boolean',
+  vol: (v) => typeof v === 'number' && v >= 0 && v <= 1,
+  theme: (v) => ['auto', 'light', 'dark'].includes(v), motion: (v) => ['system', 'full', 'reduce'].includes(v),
+  text: (v) => [1, 1.15, 1.3].includes(v), board3d: (v) => ['auto', 'on', 'off'].includes(v), ai: (v) => ['normal', 'fast', 'instant'].includes(v),
+  lastSetup: (v) => !!v && typeof v === 'object' && typeof v.hints === 'boolean' && Array.isArray(v.seats) && v.seats.length >= 2 && v.seats.length <= 4
+    && v.seats.every((x) => !!x && ((x.kind === 'human' && (x.name == null || typeof x.name === 'string')) || (x.kind === 'ai' && PERSONAS.some((p) => p.id === x.persona)))),
+};
+function loadSettings() {
+  const raw = store.json(KEYS.settings, {}, (v) => !!v && typeof v === 'object' && !Array.isArray(v));
+  let bad = Object.keys(raw).some((k) => !SETTING_OK[k]);
+  for (const k of Object.keys(SETTING_OK)) {
+    if (!(k in raw)) continue;
+    if (SETTING_OK[k](raw[k])) G.settings[k] = raw[k]; else bad = true;
+  }
+  if (bad) store.put(KEYS.settings, G.settings);
+  applySettings();
+}
 function saveSettings() { store.put(KEYS.settings, G.settings); applySettings(); }
 function applySettings() {
   const st = G.settings;
@@ -77,10 +95,10 @@ function save(s = G.s) {
   return outcome;
 }
 const loadSave = () => gameSaves.read().game;
-const register = () => store.json(KEYS.register, {});
+const register = () => store.json(KEYS.register, {}, validRegister);
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 function dailyInfo() {
-  const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null });
+  const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
   return { ...d, today: d.days[G.dailyDate || today()] || null };
 }
 function recordRegister(entry) {
@@ -98,7 +116,7 @@ function recordRegister(entry) {
 }
 function recordDaily() {
   const s = G.s;
-  const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null });
+  const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
   const date = s.daily.date, score = s.players[0].score;
   const prev = d.days[date];
   d.days[date] = { score: prev ? Math.max(prev.score, score) : score, plays: (prev ? prev.plays : 0) + 1 };
@@ -148,7 +166,7 @@ function screenHtml(name) {
     case 'about': return UI.aboutHtml(META);
     case 'over': {
       if (G.s.mode !== 'daily') return UI.overHtml(G.s, lex);
-      const d = store.json(KEYS.daily, { days: {}, streak: 0 }), date = G.s.daily.date, day = d.days[date];
+      const d = store.json(KEYS.daily, { days: {}, streak: 0 }, validDaily), date = G.s.daily.date, day = d.days[date];
       const label = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
       return UI.overHtml(G.s, lex, { label, best: day ? day.score : G.s.players[0].score, streak: d.streak || 1 });
     }
@@ -329,7 +347,7 @@ function afterAction(entry, fromAi) {
       tick();
     } else sfx('play');
     celebrate(entry);
-    recordRegister(entry);
+    try { recordRegister(entry); } catch (e) { /* the register is a keepsake: a failed write never stops the game */ }
   } else {
     sfx(entry.kind === 'swap' ? 'swap' : 'turn');
   }
@@ -1258,6 +1276,18 @@ window.__game = {
     return null;
   },
 };
+
+// an error nothing caught must not leave a dead screen: offer the way out
+function crashNotice() {
+  if (document.getElementById('crash')) return;
+  const el = document.createElement('div');
+  el.id = 'crash'; el.setAttribute('role', 'alert');
+  el.innerHTML = '<span>Something went wrong.</span><button class="btn" data-crash>Back to title</button>';
+  el.querySelector('[data-crash]').addEventListener('click', () => { el.remove(); showScene('title'); });
+  document.body.appendChild(el);
+}
+window.addEventListener('error', crashNotice);
+window.addEventListener('unhandledrejection', crashNotice);
 
 wireStatic();
 boot();

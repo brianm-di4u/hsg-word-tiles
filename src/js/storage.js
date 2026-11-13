@@ -9,9 +9,17 @@ export const store = {
   get(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { window.localStorage.setItem(k, v); return true; } catch (e) { return false; } },
   del(k) { try { window.localStorage.removeItem(k); } catch (e) { /* nothing to do */ } },
-  json(k, fallback) { try { const v = JSON.parse(this.get(k) || 'null'); return v == null ? fallback : v; } catch (e) { return fallback; } },
+  // `valid` rejects a value of the wrong shape: the key is dropped and the fallback returned, so one bad value never bricks the game
+  json(k, fallback, valid) { try { const v = JSON.parse(this.get(k) || 'null'); if (v == null) return fallback; if (valid && !valid(v)) { this.del(k); return fallback; } return v; } catch (e) { return fallback; } },
   put(k, v) { return this.set(k, JSON.stringify(v)); },
 };
+
+// Shape checks for the register and daily keys (the save key has its own validator below).
+const plain = x => !!x && typeof x === 'object' && !Array.isArray(x);
+const num = x => typeof x === 'number' && Number.isFinite(x);
+export const validRegister = r => plain(r) && Object.values(r).every(e => plain(e) && num(e.count) && num(e.best) && typeof e.first === 'string');
+export const validDaily = d => plain(d) && plain(d.days) && Object.values(d.days).every(e => plain(e) && num(e.score) && num(e.plays))
+  && (d.streak === undefined || num(d.streak)) && (d.last == null || typeof d.last === 'string');
 
 // Optional persistence metadata in the existing v1 game key, never rules/RNG data.
 export const SAVE_STAMP = '_hsgSlotV1';
