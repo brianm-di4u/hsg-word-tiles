@@ -449,3 +449,12 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   #rackbar { padding: 6px 4px 10px; }
   .abtn { min-height: 40px; }
 }
+/* the title in the same position: the painting on the left and the menu beside it, so New game is on the first screen */
+@media (max-height: 520px) and (min-aspect-ratio: 1/1) {
+  .title { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px 18px; max-width: 980px; padding-top: 0; }
+  .title-card { grid-column: 1; grid-row: 1 / span 2; aspect-ratio: 4 / 3; }
+  .title-art { object-position: 50% 50%; }
+  .title-words { padding-top: 0; }
+  .title .menu { grid-column: 2; grid-row: 1; max-width: none; gap: 6px; }
+  .title .loading { grid-column: 2; grid-row: 2; margin: 0; }
+}

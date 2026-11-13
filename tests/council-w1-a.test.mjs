@@ -171,4 +171,19 @@ export const tests = [
       t.equal(await t.page.$('#crash'), null, 'the notice goes away');
     },
   },
+  {
+    name: 'S4-23 on a landscape phone New game is on the first screen',
+    viewports: ['desktop'],
+    async run(t) {
+      await ready(t);
+      for (const [w, h] of [[844, 390], [667, 375], [568, 320]]) {
+        await t.page.setViewportSize({ width: w, height: h });
+        await t.waitForStable();
+        const r = await t.page.evaluate(() => { const b = document.querySelector('#screen [data-go="setup"]').getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, w: innerWidth, h: innerHeight, sw: document.documentElement.scrollWidth }; });
+        t.expect(r.top >= 0 && r.bottom <= r.h, w + 'x' + h + ': New game is inside the viewport (' + Math.round(r.top) + '-' + Math.round(r.bottom) + ')');
+        t.expect(r.left >= 0 && r.right <= r.w && r.sw <= r.w, w + 'x' + h + ': nothing overflows sideways');
+        await t.shot('title-landscape-' + w + 'x' + h);
+      }
+    },
+  },
 ];
