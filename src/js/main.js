@@ -15,7 +15,14 @@ import * as UI from './ui.js';
 import { generateMoves } from './movegen.js';
 
 const { qs: $, esc } = UI;
-const META = { words: 168295 };
+const META = { words: 168295, added: 0 };
+// every two-letter word the dictionary holds, for the Help sheet (built once the dictionary is loaded)
+let twoLetters = null;
+const twoLetterWords = () => {
+  if (!G.dict) return [];
+  if (!twoLetters) { twoLetters = []; for (let a = 65; a < 91; a++) for (let b = 65; b < 91; b++) { const w = String.fromCharCode(a, b); if (has(G.dict, w)) twoLetters.push(w); } }
+  return twoLetters;
+};
 
 const G = {
   s: null, scene: 'title', back: 'title', dict: null, lex: makeLexicon(LEXICON), ready: false,
@@ -74,6 +81,7 @@ async function boot() {
   const t0 = performance.now();
   G.dict = await loadDict(DICT_B64);
   G.dictMs = Math.round(performance.now() - t0);
+  META.words = G.dict.packed; META.added = G.dict.added.length;
   startAi(DICT_B64, LEXICON, { dict: G.dict, lex: G.lex });
   G.ready = true;
   if (G.scene === 'title' && !G.dialog) showScene('title');
@@ -178,7 +186,7 @@ function screenHtml(name) {
       return UI.titleHtml({ canContinue: !!sv, continueLine: sv ? (sv.mode === 'daily' ? 'Daily Soak in progress' : `${sv.players.map((p) => p.name).join(' vs ')} · move ${sv.move + 1}`) : '', dailyLine: UI.dailyLine(di), found, total: lex.data.words.length, loading: !G.ready });
     }
     case 'setup': return UI.setupHtml(G.setup);
-    case 'help': return UI.helpHtml(G.helpTab, lex);
+    case 'help': return UI.helpHtml(G.helpTab, lex, twoLetterWords());
     case 'settings': return UI.settingsHtml(G.settings);
     case 'register': return UI.registerHtml(lex, register());
     case 'about': return UI.aboutHtml(META);

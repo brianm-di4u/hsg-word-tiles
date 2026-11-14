@@ -211,7 +211,7 @@ export function privacyHtml(p, k) {
 }
 
 // ---------- help ----------
-export function helpHtml(tab, lex) {
+export function helpHtml(tab, lex, twos = []) {
   const tabs = [['rules', 'How to play'], ['squares', 'Squares and scoring'], ['words', 'Hot Springs words'], ['keys', 'Controls']];
   const tileRow = Object.entries(TILES).map(([l, t]) => `<span class="tchip"><b>${l}</b><i>${t.value}</i><small>×${t.count}</small></span>`).join('');
   const body = {
@@ -224,8 +224,11 @@ export function helpHtml(tab, lex) {
         <li>Every run of two or more tiles your play creates, across and down, must be a word. You score all of them.</li>
         <li>Draw back up to seven tiles from the bag.</li>
       </ol>
-      <p>Words come from the public-domain ENABLE list (168,000 words; no proper nouns). A play with a word that isn't on the list is handed back and you keep your turn. While you place tiles, the strip under the board shows the words, the score and any bonus.</p>
+      <p>Words come from the public-domain ENABLE list (168,000 words; no proper nouns) with a few additions: the two-letter words below and some everyday ones such as EMAIL, APP and BLOG. A play with a word that isn't on the list is handed back and you keep your turn. While you place tiles, the strip under the board shows the words, the score and any bonus.</p>
       <p>Stuck? The <b>Spring Guide</b> (Hint) sets a strong play on the board for you to keep, move or take back: three per player in a game against the computer or pass-and-play, none in the Daily Soak.</p>
+      ${twos.length ? `<h2>Two-letter words</h2>
+      <p>All ${twos.length} of these are playable. QI and ZA help when you are holding a lone Q or Z.</p>
+      <p class="twos">${twos.join(' ')}</p>` : ''}
       <h2>The end</h2>
       <p>The game ends when a player uses their last tile and the bag is empty, or when everyone has passed or swapped twice in a row. Tiles left on a rack count against their owner; whoever went out collects their value.</p>
       <p class="fine">Bathhouse Letters is an original game. Its board, tiles, bonuses and rules are game logic made for this town; the facts on its cards are history, with sources.</p>`,
@@ -306,7 +309,7 @@ export function aboutHtml(meta) {
     <header class="sheet-head"><h1>About</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     <p><b>Bathhouse Letters</b> is part of Hot Springs Games, an open-source (MIT) collection of browser games set in Hot Springs, Arkansas. It's an original crossword word-tile game: the board, tiles, bonuses and rules were made for it, and nothing here is endorsed by any park, business or bathhouse.</p>
     <h2>Words</h2>
-    <p>The dictionary is the ENABLE word list (public domain), ${meta.words.toLocaleString('en-US')} words of 2–15 letters, minus slurs and crude words. Common words for the computer opponents are marked using SCOWL by Kevin Atkinson (© 2000–2018, used under its permissive licence).</p>
+    <p>The dictionary is the ENABLE word list (public domain), ${meta.words.toLocaleString('en-US')} words of 2–15 letters, minus slurs and crude words${meta.added ? `, plus ${meta.added} added by the game: the two-letter words QI, ZA, OK, EW, KI, FE, GI and OI, and everyday words such as EMAIL, ONLINE, APP, BLOG and EMOJI` : ''}. Common words for the computer opponents are marked using SCOWL by Kevin Atkinson (© 2000–2018, used under its permissive licence).</p>
     <h2>History</h2>
     <p>Each Hot Springs word card cites its source: the National Park Service, the Encyclopedia of Arkansas, Wikipedia, and other sources checked for the collection's trivia game. The opponents are fictional characters.</p>
     <h2>Type and art</h2>

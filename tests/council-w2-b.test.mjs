@@ -4,6 +4,7 @@ import { ctx } from './lib.mjs';
 import { playMatch } from '../tools/balance.mjs';
 import { LEVELS, STYLES, premiumPoints, chooseAction } from '../src/js/ai.js';
 import { createGame, apply } from '../src/js/engine.js';
+import { SUPPLEMENT } from '../src/js/supplement.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const settingsKey = 'hs-letters-settings-v1';
@@ -142,6 +143,67 @@ export const tests = [
       const s = (await t.state()).game;
       t.equal(s.log[s.log.length - 1].p, 1, 'Lucky took his turn');
       t.equal((await t.state()).ai, 'worker', 'the worker answered');
+    },
+  },
+  {
+    name: 'P-N01 the computer opponents use the supplement',
+    node: true,
+    async run(t) {
+      const c = await ctx();
+      const s = createGame({ mode: 'play', seats: [{ kind: 'ai', level: 'hard', persona: 'julian' }, { kind: 'ai', level: 'hard', persona: 'julian' }], seed: 5 }, c.lex);
+      s.players[0].rack = ['Q', 'I', 'J', 'J', 'V', 'V', 'W'];
+      const { action } = chooseAction(c.dict, c.lex, s, { level: 'hard' });
+      t.equal(action.type, 'play', 'with only QI to play, Hard plays');
+      t.equal(action.tiles.map((x) => x.l).sort().join(''), 'IQ', 'and the word is QI');
+      s.players[0].rack = ['E', 'M', 'A', 'I', 'L', 'L', 'T'];
+      const e = chooseAction(c.dict, c.lex, s, { level: 'easy' });
+      t.equal(e.action.type, 'play', 'Easy plays too');
+    },
+  },
+  {
+    name: 'P-N01 QI is accepted and scored in play, and a made-up word is still refused',
+    viewports: ['desktop', 'mobile'],
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 21 });
+      await t.waitIdle(5000);
+      const g = (await t.state()).game;
+      g.players[0].rack = ['Q', 'I', 'Z', 'A', 'O', 'K', 'E'];
+      t.expect(await t.game('setState', { game: g }), 'a rack with Q and I is set up');
+      for (const w of [['Q', 'I'], ['Z', 'A'], ['O', 'K']]) {
+        const r = await t.game('act', 'eval', [{ i: 112, l: w[0] }, { i: 113, l: w[1] }]);
+        t.expect(r.ok, `${w.join('')} is accepted (${r.error || r.score + ' points'})`);
+      }
+      const bad = await t.game('act', 'eval', [{ i: 112, l: 'Z' }, { i: 113, l: 'K' }]);
+      t.expect(!bad.ok && /not in the dictionary/.test(bad.error), 'ZK is still refused');
+      await t.game('act', 'stage', [{ i: 112, l: 'Q' }, { i: 113, l: 'I' }]);
+      const p = await t.game('act', 'play');
+      t.expect(p.ok, 'QI can be played');
+      const s = (await t.state()).game;
+      t.equal(s.log[0].words[0].w, 'QI', 'it is logged as QI');
+      t.expect(s.players[0].score > 0, `and scores (${s.players[0].score})`);
+    },
+  },
+  {
+    name: 'P-N01 Help lists the two-letter words, and About names the additions',
+    viewports: ['desktop', 'mobile'],
+    async run(t) {
+      await ready(t);
+      await t.page.click('#screen [data-go="help"]');
+      const text = await t.page.textContent('#screen .twos');
+      const list = text.trim().split(/\s+/);
+      t.equal(list.length, 104, 'the list holds 104 words');
+      for (const w of ['QI', 'ZA', 'OK', 'EW', 'KI', 'FE', 'GI', 'OI', 'AA', 'XI']) t.expect(list.includes(w), `${w} is listed`);
+      t.expect(!list.includes('QO') && !list.includes('ZZ'), 'and no made-up pair is');
+      t.expect(/EMAIL, APP and BLOG/.test(await t.page.textContent('#screen .help-body')), 'the rules mention the everyday words');
+      await t.page.locator('#screen .twos').scrollIntoViewIfNeeded();
+      await t.checkLayout({ allowScrollY: true });
+      await t.shot('P-N01-help');
+      await t.page.click('#screen [data-back]');
+      await t.page.click('#screen [data-go="about"]');
+      const about = await t.page.textContent('#screen .about');
+      t.expect(/168,295 words/.test(about) && /plus 28 added by the game/.test(about), 'About gives the packed count and the 28 additions');
+      await t.shot('P-N01-about');
     },
   },
 ];

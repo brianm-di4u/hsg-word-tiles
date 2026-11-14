@@ -12,7 +12,10 @@
 //   bit 7     that word is common
 //   bits 8–31 index of the child node's first edge (0 = no children)
 // edges[0] holds the root node's first edge index. A "node" below is always a first-edge index.
+// The runtime list is the packed list plus src/js/supplement.js (merged in loadDict).
 // No DOM: shared by the game, the AI worker and the Node tools.
+
+import { SUPPLEMENT, SUPPLEMENT_COMMON } from './supplement.js';
 
 export const EOW = 1 << 5, LAST = 1 << 6, COMMON = 1 << 7;
 
@@ -126,9 +129,29 @@ export function buildDawg(words, common) {
   return edges;
 }
 
-export async function loadDict(b64) {
-  const { words, common } = decodeWordList(await inflateB64(b64));
+// Puts the supplement words (not already listed, not blocked) into the sorted word list, in place.
+export function mergeSupplement(words, common, extra = SUPPLEMENT) {
+  const added = [];
+  for (const w of extra) {
+    if (BLOCKED.has(w) || !/^[A-Z]{2,15}$/.test(w)) continue;
+    let lo = 0, hi = words.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (words[mid] < w) lo = mid + 1; else hi = mid; }
+    if (words[lo] === w) continue;
+    words.splice(lo, 0, w);
+    common.splice(lo, 0, SUPPLEMENT_COMMON.has(w) ? 1 : 0);
+    added.push(w);
+  }
+  return added;
+}
+
+export async function loadDict(b64, extra = SUPPLEMENT) {
+  const decoded = decodeWordList(await inflateB64(b64));
+  const words = decoded.words, common = Array.from(decoded.common);
+  const packed = words.length;
+  const added = mergeSupplement(words, common, extra);
   const d = makeDict(buildDawg(words, common));
+  d.packed = packed;      // words in the packed file
+  d.added = added;        // supplement words it did not already hold
   d.count = words.length;
   return d;
 }

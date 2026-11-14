@@ -314,6 +314,7 @@ body:not(.theme-dark) .fact-pts { color: #FFF; }
 .tabs button { min-height: 44px; padding: 6px 14px; border-radius: 99px; border: 1.5px solid var(--line); background: transparent; font-weight: 600; }
 .tabs button[aria-selected="true"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .steps { padding-left: 1.3em; } .steps li { margin: 4px 0; }
+.twos { font-weight: 600; letter-spacing: 0.08em; line-height: 1.9; word-spacing: 0.35em; }
 .legend { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .legend li { display: flex; align-items: center; gap: 12px; }
 .legend li > span:last-child { flex: 1; }
