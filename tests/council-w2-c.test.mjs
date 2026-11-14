@@ -127,6 +127,23 @@ export const tests = [
     },
   },
   {
+    name: 'S3-01 a game finishes once: leaving the results for the title is not undone, and the game is counted once',
+    viewports: ['desktop'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(31);
+      await t.game('newGame', { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      const s = await playOut(t);   // plays faster than the tiles land, so several start-of-turn timers are pending at the end
+      t.expect(s.over, 'the game finished');
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 8000 });
+      await t.game('scene', 'title');
+      await t.page.waitForTimeout(1600);   // longer than the 900 ms the results screen waits, plus the longest landing
+      t.equal((await t.state()).scene, 'title', 'still on the title: the results screen did not come back');
+      t.equal((await ls(t, STATS)).games, 1, 'and the game was counted once');
+    },
+  },
+  {
     name: 'S3-01 the Records sheet fits both viewports with a full record, and an empty one explains itself',
     initScript: instant,
     async run(t) {

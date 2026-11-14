@@ -419,8 +419,14 @@ function afterAction(entry, fromAi) {
   renderGame();
 }
 
+// A game is finished once. More than one start-of-turn timer can still be pending when the last move lands (a move
+// played while the tiles of the one before were in the air); without this each of them replayed the fanfare, counted a
+// Daily Soak again and brought the results screen back after the player had left it.
+const finishedGames = new WeakSet();
 function finishGame() {
   const s = G.s;
+  if (finishedGames.has(s)) return;
+  finishedGames.add(s);
   save(s);
   if (s.mode === 'daily') G.dailyStreak = recordDaily().streak;
   try { recordStats(s); } catch (e) { /* the records are a keepsake: a failed write never stops the game */ }
