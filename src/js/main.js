@@ -10,6 +10,8 @@ import { art, loadArt } from './art.js';
 import { store, KEYS, createGameSaves, validRegister, validDaily } from './storage.js';
 import { startAi, aiMove, aiHint, aiClient } from './aiclient.js';
 import { PERSONAS, persona, LEVEL_NAME, seatLevel } from './personas.js';
+import { barkFor, endBark, SHORT } from './voices.js';
+import { cleanStats, applyGame, applyDaily } from './stats.js';
 import * as B3 from './board3d.js';
 import * as UI from './ui.js';
 import { generateMoves } from './movegen.js';
@@ -26,7 +28,7 @@ const twoLetterWords = () => {
 
 const G = {
   s: null, scene: 'title', back: 'title', dict: null, lex: makeLexicon(LEXICON), ready: false,
-  settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true },
+  settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true, tipsSeen: true },
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
   preview: null, hint: null, last: new Set(), anim: new Map(), animUntil: 0,
@@ -41,7 +43,7 @@ const animOn = () => !reduced() && !G.fast;
 const dark = () => G.settings.theme === 'dark' || (G.settings.theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
 // stored settings are trusted field by field: a value of the wrong type or range is dropped and the stored copy rewritten
 const SETTING_OK = {
-  sound: (v) => typeof v === 'boolean', fx: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean', amb: (v) => typeof v === 'boolean', hints: (v) => typeof v === 'boolean',
+  sound: (v) => typeof v === 'boolean', tipsSeen: (v) => typeof v === 'boolean', fx: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean', amb: (v) => typeof v === 'boolean', hints: (v) => typeof v === 'boolean',
   vol: (v) => typeof v === 'number' && v >= 0 && v <= 1,
   theme: (v) => ['auto', 'light', 'dark'].includes(v), motion: (v) => ['system', 'full', 'reduce'].includes(v),
   text: (v) => [1, 1.15, 1.3].includes(v), board3d: (v) => ['auto', 'on', 'off'].includes(v), ai: (v) => ['normal', 'fast', 'instant'].includes(v),
@@ -55,6 +57,9 @@ function loadSettings() {
     if (!(k in raw)) continue;
     if (SETTING_OK[k](raw[k])) G.settings[k] = raw[k]; else bad = true;
   }
+  // first-run tips are for a newcomer: anyone who already has a save, settings, register, daily or record of this game is not one
+  // (the flag is written once a first game starts, so a tab closed mid-tips still counts as a newcomer next time)
+  if (typeof raw.tipsSeen !== 'boolean') G.settings.tipsSeen = Object.values(KEYS).some((k) => store.get(k) != null) || (!!window.__TEST__ && !window.__TEST_TIPS__);
   if (bad) store.put(KEYS.settings, G.settings);
   applySettings();
 }
@@ -136,13 +141,25 @@ function recordDaily() {
     d.last = date;
   }
   store.put(KEYS.daily, d);
+  return { score, streak: d.streak };
+}
+// The player's records: read field by field (a damaged number never costs the others), written when a game ends.
+const plainObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+const stats = () => cleanStats(store.json(KEYS.stats, null, plainObj));
+const statsDone = new WeakSet();
+function recordStats(s) {
+  if (statsDone.has(s)) return;
+  statsDone.add(s);
+  const r = s.mode === 'daily' ? { stats: applyDaily(stats(), s.players[0].score, G.dailyStreak || 0), pb: null } : applyGame(stats(), s);
+  if (s.mode === 'daily' || r.pb) store.put(KEYS.stats, r.stats);
+  G.pb = { s, pb: r.pb };
 }
 
 // ---------- music and the bed ----------
 // the lobby tune on the title and setup, the table tune in play, the results tune after the last move; a sheet opened
 // from another screen keeps that screen's tune. The bag running dry quickens the table tune a little, and the steam
 // air of the bed thickens as the board fills.
-const SHEETS = ['help', 'settings', 'about', 'register'];
+const SHEETS = ['help', 'settings', 'about', 'register', 'records'];
 const tuneFor = (name) => (SHEETS.includes(name) ? tuneFor(G.back) : name === 'game' ? 'table' : name === 'over' ? 'finale' : 'lobby');
 function moodUpdate() {
   setTune(tuneFor(G.scene));
@@ -157,8 +174,8 @@ const colPan = (i) => ((i % N) - 7) / 7 * 0.7;
 // ---------- scenes ----------
 function showScene(name, arg) {
   const prev = G.scene;
-  if (name !== prev && !['help', 'settings', 'about', 'register'].includes(name)) G.back = name;
-  if (['help', 'settings', 'about', 'register'].includes(name) && !['help', 'settings', 'about', 'register'].includes(prev)) G.back = prev;
+  if (name !== prev && !SHEETS.includes(name)) G.back = name;
+  if (SHEETS.includes(name) && !SHEETS.includes(prev)) G.back = prev;
   G.scene = name;
   moodUpdate();
   cancelDrag(); G.pinch = null; G.pointers.clear();
@@ -183,15 +200,17 @@ function screenHtml(name) {
       const reg = register();
       const found = lex.data.words.filter((e) => e.forms.some((f) => reg[f])).length;
       const di = dailyInfo();
-      return UI.titleHtml({ canContinue: !!sv, continueLine: sv ? (sv.mode === 'daily' ? 'Daily Soak in progress' : `${sv.players.map((p) => p.name).join(' vs ')} · move ${sv.move + 1}`) : '', dailyLine: UI.dailyLine(di), found, total: lex.data.words.length, loading: !G.ready });
+      const rec = stats();
+      return UI.titleHtml({ records: rec.games ? `${UI.plural(rec.games, 'game')} · ${UI.plural(rec.wins, 'win')}` : 'Your wins and bests', canContinue: !!sv, continueLine: sv ? (sv.mode === 'daily' ? 'Daily Soak in progress' : `${sv.players.map((p) => p.name).join(' vs ')} · move ${sv.move + 1}`) : '', dailyLine: UI.dailyLine(di), found, total: lex.data.words.length, loading: !G.ready });
     }
     case 'setup': return UI.setupHtml(G.setup);
     case 'help': return UI.helpHtml(G.helpTab, lex, twoLetterWords());
     case 'settings': return UI.settingsHtml(G.settings);
     case 'register': return UI.registerHtml(lex, register());
+    case 'records': return UI.recordsHtml(stats(), { found: lex.data.words.filter((e) => e.forms.some((f) => register()[f])).length, total: lex.data.words.length, daily: dailyInfo() });
     case 'about': return UI.aboutHtml(META);
     case 'over': {
-      if (G.s.mode !== 'daily') return UI.overHtml(G.s, lex);
+      if (G.s.mode !== 'daily') return UI.overHtml(G.s, lex, null, { pb: pbLines(), barks: G.s.players.map((p, k) => (p.kind === 'ai' ? endBark(G.s, k) : null)) });
       const d = store.json(KEYS.daily, { days: {}, streak: 0 }, validDaily), date = G.s.daily.date, day = d.days[date];
       const label = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
       return UI.overHtml(G.s, lex, { label, best: day ? day.score : G.s.players[0].score, streak: d.streak || 1 });
@@ -239,6 +258,11 @@ function wireScreen(name) {
       if (k === 'sound' && G.settings.sound) sfx('place');
       if (k === 'board3d') B3.want(G.settings.board3d);
     }));
+    const again = scr.querySelector('[data-tips]');
+    again.addEventListener('click', () => {
+      G.settings.tipsSeen = false; G.coach = null; saveSettings();
+      again.textContent = 'Tips will show in a game'; liveSay('The tips will show again in your game.');
+    });
     scr.querySelector('[data-vol]').addEventListener('input', (e) => { G.settings.vol = +e.target.value; saveSettings(); });
     scr.querySelector('[data-vol]').addEventListener('change', () => sfx('place'));
   }
@@ -294,6 +318,8 @@ function startDaily(date) {
 }
 function resumeGame(record) { whenReady(() => beginGame(record.game, record)); }
 function beginGame(s, intent) {
+  if (!G.settings.tipsSeen) store.put(KEYS.settings, G.settings); // the newcomer flag is written before the first save, so a tab closed mid-tips still counts as a newcomer
+  G.bark = null;
   const handle = gameSaves.open(s, intent);
   gameHandles.set(s, handle);
   G.s = s;
@@ -362,6 +388,9 @@ function afterAction(entry, fromAi) {
   const s = G.s;
   cancelDrag();
   G.flash = null;
+  const said = s.players[entry.p].kind === 'ai' ? barkFor(s, entry) : null;
+  G.bark = said ? { ...said, persona: s.players[entry.p].persona } : null;
+  if (entry.kind === 'play' && s.players[entry.p].kind === 'human') coachPlayed();
   // the next player's rack is ready at once (the move is applied), even while the tiles are still landing
   resetOrder(); G.hint = null;
   if (!s.over && cur().kind === 'human') G.privacy = turnPrivacy();
@@ -374,7 +403,7 @@ function afterAction(entry, fromAi) {
       entry.tiles.forEach((t, k) => setTimeout(() => sfx('place', { pan: colPan(t.i), step: k }), k * 90 + 200 + Math.floor(Math.random() * 24)));
       tick();
     } else sfx('play', { pan: colPan(Math.round(entry.tiles.reduce((a, t) => a + (t.i % N), 0) / entry.tiles.length)) });
-    celebrate(entry);
+    celebrate(entry, G.bark);
     try { recordRegister(entry); } catch (e) { /* the register is a keepsake: a failed write never stops the game */ }
   } else {
     sfx(entry.kind === 'swap' ? 'swap' : 'turn');
@@ -393,24 +422,39 @@ function afterAction(entry, fromAi) {
 function finishGame() {
   const s = G.s;
   save(s);
-  if (s.mode === 'daily') recordDaily();
+  if (s.mode === 'daily') G.dailyStreak = recordDaily().streak;
+  try { recordStats(s); } catch (e) { /* the records are a keepsake: a failed write never stops the game */ }
   const humanWon = s.result.winners.some((k) => s.players[k].kind === 'human');
   sfx(humanWon || s.mode === 'daily' ? 'fanfare' : 'turn');
   setTimeout(() => { if (G.s === s) showScene('over'); }, G.fast ? 0 : 900);
 }
 
+// What the finished game set, for the results screen ("new personal best").
+function pbLines() {
+  const r = G.pb && G.pb.s === G.s ? G.pb.pb : null;
+  if (!r) return [];
+  const st = stats(), out = [];
+  if (r.first) out.push('First game on your record.');
+  if (r.score) out.push(`New personal best: ${st.bestScore} points.`);
+  if (r.play) out.push(`New best turn: ${st.bestPlay.score} points for ${st.bestPlay.word}.`);
+  if (r.word) out.push(`New best word: ${st.bestWord.word}, ${st.bestWord.score} points.`);
+  return out;
+}
+
 // Toasts and effects for a play: Full Soak, Hot Springs words, a Featured Spring.
-function celebrate(e) {
+function celebrate(e, bark) {
   const p = G.s.players[e.p];
   const themed = e.words.filter((w) => w.themed);
-  if (e.featured) { toast({ kind: 'featured', title: `Featured Spring: ${e.featured}`, sub: `${p.name} found it · +${FEATURED_BONUS}`, fact: G.lex.entry(e.featured)?.id, form: e.featured }); sfx('featured'); }
+  const who = bark ? { p, k: e.p } : null, quote = (ev) => (bark && bark.event === ev ? `“${bark.text}”` : null);
+  if (e.featured) { toast({ kind: 'featured', who, title: `Featured Spring: ${e.featured}`, sub: `${quote('themed') || `${p.name} found it`} · +${FEATURED_BONUS}`, fact: G.lex.entry(e.featured)?.id, form: e.featured }); sfx('featured'); }
   for (const w of themed) {
     const entry = G.lex.byId.get(w.themed);
     toast({ kind: 'themed', title: `${w.w} +${w.bonus}${w.bath ? ' · Row ×2' : ''}`, sub: G.lex.categories[entry.cat].name, fact: entry.id, form: w.w });
     steamBurst(e.tiles.map((t) => t.i));
   }
   if (themed.length && !e.featured) sfx('steam');
-  if (e.full) { toast({ kind: 'soak', title: `Full Soak! +${FULL_SOAK}`, sub: `${p.name} used all seven tiles.` }); sfx('chime'); }
+  if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); sfx('chime'); }
+  else if (bark && bark.event === 'big') toast({ kind: 'bark', who, title: `${p.name}: ${e.words[0].w} +${e.score}`, sub: quote('big') });
   scorePop(e);
 }
 
@@ -510,6 +554,7 @@ async function doHint() {
 function renderStaging() {
   if (G.scene !== 'game' || !G.s) return;
   renderActions(); renderRack(); renderPreview();
+  coachRender();
   draw();
   startSteam();
 }
@@ -521,6 +566,7 @@ function renderGame() {
   $('#springs').innerHTML = UI.springsHtml(s, G.lex, mobile);
   $('#springs').querySelectorAll('[data-plaque]').forEach((b) => b.addEventListener('click', () => {
     const f = s.featured[+b.dataset.plaque];
+    if (G.coach && G.coach.phase === 'plaques') coachDismiss('plaques');
     if (f.by != null) openFact(G.lex.entry(f.word).id, f.word);
     else flash(`Featured Spring: ${f.word.length} letters, ${G.lex.categories[f.cat].name}. Form it to claim +${FEATURED_BONUS}.`);
   }));
@@ -531,6 +577,7 @@ function renderGame() {
     ? `<span class="chips">${UI.scoresHtml(s, true)}</span><span class="bag">${s.over ? 'Game over' : `${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'} · ${bagLine}`}</span>`
     : s.over ? 'Game over' : `<span class="who">${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'}</span><span class="bag">${bagLine}</span>`;
   renderActions(); renderRack(); renderPreview(); renderPrivacy();
+  coachRender();
   draw();
   startSteam();
 }
@@ -626,6 +673,7 @@ function renderPreview() {
       cls = 'ok';
     } else { html = esc(p.error); cls = 'bad'; }
   } else if (G.hoverInfo) html = G.hoverInfo;
+  else if (G.lastLine && G.bark) html = `<span class="bark"><b>${esc(SHORT[G.bark.persona] || '')}:</b> “${esc(G.bark.text)}”</span><span class="said">${esc(G.lastLine)}</span>`;
   else if (G.lastLine) html = esc(G.lastLine);
   else html = cur().kind === 'human' ? (G.s.move === 0 ? (isNarrow() ? 'Start on the centre square.' : 'Start on the Display Spring in the centre.') : (isNarrow() ? 'Drag tiles to the board.' : 'Drag tiles to the board to make a word.')) : '';
   el.className = cls; el.innerHTML = html;
@@ -673,7 +721,7 @@ function showToast() {
   el.dataset.busy = '1';
   el.className = `on ${t.kind}`;
   $('#app').classList.add('toasting');
-  el.innerHTML = `<button ${t.fact ? `data-fact="${t.fact}" data-form="${t.form || ''}"` : 'tabindex="-1"'}><span class="ti">${t.kind === 'soak' ? UI.ICON.play : UI.ICON.steam}</span><span class="tt"><b>${esc(t.title)}</b><small>${esc(t.sub || '')}</small></span>${t.fact ? '<em>Read the card ›</em>' : ''}</button>`;
+  el.innerHTML = `<button ${t.fact ? `data-fact="${t.fact}" data-form="${t.form || ''}"` : 'tabindex="-1"'}><span class="ti">${t.who ? UI.badge(t.who.p, t.who.k, 34) : t.kind === 'soak' ? UI.ICON.play : UI.ICON.steam}</span><span class="tt"><b>${esc(t.title)}</b><small>${esc(t.sub || '')}</small></span>${t.fact ? '<em>Read the card ›</em>' : ''}</button>`;
   const b = el.querySelector('[data-fact]');
   if (b) b.addEventListener('click', () => { openFact(b.dataset.fact, b.dataset.form); hideToast(); });
   clearTimeout(toastTimer);
@@ -681,6 +729,71 @@ function showToast() {
 }
 function hideToastNow() { const el = $('#toast'); clearTimeout(toastTimer); el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; $('#app').classList.remove('toasting'); }
 function hideToast() { const el = $('#toast'); el.dataset.busy = '0'; el.className = ''; $('#app').classList.remove('toasting'); setTimeout(showToast, 200); }
+
+// ---------- first-run tips ----------
+// A newcomer's first game gets four short tips, one at a time, in the card that takes the ledger's place: where to start,
+// how to play it, what the coloured discs do and what the plaques are. Each goes when the player does the thing, taps
+// Got it, or after a wait; Skip tips ends them all. Shown once (settings.tipsSeen); Settings can bring them back.
+const COACH_WAIT = { start: 30000, play: 20000, discs: 14000, plaques: 12000 };
+const liveSay = (t) => { const live = $('#live'); live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30); };
+function coachTip() {
+  const c = G.coach;
+  if (!c || G.scene !== 'game' || !G.s || G.s.over || cur().kind !== 'human' || G.privacy || G.dialog) return null;
+  const input = G.input || (matchMedia('(pointer: coarse)').matches ? 'touch' : 'mouse');
+  if (c.phase === 'start') {
+    if (G.staged.length) return { id: 'play', target: '#actions .play', text: ({ touch: 'Happy with it? Tap Play.', mouse: 'Happy with it? Click Play.', key: 'Happy with it? Press Enter.' })[input] };
+    return { id: 'start', target: '#boardwrap', text: input === 'key' ? 'Score the most. Type letters to spell across the centre.' : 'Score the most. Drag tiles to the centre square.' };
+  }
+  if (c.phase === 'discs') return { id: 'discs', target: '#boardwrap', text: 'Cream discs boost a letter. Dark discs boost the word.' };
+  if (c.phase === 'plaques') return { id: 'plaques', target: '#springs', text: `Plaques hide secret words. Form one for +${FEATURED_BONUS}.` };
+  return null;
+}
+function coachRender() {
+  if (!G.settings.tipsSeen && G.s && (!G.coach || G.coach.s !== G.s)) {
+    clearTimeout(G.coachTimer);
+    const played = G.s.log.some((e) => e.kind === 'play' && G.s.players[e.p].kind === 'human');
+    G.coach = { s: G.s, phase: played ? 'discs' : 'start', gone: new Set(), shown: null };
+  }
+  if (G.coach && G.coach.phase === 'discs' && G.staged.length) { G.coach.phase = 'plaques'; clearTimeout(G.coachTimer); G.coach.shown = null; }
+  const tip = coachTip(), el = $('#coach');
+  document.querySelectorAll('.coach-target').forEach((x) => x.classList.remove('coach-target'));
+  if (!tip || G.coach.gone.has(tip.id)) {
+    el.innerHTML = ''; $('#app').classList.remove('coaching');
+    if (!tip && G.coach) { G.coach.shown = null; clearTimeout(G.coachTimer); }
+    return;
+  }
+  $('#app').classList.add('coaching');
+  const target = $(tip.target); if (target) target.classList.add('coach-target');
+  if (G.coach.shown !== tip.id) {
+    G.coach.shown = tip.id;
+    el.innerHTML = `<div class="coach-card" role="note"><span class="coach-ic" aria-hidden="true">${UI.ICON.hint}</span><p>${esc(tip.text)}</p><div class="coach-btns"><button class="btn quiet" data-coach="got">Got it</button><button class="btn quiet" data-coach="skip">Skip tips</button></div></div>`;
+    el.querySelector('[data-coach="got"]').addEventListener('click', () => coachDismiss(tip.id));
+    el.querySelector('[data-coach="skip"]').addEventListener('click', coachEnd);
+    liveSay(`Tip: ${tip.text}`);
+    clearTimeout(G.coachTimer);
+    G.coachTimer = setTimeout(() => coachDismiss(tip.id), COACH_WAIT[tip.id]);
+  } else {
+    const p = el.querySelector('p'); if (p && p.textContent !== tip.text) p.textContent = tip.text;
+  }
+}
+function coachDismiss(id) {
+  const c = G.coach; if (!c) return;
+  clearTimeout(G.coachTimer);
+  if (id === 'plaques') { coachEnd(); return; }
+  if (id === 'discs') { c.phase = 'plaques'; c.shown = null; } else c.gone.add(id);
+  renderStaging();
+}
+function coachEnd() {
+  clearTimeout(G.coachTimer);
+  G.coach = null; G.settings.tipsSeen = true; saveSettings();
+  $('#coach').innerHTML = ''; $('#app').classList.remove('coaching');
+  document.querySelectorAll('.coach-target').forEach((x) => x.classList.remove('coach-target'));
+}
+// the player's own play finishes the first tips
+function coachPlayed() {
+  const c = G.coach; if (!c || c.phase !== 'start') return;
+  c.phase = 'discs'; c.shown = null; c.gone.clear(); clearTimeout(G.coachTimer);
+}
 
 // ---------- dialogs ----------
 function openDialog(name, arg) {
@@ -1200,6 +1313,8 @@ function wireStatic() {
   b.addEventListener('focus', () => { if (humanCanAct()) { G.cursor.on = true; draw(); } });
   b.addEventListener('blur', () => { G.cursor.on = false; draw(); });
   document.addEventListener('keydown', onKey);
+  window.addEventListener('pointerdown', (e) => { G.input = e.pointerType === 'touch' ? 'touch' : 'mouse'; }, true);
+  window.addEventListener('keydown', (e) => { if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) G.input = 'key'; }, true);
   window.addEventListener('resize', () => { if (G.drag) G.drag.boxes = null; layout(); if (G.scene === 'game') renderGame(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySettings);
   // no text selection, callouts or context menus on the game screen (phones)

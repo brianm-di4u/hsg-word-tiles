@@ -4,6 +4,7 @@ export const KEYS = {
   settings: 'hs-letters-settings-v1',
   register: 'hs-letters-register-v1',
   daily: 'hs-letters-daily-v1',
+  stats: 'hs-letters-stats-v1',
 };
 export const store = {
   get(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } },

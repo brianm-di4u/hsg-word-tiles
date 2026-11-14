@@ -1,5 +1,6 @@
 // HTML for screens, dialogs and panels. Pure string templates; main.js wires the events.
 import { PERSONAS, persona, LEVEL_NAME, LEVEL_BLURB, seatLevel, HUMAN_COLORS } from './personas.js';
+import { SHORT } from './voices.js';
 import { TILES, BLANKS } from './tiles.js';
 import { FULL_SOAK, FEATURED_BONUS } from './score.js';
 import { DAILY_TURNS } from './engine.js';
@@ -58,6 +59,7 @@ export function titleHtml(o) {
       <button class="btn ${o.canContinue ? '' : 'primary'}" data-go="setup">New game</button>
       <button class="btn" data-go="daily">Daily Soak <small>${esc(o.dailyLine)}</small></button>
       <button class="btn" data-go="register">Bathhouse Register <small>${o.found} of ${o.total} words found</small></button>
+      <button class="btn" data-go="records">Records <small>${esc(o.records)}</small></button>
       <div class="row2"><button class="btn quiet" data-go="help">How to play</button><button class="btn quiet" data-go="settings">Settings</button></div>
       <button class="btn link" data-go="about">About &amp; sources</button>
     </nav>
@@ -92,8 +94,10 @@ export function setupHtml(setup) {
     <ol class="seats">${setup.seats.map(seat).join('')}</ol>
     ${setup.seats.length < 4 ? '<button class="btn quiet add" data-add>Add a player</button>' : ''}
     <label class="check"><input type="checkbox" data-hints ${setup.hints ? 'checked' : ''}> Spring Guide hints (3 per player)</label>
+    <p class="goal"><b>The goal:</b> score more than the others by building words.</p>
     <p class="note">${humans >= 2 ? 'Pass and play: each person\'s tiles stay hidden until they tap to take their turn.' : humans === 1 ? 'You against the computer.' : 'Computers only: sit back and watch.'}</p>
     <button class="btn primary big" data-start>Start</button>
+    <button class="btn link" data-go="help">How to play</button>
   </div>`;
 }
 
@@ -211,11 +215,22 @@ export function privacyHtml(p, k) {
 }
 
 // ---------- help ----------
+// A play drawn on a strip of the board: FIND across a Warm square (the I counts double) and a Steam square (the word counts double).
+function workedExample() {
+  const cells = [['F', ''], ['I', 'w'], ['N', ''], ['D', 's']];
+  const parts = cells.map(([l, q]) => TILES[l].value * (q === 'w' ? 2 : 1));
+  const sum = parts.reduce((a, b) => a + b, 0), total = sum * 2;
+  const label = `FIND laid across four squares: the I on a Warm square, the D on a Steam square. ${cells.map(([l, q]) => `${l} ${TILES[l].value}${q === 'w' ? ' doubled' : ''}`).join(', ')}, then the word doubled: ${total} points.`;
+  return `<div class="example"><div class="eg" role="img" aria-label="${label}">${cells.map(([l, q]) => `<span class="eg-cell"><span class="tchip"><b>${l}</b><i>${TILES[l].value}</i></span>${q ? `<span class="sq sq-${q}${q === 's' ? ' word' : ''}" aria-hidden="true"><i>×2</i></span>` : '<span class="sq-none" aria-hidden="true"></span>'}</span>`).join('')}</div>
+    <p><b>A worked play.</b> FIND scores ${parts.join(' + ')} = ${sum}. The Steam square then doubles the whole word: <b>${total} points</b>.</p></div>`;
+}
+
 export function helpHtml(tab, lex, twos = []) {
   const tabs = [['rules', 'How to play'], ['squares', 'Squares and scoring'], ['words', 'Hot Springs words'], ['keys', 'Controls']];
   const tileRow = Object.entries(TILES).map(([l, t]) => `<span class="tchip"><b>${l}</b><i>${t.value}</i><small>×${t.count}</small></span>`).join('');
   const body = {
-    rules: `<h2>Your turn</h2>
+    rules: `<p class="goal"><b>The goal:</b> finish with more points than the others by building words on the board, and find the town's words for bonuses.</p>
+      <h2>Your turn</h2>
       <p>Each player holds seven tiles. On your turn, either <b>play</b> tiles to make words, <b>swap</b> tiles with the bag, or <b>pass</b>.</p>
       <ol class="steps">
         <li>Lay one or more tiles in a single row or a single column, with no empty squares between them.</li>
@@ -224,6 +239,7 @@ export function helpHtml(tab, lex, twos = []) {
         <li>Every run of two or more tiles your play creates, across and down, must be a word. You score all of them.</li>
         <li>Draw back up to seven tiles from the bag.</li>
       </ol>
+      ${workedExample()}
       <p>Words come from the public-domain ENABLE list (168,000 words; no proper nouns) with a few additions: the two-letter words below and some everyday ones such as EMAIL, APP and BLOG. A play with a word that isn't on the list is handed back and you keep your turn. While you place tiles, the strip under the board shows the words, the score and any bonus.</p>
       <p>Stuck? The <b>Spring Guide</b> (Hint) sets a strong play on the board for you to keep, move or take back: three per player in a game against the computer or pass-and-play, none in the Daily Soak.</p>
       ${twos.length ? `<h2>Two-letter words</h2>
@@ -281,6 +297,7 @@ export function settingsHtml(st) {
     ${seg('text', [[1, '100%'], [1.15, '115%'], [1.3, '130%']], 'Text size')}
     ${seg('board3d', [['auto', 'Auto'], ['on', '3D'], ['off', 'Flat']], 'Board')}
     ${seg('ai', [['normal', 'Normal'], ['fast', 'Fast'], ['instant', 'Instant']], 'Computer speed')}
+    <div class="setrow"><span>Tips</span><button class="btn quiet" data-tips>${st.tipsSeen ? 'Show tips again' : 'Tips will show in a game'}</button></div>
   </div>`;
 }
 
@@ -303,6 +320,39 @@ export function registerHtml(lex, reg) {
   </div>`;
 }
 
+// ---------- records ----------
+export function recordsHtml(st, o) {
+  const stat = (n, label) => `<div class="stat"><b>${esc(n)}</b><small>${esc(label)}</small></div>`;
+  const rate = st.games ? `${Math.round(100 * st.wins / st.games)}%` : '-';
+  const avg = st.games ? Math.round(st.totalScore / st.games) : '-';
+  const day = o.daily, days = Object.values(day.days || {});
+  const order = (k) => PERSONAS.findIndex((p) => p.id === k.split(':')[0]) * 3 + ['easy', 'medium', 'hard'].indexOf(k.split(':')[1]);
+  const rows = Object.entries(st.opp).filter(([k]) => persona(k.split(':')[0]) && LEVEL_NAME[k.split(':')[1]]).sort((a, b) => order(a[0]) - order(b[0]));
+  return `<div class="sheet records">
+    <header class="sheet-head"><h1>Records</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    ${st.games ? '' : '<p class="note">No games on the record yet. Finish a game against the computer and your score, wins and best plays are written here.</p>'}
+    <h2>Games against the town</h2>
+    <div class="stats">${stat(st.games, 'games')}${stat(st.wins, 'wins')}${stat(rate, 'win rate')}${stat(st.bestScore || '-', 'best score')}${stat(avg, 'average score')}${stat(`${st.streak} / ${st.bestStreak}`, 'win streak / best')}</div>
+    <ul class="bests">
+      <li><span>Best word</span><b>${st.bestWord ? `${esc(st.bestWord.word)} <small>${st.bestWord.score} points</small>` : '-'}</b></li>
+      <li><span>Best turn</span><b>${st.bestPlay ? `${st.bestPlay.score} points <small>${esc(st.bestPlay.word)}</small>` : '-'}</b></li>
+      <li><span>Full Soaks</span><b>${st.fullSoaks}</b></li>
+      <li><span>Hot Springs words</span><b>${st.themed}</b></li>
+      <li><span>Featured Springs found</span><b>${st.featured}</b></li>
+      <li><span>Hints used</span><b>${st.hints}</b></li>
+    </ul>
+    <h2>By opponent</h2>
+    ${rows.length ? `<table class="opp"><thead><tr><th scope="col">Opponent</th><th scope="col">Games</th><th scope="col">Won</th><th scope="col">Best</th></tr></thead><tbody>${rows.map(([k, r]) => {
+      const [pid, lv] = k.split(':');
+      return `<tr><th scope="row">${esc(persona(pid).name)} <small>${LEVEL_NAME[lv]}</small></th><td>${r.games}</td><td>${r.wins}</td><td>${r.best}</td></tr>`;
+    }).join('')}</tbody></table><p class="note">A win counts when your score beats that opponent's.</p>` : '<p class="note">Each opponent and difficulty you play gets a line here.</p>'}
+    <h2>Daily Soak</h2>
+    <div class="stats">${stat(days.length, 'days played')}${stat(days.length ? Math.max(...days.map((d) => d.score)) : '-', 'best day')}${stat(day.streak || 0, 'day streak')}${stat(Math.max(day.streak || 0, st.daily.bestStreak), 'best streak')}</div>
+    <h2>Bathhouse Register</h2>
+    <p>${o.found} of ${o.total} Hot Springs words found.</p>
+  </div>`;
+}
+
 // ---------- about ----------
 export function aboutHtml(meta) {
   return `<div class="sheet about">
@@ -319,7 +369,7 @@ export function aboutHtml(meta) {
 }
 
 // ---------- game over and daily results ----------
-export function overHtml(s, lex, dinfo) {
+export function overHtml(s, lex, dinfo, extra = {}) {
   const order = s.players.map((p, k) => ({ p, k })).sort((a, b) => b.p.score - a.p.score);
   const win = s.result.winners;
   const themed = [];
@@ -328,12 +378,15 @@ export function overHtml(s, lex, dinfo) {
   const daily = s.mode === 'daily';
   const top = order[0];
   const line = (p, k) => `<span>${p.best ? `Best word ${esc(p.best.word)} (${p.best.score})` : 'No words played'}</span>${s.result.adjust[k] > 0 ? `<span>Went out: +${s.result.adjust[k]}</span>` : s.result.adjust[k] < 0 ? `<span>Tiles left: −${-s.result.adjust[k]}</span>` : ''}`;
+  const say = (k) => (extra.barks && extra.barks[k] ? `<small class="bark"><b>${esc(SHORT[s.players[k].persona] || '')}:</b> “${esc(extra.barks[k].text)}”</small>` : '');
+  const pbs = extra.pb && extra.pb.length ? `<ul class="pbs" aria-label="Personal bests">${extra.pb.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '';
   return `<div class="sheet over">
     ${art.has('title') ? `<div class="over-art" style="background-image:url(${art.src('title')})" aria-hidden="true"></div>` : ''}
     <header class="masthead"><p class="mast-kicker">The Steam Ledger</p><h1>${daily ? 'Daily Soak' : 'Final Soak'}</h1><p class="mast-sub">${esc(why)}</p></header>
     ${dinfo ? `<div class="daily-box"><p class="daily-date">${esc(dinfo.label)}</p><div class="daily-stats"><div><b>${s.players[0].score}</b><small>this soak</small></div><div><b>${dinfo.best}</b><small>best today</small></div><div><b>${dinfo.streak}</b><small>day streak</small></div></div><p class="note">Everyone gets the same tiles today. Come back tomorrow for a new soak.</p></div>` : ''}
-    ${daily ? '' : `<div class="winner">${badge(top.p, top.k, 92)}<div class="wmeta"><span class="ribbon">${win.length > 1 ? 'Tied for first' : 'Winner'}</span><b>${win.map((k) => esc(s.players[k].name)).join(' &amp; ')}</b><small class="wlines">${line(top.p, top.k)}</small></div><b class="wscore">${top.p.score}</b></div>`}
-    <ol class="final">${order.slice(daily ? 0 : 1).map(({ p, k }) => `<li>${badge(p, k, 40)}<div><b>${esc(p.name)}</b><small class="wlines">${line(p, k)}</small></div><b class="fscore">${p.score}</b></li>`).join('')}</ol>
+    ${daily ? '' : `<div class="winner">${badge(top.p, top.k, 92)}<div class="wmeta"><span class="ribbon">${win.length > 1 ? 'Tied for first' : 'Winner'}</span><b>${win.map((k) => esc(s.players[k].name)).join(' &amp; ')}</b><small class="wlines">${line(top.p, top.k)}</small>${say(top.k)}</div><b class="wscore">${top.p.score}</b></div>`}
+    ${pbs}
+    <ol class="final">${order.slice(daily ? 0 : 1).map(({ p, k }) => `<li>${badge(p, k, 40)}<div><b>${esc(p.name)}</b><small class="wlines">${line(p, k)}</small>${say(k)}</div><b class="fscore">${p.score}</b></li>`).join('')}</ol>
     <div class="over-cols">
       <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}">${t.w} <small>+${t.pts}</small></button>`).join('')}</div>` : '<p class="note">None this game. They hide in everyday words like SPA, STEAM and ROCK.</p>'}</section>
       ${s.featured.length ? `<section><h2>Featured Springs</h2><ul class="feat-list">${s.featured.map((f) => `<li class="${f.by != null ? 'got' : ''}"><b>${f.word}</b><small>${f.by != null ? `found by ${esc(s.players[f.by].name)}` : 'stayed hidden'}</small></li>`).join('')}</ul></section>` : ''}
