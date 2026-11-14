@@ -59,7 +59,7 @@ export const tests = [
       const peaks = {};
       for (const n of ['place', 'play', 'pick', 'recall', 'turn', 'swap', 'error', 'steam', 'chime', 'featured', 'fanfare']) {
         peaks[n] = [];
-        for (let k = 0; k < 6; k++) peaks[n].push((await t.game('act', 'renderSfx', n, 0.35)).peak);
+        for (let k = 0; k < 20; k++) peaks[n].push((await t.game('act', 'renderSfx', n, 0.35)).peak);
       }
       t.log(Object.entries(peaks).map(([n, p]) => `${n} ${Math.min(...p)}..${Math.max(...p)}`).join(', '));
       for (const n of ['place', 'play', 'pick', 'recall', 'turn', 'swap']) {
