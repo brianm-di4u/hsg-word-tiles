@@ -19,7 +19,7 @@ self.onmessage = async (ev) => {
   const t0 = performance.now();
   if (m.type === 'move') {
     const s = m.state;
-    const r = chooseAction(dict, lex, s, { level: m.level });
+    const r = chooseAction(dict, lex, s, { level: m.level, persona: m.persona });
     self.postMessage({ type: 'move', id: m.id, action: r.action, rngAi: s.rng.ai, nodes: r.nodes, ms: performance.now() - t0 });
   } else if (m.type === 'hint') {
     const mv = bestHint(dict, lex, m.state);

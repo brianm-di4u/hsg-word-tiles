@@ -1,5 +1,5 @@
 // HTML for screens, dialogs and panels. Pure string templates; main.js wires the events.
-import { PERSONAS, persona, LEVEL_NAME, HUMAN_COLORS } from './personas.js';
+import { PERSONAS, persona, LEVEL_NAME, LEVEL_BLURB, seatLevel, HUMAN_COLORS } from './personas.js';
 import { TILES, BLANKS } from './tiles.js';
 import { FULL_SOAK, FEATURED_BONUS } from './score.js';
 import { DAILY_TURNS } from './engine.js';
@@ -78,8 +78,10 @@ export function setupHtml(setup) {
         </div>
         ${human
           ? `<label class="field"><span>Name</span><input data-name="${k}" value="${esc(st.name || '')}" maxlength="16" placeholder="Player ${k + 1}" autocomplete="off"></label>`
-          : `<label class="field"><span>Opponent <em>(fictional character)</em></span><select data-persona="${k}">${PERSONAS.map((p) => `<option value="${p.id}" ${p.id === st.persona ? 'selected' : ''}>${esc(p.name)} · ${LEVEL_NAME[p.level]}</option>`).join('')}</select></label>
-             <p class="seat-note">${esc(persona(st.persona).role)}. ${esc(persona(st.persona).line)}</p>`}
+          : `<label class="field"><span>Opponent <em>(fictional character)</em></span><select data-persona="${k}">${PERSONAS.map((p) => `<option value="${p.id}" ${p.id === st.persona ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+             <p class="seat-note">${esc(persona(st.persona).role)}. ${esc(persona(st.persona).line)}</p>
+             <label class="field"><span>Difficulty</span><select data-level="${k}">${Object.keys(LEVEL_NAME).map((l) => `<option value="${l}" ${l === seatLevel(st) ? 'selected' : ''}>${LEVEL_NAME[l]}</option>`).join('')}</select></label>
+             <p class="seat-note" data-level-note="${k}">${esc(LEVEL_BLURB[seatLevel(st)])}</p>`}
       </div>
       ${setup.seats.length > 2 ? `<button class="iconbtn small" data-remove="${k}" aria-label="Remove seat ${k + 1}">${ICON.close}</button>` : ''}
     </li>`;
@@ -100,7 +102,7 @@ export function scoresHtml(s, compact) {
   return s.players.map((p, k) => {
     const per = p.persona ? persona(p.persona) : null;
     const active = !s.over && k === s.cur;
-    const sub = per ? `${LEVEL_NAME[per.level]} · fictional` : (p.kind === 'human' ? 'Person' : '');
+    const sub = per ? `${LEVEL_NAME[p.level || per.level]} · fictional` : (p.kind === 'human' ? 'Person' : '');
     return compact
       ? `<div class="chip ${active ? 'on' : ''}" aria-current="${active}">${badge(p, k, 26)}<b class="score" data-score="${k}">${p.score}</b></div>`
       : `<div class="pcard ${active ? 'on' : ''}" aria-current="${active}">${badge(p, k, 44)}<div class="pmeta"><b>${esc(p.name)}</b><small>${esc(sub)}</small></div><b class="score" data-score="${k}">${p.score}</b></div>`;

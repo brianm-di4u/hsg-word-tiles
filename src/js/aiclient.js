@@ -51,15 +51,15 @@ function call(msg) {
 const slim = (s) => ({ board: s.board, players: s.players.map((p) => ({ rack: p.rack, level: p.level })), cur: s.cur, bag: s.bag, featured: s.featured, rng: { ...s.rng } });
 
 // Resolves { action, rngAi } for the current seat of s.
-export async function aiMove(s, level) {
+export async function aiMove(s, level, persona) {
   await aiClient.ready;
   if (aiClient.mode === 'worker') {
-    const r = await call({ type: 'move', state: slim(s), level });
+    const r = await call({ type: 'move', state: slim(s), level, persona });
     if (r.type !== 'retry') return r;
   }
   await new Promise((res) => setTimeout(res, 0)); // let the UI paint "thinking" first
   const st = slim(s);
-  const r = chooseAction(aiClient.dict, aiClient.lex, st, { level });
+  const r = chooseAction(aiClient.dict, aiClient.lex, st, { level, persona });
   return { action: r.action, rngAi: st.rng.ai, nodes: r.nodes };
 }
 

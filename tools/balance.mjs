@@ -4,17 +4,19 @@
 // and Featured Spring rates, game length, and AI time per move. Every AI action goes through apply(),
 // so an illegal AI move throws.
 //   node tools/balance.mjs [--games 100] [--json out.json]
+// A side is a level ('hard') or a level with a character's style ('medium:lucky'). Besides the three level
+// pairings it plays Lucky against Hollis (both Medium) and reports each one's share of points from premium squares.
 import fs from 'node:fs';
 import { ctx } from '../tests/lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
-import { chooseAction } from '../src/js/ai.js';
+import { chooseAction, premiumPoints } from '../src/js/ai.js';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const GAMES = +arg('--games', 100);
 const c = await ctx();
 
 export async function playMatch(levels, seed, stats) {
-  const seats = levels.map((level, k) => ({ kind: 'ai', level, name: `${level}${k}` }));
+  const seats = levels.map((spec, k) => { const [level, persona] = spec.split(':'); return { kind: 'ai', level, persona: persona || null, name: `${spec}${k}` }; });
   const s = createGame({ mode: 'play', seats, seed }, c.lex);
   let guard = 0;
   while (!s.over && guard++ < 400) {
@@ -22,12 +24,17 @@ export async function playMatch(levels, seed, stats) {
     const { action } = chooseAction(c.dict, c.lex, s, { level: s.players[s.cur].level });
     const ms = performance.now() - t0;
     const lvl = s.players[s.cur].level;
+    const who = s.players[s.cur].persona || lvl;
     stats.ms[lvl] = stats.ms[lvl] || [];
     stats.ms[lvl].push(ms);
     const r = apply(s, action, c);
     if (!r.ok) throw new Error(`seed ${seed}: ${lvl} made an illegal ${action.type}: ${r.error}`);
     const e = r.entry;
     if (e.kind === 'play') {
+      stats.prem = stats.prem || {};
+      stats.prem[who] = (stats.prem[who] || 0) + premiumPoints({ tiles: e.tiles, score: e.score });
+      stats.pts = stats.pts || {};
+      stats.pts[who] = (stats.pts[who] || 0) + e.score;
       stats.plays++;
       stats.points += e.score;
       stats.themed += e.themed;
@@ -61,6 +68,7 @@ async function matchup(a, b) {
     themedPlaysPerGame: +(stats.themedPlays / GAMES).toFixed(2), fullSoakPerGame: +(stats.full / GAMES).toFixed(2),
     featuredPerGame: +(stats.featured / GAMES).toFixed(2), movesPerGame: +(stats.moves / GAMES).toFixed(1),
     swapsPerGame: +(stats.swap / GAMES).toFixed(2), passesPerGame: +(stats.pass / GAMES).toFixed(2),
+    premiumShare: Object.fromEntries(Object.keys(stats.prem || {}).map((k) => [k, +(stats.prem[k] / stats.pts[k]).toFixed(3)])),
     msPerMove: Object.fromEntries(Object.entries(stats.ms).map(([k, v]) => [k, { median: +pct(v, 0.5).toFixed(1), p95: +pct(v, 0.95).toFixed(1), max: +Math.max(...v).toFixed(1) }])),
   };
   console.log(JSON.stringify(out));
@@ -69,7 +77,7 @@ async function matchup(a, b) {
 
 if (process.argv[1] && process.argv[1].endsWith('balance.mjs')) {
   const results = [];
-  for (const [a, b] of [['hard', 'medium'], ['medium', 'easy'], ['hard', 'easy']]) results.push(await matchup(a, b));
+  for (const [a, b] of [['hard', 'medium'], ['medium', 'easy'], ['hard', 'easy'], ['medium:lucky', 'medium:hollis']]) results.push(await matchup(a, b));
   const json = arg('--json', null);
   if (json) fs.writeFileSync(json, JSON.stringify(results, null, 2));
 }

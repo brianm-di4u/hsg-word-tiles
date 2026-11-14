@@ -1,5 +1,5 @@
-// AI: every action from every level is legal over many games; Easy plays only common words up to six
-// letters; Medium only common words or words of two or three letters; the leave table is sane.
+// AI: every action from every level is legal over many games; Easy plays only common words or words of
+// two or three letters; Medium only common words or words of up to four letters; the leave table is sane.
 import { ctx } from './lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
 import { chooseAction, leaveValue, LEVELS } from '../src/js/ai.js';
@@ -42,8 +42,8 @@ export const tests = [
       let easy = 0, medium = 0;
       await games(['easy', 'medium'], 60, 500, (level, e, c) => {
         for (const w of e.words) {
-          if (level === 'easy') { easy++; if (!isCommon(c.dict, w.w) || e.words[0].w.length > LEVELS.easy.maxLen) t.fail(`Easy played ${w.w}`); }
-          if (level === 'medium') { medium++; if (!(w.w.length < 4 || isCommon(c.dict, w.w))) t.fail(`Medium played ${w.w}`); }
+          if (level === 'easy') { easy++; if (!(w.w.length < LEVELS.easy.freeLen || isCommon(c.dict, w.w))) t.fail(`Easy played ${w.w}`); }
+          if (level === 'medium') { medium++; if (!(w.w.length < LEVELS.medium.freeLen || isCommon(c.dict, w.w))) t.fail(`Medium played ${w.w}`); }
         }
       });
       t.log(`${easy} Easy words, ${medium} Medium words checked`);

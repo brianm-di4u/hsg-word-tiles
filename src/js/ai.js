@@ -3,17 +3,40 @@
 // keeps the advanced stream, so games stay reproducible.
 import { generateMoves } from './movegen.js';
 import { rand } from './rng.js';
-import { N, SQUARE, VALUE, RACK } from './score.js';
+import { N, SQUARE, VALUE, LETTER_MULT, WORD_MULT, RACK } from './score.js';
 import { LEAVE } from './leave-table.js';
 
-// Strength comes mostly from vocabulary: Easy knows common words up to 6 letters and plays an
-// ordinary move; Medium knows common words plus every 2–3 letter word and plays its best; Hard knows
-// the whole dictionary and weighs the rack it keeps, the Boiling Springs it opens and the endgame.
+// Easy knows common words plus every word of 2 or 3 letters; Medium the same up to 4 letters (freeLen is
+// the first length that must be common). Easy plays its best word except about one turn in four (slip),
+// when it takes an ordinary one from the middle of its list, and ignores the rack it keeps. Medium always
+// plays its best and weighs its leave. Hard knows the whole dictionary, weighs the rack it keeps, the
+// Boiling Springs it opens and the endgame.
+// Before wave 2 Easy was { commonOnly, maxLen: 6, pick: [0.2, 0.5], budget: 400000 }: no short non-common
+// words and no slip (it picked from the middle of its list every turn), which Medium beat 100 games out
+// of 100.
 export const LEVELS = {
-  easy: { commonOnly: true, maxLen: 6, leave: 0, pick: [0.2, 0.5], budget: 400000 },
-  medium: { commonOnly: true, freeLen: 4, leave: 0.5, budget: 900000 },
+  easy: { commonOnly: true, freeLen: 4, leave: 0, pick: [0.2, 0.5], slip: 0.25, budget: 900000 },
+  medium: { commonOnly: true, freeLen: 5, leave: 0.5, budget: 900000 },  // freeLen was 4 before wave 2
   hard: { leave: 1, defense: true, endgame: true, budget: 1500000 },
 };
+
+// A character's own habit, laid over the level they play at. Lucky bets on the big squares: he counts
+// the points a play earns from premium squares again (premium) and cares little about the rack he keeps
+// (leaveScale), so he will take a risky play on a Boiling Spring over a tidy one.
+export const STYLES = {
+  lucky: { premium: 0.5, leaveScale: 0.2 },
+};
+
+// Points a play earns from the premium squares it covers (letter multipliers, then the word multiplier).
+export function premiumPoints(move) {
+  let extra = 0, wm = 1;
+  for (const t of move.tiles) {
+    const sq = SQUARE[t.i];
+    if (!t.blank) extra += VALUE[t.l] * ((LETTER_MULT[sq] || 1) - 1);
+    wm *= WORD_MULT[sq] || 1;
+  }
+  return extra + move.score * (1 - 1 / wm);
+}
 
 const VOWELS = new Set(['A', 'E', 'I', 'O', 'U']);
 
@@ -56,12 +79,15 @@ const rackScore = (rack) => rack.reduce((a, l) => a + (l === '?' ? 0 : VALUE[l])
 export function chooseAction(dict, lex, s, opts = {}) {
   const p = s.players[s.cur];
   const L = LEVELS[opts.level || p.level || 'medium'];
+  const style = STYLES[opts.persona || p.persona] || null;
   const { moves, nodes } = generateMoves(dict, s.board, p.rack, { lex, featured: s.featured, commonOnly: L.commonOnly, freeLen: L.freeLen, maxLen: L.maxLen, budget: L.budget });
   const bag = s.bag.length;
   if (!moves.length) return { action: fallback(p.rack, bag), nodes };
 
   if (L.pick) {
     const top = moves.slice(0, 30);
+    if (style) top.sort((a, b) => b.score + style.premium * premiumPoints(b) - a.score - style.premium * premiumPoints(a));
+    if (L.slip < 1 && rand(s, 'ai') >= L.slip) return { action: { type: 'play', tiles: top[0].tiles }, nodes, move: top[0] };
     const lo = Math.floor(top.length * L.pick[0]), hi = Math.max(lo + 1, Math.ceil(top.length * L.pick[1]));
     const m = top[lo + Math.floor(rand(s, 'ai') * (hi - lo))];
     return { action: { type: 'play', tiles: m.tiles }, nodes, move: m };
@@ -71,7 +97,8 @@ export function chooseAction(dict, lex, s, opts = {}) {
     const left = rackMinus(p.rack, m.tiles);
     let e = m.score;
     if (bag === 0) e -= 2 * rackScore(left);                       // going out matters, leave doesn't
-    else e += L.leave * leaveValue(left) * Math.min(1, bag / RACK);
+    else e += L.leave * (style ? style.leaveScale : 1) * leaveValue(left) * Math.min(1, bag / RACK);
+    if (style && bag > 0) e += style.premium * premiumPoints(m);
     if (L.defense && bag > 0) e -= 4 * openedBoiling(s.board, m.tiles);
     return e;
   };

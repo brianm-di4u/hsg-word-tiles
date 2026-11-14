@@ -9,7 +9,7 @@ import { audio, unlock, sfx, pauseAudio, resumeAudio, setTune, holdAudio, releas
 import { art, loadArt } from './art.js';
 import { store, KEYS, createGameSaves, validRegister, validDaily } from './storage.js';
 import { startAi, aiMove, aiHint, aiClient } from './aiclient.js';
-import { PERSONAS, persona } from './personas.js';
+import { PERSONAS, persona, LEVEL_NAME, seatLevel } from './personas.js';
 import * as B3 from './board3d.js';
 import * as UI from './ui.js';
 import { generateMoves } from './movegen.js';
@@ -39,7 +39,7 @@ const SETTING_OK = {
   theme: (v) => ['auto', 'light', 'dark'].includes(v), motion: (v) => ['system', 'full', 'reduce'].includes(v),
   text: (v) => [1, 1.15, 1.3].includes(v), board3d: (v) => ['auto', 'on', 'off'].includes(v), ai: (v) => ['normal', 'fast', 'instant'].includes(v),
   lastSetup: (v) => !!v && typeof v === 'object' && typeof v.hints === 'boolean' && Array.isArray(v.seats) && v.seats.length >= 2 && v.seats.length <= 4
-    && v.seats.every((x) => !!x && ((x.kind === 'human' && (x.name == null || typeof x.name === 'string')) || (x.kind === 'ai' && PERSONAS.some((p) => p.id === x.persona)))),
+    && v.seats.every((x) => !!x && ((x.kind === 'human' && (x.name == null || typeof x.name === 'string')) || (x.kind === 'ai' && PERSONAS.some((p) => p.id === x.persona) && (x.level == null || !!LEVEL_NAME[x.level])))),
 };
 function loadSettings() {
   const raw = store.json(KEYS.settings, {}, (v) => !!v && typeof v === 'object' && !Array.isArray(v));
@@ -211,13 +211,14 @@ function wireScreen(name) {
     }));
     scr.querySelectorAll('[data-name]').forEach((inp) => inp.addEventListener('input', () => { st.seats[+inp.dataset.name].name = inp.value; }));
     scr.querySelectorAll('[data-persona]').forEach((sel) => sel.addEventListener('change', () => { st.seats[+sel.dataset.persona].persona = sel.value; showScene('setup'); }));
+    scr.querySelectorAll('[data-level]').forEach((sel) => sel.addEventListener('change', () => { st.seats[+sel.dataset.level].level = sel.value; showScene('setup'); scr.querySelector(`[data-level="${sel.dataset.level}"]`).focus(); }));
     scr.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => { st.seats.splice(+b.dataset.remove, 1); showScene('setup'); }));
     const add = scr.querySelector('[data-add]');
     if (add) add.addEventListener('click', () => { const used = new Set(st.seats.map((x) => x.persona)); st.seats.push({ kind: 'ai', persona: (PERSONAS.find((p) => !used.has(p.id)) || PERSONAS[0]).id }); showScene('setup'); });
     scr.querySelector('[data-hints]').addEventListener('change', (e) => { st.hints = e.target.checked; });
     scr.querySelector('[data-start]').addEventListener('click', () => {
       G.settings.lastSetup = st; saveSettings();
-      replaceSave(() => newGame({ mode: 'play', seats: st.seats.map((x, k) => (x.kind === 'human' ? { kind: 'human', name: (x.name || '').trim() || (st.seats.filter((y) => y.kind === 'human').length > 1 ? `Player ${k + 1}` : 'You') } : { kind: 'ai', persona: x.persona, level: persona(x.persona).level, name: persona(x.persona).name })), hints: st.hints }));
+      replaceSave(() => newGame({ mode: 'play', seats: st.seats.map((x, k) => (x.kind === 'human' ? { kind: 'human', name: (x.name || '').trim() || (st.seats.filter((y) => y.kind === 'human').length > 1 ? `Player ${k + 1}` : 'You') } : { kind: 'ai', persona: x.persona, level: seatLevel(x), name: persona(x.persona).name })), hints: st.hints }));
     });
   }
   if (name === 'help') scr.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { G.helpTab = b.dataset.tab; showScene('help'); scr.querySelector(`[data-tab="${G.helpTab}"]`).focus(); }));
@@ -335,7 +336,7 @@ function scheduleAi() {
     if (!res.ok) { console.warn('AI move refused', res.error); E.apply(s, { type: 'pass' }, ctx()); }
     afterAction(res.ok ? res.entry : s.log[s.log.length - 1], true);
   };
-  aiMove(s, cur().level).then((r) => {
+  aiMove(s, cur().level, cur().persona).then((r) => {
     const wait = Math.max(0, delay - (performance.now() - t0));
     const fire = () => {
       if (!live()) { if (token === G.aiToken) G.aiBusy = false; return; }
