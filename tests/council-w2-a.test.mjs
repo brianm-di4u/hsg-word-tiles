@@ -57,12 +57,12 @@ export const tests = [
     async run(t) {
       await ready(t);
       const peaks = {};
-      for (const n of ['place', 'play', 'steam', 'chime', 'featured', 'fanfare']) {
+      for (const n of ['place', 'play', 'pick', 'recall', 'turn', 'swap', 'error', 'steam', 'chime', 'featured', 'fanfare']) {
         peaks[n] = [];
         for (let k = 0; k < 6; k++) peaks[n].push((await t.game('act', 'renderSfx', n, 0.35)).peak);
       }
       t.log(Object.entries(peaks).map(([n, p]) => `${n} ${Math.min(...p)}..${Math.max(...p)}`).join(', '));
-      for (const n of ['place', 'play']) {
+      for (const n of ['place', 'play', 'pick', 'recall', 'turn', 'swap']) {
         t.expect(Math.min(...peaks[n]) >= 0.2 && Math.max(...peaks[n]) <= 0.45, `${n} stays between 0.2 and 0.45 (${Math.min(...peaks[n])}..${Math.max(...peaks[n])})`);
       }
       for (const n of Object.keys(peaks)) t.expect(Math.max(...peaks[n]) <= 0.45, `${n} stays under 0.45 (${Math.max(...peaks[n])})`);
