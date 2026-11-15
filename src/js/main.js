@@ -441,6 +441,7 @@ function pbLines() {
   if (!r) return [];
   const st = stats(), out = [];
   if (r.first) out.push('First game on your record.');
+  if (r.held) out.push('You took a hint, so this game sets no personal best.');
   if (r.score) out.push(`New personal best: ${st.bestScore} points.`);
   if (r.play) out.push(`New best turn: ${st.bestPlay.score} points for ${st.bestPlay.word}.`);
   if (r.word) out.push(`New best word: ${st.bestWord.word}, ${st.bestWord.score} points.`);

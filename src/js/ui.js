@@ -5,6 +5,7 @@ import { TILES, BLANKS } from './tiles.js';
 import { FULL_SOAK, FEATURED_BONUS } from './score.js';
 import { DAILY_TURNS } from './engine.js';
 import { art } from './art.js';
+import { hintsUsed } from './stats.js';
 
 export function qs(s, el = document) { return el.querySelector(s); }
 const ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -377,7 +378,8 @@ export function overHtml(s, lex, dinfo, extra = {}) {
   const why = { out: `${s.players[s.result.out]?.name} went out.`, stalled: 'Everyone passed or swapped twice in a row.', daily: 'Ten turns are up.' }[s.result.why] || '';
   const daily = s.mode === 'daily';
   const top = order[0];
-  const line = (p, k) => `<span>${p.best ? `Best word ${esc(p.best.word)} (${p.best.score})` : 'No words played'}</span>${s.result.adjust[k] > 0 ? `<span>Went out: +${s.result.adjust[k]}</span>` : s.result.adjust[k] < 0 ? `<span>Tiles left: −${-s.result.adjust[k]}</span>` : ''}`;
+  const aid = (p) => (daily || p.kind !== 'human' ? '' : hintsUsed(p) ? `<span>${plural(hintsUsed(p), 'hint')} used</span>` : '<span>Unaided</span>');
+  const line = (p, k) => `<span>${p.best ? `Best word ${esc(p.best.word)} (${p.best.score})` : 'No words played'}</span>${aid(p)}${s.result.adjust[k] > 0 ? `<span>Went out: +${s.result.adjust[k]}</span>` : s.result.adjust[k] < 0 ? `<span>Tiles left: −${-s.result.adjust[k]}</span>` : ''}`;
   const say = (k) => (extra.barks && extra.barks[k] ? `<small class="bark"><b>${esc(SHORT[s.players[k].persona] || '')}:</b> “${esc(extra.barks[k].text)}”</small>` : '');
   const pbs = extra.pb && extra.pb.length ? `<ul class="pbs" aria-label="Personal bests">${extra.pb.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '';
   return `<div class="sheet over">

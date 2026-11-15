@@ -15,7 +15,8 @@ const instant = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem(
 
 // a finished game: the human (seat 0) with `me` points against the given computer seats
 const finished = (me, bots, extra = {}) => {
-  const players = [{ kind: 'human', name: 'You', score: me, best: { word: 'QUARTZ', score: 54 }, hints: 1 }, ...bots.map((b) => ({ kind: 'ai', name: b.persona, persona: b.persona, level: b.level, score: b.score, best: null, hints: null }))];
+  const { hints = 1, ...game } = extra;   // hints left to the person: one of three (two taken) unless a test says otherwise
+  const players = [{ kind: 'human', name: 'You', score: me, best: { word: 'QUARTZ', score: 54 }, hints }, ...bots.map((b) => ({ kind: 'ai', name: b.persona, persona: b.persona, level: b.level, score: b.score, best: null, hints: null }))];
   const top = Math.max(...players.map((p) => p.score));
   return {
     mode: 'play', players, seed: 12345, rng: { bag: 1, ai: 2 }, over: true, featured: [{ word: 'SPRING', by: 0 }, { word: 'TUB', by: 1 }, { word: 'ROW', by: null }],
@@ -26,7 +27,7 @@ const finished = (me, bots, extra = {}) => {
       { p: 0, kind: 'end' },
     ],
     result: { why: 'out', out: 0, adjust: [0, 0], winners: players.map((p, k) => (p.score === top ? k : -1)).filter((k) => k >= 0) },
-    ...extra,
+    ...game,
   };
 };
 
@@ -50,26 +51,26 @@ async function playOut(t, max = 120) {
 export const tests = [
   // ---------- S3-01 records: the data ----------
   {
-    name: 'S3-01 a finished game is folded into the record: wins, bests, opponent rows, Full Soaks, Featured Springs and hints', node: true,
+    name: 'S3-01 a finished game is folded into the record: wins, bests, opponent rows, Full Soaks and Featured Springs (S3-06: played without a hint)', node: true,
     async run(t) {
-      const g1 = finished(300, [{ persona: 'opal', level: 'easy', score: 200 }]);
+      const g1 = finished(300, [{ persona: 'opal', level: 'easy', score: 200 }], { hints: 3 });
       const r1 = applyGame(emptyStats(), g1);
       const a = r1.stats;
       t.equal(a.games, 1, 'one game'); t.equal(a.wins, 1, 'one win'); t.equal(a.bestScore, 300, 'best score'); t.equal(a.totalScore, 300, 'total score');
       t.equal(a.bestPlay.score, 91, 'best turn is the 91-point play'); t.equal(a.bestPlay.word, 'SPRING', 'with its first word');
       t.equal(a.bestWord.word, 'QUARTZ', 'best word is the player\'s own best'); t.equal(a.bestWord.score, 54, 'with its points');
       t.equal(a.fullSoaks, 1, 'one Full Soak'); t.equal(a.themed, 1, 'one Hot Springs word'); t.equal(a.featured, 1, 'one Featured Spring was the player\'s');
-      t.equal(a.hints, 2, 'two of three hints were used'); t.equal(a.streak, 1, 'a one-game win streak');
+      t.equal(a.hints, 0, 'no hint was taken'); t.equal(a.streak, 1, 'a one-game win streak');
       t.equal(JSON.stringify(a.opp['opal:easy']), JSON.stringify({ games: 1, wins: 1, best: 300, total: 300 }), 'a row for Opal on Easy');
       t.expect(r1.pb.first && !r1.pb.score, 'the first game is "first", not a personal best');
-      const g2 = finished(320, [{ persona: 'opal', level: 'easy', score: 400 }, { persona: 'lucky', level: 'hard', score: 100 }]);
+      const g2 = finished(320, [{ persona: 'opal', level: 'easy', score: 400 }, { persona: 'lucky', level: 'hard', score: 100 }], { hints: 3 });
       const r2 = applyGame(a, g2);
       t.equal(r2.stats.games, 2, 'two games'); t.equal(r2.stats.wins, 1, 'a loss does not add a win'); t.equal(r2.stats.streak, 0, 'a loss ends the streak'); t.equal(r2.stats.bestStreak, 1, 'the best streak stays');
       t.expect(r2.pb.score, 'a higher score is a personal best'); t.expect(!r2.pb.play && !r2.pb.word, 'the same best play and word are not new');
       t.equal(r2.stats.opp['opal:easy'].games, 2, 'Opal on Easy now has two games'); t.equal(r2.stats.opp['opal:easy'].wins, 1, 'one of them won');
       t.equal(r2.stats.opp['lucky:hard'].wins, 1, 'beating a lower-scoring opponent counts even when another seat won');
       t.equal(r2.stats.bestScore, 320, 'best score raised');
-      const lower = applyGame(r2.stats, finished(10, [{ persona: 'opal', level: 'easy', score: 50 }])).stats;
+      const lower = applyGame(r2.stats, finished(10, [{ persona: 'opal', level: 'easy', score: 50 }], { hints: 3 })).stats;
       t.equal(lower.bestScore, 320, 'a worse game never lowers a best'); t.equal(lower.games, 3, 'but it is counted');
     },
   },

@@ -1,0 +1,83 @@
+// Wave 3, batch A: S3-06 (hints and records), S3-12 (tile tracker), S6-09 (frame watchdog), S6-10 (storage-blocked note),
+// S6-11 (a hint survives a reload), S1-02 (Enter and Space on buttons), S1-05 (tile settle), S2-05 (score breakdown),
+// S4-06 (setup cards) and S4-25 (docs).
+import { emptyStats, applyGame, hintsUsed } from '../src/js/stats.js';
+
+const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
+const SET = 'hs-letters-settings-v1', SAVE = 'hs-letters-save-v1';
+const ls = (t, k) => t.page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), k);
+// a pre-wave profile with a settings key: no first-run tips, instant computer, no sound
+const instant = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false })); };
+const SEATS = [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }];
+
+// a finished game: the human (seat 0) with `me` points against Opal, `hints` left of three
+const finished = (me, hints) => ({
+  mode: 'play', seed: 1, rng: { bag: 1, ai: 2 }, over: true, featured: [],
+  players: [{ kind: 'human', name: 'You', score: me, best: { word: 'QUARTZ', score: 54 }, hints }, { kind: 'ai', name: 'Opal', persona: 'opal', level: 'easy', score: 50, best: null, hints: null }],
+  log: [{ p: 0, kind: 'play', n: 0, score: 91, full: 0, words: [{ w: 'SPRING', score: 91, bonus: 0 }] }, { kind: 'end' }],
+  result: { why: 'out', out: 0, adjust: [0, 0], winners: [0] },
+});
+
+// play a game to its end as a person would: the best scoring play each turn, a pass when nothing fits
+async function playOut(t, max = 120) {
+  for (let n = 0; n < max; n++) {
+    const s = (await t.state()).game;
+    if (s.over) return s;
+    if (s.players[s.cur].kind !== 'human') { await t.page.waitForFunction(() => { const g = window.__game.getState(); return g.game.over || g.game.players[g.game.cur].kind === 'human'; }, null, { timeout: 20000 }); continue; }
+    const mv = await t.game('act', 'moves', 1);
+    if (mv && mv.length) {
+      const st = await t.game('act', 'stage', mv[0].tiles);
+      const r = st.ok ? await t.game('act', 'play') : { ok: false };
+      if (!r.ok) { await t.game('act', 'recall'); await t.game('act', 'pass'); }
+    } else await t.game('act', 'pass');
+    await t.page.waitForTimeout(60);
+  }
+  return (await t.state()).game;
+}
+
+export const tests = [
+  // ---------- S3-06 ----------
+  {
+    name: 'S3-06 a game with a hint counts as played and won but sets no personal best; an unaided game does', node: true,
+    async run(t) {
+      const base = applyGame(emptyStats(), finished(100, 3)).stats;
+      t.equal(base.bestScore, 100, 'an unaided first game sets the best');
+      const hinted = applyGame(base, finished(300, 1));
+      t.equal(hinted.stats.games, 2, 'the hinted game is counted'); t.equal(hinted.stats.wins, 2, 'and the win');
+      t.equal(hinted.stats.bestScore, 100, 'but the best score stays'); t.equal(hinted.stats.bestPlay.score, 91, 'and the best turn');
+      t.equal(hinted.stats.hints, 2, 'two hints are added to the hints used');
+      t.expect(hinted.pb.held && !hinted.pb.score && !hinted.pb.play, 'the game says it held a record back, and sets none');
+      const none = applyGame(base, finished(40, 1));
+      t.expect(!none.pb.held, 'a hinted game that would not have beaten anything says nothing');
+      const clean = applyGame(base, finished(300, 3));
+      t.expect(clean.pb.score && !clean.pb.held && clean.stats.bestScore === 300, 'an unaided game still sets the best');
+      t.equal(hintsUsed({ hints: 3 }), 0, 'three left is none used'); t.equal(hintsUsed({ hints: 0 }), 3, 'none left is three used'); t.equal(hintsUsed({ hints: null }), 0, 'hints off is none used');
+    },
+  },
+  {
+    name: 'S3-06 the results card says Unaided, or how many hints were used',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(11);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      await playOut(t);
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 15000 });
+      t.expect(/Unaided/.test(await t.page.textContent('.sheet.over')), 'a game with no hint says Unaided');
+      await t.seed(11);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      await t.game('act', 'hint');
+      t.equal((await t.state()).game.players[0].hints, 2, 'the hint was taken');
+      await t.game('act', 'recall');
+      await playOut(t);
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 15000 });
+      const text = await t.page.textContent('.sheet.over');
+      t.expect(/1 hint used/.test(text) && !/Unaided/.test(text), 'a game with one hint says so');
+      await t.shot('S3-06-results-hinted');
+      await t.checkLayout({ allowScrollY: true });
+    },
+  },
+];

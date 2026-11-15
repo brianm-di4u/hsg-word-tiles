@@ -23,10 +23,14 @@ export function cleanStats(raw) {
   return out;
 }
 
+// How many Spring Guide hints a seat has taken: its allowance of three less what is left (none where hints were off).
+export const hintsUsed = (p) => (p.hints == null ? 0 : Math.max(0, 3 - p.hints));
+
 export const oppKey = (p) => `${p.persona}:${p.level || 'medium'}`;
 
 // Folds one finished game into the record. Returns { stats, pb } where pb says what the game set:
-// { first, score, play, word } (booleans), each true only for a record beaten in a game that is not the first.
+// { first, score, play, word, held } (booleans), the first four's records true only when beaten in a game that is not the first.
+// A game in which the player took a hint counts as a game and a win but sets no best (`held` says it would have set one).
 // Games with no computer opponent or with two or more people are left out: the record is the player's own against the town.
 export function applyGame(prev, s) {
   const humans = s.players.filter((p) => p.kind === 'human');
@@ -35,19 +39,20 @@ export function applyGame(prev, s) {
   if (s.mode !== 'play' || humans.length !== 1 || !bots.length || !s.result) return { stats: st, pb: null };
   const k = s.players.indexOf(humans[0]), me = humans[0];
   const won = s.result.winners.includes(k), tied = won && s.result.winners.length > 1;
-  const pb = { first: st.games === 0, score: false, play: false, word: false };
+  const pb = { first: st.games === 0, score: false, play: false, word: false, held: false };
+  const aided = hintsUsed(me) > 0;
   st.games++; st.totalScore += me.score;
   if (won && !tied) { st.wins++; st.streak++; st.bestStreak = Math.max(st.bestStreak, st.streak); }
   else { if (tied) st.ties++; st.streak = 0; }
-  if (me.score > st.bestScore) { pb.score = !pb.first; st.bestScore = me.score; }
+  if (me.score > st.bestScore) { if (aided) pb.held = !pb.first; else { pb.score = !pb.first; st.bestScore = me.score; } }
   const plays = s.log.filter((e) => e.kind === 'play' && e.p === k);
   const top = plays.reduce((a, e) => (!a || e.score > a.score ? e : a), null);
-  if (top && top.score > (st.bestPlay ? st.bestPlay.score : 0)) { pb.play = !pb.first; st.bestPlay = { word: top.words[0].w, score: top.score }; }
-  if (me.best && me.best.score > (st.bestWord ? st.bestWord.score : 0)) { pb.word = !pb.first; st.bestWord = { word: String(me.best.word).slice(0, 20), score: me.best.score }; }
+  if (top && top.score > (st.bestPlay ? st.bestPlay.score : 0)) { if (aided) pb.held = !pb.first; else { pb.play = !pb.first; st.bestPlay = { word: top.words[0].w, score: top.score }; } }
+  if (me.best && me.best.score > (st.bestWord ? st.bestWord.score : 0)) { if (aided) pb.held = !pb.first; else { pb.word = !pb.first; st.bestWord = { word: String(me.best.word).slice(0, 20), score: me.best.score }; } }
   st.fullSoaks += plays.filter((e) => e.full).length;
   st.themed += plays.reduce((a, e) => a + e.words.filter((w) => w.themed).length, 0);
   st.featured += s.featured.filter((f) => f.by === k).length;
-  st.hints += me.hints == null ? 0 : Math.max(0, 3 - me.hints);
+  st.hints += hintsUsed(me);
   for (const b of bots) {
     const row = st.opp[oppKey(b)] || oppRow(null);
     row.games++; row.total += me.score;
