@@ -4,6 +4,7 @@
 import { ctx, hasRaw } from './lib.mjs';
 import { createGame, apply, evaluate } from '../src/js/engine.js';
 import { generateMoves } from '../src/js/movegen.js';
+import { words as wordsOf, BLOCKED } from '../src/js/dict.js';
 import { N } from '../src/js/score.js';
 import { referenceWordSet, refPlay } from '../tools/ref-validator.mjs';
 import { seedState, rand } from '../src/js/rng.js';
@@ -14,9 +15,11 @@ export const tests = [
   {
     name: 'engine agrees with the reference on 50,000 plays', node: true,
     async run(t) {
-      if (!hasRaw()) { t.log('raw word lists missing: run tools/fetch-wordlists.mjs (skipped)'); return; }
       const c = await ctx();
-      const words = referenceWordSet();
+      // the independent word set comes from the raw ENABLE list when it is on this machine; without it (it is git-ignored and
+      // fetched) the shipped dictionary stands in, so the engine-against-reference check still runs in every green run
+      const words = hasRaw() ? referenceWordSet() : new Set([...wordsOf(c.dict)].filter((w) => !BLOCKED.has(w)));
+      t.log(hasRaw() ? 'reference words: the raw ENABLE list' : 'reference words: the shipped dictionary (raw word lists missing)');
       const themed = new Map();
       for (const e of c.lex.data.words) for (const f of e.forms) themed.set(f, c.lex.data.tiers[e.tier]);
       const r = { rng: { x: seedState(2026) } };
