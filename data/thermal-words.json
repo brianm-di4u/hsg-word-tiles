@@ -1,9 +1,9 @@
 {
- "about": "Hot Springs bonus words. Every form must be a legal dictionary word (tools/check-lexicon.mjs). Tiers pay +10 / +15 / +25. Each entry's fact comes from the audited bank (bank id) or quotes a research file (ref + quote); tools/check-facts.mjs verifies both.",
+ "about": "Hot Springs bonus words. Every form must be a legal dictionary word (tools/check-lexicon.mjs). Tiers pay +10 / +18 / +30. Each entry's fact comes from the audited bank (bank id) or quotes a research file (ref + quote); tools/check-facts.mjs verifies both.",
  "tiers": {
   "1": 10,
-  "2": 15,
-  "3": 25
+  "2": 18,
+  "3": 30
  },
  "categories": {
   "springs": {

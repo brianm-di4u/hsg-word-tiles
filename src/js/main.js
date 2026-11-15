@@ -2,7 +2,7 @@
 import { loadDict, has } from './dict.js';
 import { makeLexicon } from './lexicon.js';
 import * as E from './engine.js';
-import { N, CENTER, RACK, FULL_SOAK, FEATURED_BONUS, SQUARE as SQUARES, BATHHOUSES as BATHS } from './score.js';
+import { N, CENTER, RACK, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, SQUARE as SQUARES, BATHHOUSES as BATHS } from './score.js';
 import { seedState } from './rng.js';
 import * as R from './render2d.js';
 import { audio, unlock, sfx, pauseAudio, resumeAudio, setTune, holdAudio, releaseAudio, syncAudio, audioList, audioRender, renderCue, tuneName } from './audio.js';
@@ -512,7 +512,7 @@ function celebrate(e, bark) {
   if (e.featured) { toast({ kind: 'featured', who, title: `Featured Spring: ${e.featured}`, sub: `${quote('themed') || `${p.name} found it`} · +${FEATURED_BONUS}`, fact: G.lex.entry(e.featured)?.id, form: e.featured }); sfx('featured'); }
   for (const w of themed) {
     const entry = G.lex.byId.get(w.themed);
-    toast({ kind: 'themed', title: `${w.w} +${w.bonus}${w.bath ? ' · Row ×2' : ''}`, sub: G.lex.categories[entry.cat].name, fact: entry.id, form: w.w });
+    toast({ kind: 'themed', title: `${w.w} +${w.bonus}${w.bath ? ` · Row +${ROW_BONUS}` : ''}`, sub: G.lex.categories[entry.cat].name, fact: entry.id, form: w.w });
     steamBurst(e.tiles.map((t) => t.i));
   }
   if (themed.length && !e.featured) sfx('steam');

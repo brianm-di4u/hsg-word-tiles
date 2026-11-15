@@ -82,7 +82,7 @@ export function refPlay(board, tiles, words, themed = new Map(), featuredWords =
       m *= WM[k] || 1;
       if (x.t.fresh && BATHHOUSES[x.r * n + x.c]) bath = true;
     }
-    total += s * m + (themed.has(w) ? themed.get(w) * (bath ? 2 : 1) : 0);
+    total += s * m + (themed.has(w) ? (themed.get(w) + (bath ? 20 : 0)) : 0);
     list.push(w);
   }
   if (tiles.length === 7) total += 40;

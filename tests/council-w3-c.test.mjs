@@ -2,6 +2,8 @@
 // P-N03 (words with no tie to their fact), S4-24 / S4-02 (the Bathhouse Row medallions) and S3-03 (Daily par and history).
 import { ctx, root } from './lib.mjs';
 import { emptyStats, applyGame, hintsUsed } from '../src/js/stats.js';
+import { ROW_BONUS } from '../src/js/score.js';
+import { generateMoves } from '../src/js/movegen.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false })); };
@@ -108,6 +110,44 @@ export const tests = [
       await t.game('scene', 'setup');
       t.equal(await t.page.inputValue('[data-hints-unl]'), 'unl', 'and comes back after a reload');
       await t.checkLayout({ allowScrollY: true });
+    },
+  },
+  // ---------- S3-07 ----------
+  {
+    name: 'S3-07 the tiers pay 10 / 18 / 30, a Bathhouse Row square adds a flat 20, and the move generator scores it the same way',
+    node: true,
+    async run(t) {
+      const c = await ctx();
+      t.equal(JSON.stringify(c.lex.data.tiers), JSON.stringify({ 1: 10, 2: 18, 3: 30 }), 'tiers 10 / 18 / 30');
+      t.equal(ROW_BONUS, 20, 'the Row bonus is 20');
+      // every themed play the generator finds for a rack is scored like the engine scores it (bonus and Row flag), over several racks
+      const { createGame, evaluate } = await import('../src/js/engine.js');
+      let themed = 0, row = 0;
+      for (const seed of [3, 5, 8, 13, 21]) {
+        const s = createGame({ mode: 'play', seats: [{ kind: 'ai', persona: 'opal', level: 'easy' }, { kind: 'ai', persona: 'hollis', level: 'hard' }], seed }, c.lex);
+        const moves = generateMoves(c.dict, s.board, s.players[0].rack, { lex: c.lex, featured: s.featured }).moves;
+        for (const m of moves.slice(0, 300)) {
+          const ev = evaluate(s, m.tiles, c);
+          if (!ev.ok) continue;
+          t.equal(m.score, ev.score, 'generator and engine agree on ' + m.words[0]);
+          for (const w of ev.words) if (w.bonus) { themed++; if (w.bath) row++; t.expect(w.bonus === c.lex.bonusOf(c.lex.entry(w.w)) + (w.bath ? 20 : 0), w.w + ' pays its tier, plus 20 on the Row'); }
+        }
+      }
+      t.expect(themed > 0, 'at least one Hot Springs play was seen (' + themed + ', ' + row + ' on the Row)');
+    },
+  },
+  {
+    name: 'S3-07 Help lists the new tiers and the Row bonus',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('scene', 'help');
+      await t.page.click('[data-tab="squares"]');
+      const text = await t.page.textContent('.help-body');
+      t.expect(text.includes('Hot Springs word +10 / 18 / 30'), 'the bonus line says 10 / 18 / 30');
+      t.expect(/earns 20 more/.test(text), 'the Row line says 20 more');
+      t.expect(!/earns its bonus twice/.test(text), 'and no longer says twice');
     },
   },
 ];

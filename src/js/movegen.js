@@ -3,7 +3,7 @@
 // move is scored as it is recorded, with the same rules as score.js (tests/04-movegen checks every
 // generated move against the engine). No DOM; runs in the AI worker and in Node.
 import { EOW, LAST, COMMON, BLOCKED } from './dict.js';
-import { N, SQUARE, VALUE, LETTER_MULT, WORD_MULT, FULL_SOAK, FEATURED_BONUS, CENTER, RACK } from './score.js';
+import { N, SQUARE, VALUE, LETTER_MULT, WORD_MULT, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, CENTER, RACK } from './score.js';
 
 const ALL = (1 << 26) - 1;
 const LV = new Int8Array(26);
@@ -125,12 +125,12 @@ export function generateMoves(d, board, rack, opts = {}) {
             const cw = cup[i] + A[l] + cdown[i];
             cross += (cscore[i] + v * lm[i]) * wm[i];
             words.push(cw);
-            if (lex) { const en = lex.byForm.get(cw); if (en) bonus += lex.bonusOf(en) * (bath[i] ? 2 : 1); }
+            if (lex) { const en = lex.byForm.get(cw); if (en) bonus += lex.bonusOf(en) + (bath[i] ? ROW_BONUS : 0); }
           }
         } else sum += v;
       }
       words.unshift(word);
-      if (lex) { const en = lex.byForm.get(word); if (en) bonus += lex.bonusOf(en) * (anyBath ? 2 : 1); }
+      if (lex) { const en = lex.byForm.get(word); if (en) bonus += lex.bonusOf(en) + (anyBath ? ROW_BONUS : 0); }
       if (words.some((w) => BLOCKED.has(w))) return;
       if (commonOnly && !words.every((w) => w.length < freeLen || isCommonWord(w))) return;
       for (const f of featured) if (words.includes(f)) { feat = FEATURED_BONUS; break; }

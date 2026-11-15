@@ -83,7 +83,7 @@ and ≤ 1.2 s (Hard) at 4× throttle.
 ### Scoring
 8. Letter and word premiums apply only to squares covered in that play.
 9. Playing all 7 tiles adds 40 (Full Soak).
-10. Each Hot Springs bonus word formed adds its tier bonus (10/15/25), doubled when a new tile in it covers a Bathhouse Row square.
+10. Each Hot Springs bonus word formed adds its tier bonus (10/18/30), plus 20 when a new tile in it covers a Bathhouse Row square.
 11. Forming a Featured Spring adds 30 once per game and reveals it.
 12. Engine scores match an independent reference scorer on 50,000 random plays.
 

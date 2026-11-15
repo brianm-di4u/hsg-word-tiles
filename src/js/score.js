@@ -8,6 +8,9 @@ export const SQUARE = ROWS.join('').split('');           // per square: . w h s 
 export const LETTER_MULT = { w: 2, h: 3 };
 export const WORD_MULT = { s: 2, b: 3 };
 export const FULL_SOAK = 40, FEATURED_BONUS = 30, RACK = 7;
+// A Hot Springs word that a new tile carries onto a Bathhouse Row square earns this much on top of its tier bonus.
+// (Before wave 3, S3-07: the tier bonus doubled. The tiers themselves are in data/thermal-words.json: 10 / 18 / 30, were 10 / 15 / 25.)
+export const ROW_BONUS = 20;
 export const VALUE = {};
 for (const [l, t] of Object.entries(TILES)) VALUE[l] = t.value;
 
@@ -125,7 +128,7 @@ export function scorePlay(board, found, tilesPlaced, lex, featured) {
       entry = lex.entry(wd.w);
       if (entry) {
         bath = wd.newCells.some(isBath);
-        bonus = lex.bonusOf(entry) * (bath ? 2 : 1);
+        bonus = lex.bonusOf(entry) + (bath ? ROW_BONUS : 0);
       }
     }
     total += base + bonus;

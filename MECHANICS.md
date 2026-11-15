@@ -50,8 +50,8 @@ Racks are arrays of letters, `'?'` for a blank. A placed blank stores the letter
   Blanks score 0. The Display Spring and Bathhouse Row squares have no multiplier.
 - Play score = Σ word scores + **Full Soak** +40 when all 7 rack tiles are played.
 - **Hot Springs bonus**: each formed word that is a form in `data/thermal-words.json` adds its tier
-  bonus (+10 / +15 / +25). If that word covers a Bathhouse Row square with a tile from this play,
-  its bonus is doubled.
+  bonus (+10 / +18 / +30). If that word covers a Bathhouse Row square with a tile from this play,
+  it earns 20 more.
 - **Featured Spring**: forming the exact featured word adds +30 the first time anyone forms it in the game.
   It's then revealed and marked with the player's name.
 - The log entry keeps each word's base score and bonus separately, so the UI can show the breakdown.

@@ -76,7 +76,7 @@ export const tests = [
       t.expect(ev.ok, 'QUARTZ is legal');
       const base = sum('QUARTZ') + VALUE.Q; // Q doubled on the Warm square
       t.equal(ev.words[0].score, base, 'letter premium');
-      t.equal(ev.words[0].bonus, 15, 'QUARTZ is a tier-2 bonus word');
+      t.equal(ev.words[0].bonus, 18, 'QUARTZ is a tier-2 bonus word');
       apply(s, { type: 'play', tiles: across(7, 3, 'QUARTZ') }, c);
       // B extends QUARTZ? no: B plays a word through existing tiles using the Q square again → no premium
       s.players[1].rack = 'ESETTSS'.split('');
@@ -98,7 +98,7 @@ export const tests = [
       t.expect(ev.ok, ev.error || 'TUFA legal');
       t.equal(ev.words[0].w, 'TUFA', 'main word');
       t.equal(ev.words[0].score, sum('TUFA') * 2, 'Steam doubles the word');
-      t.equal(ev.words[0].bonus, 25, 'TUFA tier-3 bonus');
+      t.equal(ev.words[0].bonus, 30, 'TUFA tier-3 bonus');
     },
   },
   {
@@ -121,7 +121,7 @@ export const tests = [
     },
   },
   {
-    name: 'bonus doubled on a Bathhouse Row square', node: true,
+    name: 'a Hot Springs bonus rises by the Row bonus on a Bathhouse Row square', node: true,
     async run(t) {
       const { s, c } = await game(['SPAEEEE', 'EEEEEEE']);
       // (0,8) is the Superior square. Put an A at (1,8) and an existing column to connect.
@@ -132,7 +132,7 @@ export const tests = [
       const ev = evaluate(s, [{ i: at(0, 8), l: 'S' }], c);
       t.expect(ev.ok, ev.error || 'SPA legal');
       const spa = ev.words.find((w) => w.w === 'SPA');
-      t.equal(spa.bonus, 20, 'tier-1 bonus 10 doubled');
+      t.equal(spa.bonus, 30, 'tier-1 bonus 10 plus 20 for the Bathhouse Row square');
       t.expect(spa.bath, 'flagged as a Bathhouse Row word');
     },
   },

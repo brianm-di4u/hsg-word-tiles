@@ -2,7 +2,7 @@
 import { PERSONAS, persona, LEVEL_NAME, LEVEL_BLURB, seatLevel, HUMAN_COLORS } from './personas.js';
 import { SHORT } from './voices.js';
 import { TILES, BLANKS } from './tiles.js';
-import { FULL_SOAK, FEATURED_BONUS, explainWord } from './score.js';
+import { FULL_SOAK, FEATURED_BONUS, ROW_BONUS, explainWord } from './score.js';
 import { DAILY_TURNS, unseen } from './engine.js';
 import { art } from './art.js';
 import { hintsUsed } from './stats.js';
@@ -126,7 +126,7 @@ export function breakdownHtml(p, board, staged) {
     const sum = x.parts.map((q) => `${q.l} ${q.v}${q.lm > 1 ? `×${q.lm}` : ''}`).join(' + ');
     return `<li><b>${esc(w.w)}</b> <span>${sum} = ${x.sum}${x.wm > 1 ? `, word ×${x.wm} = ${x.total}` : ''}</span></li>`;
   });
-  for (const w of p.words) if (w.bonus) rows.push(`<li><b>Hot Springs</b> <span>${esc(w.w)} +${w.bonus}${w.bath ? ' (a Bathhouse Row square doubles it)' : ''}</span></li>`);
+  for (const w of p.words) if (w.bonus) rows.push(`<li><b>Hot Springs</b> <span>${esc(w.w)} +${w.bonus}${w.bath ? ' (a Bathhouse Row square adds ${ROW_BONUS})' : ''}</span></li>`);
   if (p.featured) rows.push(`<li><b>Featured Spring</b> <span>${esc(p.featured)} +${FEATURED_BONUS}</span></li>`);
   if (p.full) rows.push(`<li><b>Full Soak</b> <span>all seven tiles +${FULL_SOAK}</span></li>`);
   return `<div class="bd" role="region" aria-label="How this play scores"><ul>${rows.join('')}<li class="tot"><b>Total</b> <span>${p.score} points</span></li></ul></div>`;
@@ -269,6 +269,7 @@ function workedExample() {
 }
 
 export function helpHtml(tab, lex, twos = []) {
+  const tierList = Object.values(lex.data.tiers).join(' / ');
   const tabs = [['rules', 'How to play'], ['squares', 'Squares and scoring'], ['words', 'Hot Springs words'], ['keys', 'Controls']];
   const tileRow = Object.entries(TILES).map(([l, t]) => `<span class="tchip"><b>${l}</b><i>${t.value}</i><small>×${t.count}</small></span>`).join('');
   const body = {
@@ -304,12 +305,12 @@ export function helpHtml(tab, lex, twos = []) {
         <li><span class="sq sq-h"><i>×3</i></span><span><b>Hot</b> triples the letter on it.</span></li>
         <li><span class="sq sq-s word"><i>×2</i></span><span><b>Steam</b> doubles the whole word.</span></li>
         <li><span class="sq sq-b word"><i>×3</i></span><span><b>Boiling Spring</b> triples the whole word.</span></li>
-        <li><span class="sq sq-B"><i class="row">${ICON.cat.arch}</i></span><span><b>Bathhouse Row</b>: eight squares named for the eight historic bathhouses. A Hot Springs word that covers one earns its bonus twice.</span></li>
+        <li><span class="sq sq-B"><i class="row">${ICON.cat.arch}</i></span><span><b>Bathhouse Row</b>: eight squares named for the eight historic bathhouses. A Hot Springs word that covers one earns ${ROW_BONUS} more.</span></li>
       </ul>
       <h2>Bonuses</h2>
       <ul class="legend plain">
         <li><b>Full Soak +${FULL_SOAK}</b>: use all seven tiles in one turn.</li>
-        <li><b>Hot Springs word +10 / +15 / +25</b>: any word you form that belongs to the town (see the next tab).</li>
+        <li><b>Hot Springs word +${tierList}</b>: any word you form that belongs to the town (see the next tab).</li>
         <li><b>Featured Spring +${FEATURED_BONUS}</b>: three secret words per game, hidden in steam on the plaques. A letter clears every round. The first to form one claims it.</li>
       </ul>
       <h2>The tiles</h2>
