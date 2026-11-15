@@ -364,7 +364,7 @@ function beginGame(s, intent) {
   const handle = gameSaves.open(s, intent);
   gameHandles.set(s, handle);
   G.s = s;
-  G.staged = []; G.selected = null; G.hint = null; G.preview = null; G.anim.clear(); G.last = new Set(lastTiles(s));
+  G.staged = []; G.selected = null; G.hint = null; G.hintAlts = null; G.preview = null; G.anim.clear(); G.last = new Set(lastTiles(s));
   G.revealed = -1; G.lastHuman = -1; G.privacy = false;
   resetOrder();
   if (!turnPrivacy()) restoreHint(s);
@@ -616,14 +616,20 @@ async function doHint() {
   // staging is locked (humanCanAct) until the hint arrives, so it can't land on top of new tiles
   const s = G.s, move = s.move;
   G.hintBusy = true; renderStaging();
-  let m = null;
-  try { m = await aiHint(s); } catch (err) { console.warn('hint failed', err); }
+  let list = [];
+  try { list = (await aiHint(s)) || []; } catch (err) { console.warn('hint failed', err); }
   G.hintBusy = false;
   if (G.s !== s || s.move !== move || !humanCanAct()) { renderPreview(); return; }
   recallAll();
-  if (!m) { flash('No play found. Try a swap.'); renderStaging(); return; }
+  if (!list.length) { flash('No play found. Try a swap.'); renderStaging(); return; }
   if (p.unl) p.taken++; else p.hints--;
-  // a hint becomes a staged play the player can accept with Play, move, or recall
+  G.hintAlts = list; G.hintIx = 0; G.hintMove = s.move;   // the other plays are free to look at: the one hint was paid for
+  putHint(list[0]);
+}
+// A Spring Guide play becomes a staged play the player can accept with Play, move, or recall.
+function putHint(m) {
+  const s = G.s;
+  recallAll();
   for (const t of m.tiles) {
     const k = cur().rack.findIndex((l, j) => (t.blank ? l === '?' : l === t.l) && !G.staged.some((x) => x.k === j));
     if (k >= 0) { G.staged.push({ k, i: t.i, l: t.l, blank: t.blank }); G.order = G.order.filter((x) => x !== k); }
@@ -631,7 +637,20 @@ async function doHint() {
   G.hint = null; clearToasts();
   s.hintStaged = { move: s.move, tiles: G.staged.map((t) => ({ i: t.i, l: t.l, blank: t.blank })) };   // kept in the save: the hint is paid for, so a reload must not lose it
   updatePreview(); save(s); renderGame();
-  flash(`Spring Guide: ${m.words[0]} for ${m.score}. Play it, move the tiles, or take them back.`, 4000);
+  const keep = m.keep.length ? m.keep.map((l) => (l === '?' ? 'a blank' : l)).join('') : 'no tiles';
+  liveSay(`Spring Guide: ${m.words[0]} for ${m.score}, keeping ${keep}. Play it or take the tiles back.${hintLive() ? ' Press Other plays for another idea.' : ''}`);
+}
+// the hint on the board while its other plays can still be cycled (same turn, the tiles untouched)
+const hintLive = () => {
+  const a = G.hintAlts, s = G.s;
+  if (!a || a.length < 2 || !s || s.over || s.move !== G.hintMove || !G.staged.length) return false;
+  const shown = a[G.hintIx].tiles;
+  return shown.length === G.staged.length && shown.every((t) => G.staged.some((x) => x.i === t.i && x.l === t.l));
+};
+function hintNext() {
+  if (!hintLive() || !humanCanAct()) return;
+  G.hintIx = (G.hintIx + 1) % G.hintAlts.length;
+  putHint(G.hintAlts[G.hintIx]);
 }
 
 // ---------- rendering ----------
@@ -763,9 +782,10 @@ function renderPreview() {
     const p = G.preview;
     if (p.ok) {
       html = `<span class="words">${p.words.map((w) => `<b class="${w.themed ? 'themed' : ''}">${w.w}</b>`).join(' ')}</span><span class="pts">${p.score}<small> pts</small></span>${p.themed ? `<span class="extra">${UI.ICON.steam} +${p.themed}</span>` : ''}${p.full ? `<span class="extra">Full Soak +${FULL_SOAK}</span>` : ''}${p.featured ? `<span class="extra">Featured +${FEATURED_BONUS}</span>` : ''}`;
+      if (hintLive()) html += `<span class="extra">keeps ${G.hintAlts[G.hintIx].keep.length ? G.hintAlts[G.hintIx].keep.map((l) => (l === '?' ? 'blank' : l)).join('') : 'nothing'}</span><button class="bdbtn" data-hintnext aria-label="Show another Spring Guide play, ${G.hintIx + 1} of ${G.hintAlts.length} shown">Other plays ${G.hintIx + 1}/${G.hintAlts.length}</button>`;
       html += `<button class="bdbtn" tabindex="-1">${G.breakdown ? 'Hide' : 'How it scores'}</button>`;
       if (G.breakdown) html += UI.breakdownHtml(p, G.s.board, G.staged);
-      cls = 'ok';
+      cls = hintLive() ? 'ok hintlive' : 'ok';
     } else { html = esc(p.error); cls = 'bad'; }
   } else if (G.hoverInfo) html = G.hoverInfo;
   else if (G.lastLine && G.bark) html = `<span class="bark"><b>${esc(SHORT[G.bark.persona] || '')}:</b> “${esc(G.bark.text)}”</span><span class="said">${esc(G.lastLine)}</span>`;
@@ -1471,7 +1491,7 @@ function wireStatic() {
   $('#b-menu').addEventListener('click', () => { unlock(); openDialog('pause'); });
   $('#b-sound').addEventListener('click', () => { unlock(); G.settings.sound = !G.settings.sound; saveSettings(); if (G.settings.sound) sfx('place'); });
   // the strip under the board opens the breakdown of the staged play (its button is the keyboard's way in)
-  $('#preview').addEventListener('click', toggleBreakdown);
+  $('#preview').addEventListener('click', (e) => { if (e.target.closest('[data-hintnext]')) hintNext(); else toggleBreakdown(); });
   $('#b-zoom').addEventListener('click', () => animateView(1, R.U / 2, R.U / 2));
   $('#b-zoomin').addEventListener('click', () => { if (R.view.zoom > 1.01) animateView(1, R.U / 2, R.U / 2); else zoomInAt(); });
   const b = $('#board');

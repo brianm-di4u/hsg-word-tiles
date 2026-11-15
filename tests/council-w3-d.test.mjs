@@ -1,6 +1,9 @@
 // Wave 3, batch D: S4-19, S1-04, S1-07, S2-02, S2-06, S2-09, S4-05, S4-09, S2-14 and S3-15 (feedback, teaching, help and records).
+import { ctx } from './lib.mjs';
 import { BATHHOUSES, ROWS, SIZE } from '../src/js/layout.js';
 import { stallNote, decisiveLine, outcome } from '../src/js/ui.js';
+import { createGame } from '../src/js/engine.js';
+import { hintChoices, bestHint } from '../src/js/ai.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false })); };
@@ -293,6 +296,69 @@ export const tests = [
       await t.page.locator('.fchip', { hasText: 'stayed hidden' }).click();
       await t.page.waitForFunction(() => window.__game.getState().dialog === 'fact', null, { timeout: 3000 });
       t.expect(/SPRING/.test(await t.page.textContent('.fact h2')), 'the unfound word opens its card');
+      await t.checkLayout({ allowScrollY: true });
+    },
+  },
+  // ---------- S3-15 ----------
+  {
+    name: 'S3-15 the hint gives up to three different plays, best first, each with the tiles it keeps',
+    node: true,
+    async run(t) {
+      const c = await ctx();
+      let seen3 = 0;
+      for (const seed of [3, 4, 5, 6, 7]) {
+        const s = createGame({ mode: 'play', seed, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] }, c.lex);
+        const list = hintChoices(c.dict, c.lex, s);
+        t.expect(list.length >= 1 && list.length <= 3, 'seed ' + seed + ': one to three plays (' + list.length + ')');
+        if (list.length === 3) seen3++;
+        t.equal(new Set(list.map((m) => m.words.join(','))).size, list.length, 'seed ' + seed + ': all different');
+        const rack = s.players[0].rack.slice().sort().join('');
+        for (const m of list) t.equal([...m.keep, ...m.tiles.map((x) => (x.blank ? '?' : x.l))].sort().join(''), rack, 'seed ' + seed + ': ' + m.words[0] + ' plus what it keeps is the rack');
+        const best = bestHint(c.dict, c.lex, s);
+        t.equal(JSON.stringify(best.tiles), JSON.stringify(list[0].tiles), 'seed ' + seed + ': bestHint is the first of them');
+      }
+      t.expect(seen3 >= 3, 'most opening racks have three (' + seen3 + ' of 5)');
+    },
+  },
+  {
+    name: 'S3-15 Other plays cycles the Spring Guide through its plays for the one hint that was paid for, and says what each keeps',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await start(t);
+      const staged = async () => (await t.state()).staged.map((x) => x.i + x.l).sort().join(',');
+      const used0 = (await t.state()).game.players[0].hints;
+      await t.game('act', 'hint');
+      await t.waitIdle(5000);
+      t.equal((await t.state()).game.players[0].hints, used0 - 1, 'the hint cost one charge');
+      const label = async () => (await t.page.textContent('[data-hintnext]')).trim();
+      const m = /Other plays 1\/(\d)/.exec(await label());
+      t.expect(!!m, 'the strip offers Other plays (' + (await t.page.textContent('#preview')).trim() + ')');
+      const n = +m[1];
+      t.expect(n >= 2, 'with at least two plays to see (' + n + ')');
+      t.expect(/keeps/.test(await t.page.textContent('#preview')), 'and what the first one keeps');
+      const seen = [await staged()];
+      await t.shot('S3-15-other-plays');
+      for (let k = 2; k <= n; k++) {
+        await t.page.click('[data-hintnext]');
+        await t.page.waitForFunction((k2) => new RegExp('Other plays ' + k2 + '/').test(document.querySelector('[data-hintnext]')?.textContent || ''), k, { timeout: 3000 });
+        seen.push(await staged());
+      }
+      t.equal(new Set(seen).size, n, 'each press stages a different play');
+      t.equal((await t.state()).game.players[0].hints, used0 - 1, 'and costs nothing more');
+      await t.page.click('[data-hintnext]');
+      await t.page.waitForFunction(() => /Other plays 1\//.test(document.querySelector('[data-hintnext]')?.textContent || ''), null, { timeout: 3000 });
+      t.equal(await staged(), seen[0], 'after the last it comes round to the first');
+      // the player takes one tile back: the hint is theirs now and the button goes
+      await t.game('act', 'recall');
+      t.equal(await t.page.locator('[data-hintnext]').count(), 0, 'once the tiles are taken back the button is gone');
+      // and the keyboard reaches it
+      await t.game('act', 'hint'); await t.waitIdle(5000);
+      await t.page.focus('[data-hintnext]');
+      const before = await staged();
+      await t.page.keyboard.press('Enter');
+      await t.page.waitForFunction((b) => window.__G.staged.map((x) => x.i + x.l).sort().join(',') !== b, before, { timeout: 3000 });
+      t.expect((await staged()) !== before, 'Enter on the focused button shows the next play');
       await t.checkLayout({ allowScrollY: true });
     },
   },

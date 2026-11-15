@@ -103,7 +103,7 @@ and ≤ 1.2 s (Hard) at 4× throttle.
 21. AI plays only legal moves (every AI move in 2,000 self-play games passes the engine check).
 22. Easy plays only common words; Hard beats Medium in ≥ 70 % and Medium beats Easy in ≥ 75 % of 2-player games.
 23. AI turns never block the UI (Web Worker; in-thread fallback works when Workers are unavailable).
-24. Hints (3 per game in Play) show a strong legal move on the board.
+24. Hints (3 per game in Play) show a strong legal move on the board; Other plays steps through the next two best, with the tiles each keeps, at no extra charge.
 
 ### Hot Springs content
 25. Every bonus word opens a fact card with its source; every card passes `check-facts`.

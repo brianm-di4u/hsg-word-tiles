@@ -140,16 +140,25 @@ function fallback(rack, bag) {
   return letters.length ? { type: 'swap', letters } : { type: 'pass' };
 }
 
-// The hint: the best Medium-strength play for a human seat, or null.
-export function bestHint(dict, lex, s) {
+// The hint: up to three different plays for a human seat, best Medium-strength play first (score plus half the value of the tiles kept),
+// each with the tiles it keeps. Two plays that make the same words count as one. Empty when nothing fits.
+export function hintChoices(dict, lex, s, n = 3) {
   const p = s.players[s.cur];
   const { moves } = generateMoves(dict, s.board, p.rack, { lex, featured: s.featured, budget: 900000 });
-  if (!moves.length) return null;
   const bag = s.bag.length;
-  let best = null;
-  for (const m of moves.slice(0, 60)) {
-    const e = m.score + 0.5 * leaveValue(rackMinus(p.rack, m.tiles)) * Math.min(1, bag / RACK);
-    if (!best || e > best.e) best = { m, e };
+  const ranked = moves.slice(0, 60).map((m) => { const keep = rackMinus(p.rack, m.tiles); return { m, keep, e: m.score + 0.5 * leaveValue(keep) * Math.min(1, bag / RACK) }; }).sort((a, b) => b.e - a.e);
+  const out = [], seen = new Set();
+  for (const { m, keep } of ranked) {
+    const k = m.words.join(',');
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ tiles: m.tiles, score: m.score, words: m.words, keep });
+    if (out.length >= n) break;
   }
-  return best.m;
+  return out;
+}
+// The best of them, or null.
+export function bestHint(dict, lex, s) {
+  const [best] = hintChoices(dict, lex, s, 1);
+  return best || null;
 }

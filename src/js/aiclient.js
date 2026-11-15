@@ -1,7 +1,7 @@
 // Runs the AI off the main thread: a Worker started from a Blob URL (works from file:// too), with the
 // same code on the main thread as a fallback (no Worker, a failed start, or ?worker=0).
 import { WORKER_SRC } from './worker-src.js';
-import { chooseAction, bestHint } from './ai.js';
+import { chooseAction, hintChoices } from './ai.js';
 
 export const aiClient = { mode: 'none', worker: null, pending: new Map(), seq: 0, ready: null, dict: null, lex: null };
 
@@ -63,12 +63,12 @@ export async function aiMove(s, level, persona) {
   return { action: r.action, rngAi: st.rng.ai, nodes: r.nodes };
 }
 
+// Resolves up to three plays for the Spring Guide, the best first (each { tiles, score, words, keep }); an empty list when nothing fits.
 export async function aiHint(s) {
   await aiClient.ready;
   if (aiClient.mode === 'worker') {
     const r = await call({ type: 'hint', state: slim(s) });
-    if (r.type !== 'retry') return r.move;
+    if (r.type !== 'retry') return r.moves;
   }
-  const m = bestHint(aiClient.dict, aiClient.lex, slim(s));
-  return m ? { tiles: m.tiles, score: m.score, words: m.words } : null;
+  return hintChoices(aiClient.dict, aiClient.lex, slim(s));
 }

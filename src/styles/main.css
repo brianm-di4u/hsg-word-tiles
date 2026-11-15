@@ -590,3 +590,7 @@ body.theme-dark #preview .bd { background: #0C0A16; }
 .fchip:hover { background: rgba(138, 106, 30, 0.12); }
 .fchip small { text-decoration: underline; text-decoration-color: rgba(120, 100, 60, 0.5); }
 #preview .stall { color: #F3DD8B; }
+@media (max-width: 860px), (max-aspect-ratio: 1/1), (max-height: 520px) {
+  /* while the Spring Guide's other plays are on offer the strip keeps to one row of chips; tapping the strip still opens how the play scores */
+  #preview.hintlive .bdbtn:not([data-hintnext]) { display: none; }
+}

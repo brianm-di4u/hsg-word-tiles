@@ -285,7 +285,7 @@ export function helpHtml(tab, lex, twos = []) {
       </ol>
       ${workedExample()}
       <p>Words come from the public-domain ENABLE list (168,000 words; no proper nouns) with a few additions: the two-letter words below and some everyday ones such as EMAIL, APP and BLOG. A play with a word that isn't on the list is handed back and you keep your turn. While you place tiles, the strip under the board shows the words, the score and any bonus.</p>
-      <p>Stuck? The <b>Spring Guide</b> (Hint) sets a strong play on the board for you to keep, move or take back: three per player in a game against the computer or pass-and-play (or unlimited, if you choose that in the setup; such a game sets no personal best), none in the Daily Soak.</p>
+      <p>Stuck? The <b>Spring Guide</b> (Hint) sets a strong play on the board for you to keep, move or take back. <b>Other plays</b> under the board shows its next two choices, and the tiles each one keeps, for no extra charge. Three hints per player in a game against the computer or pass-and-play (or unlimited, if you choose that in the setup; such a game sets no personal best), none in the Daily Soak.</p>
       ${twos.length ? `<h2>Two-letter words</h2>
       <p>All ${twos.length} of these are playable. QI and ZA help when you are holding a lone Q or Z.</p>
       <p class="twos">${twos.join(' ')}</p>` : ''}
