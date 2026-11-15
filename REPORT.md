@@ -19,7 +19,7 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 - **Presentation:** a three.js board on a bathhouse counter (Blender tiles, frame, towels and desk bell), with a 2D
   fallback; painted art made for the game (title, glass, marble, terrazzo, counter, bathhouse medallions, portraits,
   fact-card paintings) plus 18 Barons vignettes; day and night themes; synthesized sound.
-- **Input:** mouse drag-and-drop, touch with tap-to-zoom, a loupe and an overview map, tap-to-place, and full
+- **Input:** mouse drag-and-drop, touch with a floating tile and a lit target square, pinch zoom with an overview map, tap-to-place, and full
   keyboard play.
 
 ## Acceptance criteria (PRD §11)
@@ -40,7 +40,7 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 | 31 Day and night contrast | met | 16-a11y: no failures on any screen in either theme |
 | 32 Animation and reduced motion | met | tile drops, score pops, steam, banners; 16-a11y reduced motion |
 | 33 Sound | met (not listened to) | 21-audio renders every sound offline: audible, unclipped, short |
-| 34–35 Mouse, touch, zoom, loupe | met | 13-input |
+| 34–35 Mouse, touch, zoom, floating tile | met | 13-input |
 | 36–37 Keyboard, live region | met | 13-input, 16-a11y |
 | 38 No storage | met | 17-save |
 | 39 Offline, no network, no console errors | met | every test; `--file-url --gpu` run |

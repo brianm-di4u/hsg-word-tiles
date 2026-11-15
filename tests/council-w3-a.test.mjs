@@ -360,4 +360,21 @@ export const tests = [
     },
   },
 
+  // ---------- S4-25 ----------
+  {
+    name: 'S4-25 the PRD counts the Hot Springs words as the data does, nothing documents a loupe the code lacks, and the style guide lists the painted art', node: true,
+    async run(t) {
+      const rd = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+      const lex = JSON.parse(rd('data/lexicon.game.json'));
+      const forms = lex.words.reduce((a, e) => a + e.forms.length, 0);
+      t.expect(rd('PRD.md').includes(lex.words.length + ' entries / ' + forms + ' forms'), 'the PRD says ' + lex.words.length + ' entries / ' + forms + ' forms');
+      const code = ['main.js', 'ui.js', 'render2d.js', 'board3d.js'].map((f) => rd('src/js/' + f)).join(' ') + rd('src/styles/main.css');
+      t.expect(!/loupe|magnif/i.test(code), 'the code has no loupe');
+      for (const f of ['PRD.md', 'README.md', 'REPORT.md']) t.expect(!/loupe/i.test(rd(f)), f + ' does not describe a loupe');
+      const webp = fs.readdirSync(path.join(root, 'assets')).filter((f) => f.endsWith('.webp')).length;
+      const guide = rd('research/visual-style-guide.md');
+      t.expect(guide.includes('## Painted assets in Bathhouse Letters') && guide.includes('ships ' + webp + ' painted'), 'the style guide has a section for the ' + webp + ' painted files');
+      t.expect(!/with no image files./.test(guide), 'the guide no longer says there are no image files without the exception');
+    },
+  },
 ];

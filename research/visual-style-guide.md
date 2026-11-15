@@ -1,6 +1,6 @@
 # Visual Style Guide
 
-The art-direction bible for the eleven Hot Springs browser games, all drawn procedurally in Canvas/SVG with no image files. It collects the sourced architecture and material facts for Bathhouse Row and downtown, an era-by-era look, ten named palettes, typography (system fonts first), a 54-icon catalog, a motif library with construction recipes, and per-game art-direction hooks.
+The art-direction bible for the eleven Hot Springs browser games, drawn procedurally in Canvas/SVG, with one exception: Bathhouse Letters also ships painted art (see "Painted assets in Bathhouse Letters"). It collects the sourced architecture and material facts for Bathhouse Row and downtown, an era-by-era look, ten named palettes, typography (system fonts first), a 54-icon catalog, a motif library with construction recipes, and per-game art-direction hooks.
 **Every hex value in this file is an estimate (`est.`).** Each was matched to a material or a written description ("cream-colored brick", "red clay tile", "blue-green algae"); none was measured from a photo, and no source gives official hex values for any building, school or business. The shared tokens in `shared/design/tokens.css` and `tokens.js` carry the same palettes.
 
 Era ids: `ancient (<1804) · frontier (1804–1874) · gilded-spa (1875–1920) · roaring (1921–1946) · midcentury (1947–1967) · revival (1968–1999) · modern (2000–2026)`
@@ -11,11 +11,22 @@ Tags: **[inferred]** = design inference, not a sourced fact; `est.` = estimated 
 
 ## How to use this guide
 
-- **Everything is drawn in code.** Facades are flat polygons, roofs are repeated arcs, glass is a Voronoi tessellation, steam is blurred sine paths. Recipes below give primitive counts and sizes. No downloaded images, fonts or logos.
+- **Everything is drawn in code, except the painted assets listed in the next section.** Facades are flat polygons, roofs are repeated arcs, glass is a Voronoi tessellation, steam is blurred sine paths. Recipes below give primitive counts and sizes. No downloaded images, fonts or logos.
 - **Fonts: system stacks first.** Games may not be able to load web fonts, so every text style has a system fallback stack (Typography section). Web fonts from Google Fonts are optional extras; verify each license.
 - **Tokens.** Colors, fonts, spacing and radius live in `C:\Video Game Projects\shared\design\tokens.css` (CSS custom properties `--pal-<slug>-<role>` and `--color-*`) and `tokens.js` (`PALETTES`, `THEME`, `FONTS`, `ERA_PALETTE`). Games are single files: copy the blocks you need inline; do not link the shared file. Default light theme is gilded-spa based, dark theme is deco-neon based; all default text/background pairs pass 4.5:1 (see `shared/design/README.md`).
 - **Facts vs. inferences.** Building descriptions marked with a source link are sourced. Drawing recipes, hexes and era looks are **[inferred]** unless noted.
 - **Content rules.** No logos or brand marks (no NPS arrowhead, no school logos, no Oaklawn, Magic Springs or Mountain Valley marks). School mascots are generic geometric shapes. The Quapaw Bathhouse "Indian-head" cartouche is drawn as an abstract architectural cartouche or a respectful motif, never a caricature. Gangster-era props (fedora, cigar) are generic silhouettes, never a real person's likeness.
+
+## Painted assets in Bathhouse Letters
+
+The rule above (no image files) holds for the other games. Bathhouse Letters is the exception: it ships 46 painted `.webp` files in `assets/` (listed in `assets/manifest.json`, packed into the page by `tools/build-art.mjs`), because its board is built from painted materials. Prompts and provenance are in `art-src/PROMPTS.md`; the credits are in the game's `README.md`.
+
+- **Title painting** (`title`) and the results-screen masthead, which reuses it.
+- **Board materials:** five stained-glass pane textures for the premium squares (`glass-w`, `glass-h`, `glass-s`, `glass-b`, `glass-c`), `marble`, `terrazzo` and the walnut `counter`.
+- **Bathhouse Row medallions** (`bath-*`, eight) for the eight Bathhouse Row squares, and four character **portraits** (`face-*`) for the opponents.
+- **Fact-card pictures:** six category cards (`card-*`), a magnolia card, and landmark vignettes (`vig-*`, painted for Bathhouse Barons and reused here).
+
+When another game borrows from these, or a new piece is added, keep to the same rules as the code-drawn art: sourced subjects, no logos or brand marks, no real people's likenesses, and the day and night palettes of the named palettes below. Everything else in Bathhouse Letters (tiles, the board grid and its labels, plaques, icons, steam) is still drawn in code.
 
 ---
 

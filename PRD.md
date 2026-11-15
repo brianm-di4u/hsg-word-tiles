@@ -10,7 +10,7 @@ valley's springs, and earn extra points for Hot Springs words, each of which ope
 2. **Elegant, not kitsch.** Marble, brass, terrazzo and stained glass from the real bathhouses;
    Art Deco type; steam that drifts, never clutters. Bathhouse Barons is the quality bar.
 3. **The town in every word.** Bonus words, plaques and the Register teach real, cited history.
-4. **Plays well on a phone.** Portrait-first layout, 44 px targets, zoom and loupe for placing tiles.
+4. **Plays well on a phone.** Portrait-first layout, 44 px targets, pinch zoom and a tile that floats clear of the finger for placing tiles.
 5. **Fair, lively opponents.** Three AI levels that play real words at measured strength.
 
 ## 2. Target players
@@ -30,7 +30,7 @@ help screen in our own words with diagrams.
 | Where | Content | Source |
 |---|---|---|
 | Board | 47 springs (46 premium squares + Display Spring); 8 Bathhouse Row squares with building motifs | `research/town-content.md` §1–2 |
-| Bonus words | 70 entries / 184 forms in 6 categories, each with a fact card | `data/thermal-words.json`, §3 |
+| Bonus words | 96 entries / 267 forms in 6 categories, each with a fact card | `data/thermal-words.json`, §3 |
 | Featured Springs | 3 bonus words per game on steam-fogged plaques | same |
 | Register | every bonus word you've played, with its card | same |
 | Opponents | 4 fictional town archetypes | §4 |
@@ -120,7 +120,7 @@ and ≤ 1.2 s (Hard) at 4× throttle.
 
 ### Input and accessibility
 34. Mouse drag-and-drop, touch drag-and-drop, and tap-to-place all work; touch targets are ≥ 44 px on mobile.
-35. On a phone the board zooms for placement and a loupe shows the target square; pinch and pan work.
+35. On a phone a dragged tile floats clear of the finger and the square it will land on lights up; pinch to zoom and drag to pan.
 36. The whole game is playable with the keyboard alone.
 37. A live region announces each play.
 38. The game works with `localStorage` unavailable (no crash; nothing saved).
