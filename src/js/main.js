@@ -455,6 +455,9 @@ function releaseAi() {
 
 const ctx = () => ({ dict: G.dict, lex: G.lex });
 
+// run `fn` in `ms` milliseconds, as a sound that waits for the tiles to land; it is dropped if another game has begun by then
+const later = (g, ms, fn) => { if (ms <= 0) fn(); else setTimeout(() => { if (G.s === g) fn(); }, ms); };
+
 function afterAction(entry, fromAi) {
   const s = G.s;
   cancelDrag();
@@ -466,6 +469,8 @@ function afterAction(entry, fromAi) {
   resetOrder(); G.hint = null; G.breakdown = false; delete s.hintStaged;
   G.deal = !fromAi && entry.kind !== 'pass' && humans() === 1;
   if (!s.over && cur().kind === 'human') G.privacy = turnPrivacy();
+  // seconds until the computer's tiles have landed (nothing to wait for on a pass or swap, or with animation off)
+  const landed = fromAi && animOn() && entry.kind === 'play' ? (entry.tiles.length * 90 + 200) / 1000 : 0;
   if (entry.kind === 'play') {
     G.last = new Set(entry.tiles.map((t) => t.i));
     if (fromAi && animOn()) {
@@ -480,6 +485,7 @@ function afterAction(entry, fromAi) {
   } else {
     sfx(entry.kind === 'swap' ? 'swap' : 'turn');
   }
+  if (fromAi && !s.over && cur().kind === 'human') later(s, landed * 1000 + 300, () => { if (!s.over && cur().kind === 'human') sfx('yourturn'); });   // the hand-over, once the computer's move has landed
   announce(entry);
   moodUpdate();
   if (cur().kind === 'human' && !fromAi) G.lastHuman = s.cur;

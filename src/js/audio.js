@@ -10,7 +10,7 @@ const DEFAULT_VOL = 0.35;
 // volume the tile sounds peak between 0.2 and 0.45 and sit clearly over the music and the bed. Set it to 1 to undo.
 const CUE_GAIN = 6;
 // bells and steam are the loudest cues: a little less so they do not outrun the tile sounds
-const TRIM = { featured: 0.6, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, good: 1.8, big: 0.57, discover: 0.6 };
+const TRIM = { featured: 0.6, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, yourturn: 2, good: 1.8, big: 0.57, discover: 0.6 };
 const musicGain = (vol = audio.vol) => Math.min(1.5, vol / DEFAULT_VOL);   // the Volume slider moves the music with the cues
 // Above the shipped volume the cues rise more gently than the slider: to about twice the shipped level at full, not
 // 2.9 times. With the slider at full the loudest repeats of steam and place overshot the limiter and clipped (peaks
@@ -125,6 +125,8 @@ export function sfx(name, opts = {}) {
       case 'steam': noise(t, 0.9, 0.16, 5200, 0.6, 'highpass', 0.25); break;
       case 'chime': [784, 988, 1175].forEach((f, k) => bell(t + k * 0.11, f, 0.08)); break;
       case 'featured': bell(t, 659, 0.14); bell(t + 0.28, 988, 0.12); noise(t + 0.1, 0.9, 0.12, 5200, 0.6, 'highpass', 0.25); break;
+      // control comes back to a person after the computer has played: two soft notes, the second a fifth above, unlike the single 'turn'
+      case 'yourturn': tone(587, t, 0.16, 'sine', 0.05); tone(880, t + 0.11, 0.28, 'sine', 0.045); break;
       case 'turn': tone(660, t, 0.12, 'sine', 0.05); break;
       case 'error': tone(196, t, 0.16, 'triangle', 0.1, -40); break;
       // a play worth 25 or more earns a rising pair of notes over its clacks; 45 or more, a short run up and a low thump

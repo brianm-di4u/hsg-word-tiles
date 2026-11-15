@@ -105,7 +105,7 @@ export const tests = [
       await ready(t);
       const med = (p) => [...p].sort((x, y) => x - y)[p.length >> 1], SPREAD = 10 ** (1.5 / 20);
       const render = async (n, vol) => { const p = []; for (let k = 0; k < 20; k++) p.push((await t.game('act', 'renderSfx', n, vol)).peak); return p; };
-      for (const n of ['good', 'big', 'discover']) {
+      for (const n of ['good', 'big', 'discover', 'yourturn']) {
         const p = await render(n, 0.35);
         t.log(n + ' median ' + med(p));
         t.expect(med(p) >= 0.2 && med(p) <= 0.45, n + ' is typically between 0.2 and 0.45 (median ' + med(p) + ')');
@@ -117,6 +117,37 @@ export const tests = [
         t.log(n + ' full-volume most ' + Math.max(...p));
         t.expect(Math.max(...p) < 0.95, n + ' stays under 0.95 with the volume at full (' + Math.max(...p) + ')');
       }
+    },
+  },
+  // ---------- S5-05 ----------
+  {
+    name: 'S5-05 a soft cue tells you it is your turn when the computer has played, and not when you have',
+    viewports: ['desktop'],
+    initScript: quiet,
+    async run(t) {
+      await start(t, 'SPRINGE');
+      t.expect(!(await t.state()).sfx.includes('yourturn'), 'no cue at the start of a game');
+      await t.page.evaluate(async (tl) => { await window.__game.act('stage', tl); await window.__game.act('play'); }, across('SPRING'));
+      const own = (await t.state()).sfx;
+      t.expect(own.includes('play') && !own.includes('yourturn'), 'your own play does not make it (' + own.join(',') + ')');
+      await t.waitIdle(8000);
+      await t.page.waitForFunction(() => window.__game.getState().sfx.includes('yourturn'), null, { timeout: 8000 });
+      const g = (await t.state()).game;
+      t.equal(g.players[g.cur].kind, 'human', 'it is your turn when the cue has sounded');
+      const sfx = (await t.state()).sfx;
+      t.expect(sfx.lastIndexOf('yourturn') > Math.max(sfx.lastIndexOf('place'), sfx.lastIndexOf('play'), sfx.lastIndexOf('turn')), 'and it is the last thing heard (' + sfx.join(',') + ')');
+    },
+  },
+  {
+    name: 'S5-05 the cue is its own sound, not the plain turn cue',
+    viewports: ['desktop'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      const a = [], b = [];
+      for (let k = 0; k < 8; k++) { a.push((await t.game('act', 'renderSfx', 'yourturn', 0.35)).zc); b.push((await t.game('act', 'renderSfx', 'turn', 0.35)).zc); }
+      const mean = (x) => x.reduce((p, q) => p + q, 0) / x.length;
+      t.expect(Math.abs(mean(a) - mean(b)) > 0.15 * mean(b), 'it does not sound like the plain turn cue (' + mean(a).toFixed(0) + ' against ' + mean(b).toFixed(0) + ' zero crossings)');
     },
   },
 ];
