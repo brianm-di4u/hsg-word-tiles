@@ -44,4 +44,51 @@ export const tests = [
       await t.checkLayout();
     },
   },
+  // ---------- S3-16 ----------
+  {
+    name: 'S3-16 the computer holds its move while the pause sheet is open and plays it once the sheet closes',
+    viewports: ['desktop', 'mobile'],
+    initScript: paced,
+    async run(t) {
+      await ready(t);
+      await t.seed(5);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      const [m] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m.tiles);
+      // play and open the menu in one breath, so the sheet is up before the computer can answer
+      await t.page.evaluate(() => { window.__game.act('play'); window.__game.act('open', 'pause'); });
+      const move = (await t.state()).game.move;
+      await t.page.waitForFunction(() => window.__game.getState().aiHeld, null, { timeout: 15000 });
+      let s = await t.state();
+      t.equal(s.dialog, 'pause', 'the pause sheet is still open');
+      t.equal(s.game.move, move, 'the computer has not played under it');
+      await t.game('act', 'close');
+      await t.page.waitForFunction((n) => window.__game.getState().game.move > n, move, { timeout: 15000 });
+      s = await t.state();
+      t.expect(!s.aiHeld, 'the held reply was used');
+      t.equal(s.game.move, move + 1, 'the computer played its one move after the sheet closed');
+    },
+  },
+  {
+    name: 'S3-16 a reply held for the menu is not lost when the menu opens the tile tracker first',
+    viewports: ['desktop'],
+    initScript: paced,
+    async run(t) {
+      await ready(t);
+      await t.seed(6);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      const [m] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m.tiles);
+      await t.page.evaluate(() => { window.__game.act('play'); window.__game.act('open', 'pause'); });
+      const move = (await t.state()).game.move;
+      await t.page.waitForFunction(() => window.__game.getState().aiHeld, null, { timeout: 15000 });
+      await t.page.evaluate(() => window.__game.act('open', 'tracker'));
+      t.equal((await t.state()).game.move, move, 'still held on the second sheet');
+      await t.game('act', 'close');
+      await t.page.waitForFunction((n) => window.__game.getState().game.move > n, move, { timeout: 15000 });
+      t.equal((await t.state()).game.move, move + 1, 'played once, after the last sheet closed');
+    },
+  },
 ];

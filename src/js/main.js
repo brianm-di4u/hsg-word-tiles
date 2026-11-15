@@ -398,9 +398,15 @@ function scheduleAi() {
       s.rng.ai = r.rngAi;
       act(r.action);
     };
-    // a hidden tab holds the reply (and its cue) until the player is back
-    G.aiTimer = setTimeout(() => { if (document.hidden) G.aiHeld = fire; else fire(); }, wait);
+    // a hidden tab, or an open menu or ledger, holds the reply (and its cue) until the player is back
+    G.aiTimer = setTimeout(() => { if (document.hidden || G.dialog) G.aiHeld = fire; else fire(); }, wait);
   }).catch((err) => { console.warn('AI failed, passing', err); if (live()) act({ type: 'pass' }); });
+}
+
+// lets a held reply land once the tab is back and no dialog is open
+function releaseAi() {
+  if (!G.aiHeld || document.hidden || G.dialog) return;
+  const f = G.aiHeld; G.aiHeld = null; f();
 }
 
 const ctx = () => ({ dict: G.dict, lex: G.lex });
@@ -891,6 +897,8 @@ function closeDialog(silent) {
   if (G.dialog === 'pause') releaseAudio('pause');
   G.dialog = null; G.blankCb = null; m.hidden = true; m.innerHTML = '';
   if (!silent) { const b = $('#board'); if (G.scene === 'game' && b) b.focus({ preventScroll: true }); }
+  // a reply held while the dialog was open lands a moment after it closes (and not at all if another dialog opens at once)
+  if (G.aiHeld) setTimeout(releaseAi, 300);
 }
 function askBlank(cb) { G.blankCb = cb; openDialog('blank'); }
 function confirmDialog(title, text, ok, onOk) { openDialog('confirm', { title, text, ok, onOk }); }
@@ -1368,7 +1376,7 @@ function wireStatic() {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { away(); pauseAudio(); return; }
     resumeAudio();
-    if (G.aiHeld) { const f = G.aiHeld; G.aiHeld = null; f(); }
+    releaseAi();
   });
   // iOS: no rubber-band scroll or page zoom while a tile or the board is held (they would cancel the touch)
   document.addEventListener('touchmove', (e) => { if (G.scene === 'game' && (G.drag || G.pinch)) e.preventDefault(); }, { passive: false });
@@ -1390,7 +1398,7 @@ window.__game = {
   seed(n) { G.nextSeed = n >>> 0; return true; },
   getState() {
     return JSON.parse(JSON.stringify({ scene: G.scene, dialog: G.dialog, game: G.s, staged: G.staged, order: G.order, preview: G.preview, settings: G.settings,
-      view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, ready: G.ready, privacy: G.privacy,
+      view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, ready: G.ready, privacy: G.privacy,
       drag: G.drag && G.drag.active ? { from: G.drag.from, target: G.drag.target, blocked: G.drag.blocked, lift: G.drag.lift, size: G.drag.size } : null,
       ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
   },
