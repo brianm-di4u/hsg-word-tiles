@@ -98,6 +98,7 @@ export function evaluate(s, tiles, ctx) {
 export function apply(s, action, ctx) {
   if (s.over) return { ok: false, error: 'The game is over.' };
   const p = s.players[s.cur];
+  const rack = p.rack.join('');   // kept in the log so the game can be looked back over (review.js)
   let entry;
   if (action.type === 'play') {
     const ev = evaluate(s, action.tiles, ctx);
@@ -110,7 +111,7 @@ export function apply(s, action, ctx) {
     if (!p.best || top.score + top.bonus > p.best.score) p.best = { word: top.w, score: top.score + top.bonus };
     entry = { p: s.cur, kind: 'play', n: s.move, tiles: action.tiles.map((t) => ({ i: t.i, l: t.l, blank: !!t.blank })),
       words: ev.words.map((w) => ({ w: w.w, score: w.score, bonus: w.bonus, themed: w.themed, bath: w.bath })),
-      score: ev.score, full: ev.full, themed: ev.themed, featured: ev.featured };
+      score: ev.score, full: ev.full, themed: ev.themed, featured: ev.featured, rack };
     s.scoreless = ev.score > 0 ? 0 : s.scoreless + 1;
     draw(s, p);
   } else if (action.type === 'swap') {
@@ -122,10 +123,10 @@ export function apply(s, action, ctx) {
     p.rack = left;
     draw(s, p);
     s.bag.push(...letters.slice().sort());
-    entry = { p: s.cur, kind: 'swap', n: s.move, count: letters.length, score: 0 };
+    entry = { p: s.cur, kind: 'swap', n: s.move, count: letters.length, score: 0, rack };
     s.scoreless++;
   } else if (action.type === 'pass') {
-    entry = { p: s.cur, kind: 'pass', n: s.move, score: 0 };
+    entry = { p: s.cur, kind: 'pass', n: s.move, score: 0, rack };
     s.scoreless++;
   } else return { ok: false, error: 'Unknown action.' };
 

@@ -441,8 +441,18 @@ export function overHtml(s, lex, dinfo, extra = {}) {
       <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}">${t.w} <small>+${t.pts}</small></button>`).join('')}</div>` : '<p class="note">None this game. They hide in everyday words like SPA, STEAM and ROCK.</p>'}</section>
       ${s.featured.length ? `<section><h2>Featured Springs</h2><ul class="feat-list">${s.featured.map((f) => `<li class="${f.by != null ? 'got' : ''}"><b>${f.word}</b><small>${f.by != null ? `found by ${esc(s.players[f.by].name)}` : 'stayed hidden'}</small></li>`).join('')}</ul></section>` : ''}
     </div>
-    <div class="dlg-btns">${daily ? '' : '<button class="btn primary" data-again>Play again</button>'}<button class="btn ${daily ? 'primary' : ''}" data-go="title">Title screen</button></div>
+    <div class="dlg-btns">${daily ? '' : '<button class="btn primary" data-again>Play again</button>'}${extra.review ? '<button class="btn" data-review>What you missed</button>' : ''}<button class="btn ${daily ? 'primary' : ''}" data-go="title">Title screen</button></div>
   </div>`;
+}
+
+// The look back over a finished game (review.js): how often the best-scoring play was found, and the biggest misses. r is null while it is worked out.
+export function reviewHtml(r) {
+  const body = !r ? '<p role="status">Looking back over your turns…</p>'
+    : !r.total ? '<p>There is nothing to look back over.</p>'
+    : `<p class="rv-rate"><b>${r.found} of ${r.total}</b> ${r.total === 1 ? 'turn' : 'turns'}: you made the highest-scoring play your tiles allowed.</p>
+      ${r.misses.length ? `<ol class="rv-list">${r.misses.map((m) => `<li><b>Turn ${m.turn}</b> ${m.kind === 'play' ? `You played <em>${esc(m.word)}</em> for ${m.score}.` : m.kind === 'swap' ? 'You swapped tiles.' : 'You passed.'} <em>${esc(m.best.word)}</em> would have scored ${m.best.score}.</li>`).join('')}</ol>` : '<p>No play left more than a few points behind the best one on offer.</p>'}
+      <p class="note">This counts points only. A smaller play that keeps good tiles can be the better one.${r.skipped ? ` ${plural(r.skipped, 'turn')} from before this was kept could not be looked at.` : ''}</p>`;
+  return `<div class="card dialog review" role="dialog" aria-modal="true" aria-labelledby="rv-h"><h2 id="rv-h">What you missed</h2>${body}<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div></div>`;
 }
 
 export function dailyLine(d) {

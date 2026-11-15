@@ -2,6 +2,9 @@
 // S6-08 (the checks a green run used to skip), S1-01 (the rack is yours during the computer's turn),
 // S1-03 (phone placement), S3-13 (what you missed) and S4-03 (fact cards).
 import { ctx, root } from './lib.mjs';
+import { createGame, apply } from '../src/js/engine.js';
+import { generateMoves } from '../src/js/movegen.js';
+import { reviewSeat, reviewSteps, summarize, MIN_MISS } from '../src/js/review.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 // a pre-wave profile with a settings key: no first-run tips, no sound; the computer answers at once unless a test asks for a pace
@@ -206,6 +209,85 @@ export const tests = [
       await t.page.click('#b-zoom');
       await t.page.waitForFunction(() => document.querySelector('#b-zoom').hidden, null, { timeout: 5000 });
       t.expect(!(await t.page.locator('#b-zoom').isVisible()), 'and hides again');
+    },
+  },
+  // ---------- S3-13 ----------
+  {
+    name: 'S3-13 the review finds the best play for every turn the person took, as the board and rack stood then', node: true,
+    async run(t) {
+      const c = await ctx();
+      const s = createGame({ mode: 'play', seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', name: 'Opal' }], seed: 31 }, c.lex);
+      const want = [];   // what the game itself says is best on each of the person's turns, asked at the time
+      for (let turn = 0; !s.over && turn < 40; turn++) {
+        const { moves } = generateMoves(c.dict, s.board, s.players[s.cur].rack, { lex: c.lex, featured: s.featured });
+        let action;
+        if (s.cur === 0) {
+          // turn 2: the weakest play; turn 3: a pass; otherwise the best
+          want.push(moves.length ? moves[0].score : null);
+          if (want.length === 2 && moves.length > 1) action = { type: 'play', tiles: moves[moves.length - 1].tiles };
+          else if (want.length === 3 || !moves.length) action = { type: 'pass' };
+        }
+        if (!action) action = moves.length ? { type: 'play', tiles: moves[0].tiles } : { type: 'pass' };
+        t.expect(apply(s, action, c).ok, 'the move was legal');
+      }
+      t.expect(want.length >= 8, 'a game of at least eight turns for the person (' + want.length + ')');
+      const steps = [...reviewSteps(s, 0, c.dict, c.lex)];
+      t.equal(steps.length, want.length, 'one result for each turn the person took');
+      steps.forEach((x, k) => {
+        t.equal(x.best ? x.best.score : null, want[k], `turn ${k + 1}: the best play on offer was ${want[k]}`);
+      });
+      t.expect(steps[1].best.score - steps[1].score >= MIN_MISS, 'the weak play on turn 2 is well short of the best');
+      t.equal(steps[2].kind, 'pass', 'the pass is looked at too'); t.expect(steps[2].score === 0 && steps[2].best.score > 0, 'and the play it passed up is named');
+      const r = summarize(steps);
+      t.equal(r.total, want.length, 'every turn counted');
+      t.equal(r.found, want.length - (steps[1].best.score > steps[1].score ? 1 : 0) - (steps[2].best.score > 0 ? 1 : 0) - steps.filter((x, k) => k > 2 && x.best && x.score < x.best.score).length, 'the rate is the turns that made the best score');
+      t.equal(r.misses[0].turn, [...steps.filter((x) => x.best).map((x) => x.best.score - x.score)].reduce((a, g, k, all) => (g > all[a] ? k : a), 0) + 1, 'the biggest miss is listed first');
+      t.expect(r.misses.length <= 3 && r.misses.every((m) => m.gap >= MIN_MISS), 'at most three, each at least the smallest worth listing');
+      t.equal(reviewSeat(s), 0, 'the person is the seat to review');
+      // a game saved before the racks were kept: nothing to look at, turn by turn
+      const old = JSON.parse(JSON.stringify(s)); for (const e of old.log) delete e.rack;
+      t.equal(reviewSeat(old), null, 'no seat to review without racks');
+      const half = JSON.parse(JSON.stringify(s)); for (const e of half.log) if (e.n < 4) delete e.rack;
+      const h = summarize([...reviewSteps(half, 0, c.dict, c.lex)]);
+      t.expect(h.skipped >= 1 && h.total === want.length - h.skipped, 'turns without a rack are skipped, the rest read');
+      // two people, or none: no review
+      t.equal(reviewSeat(createGame({ mode: 'play', seats: [{ kind: 'human', name: 'A' }, { kind: 'human', name: 'B' }], seed: 3 }, c.lex)), null, 'two people share a rack-hiding table: no review');
+    },
+  },
+  {
+    name: 'S3-13 What you missed on the results sheet lists the biggest miss and counts the plays that were the best',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(31);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      // the first turn is the weakest play on offer, every turn after is the best
+      let first = true, plays = 0;
+      for (let n = 0; n < 150; n++) {
+        const g = (await t.state()).game;
+        if (g.over) break;
+        if (g.players[g.cur].kind !== 'human') { await t.page.waitForFunction(() => { const x = window.__game.getState(); return x.game.over || x.game.players[x.game.cur].kind === 'human'; }, null, { timeout: 20000 }); continue; }
+        const mv = await t.game('act', 'moves', first ? 300 : 1);
+        const pick = first ? mv[mv.length - 1] : mv[0];
+        if (pick) { const st = await t.game('act', 'stage', pick.tiles); const r = st.ok ? await t.game('act', 'play') : { ok: false }; if (!r.ok) { await t.game('act', 'recall'); await t.game('act', 'pass'); } } else await t.game('act', 'pass');
+        first = false; plays++;
+        await t.page.waitForFunction((m) => window.__game.getState().game.move > m, g.move, { timeout: 10000 });
+      }
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 15000 });
+      t.expect(await t.page.locator('[data-review]').isVisible(), 'the results sheet has the button');
+      await t.page.click('[data-review]');
+      await t.page.waitForSelector('.review .rv-rate', { timeout: 15000 });
+      const text = await t.page.textContent('.review');
+      const m = /(\d+) of (\d+) turns/.exec(text);
+      t.expect(m && +m[2] === plays && +m[1] === plays - 1, 'every turn but the first made the best play: ' + (m && m[0]) + ' of ' + plays);
+      t.expect(/Turn 1 You played [A-Z]+ for \d+\. [A-Z]+ would have scored/.test(text) && /would have scored/.test(text), 'the first turn is listed with the play that was there');
+      t.expect(/points only/.test(text), 'and the note says what it does not count');
+      await t.shot('S3-13-what-you-missed');
+      await t.checkLayout();
+      await t.page.click('.review [data-close]');
+      t.equal((await t.state()).dialog, null, 'Close puts the results sheet back');
     },
   },
 ];

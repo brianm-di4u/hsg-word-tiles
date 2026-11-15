@@ -15,6 +15,7 @@ import { cleanStats, applyGame, applyDaily } from './stats.js';
 import * as B3 from './board3d.js';
 import * as UI from './ui.js';
 import { generateMoves } from './movegen.js';
+import { reviewSeat, reviewSteps, summarize } from './review.js';
 
 const { qs: $, esc } = UI;
 const META = { words: 168295, added: 0 };
@@ -217,10 +218,10 @@ function screenHtml(name) {
     case 'records': return UI.recordsHtml(stats(), { found: lex.data.words.filter((e) => e.forms.some((f) => register()[f])).length, total: lex.data.words.length, daily: dailyInfo() });
     case 'about': return UI.aboutHtml(META);
     case 'over': {
-      if (G.s.mode !== 'daily') return UI.overHtml(G.s, lex, null, { pb: pbLines(), barks: G.s.players.map((p, k) => (p.kind === 'ai' ? endBark(G.s, k) : null)) });
+      if (G.s.mode !== 'daily') return UI.overHtml(G.s, lex, null, { pb: pbLines(), review: reviewSeat(G.s) != null, barks: G.s.players.map((p, k) => (p.kind === 'ai' ? endBark(G.s, k) : null)) });
       const d = store.json(KEYS.daily, { days: {}, streak: 0 }, validDaily), date = G.s.daily.date, day = d.days[date];
       const label = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      return UI.overHtml(G.s, lex, { label, best: day ? day.score : G.s.players[0].score, streak: d.streak || 1 });
+      return UI.overHtml(G.s, lex, { label, best: day ? day.score : G.s.players[0].score, streak: d.streak || 1 }, { review: reviewSeat(G.s) != null });
     }
   }
   return '';
@@ -276,6 +277,7 @@ function wireScreen(name) {
   if (name === 'register') scr.querySelectorAll('[data-reg]').forEach((b) => b.addEventListener('click', () => openFact(b.dataset.reg)));
   if (name === 'over') {
     scr.querySelectorAll('[data-fact]').forEach((b) => b.addEventListener('click', () => openFact(b.dataset.fact, b.dataset.form)));
+    scr.querySelector('[data-review]')?.addEventListener('click', openReview);
     const again = scr.querySelector('[data-again]');
     if (again) again.addEventListener('click', () => newGame({ mode: 'play', seats: G.s.players.map((p) => ({ kind: p.kind, name: p.name, persona: p.persona, level: p.level })), hints: G.s.players.some((p) => p.hints != null) }));
   }
@@ -925,6 +927,27 @@ function openFact(id, form) {
     m.querySelector('[data-close]').addEventListener('click', () => closeDialog());
     m.querySelector('[data-close]').focus();
   }
+}
+
+// What you missed: the finished game looked back over, one turn at a time so the page stays awake while it works.
+let reviewing = 0;
+async function openReview() {
+  const s = G.s, seat = s && reviewSeat(s);
+  if (seat == null) return;
+  const m = $('#modal'), mine = ++reviewing;
+  const show = (r) => {
+    G.dialog = 'review'; m.innerHTML = UI.reviewHtml(r); m.hidden = false; m.dataset.name = 'review'; G.dialogAt = performance.now();
+    m.querySelector('[data-close]').addEventListener('click', () => closeDialog());
+    m.querySelector('[data-close]').focus();
+  };
+  show(null);
+  const steps = [];
+  for (const step of reviewSteps(s, seat, G.dict, G.lex)) {
+    steps.push(step);
+    await new Promise((res) => setTimeout(res, 0));
+    if (mine !== reviewing || G.dialog !== 'review' || G.s !== s) return;   // closed, or another game, meanwhile
+  }
+  show(summarize(steps));
 }
 
 // ---------- layout and drawing ----------

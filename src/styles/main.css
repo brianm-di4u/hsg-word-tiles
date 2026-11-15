@@ -356,6 +356,11 @@ body:not(.theme-dark) .fact-pts { color: #FFF; }
 .tchip { display: inline-flex; align-items: baseline; gap: 2px; padding: 4px 8px; border-radius: 6px; background: linear-gradient(#FFFBF1, #E8DCC0); color: #1F2A24; border: 1px solid #B9A57A; }
 .tchip b { font: 800 1.05rem var(--f-serif); } .tchip i { font: 700 0.75rem var(--f-ui); font-style: normal; } .tchip small { color: #574A37; margin-left: 4px; }
 .tchip.tk { min-width: 54px; justify-content: center; } .tchip.tk small { font-weight: 700; } .tchip.out { opacity: 0.4; } .tracker .tchips { margin: 10px 0 4px; }
+.review .rv-rate { font-size: 1.05rem; }
+.review .rv-rate b { font: 800 1.3rem var(--f-serif); }
+.review .rv-list { margin: 10px 0; padding-left: 1.3em; display: grid; gap: 8px; }
+.review .rv-list em { font-style: normal; font-weight: 800; letter-spacing: 0.02em; }
+.review .note { margin: 10px 0 0; }
 .keys { list-style: none; padding: 0; columns: 2; } .keys li { margin: 4px 0; break-inside: avoid; }
 
 /* settings */
