@@ -528,13 +528,15 @@ function celebrate(e, bark) {
   if (e.featured) { toast({ kind: 'featured', who, title: `Featured Spring: ${e.featured}`, sub: `${quote('themed') || `${p.name} found it`} · +${FEATURED_BONUS}`, fact: G.lex.entry(e.featured)?.id, form: e.featured }); sfx('featured'); }
   for (const w of themed) {
     const entry = G.lex.byId.get(w.themed);
-    toast({ kind: 'themed', title: `${w.w} +${w.bonus}${w.bath ? ` · Row +${ROW_BONUS}` : ''}`, sub: G.lex.categories[entry.cat].name, fact: entry.id, form: w.w });
+    const fresh = p.kind === 'human' && !register()[w.w];   // celebrate runs before recordRegister: this is the first time the word is signed in
+    toast({ kind: 'themed', title: `${w.w} +${w.bonus}${w.bath ? ` · Row +${ROW_BONUS}` : ''}`, sub: fresh ? 'New in your Register' : G.lex.categories[entry.cat].name, fact: entry.id, form: w.w });
     steamBurst(e.tiles.map((t) => t.i));
   }
+  if (themed.length) goldSweep(e.tiles.map((t) => t.i));
   if (themed.length && !e.featured) sfx('steam');
   if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); sfx('chime'); }
   else if (bark && bark.event === 'big') toast({ kind: 'bark', who, title: `${p.name}: ${e.words[0].w} +${e.score}`, sub: quote('big') });
-  scorePop(e);
+  scorePop(e, themed.length > 0);
 }
 
 function announce(e) {
@@ -786,15 +788,16 @@ function rollScores() {
   if (!animOn()) return;
   document.querySelectorAll('[data-score]').forEach((el) => el.classList.add('bump'));
 }
-function scorePop(e) {
+const POP_MS = 1300, POP_THEMED_MS = 1600;   // how long a score pop lives; a Hot Springs word's stays 0.3 s longer
+function scorePop(e, themed) {
   if (!animOn() || !e.tiles.length) return;
   const i = e.tiles[e.tiles.length - 1].i;
   const [x, y] = R.cellCenter(i);
   const el = document.createElement('div');
-  el.className = 'pop'; el.textContent = `+${e.score}`;
+  el.className = themed ? 'pop themed' : 'pop'; el.textContent = `+${e.score}`;
   el.style.left = x + 'px'; el.style.top = y + 'px';
   $('#boardwrap').append(el);
-  setTimeout(() => el.remove(), 1400);
+  setTimeout(() => el.remove(), (themed ? POP_THEMED_MS : POP_MS) + 100);
 }
 
 // Toasts: one at a time, newest on top of the queue; click to read the card.
@@ -1108,14 +1111,21 @@ function stepViewAnim(now) {
 const pxPerCell = () => (B3.B3.on ? B3.cellPx() : R.scale());
 
 // ---------- steam effects (ambient; not part of isIdle) ----------
-const steam = { parts: [], last: 0, on: false, emit: 0 };
+const steam = { parts: [], sweeps: [], last: 0, on: false, emit: 0 };
+const SWEEP_MS = 900;   // a Hot Springs word: a band of gold light runs along its tiles in this time
 const ambientSteam = () => animOn() && G.scene === 'game' && G.s && !G.s.board[CENTER] && !G.staged.some((t) => t.i === CENTER);
 function steamBurst(cells) {
   if (!animOn()) return;
   for (const i of cells) for (let k = 0; k < 6; k++) steam.parts.push({ i, x: Math.random() - 0.5, y: 0, vx: (Math.random() - 0.5) * 0.3, vy: 0.6 + Math.random() * 0.6, life: 0, max: 1.2 + Math.random() * 0.8, r: 0.25 + Math.random() * 0.25, a: 0.45 });
   startSteam();
 }
-function startSteam() { if (!steam.on && (steam.parts.length || ambientSteam())) { steam.on = true; steam.last = 0; requestAnimationFrame(steamLoop); } }
+// the gold sweep over the tiles of a Hot Springs word, drawn on the same overlay as the steam
+function goldSweep(cells) {
+  if (!animOn() || !cells.length) return;
+  steam.sweeps.push({ cells: [...cells].sort((a, b) => a - b), t0: performance.now() });
+  startSteam();
+}
+function startSteam() { if (!steam.on && (steam.parts.length || steam.sweeps.length || ambientSteam())) { steam.on = true; steam.last = 0; requestAnimationFrame(steamLoop); } }
 function steamLoop(now) {
   const fx = $('#fx');
   if (!fx || G.scene !== 'game') { steam.on = false; return; }
@@ -1138,7 +1148,19 @@ function steamLoop(now) {
     g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(1, 'rgba(255,255,255,0)');
     c.fillStyle = g; c.beginPath(); c.arc(cx + p.x * cell, cy - p.y * cell, p.r * cell * (1 + p.life), 0, Math.PI * 2); c.fill();
   }
-  if (steam.parts.length || ambientSteam()) requestAnimationFrame(steamLoop); else { steam.on = false; c.clearRect(0, 0, R.view.W, R.view.H); }
+  steam.sweeps = steam.sweeps.filter((w) => now - w.t0 < SWEEP_MS);
+  for (const w of steam.sweeps) {
+    const n = w.cells.length, head = ((now - w.t0) / SWEEP_MS) * (n + 1);
+    w.cells.forEach((i, j) => {
+      const a = Math.max(0, 1 - Math.abs(head - j - 0.5) / 1.8);
+      if (a <= 0) return;
+      const [cx, cy] = R.cellCenter(i), r = cell * 0.62;
+      const g = c.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, `rgba(255,228,120,${0.75 * a})`); g.addColorStop(1, 'rgba(255,214,90,0)');
+      c.fillStyle = g; c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.fill();
+    });
+  }
+  if (steam.parts.length || steam.sweeps.length || ambientSteam()) requestAnimationFrame(steamLoop); else { steam.on = false; c.clearRect(0, 0, R.view.W, R.view.H); }
 }
 
 // ---------- pointer input ----------
@@ -1483,7 +1505,7 @@ window.__game = {
     return JSON.parse(JSON.stringify({ scene: G.scene, dialog: G.dialog, game: G.s, staged: G.staged, order: G.order, preview: G.preview, settings: G.settings,
       view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, ready: G.ready, privacy: G.privacy,
       drag: G.drag && G.drag.active ? { from: G.drag.from, target: G.drag.target, blocked: G.drag.blocked, lift: G.drag.lift, size: G.drag.size } : null,
-      ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
+      ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
   },
   setState(o) {
     if (o.game) {
