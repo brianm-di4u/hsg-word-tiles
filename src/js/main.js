@@ -640,6 +640,7 @@ async function doHint() {
   recallAll();
   if (!list.length) { flash('No play found. Try a swap.'); renderStaging(); return; }
   if (p.unl) p.taken++; else p.hints--;
+  sfx('hint');
   G.hintAlts = list; G.hintIx = 0; G.hintMove = s.move;   // the other plays are free to look at: the one hint was paid for
   putHint(list[0]);
 }
@@ -961,6 +962,7 @@ function openDialog(name, arg) {
   if (G.dialog === 'pause' && name !== 'pause') releaseAudio('pause');
   if (name === 'pause') holdAudio('pause');
   m.innerHTML = html; m.hidden = false; m.dataset.name = name; G.dialogAt = performance.now();
+  if (name !== 'blank') sfx('open');
   m.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => closeDialog()));
   m.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { closeDialog(); go(b.dataset.go); }));
   m.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => openDialog(b.dataset.open)));
@@ -1001,7 +1003,7 @@ function openFact(id, form) {
   else {
     const m = $('#modal'); G.dialog = 'fact';
     m.innerHTML = `<div class="dialog-wrap" role="dialog" aria-modal="true" aria-label="Hot Springs word card">${UI.factHtml(entry, G.lex, form, '<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div>')}</div>`;
-    m.hidden = false; m.dataset.name = 'fact'; G.dialogAt = performance.now();
+    m.hidden = false; m.dataset.name = 'fact'; G.dialogAt = performance.now(); sfx('open');
     m.querySelector('[data-close]').addEventListener('click', () => closeDialog());
     m.querySelector('[data-close]').focus();
   }
@@ -1591,7 +1593,7 @@ window.__game = {
   audioRender(name, seconds = 30, wantWav = false) { return audioRender(name, seconds, !!wantWav); },
   audioState() {
     const k = audio.kit, i = k && k.music.info();
-    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, holds: [...audio.holds], tune: tuneName(), bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), fxGain: audio.bus ? audio.bus.sfx.gain.value : null, musGain: audio.bus ? audio.bus.mus.gain.value : null };
+    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, holds: [...audio.holds], tune: tuneName(), bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), total: audio.total, fxGain: audio.bus ? audio.bus.sfx.gain.value : null, musGain: audio.bus ? audio.bus.mus.gain.value : null };
   },
   async act(name, ...a) {
     switch (name) {

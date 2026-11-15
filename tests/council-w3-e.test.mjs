@@ -217,4 +217,34 @@ export const tests = [
       t.expect(mine.lastIndexOf('yourturn') > Math.max(...stings), 'and your turn comes last');
     },
   },
+  // ---------- S2-17 ----------
+  {
+    name: 'S2-17 cards, sheets and the Spring Guide have a soft cue, quieter than the play cues',
+    viewports: ['desktop'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      const med = (p) => [...p].sort((x, y) => x - y)[p.length >> 1];
+      for (const n of ['open', 'hint']) {
+        const p = []; for (let k = 0; k < 15; k++) p.push((await t.game('act', 'renderSfx', n, 0.35)).peak);
+        t.log(n + ' median ' + med(p) + ', most ' + Math.max(...p));
+        t.expect(med(p) >= 0.06 && med(p) <= 0.2, n + ' is soft at the shipped volume (median ' + med(p) + ')');
+        const full = []; for (let k = 0; k < 15; k++) full.push((await t.game('act', 'renderSfx', n, 1)).peak);
+        t.expect(Math.max(...full) < 0.95, n + ' stays under 0.95 with the volume at full (' + Math.max(...full) + ')');
+      }
+      const heard = async (f) => { const before = (await t.game('audioState')).total; await f(); const a = await t.game('audioState'); return a.played.slice(a.played.length - (a.total - before)); };
+      await start(t, 'SPRINGE');
+      let h = await heard(() => t.game('act', 'open', 'ledger'));
+      t.expect(h.includes('open'), 'opening the ledger makes the paper tick (' + h.join(',') + ')');
+      await t.game('act', 'close');
+      h = await heard(() => t.game('act', 'fact', 'spring'));
+      t.expect(h.includes('open'), 'so does a fact card');
+      await t.game('act', 'close');
+      h = await heard(() => t.game('act', 'open', 'pause'));
+      t.expect(h.includes('open'), 'and the pause sheet');
+      await t.game('act', 'close');
+      h = await heard(() => t.game('act', 'hint'));
+      t.expect(h.includes('hint'), 'a hint that is taken rings the small bell (' + h.join(',') + ')');
+    },
+  },
 ];
