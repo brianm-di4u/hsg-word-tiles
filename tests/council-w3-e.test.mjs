@@ -50,6 +50,10 @@ export const tests = [
       await t.page.keyboard.press('a');
       s = await t.state();
       t.equal(s.staged.length, 2, 'a letter you hold goes straight down');
+      await t.game('act', 'recall');
+      await t.page.keyboard.press('?');
+      await t.page.click('[data-tab="keys"]');
+      t.expect(/press it twice to use your blank/.test(await t.page.textContent('#screen')), 'the Controls tab says how');
     },
   },
 ];
