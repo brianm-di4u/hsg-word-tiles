@@ -564,6 +564,7 @@ function stage(k, i, letter) {
   G.staged.push({ k, i, l: l === '?' ? letter : l, blank: l === '?' });
   G.order = G.order.filter((x) => x !== k);
   G.selected = null; G.hint = null;
+  clearToasts();
   if (animOn()) { const now = performance.now(); G.settle.set(i, now); G.settleUntil = now + 130; }
   sfx('place', { pan: colPan(i) });
   updatePreview(); renderStaging();
@@ -573,6 +574,7 @@ function unstage(i, toPos) {
   const t = G.staged.find((x) => x.i === i);
   if (!t) return;
   G.staged = G.staged.filter((x) => x !== t);
+  clearToasts();
   if (toPos != null) G.order.splice(toPos, 0, t.k); else G.order.push(t.k);
   sfx('recall');
   updatePreview(); renderStaging();
@@ -626,7 +628,7 @@ async function doHint() {
     const k = cur().rack.findIndex((l, j) => (t.blank ? l === '?' : l === t.l) && !G.staged.some((x) => x.k === j));
     if (k >= 0) { G.staged.push({ k, i: t.i, l: t.l, blank: t.blank }); G.order = G.order.filter((x) => x !== k); }
   }
-  G.hint = null;
+  G.hint = null; clearToasts();
   s.hintStaged = { move: s.move, tiles: G.staged.map((t) => ({ i: t.i, l: t.l, blank: t.blank })) };   // kept in the save: the hint is paid for, so a reload must not lose it
   updatePreview(); save(s); renderGame();
   flash(`Spring Guide: ${m.words[0]} for ${m.score}. Play it, move the tiles, or take them back.`, 4000);
@@ -821,6 +823,8 @@ function showToast() {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(hideToast, t.kind === 'themed' ? 5200 : 3200);
 }
+// the player has gone back to planning: a banner still over the preview strip would hide the score and the errors, so it goes (the ledger keeps the word)
+function clearToasts() { G.toastQ = []; if ($('#toast').classList.contains('on')) hideToastNow(); }
 function hideToastNow() { const el = $('#toast'); clearTimeout(toastTimer); el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; $('#app').classList.remove('toasting'); }
 function hideToast() { const el = $('#toast'); el.dataset.busy = '0'; el.className = ''; $('#app').classList.remove('toasting'); setTimeout(showToast, 200); }
 

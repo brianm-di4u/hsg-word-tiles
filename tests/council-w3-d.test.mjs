@@ -87,4 +87,55 @@ export const tests = [
       t.expect(/New in your Register/.test(s.toast), 'the text is still there');
     },
   },
+  // ---------- S1-04 ----------
+  {
+    name: 'S1-04 placing a tile puts a waiting toast away so the strip shows the play again, and clears the ones queued behind it',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await start(t, 'SPRINGE');
+      for (const n of [1, 2, 3]) await t.game('act', 'toast', { kind: 'themed', title: 'SPRING +10 ' + n, sub: 'Place' });
+      t.expect(await t.page.locator('#toast.on').count() === 1 && await t.page.locator('#app.toasting').count() === 1, 'a toast is up and the strip is covered');
+      await t.game('act', 'stage', across('SPRING'));
+      t.equal(await t.page.locator('#toast.on').count(), 0, 'staging a tile puts the toast away');
+      t.equal(await t.page.locator('#app.toasting').count(), 0, 'and uncovers the strip');
+      await t.page.waitForFunction(() => /SPRING/.test(document.querySelector('#preview').textContent) && /pts/.test(document.querySelector('#preview').textContent), null, { timeout: 3000 });
+      const col = await t.page.evaluate(() => getComputedStyle(document.querySelector('#preview .pts')).color);
+      t.expect(col !== 'rgba(0, 0, 0, 0)', 'the score is readable (' + col + ')');
+      // the queued toasts do not come back after the 200 ms the old code waited
+      await t.page.waitForTimeout(600);
+      t.equal(await t.page.locator('#toast.on').count(), 0, 'nothing queued behind it comes up');
+    },
+  },
+  // ---------- S1-07 ----------
+  {
+    name: 'S1-07 the rack and the buttons stay where they are whether the strip shows nothing, a score, a refusal or a long message',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await start(t, 'SPRINGE');
+      const base = await geom(t);
+      const seen = [['empty', base]];
+      await t.game('act', 'play');   // "Place tiles on the board first."
+      seen.push(['refusal', await geom(t)]);
+      await t.game('act', 'stage', [{ i: CENTER, l: 'S' }]);
+      seen.push(['one tile', await geom(t)]);
+      await t.game('act', 'stage', [{ i: CENTER + 1, l: 'P' }]);
+      seen.push(['not a word', await geom(t)]);
+      await t.game('act', 'recall');
+      await t.game('act', 'stage', across('SPRING'));
+      seen.push(['a word', await geom(t)]);
+      await t.game('act', 'stage', [{ i: 20, l: 'S' }]);   // a tile far from the Display Spring: the opening rule is the refusal
+      seen.push(['a refusal on the board', await geom(t)]);
+      await t.game('act', 'recall');
+      // after the computer has played the strip holds its quote and the last play, two lines
+      await t.game('act', 'stage', across('SPRING')); await t.game('act', 'play');
+      await t.page.waitForFunction(() => { const g = window.__game.getState(); return g.game.cur === 0 && !g.aiThinking && g.game.move >= 2; }, null, { timeout: 20000 });
+      await t.game('act', 'recall');
+      seen.push(['after the computer played', await geom(t)]);
+      for (const [name, g] of seen) t.equal(g.rack + ',' + g.play, base.rack + ',' + base.play, name + ': the rack and Play stay put (' + JSON.stringify(g) + ')');
+      if (t.viewport === 'mobile') t.expect(base.prev >= 52, 'the strip is two lines high on a phone (' + base.prev + ' px, was 40)');
+      await t.shot('S1-07-strip');
+    },
+  },
 ];
