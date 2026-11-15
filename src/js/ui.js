@@ -43,6 +43,9 @@ export function badge(p, k, size = 40) {
   return `<span class="badge" style="--c:${color};--s:${size}px" aria-hidden="true">${face || `<b>${esc(initials)}</b>`}<i>${k + 1}</i></span>`;
 }
 
+// shown where progress would be kept, when the browser will not store anything (a private window, blocked site data)
+export const NO_SAVE = 'Saving is blocked in this browser, so your progress will not be kept.';
+
 // ---------- title ----------
 export function titleHtml(o) {
   const hasArt = art.has('title');
@@ -55,6 +58,7 @@ export function titleHtml(o) {
         <p class="tag">Build words. Find the springs.</p>
       </div>
     </div>
+    ${o.noSave ? `<p class="storage-note" role="status">${NO_SAVE}</p>` : ''}
     <nav class="menu" aria-label="Main menu">
       ${o.canContinue ? `<button class="btn primary" data-go="continue">Continue <small>${esc(o.continueLine)}</small></button>` : ''}
       <button class="btn ${o.canContinue ? '' : 'primary'}" data-go="setup">New game</button>
@@ -314,7 +318,7 @@ export function settingsHtml(st) {
 }
 
 // ---------- register ----------
-export function registerHtml(lex, reg) {
+export function registerHtml(lex, reg, noSave) {
   const groups = Object.entries(lex.categories).map(([ck, c]) => {
     const entries = lex.data.words.filter((w) => w.cat === ck);
     const found = entries.filter((e) => e.forms.some((f) => reg[f]));
@@ -327,6 +331,7 @@ export function registerHtml(lex, reg) {
   }).join('');
   return `<div class="sheet register">
     <header class="sheet-head"><h1>Bathhouse Register</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    ${noSave ? `<p class="note warn" role="status">${NO_SAVE}</p>` : ''}
     <p class="note">Every Hot Springs word you play is signed in here. Tap a word to read its card.</p>
     ${groups}
   </div>`;

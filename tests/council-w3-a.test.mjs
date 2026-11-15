@@ -130,4 +130,32 @@ export const tests = [
       t.equal(await t.page.locator('#modal [data-open="tracker"]').count(), 1, 'it is offered once the rack is showing');
     },
   },
+
+  // ---------- S6-10 ----------
+  {
+    name: 'S6-10 a browser that will not store anything is told so on the title and in the Register, before a game starts',
+    viewports: ['desktop', 'mobile'],
+    initScript: () => { window.__TEST_TIPS__ = false; const no = () => { throw new Error('storage blocked'); }; Object.defineProperty(window, 'localStorage', { get: no }); },
+    async run(t) {
+      await ready(t);
+      t.expect(/progress will not be kept/.test(await t.page.textContent('#screen')), 'the title says progress will not be kept');
+      await t.checkLayout({ allowScrollY: true });
+      await t.shot('S6-10-title-blocked');
+      await t.page.click('#screen [data-go="register"]');
+      t.expect(/progress will not be kept/.test(await t.page.textContent('.sheet.register')), 'and so does the Register');
+      await t.shot('S6-10-register-blocked');
+      await t.checkLayout({ allowScrollY: true });
+    },
+  },
+  {
+    name: 'S6-10 a browser that stores normally sees no warning and the probe leaves nothing behind',
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      t.expect(!/will not be kept/.test(await t.page.textContent('#screen')), 'no warning on the title');
+      t.equal(await t.page.evaluate(() => localStorage.getItem('hs-letters-probe')), null, 'the probe key is removed');
+      await t.page.click('#screen [data-go="register"]');
+      t.expect(!/will not be kept/.test(await t.page.textContent('.sheet.register')), 'no warning in the Register');
+    },
+  },
 ];

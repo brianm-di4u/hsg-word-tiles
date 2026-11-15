@@ -78,7 +78,14 @@ function applySettings() {
 }
 
 // ---------- boot ----------
+// can this browser store anything? (a private window or blocked site data cannot: settings, register and records then last one visit)
+function storageBlocked() {
+  const ok = store.set('hs-letters-probe', '1');
+  if (ok) store.del('hs-letters-probe');
+  return !ok;
+}
 async function boot() {
+  G.noSave = storageBlocked();
   loadSettings();
   if (window.__TEST__) G.settings.ai = G.settings.ai || 'normal';
   loadArt(() => { R.invalidateBoardTexture(); draw(); if (G.scene === 'title' && !G.dialog) showScene('title'); if (G.scene === 'game') renderGame(); });
@@ -201,12 +208,12 @@ function screenHtml(name) {
       const found = lex.data.words.filter((e) => e.forms.some((f) => reg[f])).length;
       const di = dailyInfo();
       const rec = stats();
-      return UI.titleHtml({ records: rec.games ? `${UI.plural(rec.games, 'game')} · ${UI.plural(rec.wins, 'win')}` : 'Your wins and bests', canContinue: !!sv, continueLine: sv ? (sv.mode === 'daily' ? 'Daily Soak in progress' : `${sv.players.map((p) => p.name).join(' vs ')} · move ${sv.move + 1}`) : '', dailyLine: UI.dailyLine(di), found, total: lex.data.words.length, loading: !G.ready });
+      return UI.titleHtml({ records: rec.games ? `${UI.plural(rec.games, 'game')} · ${UI.plural(rec.wins, 'win')}` : 'Your wins and bests', noSave: G.noSave, canContinue: !!sv, continueLine: sv ? (sv.mode === 'daily' ? 'Daily Soak in progress' : `${sv.players.map((p) => p.name).join(' vs ')} · move ${sv.move + 1}`) : '', dailyLine: UI.dailyLine(di), found, total: lex.data.words.length, loading: !G.ready });
     }
     case 'setup': return UI.setupHtml(G.setup);
     case 'help': return UI.helpHtml(G.helpTab, lex, twoLetterWords());
     case 'settings': return UI.settingsHtml(G.settings);
-    case 'register': return UI.registerHtml(lex, register());
+    case 'register': return UI.registerHtml(lex, register(), G.noSave);
     case 'records': return UI.recordsHtml(stats(), { found: lex.data.words.filter((e) => e.forms.some((f) => register()[f])).length, total: lex.data.words.length, daily: dailyInfo() });
     case 'about': return UI.aboutHtml(META);
     case 'over': {
