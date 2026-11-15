@@ -260,10 +260,11 @@ function wireScreen(name) {
     scr.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => { st.seats.splice(+b.dataset.remove, 1); showScene('setup'); }));
     const add = scr.querySelector('[data-add]');
     if (add) add.addEventListener('click', () => { const used = new Set(st.seats.map((x) => x.persona)); st.seats.push({ kind: 'ai', persona: (PERSONAS.find((p) => !used.has(p.id)) || PERSONAS[0]).id }); showScene('setup'); });
-    scr.querySelector('[data-hints]').addEventListener('change', (e) => { st.hints = e.target.checked; });
+    scr.querySelector('[data-hints]').addEventListener('change', (e) => { st.hints = e.target.checked; scr.querySelector('[data-hints-unl]').disabled = !e.target.checked; });
+    scr.querySelector('[data-hints-unl]').addEventListener('change', (e) => { st.hintsUnl = e.target.value === 'unl'; });
     scr.querySelector('[data-start]').addEventListener('click', () => {
       G.settings.lastSetup = st; saveSettings();
-      replaceSave(() => newGame({ mode: 'play', seats: st.seats.map((x, k) => (x.kind === 'human' ? { kind: 'human', name: (x.name || '').trim() || (st.seats.filter((y) => y.kind === 'human').length > 1 ? `Player ${k + 1}` : 'You') } : { kind: 'ai', persona: x.persona, level: seatLevel(x), name: persona(x.persona).name })), hints: st.hints }));
+      replaceSave(() => newGame({ mode: 'play', hintsUnl: !!st.hintsUnl, seats: st.seats.map((x, k) => (x.kind === 'human' ? { kind: 'human', name: (x.name || '').trim() || (st.seats.filter((y) => y.kind === 'human').length > 1 ? `Player ${k + 1}` : 'You') } : { kind: 'ai', persona: x.persona, level: seatLevel(x), name: persona(x.persona).name })), hints: st.hints }));
     });
   }
   if (name === 'help') {
@@ -293,7 +294,7 @@ function wireScreen(name) {
     scr.querySelectorAll('[data-fact]').forEach((b) => b.addEventListener('click', () => openFact(b.dataset.fact, b.dataset.form)));
     scr.querySelector('[data-review]')?.addEventListener('click', openReview);
     const again = scr.querySelector('[data-again]');
-    if (again) again.addEventListener('click', () => newGame({ mode: 'play', seats: G.s.players.map((p) => ({ kind: p.kind, name: p.name, persona: p.persona, level: p.level })), hints: G.s.players.some((p) => p.hints != null) }));
+    if (again) again.addEventListener('click', () => newGame({ mode: 'play', seats: G.s.players.map((p) => ({ kind: p.kind, name: p.name, persona: p.persona, level: p.level })), hints: G.s.players.some((p) => p.hints != null), hintsUnl: G.s.players.some((p) => p.unl) }));
   }
 }
 
@@ -327,6 +328,7 @@ function newGame(opts) {
     const s = E.createGame({ ...opts, seed }, G.lex);
     if (opts.hints === false) for (const p of s.players) p.hints = null;
     for (const p of s.players) if (p.kind !== 'human') p.hints = null;
+    if (opts.hints !== false && opts.hintsUnl) for (const p of s.players) if (p.kind === 'human') { p.unl = true; p.taken = 0; }
     beginGame(s, intent);
   });
 }
@@ -588,7 +590,7 @@ function doSwap() {
 async function doHint() {
   if (!humanCanAct()) return;
   const p = cur();
-  if (p.hints == null || p.hints <= 0) return;
+  if (p.hints == null || (p.hints <= 0 && !p.unl)) return;
   cancelDrag();
   recallAll();
   // staging is locked (humanCanAct) until the hint arrives, so it can't land on top of new tiles
@@ -600,7 +602,7 @@ async function doHint() {
   if (G.s !== s || s.move !== move || !humanCanAct()) { renderPreview(); return; }
   recallAll();
   if (!m) { flash('No play found. Try a swap.'); renderStaging(); return; }
-  p.hints--;
+  if (p.unl) p.taken++; else p.hints--;
   // a hint becomes a staged play the player can accept with Play, move, or recall
   for (const t of m.tiles) {
     const k = cur().rack.findIndex((l, j) => (t.blank ? l === '?' : l === t.l) && !G.staged.some((x) => x.k === j));
@@ -658,7 +660,7 @@ function trimLedger() {
 function renderActions() {
   const s = G.s, p = cur(), human = p.kind === 'human' && !G.privacy;
   const el = $('#actions');
-  el.innerHTML = UI.actionsHtml({ staged: G.staged.length > 0, canSwap: s.bag.length >= RACK, canPlay: G.staged.length > 0 && G.preview && G.preview.ok, hints: p.hints != null && p.kind === 'human' ? p.hints : null });
+  el.innerHTML = UI.actionsHtml({ staged: G.staged.length > 0, canSwap: s.bag.length >= RACK, canPlay: G.staged.length > 0 && G.preview && G.preview.ok, hints: p.hints != null && p.kind === 'human' ? p.hints : null, unlimited: !!p.unl });
   el.classList.toggle('waiting', !human || s.over);
   el.querySelectorAll('[data-act]').forEach((b) => {
     if ((!human || s.over) && !(b.dataset.act === 'shuffle' && waitSeat())) b.disabled = true;
@@ -1486,7 +1488,7 @@ window.__game = {
     const seats = (opts.seats || [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'hollis' }]).map((x, k) => (x.kind === 'ai'
       ? { kind: 'ai', persona: x.persona || 'hollis', level: x.level || persona(x.persona || 'hollis').level, name: x.name || persona(x.persona || 'hollis').name }
       : { kind: 'human', name: x.name || (k ? `Player ${k + 1}` : 'You') }));
-    newGame({ mode: 'play', seats, hints: opts.hints !== false });
+    newGame({ mode: 'play', seats, hints: opts.hints !== false, hintsUnl: !!opts.hintsUnl });
     return true;
   },
   audioList() { return audioList(); },

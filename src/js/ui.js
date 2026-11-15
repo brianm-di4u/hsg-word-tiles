@@ -107,7 +107,8 @@ export function setupHtml(setup) {
     <header class="sheet-head"><h1>New game</h1><button class="iconbtn" data-go="title" aria-label="Back to the title screen">${ICON.close}</button></header>
     <ol class="seats">${setup.seats.map(seat).join('')}</ol>
     ${setup.seats.length < 4 ? '<button class="btn quiet add" data-add>Add a player</button>' : ''}
-    <label class="check"><input type="checkbox" data-hints ${setup.hints ? 'checked' : ''}> Spring Guide hints (3 per player)</label>
+    <label class="check"><input type="checkbox" data-hints ${setup.hints ? 'checked' : ''}> Spring Guide hints</label>
+    <label class="field hint-allow"><span>Hints for each player</span><select data-hints-unl ${setup.hints ? '' : 'disabled'}><option value="3" ${setup.hintsUnl ? '' : 'selected'}>Three</option><option value="unl" ${setup.hintsUnl ? 'selected' : ''}>Unlimited (a game with hints sets no personal best)</option></select></label>
     <p class="goal"><b>The goal:</b> score more than the others by building words.</p>
     <p class="note">${humans >= 2 ? 'Pass and play: each person\'s tiles stay hidden until they tap to take their turn.' : humans === 1 ? 'You against the computer.' : 'Computers only: sit back and watch.'}</p>
     <button class="btn primary big" data-start>Start</button>
@@ -160,7 +161,7 @@ export function actionsHtml(o) {
     o.staged ? b('recall', ICON.recall, 'Recall', 'Esc') : '',
     b('swap', ICON.swap, 'Swap', '⇧S', o.canSwap ? '' : 'disabled'),
     b('pass', ICON.pass, 'Pass', '⇧P'),
-    o.hints != null ? b('hint', ICON.hint, `Hint <em>${o.hints}</em>`, '⇧H', o.hints > 0 ? '' : 'disabled') : '',
+    o.hints != null ? b('hint', ICON.hint, `Hint <em>${o.unlimited ? '∞' : o.hints}</em>`, '⇧H', o.hints > 0 || o.unlimited ? '' : 'disabled') : '',
     b('play', ICON.play, 'Play', 'Enter', o.canPlay ? '' : 'aria-disabled="true"'),
   ].join('');
 }
@@ -283,7 +284,7 @@ export function helpHtml(tab, lex, twos = []) {
       </ol>
       ${workedExample()}
       <p>Words come from the public-domain ENABLE list (168,000 words; no proper nouns) with a few additions: the two-letter words below and some everyday ones such as EMAIL, APP and BLOG. A play with a word that isn't on the list is handed back and you keep your turn. While you place tiles, the strip under the board shows the words, the score and any bonus.</p>
-      <p>Stuck? The <b>Spring Guide</b> (Hint) sets a strong play on the board for you to keep, move or take back: three per player in a game against the computer or pass-and-play, none in the Daily Soak.</p>
+      <p>Stuck? The <b>Spring Guide</b> (Hint) sets a strong play on the board for you to keep, move or take back: three per player in a game against the computer or pass-and-play (or unlimited, if you choose that in the setup; such a game sets no personal best), none in the Daily Soak.</p>
       ${twos.length ? `<h2>Two-letter words</h2>
       <p>All ${twos.length} of these are playable. QI and ZA help when you are holding a lone Q or Z.</p>
       <p class="twos">${twos.join(' ')}</p>` : ''}
@@ -432,7 +433,7 @@ export function overHtml(s, lex, dinfo, extra = {}) {
   const why = { out: `${s.players[s.result.out]?.name} went out.`, stalled: 'Everyone passed or swapped twice in a row.', daily: 'Ten turns are up.' }[s.result.why] || '';
   const daily = s.mode === 'daily';
   const top = order[0];
-  const aid = (p) => (daily || p.kind !== 'human' ? '' : hintsUsed(p) ? `<span>${plural(hintsUsed(p), 'hint')} used</span>` : '<span>Unaided</span>');
+  const aid = (p) => (daily || p.kind !== 'human' ? '' : p.unl ? `<span>Unlimited hints, ${hintsUsed(p)} used</span>` : hintsUsed(p) ? `<span>${plural(hintsUsed(p), 'hint')} used</span>` : '<span>Unaided</span>');
   const line = (p, k) => `<span>${p.best ? `Best word ${esc(p.best.word)} (${p.best.score})` : 'No words played'}</span>${aid(p)}${s.result.adjust[k] > 0 ? `<span>Went out: +${s.result.adjust[k]}</span>` : s.result.adjust[k] < 0 ? `<span>Tiles left: −${-s.result.adjust[k]}</span>` : ''}`;
   const say = (k) => (extra.barks && extra.barks[k] ? `<small class="bark"><b>${esc(SHORT[s.players[k].persona] || '')}:</b> “${esc(extra.barks[k].text)}”</small>` : '');
   const pbs = extra.pb && extra.pb.length ? `<ul class="pbs" aria-label="Personal bests">${extra.pb.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '';

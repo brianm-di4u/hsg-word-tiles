@@ -24,7 +24,8 @@ export function cleanStats(raw) {
 }
 
 // How many Spring Guide hints a seat has taken: its allowance of three less what is left (none where hints were off).
-export const hintsUsed = (p) => (p.hints == null ? 0 : Math.max(0, 3 - p.hints));
+// A seat with unlimited hints (`unl`) counts them as it goes in `taken`.
+export const hintsUsed = (p) => (p.unl ? Math.max(0, Math.floor(p.taken) || 0) : p.hints == null ? 0 : Math.max(0, 3 - p.hints));
 
 export const oppKey = (p) => `${p.persona}:${p.level || 'medium'}`;
 
@@ -40,7 +41,7 @@ export function applyGame(prev, s) {
   const k = s.players.indexOf(humans[0]), me = humans[0];
   const won = s.result.winners.includes(k), tied = won && s.result.winners.length > 1;
   const pb = { first: st.games === 0, score: false, play: false, word: false, held: false };
-  const aided = hintsUsed(me) > 0;
+  const aided = hintsUsed(me) > 0 || !!me.unl;   // unlimited hints keep a game out of the bests whether or not one was taken
   st.games++; st.totalScore += me.score;
   if (won && !tied) { st.wins++; st.streak++; st.bestStreak = Math.max(st.bestStreak, st.streak); }
   else { if (tied) st.ties++; st.streak = 0; }
