@@ -2,7 +2,7 @@
 import { PERSONAS, persona, LEVEL_NAME, LEVEL_BLURB, seatLevel, HUMAN_COLORS } from './personas.js';
 import { SHORT } from './voices.js';
 import { TILES, BLANKS } from './tiles.js';
-import { FULL_SOAK, FEATURED_BONUS, ROW_BONUS, explainWord } from './score.js';
+import { N, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, explainWord } from './score.js';
 import { DAILY_TURNS, unseen } from './engine.js';
 import { art } from './art.js';
 import { hintsUsed } from './stats.js';
@@ -231,6 +231,7 @@ export function pauseHtml(o) {
     <nav class="menu">
       <button class="btn primary" data-close>Resume</button>
       <button class="btn" data-open="ledger">Steam ledger</button>
+      <button class="btn" data-open="boardtext">Read the board</button>
       ${o.tracker ? '<button class="btn" data-open="tracker">Unseen tiles</button>' : ''}
       <button class="btn" data-go="help">How to play</button>
       <button class="btn" data-go="settings">Settings</button>
@@ -241,6 +242,27 @@ export function pauseHtml(o) {
 
 export function ledgerHtml(s, lex) {
   return `<div class="card dialog ledger-dlg" role="dialog" aria-modal="true" aria-labelledby="ledger-h"><h2 id="ledger-h">Steam ledger</h2><ol class="log">${logHtml(s, lex) || '<li>No plays yet.</li>'}</ol><div class="dlg-btns"><button class="btn primary" data-close>Close</button></div></div>`;
+}
+
+// The board as words (S2-08), for a screen reader: a square is its column letter and row number (H8 is the centre), and a tile
+// is read as the letter on it. `staged` are the player's tiles not yet played.
+export const squareName = (i) => `${'ABCDEFGHIJKLMNO'[i % N]}${Math.floor(i / N) + 1}`;
+export function tileSpeech(s, staged, i) {
+  const t = s.board[i], st = staged.find((x) => x.i === i);
+  if (t) return `tile ${t.l}${t.blank ? ', a blank' : ''}`;
+  return st ? `your tile ${st.l}${st.blank ? ', a blank' : ''}, not played yet` : 'empty';
+}
+export function boardTextHtml(s, staged) {
+  const rows = [];
+  for (let r = 0; r < N; r++) {
+    const bits = [];
+    for (let c = 0; c < N; c++) { const i = r * N + c, t = s.board[i] || staged.find((x) => x.i === i); if (t) bits.push(`${squareName(i)} ${t.l}${s.board[i] ? '' : ' (not played yet)'}`); }
+    rows.push(`<li><b>Row ${r + 1}:</b> ${bits.length ? bits.join(', ') : 'empty'}</li>`);
+  }
+  return `<div class="card dialog boardtext" role="dialog" aria-modal="true" aria-labelledby="bt-h"><h2 id="bt-h">The board, as text</h2>
+    <p>Columns run A to O and rows 1 to 15, so H8 is the centre square. Only squares with a tile are listed.</p>
+    <ul class="log">${rows.join('')}</ul>
+    <div class="dlg-btns"><button class="btn quiet" data-open="pause">Back</button><button class="btn primary" data-close>Close</button></div></div>`;
 }
 
 // The tile tracker: every letter the player cannot see, from the engine's own count (the bag and the other racks).
@@ -335,7 +357,7 @@ export function helpHtml(tab, lex, twos = []) {
 }
 
 // ---------- settings ----------
-export function settingsHtml(st) {
+export function settingsHtml(st, canVibrate = false) {
   const seg = (key, opts, label) => `<div class="setrow"><span>${label}</span><div class="seg" role="radiogroup" aria-label="${label}">${opts.map(([v, t]) => `<button role="radio" aria-checked="${st[key] === v}" data-set="${key}" data-val="${v}">${t}</button>`).join('')}</div></div>`;
   return `<div class="sheet settings">
     ${band()}
@@ -349,6 +371,7 @@ export function settingsHtml(st) {
     <div class="setrow"><span>Music level</span><input type="range" min="0" max="1" step="0.05" value="${st.musicVol}" data-musicvol aria-label="Music and ambience level, under the Volume"></div>
     ${seg('theme', [['auto', 'Auto'], ['light', 'Day'], ['dark', 'Night']], 'Theme')}
     ${seg('motion', [['system', 'Auto'], ['full', 'Full'], ['reduce', 'Reduced']], 'Motion')}
+    ${canVibrate ? seg('vibrate', [[true, 'On'], [false, 'Off']], 'Vibration') : ''}
     ${seg('text', [[1, '100%'], [1.15, '115%'], [1.3, '130%']], 'Text size')}
     ${seg('board3d', [['auto', 'Auto'], ['on', '3D'], ['off', 'Flat']], 'Board')}
     ${seg('ai', [['normal', 'Normal'], ['fast', 'Fast'], ['instant', 'Instant']], 'Computer speed')}
@@ -361,7 +384,7 @@ export function registerHtml(lex, reg, noSave) {
   const groups = Object.entries(lex.categories).map(([ck, c]) => {
     const entries = lex.data.words.filter((w) => w.cat === ck);
     const found = entries.filter((e) => e.forms.some((f) => reg[f]));
-    return `<section class="reg-cat"><h2>${ICON.cat[c.icon]} ${esc(c.name)} <small>${found.length} / ${entries.length}</small></h2><ul class="reg-list">${entries.map((e) => {
+    return `<section class="reg-cat"><h2>${ICON.cat[c.icon]} ${esc(c.name)} <small>${found.length} / ${entries.length}${found.length === entries.length ? ' · complete' : ''}</small></h2><ul class="reg-list">${entries.map((e) => {
       const forms = e.forms.filter((f) => reg[f]);
       if (!forms.length) return `<li class="reg-item locked" aria-label="Not found yet: ${e.forms[0].length} letters"><b aria-hidden="true">${'<i></i>'.repeat(e.forms[0].length)}</b></li>`;
       const best = Math.max(...forms.map((f) => reg[f].best));
@@ -440,6 +463,15 @@ export function stingFor(e, newWord) {
   if (e.featured || e.full) return null;
   if (newWord) return 'discover';
   return e.score >= SCORE_BIG ? 'big' : e.score >= SCORE_GOOD ? 'good' : null;
+}
+// The Register categories a play finishes (S3-04): `reg` is the Register before the play, `words` the play's scored words. A
+// category is finished when every one of its words has been signed in under at least one of its forms.
+export function categoriesCompleted(lex, reg, words) {
+  const after = { ...reg };
+  for (const w of words) if (w.themed) after[w.w] = after[w.w] || { count: 1 };
+  const done = (ck) => lex.data.words.filter((e) => e.cat === ck).every((e) => e.forms.some((f) => after[f]));
+  const touched = new Set(words.filter((w) => w.themed && !reg[w.w]).map((w) => lex.byId.get(w.themed).cat));
+  return [...touched].filter((ck) => done(ck) && !lex.data.words.filter((e) => e.cat === ck).every((e) => e.forms.some((f) => reg[f])));
 }
 export function stallNote(s, passing) {
   if (!s || s.over || s.mode === 'daily' || !s.players) return '';

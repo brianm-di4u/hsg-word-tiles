@@ -40,7 +40,7 @@ function wordCheck(raw) {
 
 const G = {
   s: null, scene: 'title', back: 'title', dict: null, lex: makeLexicon(LEXICON), ready: false,
-  settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, fxVol: 1, musicVol: 1, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true, tipsSeen: true },
+  settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, fxVol: 1, musicVol: 1, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true, tipsSeen: true, vibrate: matchMedia('(pointer: coarse)').matches },
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
   preview: null, hint: null, last: new Set(), anim: new Map(), animUntil: 0,
@@ -52,10 +52,18 @@ window.__G = G;
 // ---------- settings ----------
 const reduced = () => G.settings.motion === 'reduce' || (G.settings.motion === 'system' && matchMedia('(prefers-reduced-motion: reduce)').matches);
 const animOn = () => !reduced() && !G.fast;
+// Haptics (S2-22): short pulses on the player's own moves, where the browser has navigator.vibrate. Off with the Vibration switch
+// and whenever motion is reduced. Never on the computer's moves.
+const HAP = { stage: 10, play: 20, error: [30, 40, 30], big: [20, 40, 20, 40, 40] };
+function buzz(kind) {
+  if (!G.settings.vibrate || reduced() || typeof navigator.vibrate !== 'function') return;
+  try { navigator.vibrate(HAP[kind]); } catch (e) { /* a phone that refuses a pulse is not a problem */ }
+}
+const oops = () => { sfx('error'); buzz('error'); };
 const dark = () => G.settings.theme === 'dark' || (G.settings.theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
 // stored settings are trusted field by field: a value of the wrong type or range is dropped and the stored copy rewritten
 const SETTING_OK = {
-  sound: (v) => typeof v === 'boolean', tipsSeen: (v) => typeof v === 'boolean', fx: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean', amb: (v) => typeof v === 'boolean', hints: (v) => typeof v === 'boolean',
+  sound: (v) => typeof v === 'boolean', tipsSeen: (v) => typeof v === 'boolean', fx: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean', amb: (v) => typeof v === 'boolean', hints: (v) => typeof v === 'boolean', vibrate: (v) => typeof v === 'boolean',
   vol: (v) => typeof v === 'number' && v >= 0 && v <= 1, fxVol: (v) => typeof v === 'number' && v >= 0 && v <= 1, musicVol: (v) => typeof v === 'number' && v >= 0 && v <= 1,
   theme: (v) => ['auto', 'light', 'dark'].includes(v), motion: (v) => ['system', 'full', 'reduce'].includes(v),
   text: (v) => [1, 1.15, 1.3].includes(v), board3d: (v) => ['auto', 'on', 'off'].includes(v), ai: (v) => ['normal', 'fast', 'instant'].includes(v),
@@ -239,7 +247,7 @@ function screenHtml(name) {
     }
     case 'setup': return UI.setupHtml(G.setup);
     case 'help': return UI.helpHtml(G.helpTab, lex, twoLetterWords());
-    case 'settings': return UI.settingsHtml(G.settings);
+    case 'settings': return UI.settingsHtml(G.settings, typeof navigator.vibrate === 'function');
     case 'register': return UI.registerHtml(lex, register(), G.noSave);
     case 'records': return UI.recordsHtml(stats(), { found: lex.data.words.filter((e) => e.forms.some((f) => register()[f])).length, total: lex.data.words.length, daily: dailyInfo(), today: today() });
     case 'about': return UI.aboutHtml(META);
@@ -296,6 +304,7 @@ function wireScreen(name) {
       if (['sound', 'fx', 'music', 'amb'].includes(k)) unlock();
       if (k === 'sound' && G.settings.sound) sfx('place');
       if (k === 'board3d') B3.want(G.settings.board3d);
+      if (k === 'vibrate') buzz('stage');
     }));
     const again = scr.querySelector('[data-tips]');
     again.addEventListener('click', () => {
@@ -538,6 +547,7 @@ function celebrate(e, bark, wait = 0) {
   const p = G.s.players[e.p];
   const themed = e.words.filter((w) => w.themed);
   let found = false;
+  if (p.kind === 'human' && (e.full || e.featured)) buzz('big');
   const who = bark ? { p, k: e.p } : null, quote = (ev) => (bark && bark.event === ev ? `“${bark.text}”` : null);
   if (e.featured) { toast({ kind: 'featured', who, title: `Featured Spring: ${e.featured}`, sub: `${quote('themed') || `${p.name} found it`} · +${FEATURED_BONUS}`, fact: G.lex.entry(e.featured)?.id, form: e.featured }); cue('featured'); }
   for (const w of themed) {
@@ -551,7 +561,9 @@ function celebrate(e, bark, wait = 0) {
   if (themed.length && !e.featured) cue('steam');
   if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); cue('chime'); }
   // one sting a play: a Featured Spring or a Full Soak has its own, then a word new to the Register, then the size of the score
-  const st = UI.stingFor(e, found); if (st) cue(st, { delay: STING_LAG });
+  const done = p.kind === 'human' ? UI.categoriesCompleted(G.lex, register(), e.words) : [];
+  for (const ck of done) toast({ kind: 'themed', title: `${G.lex.categories[ck].name}: complete`, sub: 'All its words are in your Register.' });
+  const st = done.length && !e.featured && !e.full ? 'fanfare' : UI.stingFor(e, found); if (st) cue(st, { delay: STING_LAG });
   if (!e.full && bark && bark.event === 'big') toast({ kind: 'bark', who, title: `${p.name}: ${e.words[0].w} +${e.score}`, sub: quote('big') });
   scorePop(e, themed.length > 0);
 }
@@ -583,7 +595,7 @@ function stage(k, i, letter) {
   G.selected = null; G.hint = null;
   clearToasts();
   if (animOn()) { const now = performance.now(); G.settle.set(i, now); G.settleUntil = now + 130; }
-  sfx('place', { pan: colPan(i) });
+  sfx('place', { pan: colPan(i) }); buzz('stage');
   updatePreview(); renderStaging();
   return true;
 }
@@ -608,9 +620,10 @@ function humanCanAct() { return G.s && !G.s.over && cur().kind === 'human' && !G
 function doPlay() {
   if (!humanCanAct()) return;
   cancelDrag();   // a staged tile still in the air goes back to its square and counts
-  if (!G.staged.length) { flash('Place tiles on the board first.'); sfx('error'); return; }
+  if (!G.staged.length) { flash('Place tiles on the board first.'); oops(); return; }
   const r = E.apply(G.s, { type: 'play', tiles: stagedTiles() }, ctx());
-  if (!r.ok) { flash(r.error); sfx('error'); shake(); return; }
+  if (!r.ok) { flash(r.error); oops(); shake(); return; }
+  buzz('play');
   afterAction(r.entry, false);
 }
 function doPass() {
@@ -620,7 +633,7 @@ function doPass() {
 }
 function doSwap() {
   if (!humanCanAct()) return;
-  if (G.s.bag.length < RACK) { flash('You can swap only while the bag holds at least seven tiles.'); sfx('error'); return; }
+  if (G.s.bag.length < RACK) { flash('You can swap only while the bag holds at least seven tiles.'); oops(); return; }
   recallAll();
   openDialog('swap');
 }
@@ -956,6 +969,7 @@ function openDialog(name, arg) {
   else if (name === 'blank') html = UI.blankHtml();
   else if (name === 'pause') html = UI.pauseHtml({ mobile: isNarrow(), tracker: trackerSeat() >= 0 });
   else if (name === 'tracker') html = UI.trackerHtml(G.s, trackerSeat());
+  else if (name === 'boardtext') html = UI.boardTextHtml(G.s, G.staged);
   else if (name === 'ledger') html = UI.ledgerHtml(G.s, G.lex);
   else if (name === 'fact') html = `<div class="dialog-wrap" role="dialog" aria-modal="true" aria-label="Hot Springs word card">${UI.factHtml(arg.entry, G.lex, arg.form, '<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div>')}</div>`;
   else if (name === 'confirm') html = `<div class="card dialog" role="dialog" aria-modal="true" aria-labelledby="cf-h"><h2 id="cf-h">${esc(arg.title)}</h2><p>${esc(arg.text)}</p><div class="dlg-btns"><button class="btn quiet" data-close>Cancel</button><button class="btn primary" data-ok>${esc(arg.ok)}</button></div></div>`;
@@ -1158,7 +1172,16 @@ const pxPerCell = () => (B3.B3.on ? B3.cellPx() : R.scale());
 // ---------- steam effects (ambient; not part of isIdle) ----------
 const steam = { parts: [], sweeps: [], last: 0, on: false, emit: 0 };
 const SWEEP_MS = 900;   // a Hot Springs word: a band of gold light runs along its tiles in this time
-const ambientSteam = () => animOn() && G.scene === 'game' && G.s && !G.s.board[CENTER] && !G.staged.some((t) => t.i === CENTER);
+const ambientSteam = () => animOn() && G.scene === 'game' && !!G.s;
+const covered = (i) => !!G.s.board[i] || G.staged.some((t) => t.i === i);
+// where the next idle wisp rises: the Display Spring while it is uncovered; after the first word, one of the Bathhouse Row squares
+// still showing (S4-04), so the board keeps breathing between plays. Nothing when they are all covered.
+function wispAt() {
+  if (!covered(CENTER)) return CENTER;
+  const open = Object.keys(BATHS).map(Number).filter((i) => !covered(i));
+  return open.length ? open[Math.floor(Math.random() * open.length)] : -1;
+}
+const WISP_EVERY = 0.7, ROW_WISP_EVERY = 1.6;   // seconds between idle wisps from the Display Spring / from a Bathhouse Row square
 function steamBurst(cells) {
   if (!animOn()) return;
   for (const i of cells) for (let k = 0; k < 6; k++) steam.parts.push({ i, x: Math.random() - 0.5, y: 0, vx: (Math.random() - 0.5) * 0.3, vy: 0.6 + Math.random() * 0.6, life: 0, max: 1.2 + Math.random() * 0.8, r: 0.25 + Math.random() * 0.25, a: 0.45 });
@@ -1179,10 +1202,14 @@ function steamLoop(now) {
   c.setTransform(d, 0, 0, d, 0, 0); c.clearRect(0, 0, R.view.W, R.view.H);
   const dt = G.fxFrozen != null ? 0 : Math.min(0.05, (now - (steam.last || now)) / 1000); steam.last = now;
   const cell = pxPerCell();
-  // a slow wisp from the Display Spring every ~0.7 s while it is uncovered
+  // a slow wisp from the Display Spring every ~0.7 s while it is uncovered, then from a Bathhouse Row square every ~1.6 s
   if (ambientSteam() && G.fxFrozen == null) {
     steam.emit -= dt;
-    if (steam.emit <= 0) { steam.emit = 0.7; steam.parts.push({ i: CENTER, x: (Math.random() - 0.5) * 0.3, y: 0, vx: (Math.random() - 0.5) * 0.12, vy: 0.35 + Math.random() * 0.2, life: 0, max: 2.6, r: 0.22, a: 0.32 }); }
+    if (steam.emit <= 0) {
+      const at = wispAt();
+      steam.emit = at === CENTER ? WISP_EVERY : ROW_WISP_EVERY;
+      if (at >= 0) steam.parts.push({ i: at, x: (Math.random() - 0.5) * 0.3, y: 0, vx: (Math.random() - 0.5) * 0.12, vy: 0.35 + Math.random() * 0.2, life: 0, max: 2.6, r: 0.22, a: at === CENTER ? 0.32 : 0.24 });
+    }
   }
   steam.parts = steam.parts.filter((p) => (p.life += dt) < p.max);
   for (const p of steam.parts) {
@@ -1262,6 +1289,11 @@ function squareInfo(i) {
   return SQUARE_INFO[k] || null;
 }
 const SQUARE_INFO = { w: 'Warm spring: doubles the letter on it', h: 'Hot spring: triples the letter on it', s: 'Steam: doubles the whole word', b: 'Boiling Spring: triples the whole word', '*': 'The Display Spring: the first word covers it' };
+// the square under the keyboard cursor, spoken through the live region: "H8, empty, Steam: doubles the whole word"
+function sayCursor(i) {
+  const empty = !G.s.board[i] && !G.staged.some((t) => t.i === i);
+  liveSay(`${UI.squareName(i)}, ${UI.tileSpeech(G.s, G.staged, i)}${empty && squareInfo(i) ? `, ${squareInfo(i)}` : ''}`);
+}
 function hoverSquare(e) {
   if (G.drag || e.pointerType !== 'mouse' || G.scene !== 'game' || !G.s) return;
   const r = $('#board').getBoundingClientRect();
@@ -1474,7 +1506,7 @@ function onKey(e) {
   }
   if (!humanCanAct()) { if (k === 'Escape') { e.preventDefault(); openDialog('pause'); } return; }
   const c = G.cursor;
-  const move = (dr, dc) => { const r = Math.floor(c.i / N) + dr, col = (c.i % N) + dc; if (r >= 0 && r < N && col >= 0 && col < N) c.i = r * N + col; c.on = true; ensureVisible(c.i); draw(); };
+  const move = (dr, dc) => { const r = Math.floor(c.i / N) + dr, col = (c.i % N) + dc; if (r >= 0 && r < N && col >= 0 && col < N) c.i = r * N + col; c.on = true; ensureVisible(c.i); draw(); sayCursor(c.i); };
   if (k === 'ArrowLeft') { e.preventDefault(); move(0, -1); }
   else if (k === 'ArrowRight') { e.preventDefault(); move(0, 1); }
   else if (k === 'ArrowUp') { e.preventDefault(); move(-1, 0); }
@@ -1493,12 +1525,12 @@ function onKey(e) {
     let blankLetter = null;
     if (idx == null) {
       idx = G.order.find((j) => rack[j] === '?');
-      if (idx == null) { flash(`No ${L} on your rack.`); sfx('error'); return; }
+      if (idx == null) { flash(`No ${L} on your rack.`); oops(); return; }
       // a letter you do not hold would spend your blank: the first press asks, the same letter again (within a few seconds) does it
       const arm = G.blankArm;
       if (!arm || arm.L !== L || performance.now() - arm.t > BLANK_ARM_MS) {
         G.blankArm = { L, t: performance.now() };
-        flash(`No ${L} on your rack. Press ${L} again to use your blank.`, BLANK_ARM_MS); sfx('error'); return;
+        flash(`No ${L} on your rack. Press ${L} again to use your blank.`, BLANK_ARM_MS); oops(); return;
       }
       blankLetter = L;
     }
@@ -1565,7 +1597,7 @@ window.__game = {
     return JSON.parse(JSON.stringify({ scene: G.scene, dialog: G.dialog, game: G.s, staged: G.staged, order: G.order, preview: G.preview, settings: G.settings,
       view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, ready: G.ready, privacy: G.privacy,
       drag: G.drag && G.drag.active ? { from: G.drag.from, target: G.drag.target, blocked: G.drag.blocked, lift: G.drag.lift, size: G.drag.size } : null,
-      ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
+      ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, wisps: steam.parts.map((p) => p.i), sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
   },
   setState(o) {
     if (o.game) {
