@@ -133,8 +133,25 @@ body.theme-dark .btn.primary small { color: #2A2310; }
 .field { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
 .field span em { font-weight: 400; color: var(--muted); }
 .field input, .field select { min-height: 44px; padding: 6px 10px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--panel); color: var(--ink); max-width: 100%; }
-.check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 600; }
-.check input { width: 22px; height: 22px; accent-color: var(--primary); }
+.check { display: flex; align-items: center; gap: 12px; min-height: 44px; font-weight: 600; cursor: pointer; }
+/* a brass toggle in place of the browser's checkbox */
+.check input { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 50px; height: 28px; margin: 0; border-radius: 99px; border: 1.5px solid var(--brass); background: var(--panel-2); cursor: pointer; transition: background 0.15s; }
+.check input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 21px; height: 21px; border-radius: 50%; background: linear-gradient(#FFF3C7, #D9A23A); border: 1px solid var(--brass); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); transition: transform 0.15s; }
+.check input:checked { background: var(--primary); }
+.check input:checked::after { transform: translateX(22px); }
+.check input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+body.reduce .check input, body.reduce .check input::after { transition: none; }
+/* the opponent as four portrait cards */
+.opps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.opp { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'p n' 'p r' 'p l'; column-gap: 10px; align-items: center; text-align: left; padding: 8px 10px; min-height: 64px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+.opp .badge { grid-area: p; }
+.opp b { grid-area: n; font: 600 1rem var(--f-serif); line-height: 1.15; }
+.opp small { grid-area: r; color: var(--muted); line-height: 1.2; }
+.opp em { grid-area: l; font-style: normal; font-size: 0.8em; font-weight: 700; color: var(--accent); }
+.opp[aria-checked="true"] { border-color: var(--brass); background: var(--panel-2); box-shadow: inset 0 0 0 2px var(--brass); }
+.opp:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.opp b, .opp small { overflow-wrap: anywhere; }
+@media (max-width: 520px) { .opps { grid-template-columns: minmax(0, 1fr); } }
 .add { margin: 4px 0 8px; }
 .setup [data-start] { width: 100%; }
 
@@ -360,7 +377,11 @@ body:not(.theme-dark) .fact-pts { color: #FFF; }
 /* game over */
 body[data-scene="over"] #screen { display: grid; place-items: center; }
 .over { width: 100%; }
-.over-art { height: 120px; margin: -18px -22px 10px; border-radius: 16px 16px 0 0; background: center 62% / cover; border-bottom: 2px solid var(--brass); }
+.over-art, .sheet-art { height: 120px; margin: -18px -22px 10px; border-radius: 16px 16px 0 0; background: center 62% / cover; border-bottom: 2px solid var(--brass); }
+.sheet-art { height: 68px; margin-bottom: 4px; }
+.dialog .sheet-art { margin: -20px -22px 12px; height: 56px; }
+.help-vig { float: right; width: min(46%, 190px); margin: 4px 0 8px 14px; border-radius: 12px; border: 2px solid var(--brass); box-shadow: var(--shadow); aspect-ratio: 4 / 3; object-fit: cover; }
+.help-body::after { content: ""; display: block; clear: both; }
 .masthead { text-align: center; border-bottom: 3px double var(--brass); padding-bottom: 8px; margin-bottom: 10px; }
 .mast-kicker { margin: 0; font: 700 0.78rem var(--f-ui); letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted); }
 .masthead h1 { margin: 2px 0; font: 400 calc(2.4rem * var(--ts)) / 1 var(--f-display); color: var(--primary); }
@@ -436,6 +457,8 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   .keys { columns: 1; }
   .over-cols { grid-template-columns: 1fr; gap: 0; }
   .over-art { height: 90px; margin: -14px -14px 8px; }
+  .sheet-art { height: 52px; margin: -14px -14px 4px; }
+  .help-vig { width: 40%; }
   .over h2 { margin-top: 12px; }
   .winner { display: grid; grid-template-columns: auto 1fr; grid-template-areas: 'b m' 's s'; gap: 8px 14px; }
   .winner .badge { grid-area: b; } .wmeta { grid-area: m; } .wscore { grid-area: s; font-size: 2.2rem; text-align: right; border-top: 1px solid rgba(110, 75, 30, 0.35); padding-top: 4px; }

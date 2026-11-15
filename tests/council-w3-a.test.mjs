@@ -424,4 +424,76 @@ export const tests = [
       t.expect(iv.every((x) => x > 0 && x < 250), 'each is a plausible frame interval, under a quarter of a second');
     },
   },
+  // ---------- S4-06 ----------
+  {
+    name: 'S4-06 the opponent is chosen from four portrait cards with a name, a role and a usual level; the choice carries to the game',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.page.click('#screen [data-go="setup"]');
+      t.equal(await t.page.locator('select[data-persona]').count(), 0, 'no drop-down for the opponent');
+      const cards = await t.page.$$eval('.opp[role="radio"]', (els) => els.map((e) => ({ val: e.dataset.val, on: e.getAttribute('aria-checked'), text: e.textContent, face: !!e.querySelector('img'), h: e.getBoundingClientRect().height })));
+      t.equal(cards.length, 4, 'four characters');
+      t.equal(cards.filter((c) => c.on === 'true').map((c) => c.val).join(), 'hollis', 'Hollis is chosen to start');
+      t.expect(cards.every((c) => c.face && /Usually (Easy|Medium|Hard)/.test(c.text) && c.h >= 44), 'each card has a portrait, a usual level and a touch-sized body');
+      t.expect(/Opal Vance/.test(cards.find((c) => c.val === 'opal').text) && /Bath attendant/.test(cards.find((c) => c.val === 'opal').text), 'a card names the character and the role');
+      await t.page.focus('[data-persona="1"][data-val="julian"]');
+      await t.page.keyboard.press('Enter');
+      t.equal(await t.page.getAttribute('[data-persona="1"][aria-checked="true"]', 'data-val'), 'julian', 'Enter on a focused card chooses it');
+      t.equal(await t.page.evaluate(() => document.activeElement.dataset.val), 'julian', 'and the focus stays on it');
+      t.equal(await t.page.inputValue('[data-level="1"]'), 'hard', 'the level follows the character until the player sets one');
+      t.expect(/Knows every word in the book/.test(await t.page.textContent('#screen .seat-note')), 'the character line shows under the cards');
+      await t.page.click('[data-persona="1"][data-val="opal"]');
+      await t.checkLayout({ allowScrollY: true });
+      await t.shot('S4-06-setup');
+      await t.page.click('#screen [data-start]');
+      await t.waitIdle(5000);
+      t.equal((await t.state()).game.players[1].persona, 'opal', 'the game starts against the chosen character');
+    },
+  },
+  {
+    name: 'S4-06 Spring Guide hints are a brass toggle, and still a checkbox for the keyboard and for screen readers',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.page.click('#screen [data-go="setup"]');
+      const box = await t.page.evaluate(() => { const i = document.querySelector('[data-hints]'), cs = getComputedStyle(i), r = i.getBoundingClientRect(); return { type: i.type, appearance: cs.appearance, w: r.width, checked: i.checked, label: i.closest('label').getBoundingClientRect().height }; });
+      t.equal(box.type, 'checkbox', 'it is still a checkbox'); t.equal(box.appearance, 'none', 'drawn by the game, not the browser');
+      t.expect(box.w >= 44 && box.label >= 44, 'wide enough to hit');
+      t.expect(box.checked, 'on to start');
+      await t.page.focus('[data-hints]');
+      await t.page.keyboard.press('Space');
+      t.equal(await t.page.isChecked('[data-hints]'), false, 'Space turns it off');
+      await t.page.click('.check');
+      t.equal(await t.page.isChecked('[data-hints]'), true, 'a tap on the label turns it on');
+    },
+  },
+  {
+    name: 'S4-06 every sheet and the pause card open with the painted band, and Help shows a bathhouse picture on the words tab',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.page.waitForFunction(() => window.__G && document.querySelector('.title-art')?.tagName === 'IMG', null, { timeout: 8000 });
+      for (const name of ['setup', 'help', 'settings', 'about', 'register', 'records']) {
+        await t.game('scene', name);
+        t.equal(await t.page.locator('#screen .sheet > .sheet-art').count(), 1, name + ' has the band');
+        t.expect(await t.page.evaluate(() => getComputedStyle(document.querySelector('.sheet-art')).backgroundImage.startsWith('url(')), name + ' band is the painting');
+      }
+      await t.game('scene', 'help');
+      await t.page.click('[data-tab="words"]');
+      t.equal(await t.page.locator('.help-body .help-vig').count(), 1, 'the words tab has its picture');
+      await t.checkLayout({ allowScrollY: true });
+      await t.shot('S4-06-help-words');
+      await t.game('scene', 'settings');
+      await t.shot('S4-06-settings');
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      await t.game('act', 'open', 'pause');
+      t.equal(await t.page.locator('#modal .pause .sheet-art').count(), 1, 'the pause card has the band');
+      await t.shot('S4-06-pause');
+    },
+  },
 ];

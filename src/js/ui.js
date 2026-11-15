@@ -46,6 +46,14 @@ export function badge(p, k, size = 40) {
 // shown where progress would be kept, when the browser will not store anything (a private window, blocked site data)
 export const NO_SAVE = 'Saving is blocked in this browser, so your progress will not be kept.';
 
+// the painted band at the head of a sheet, the same picture as the results screen's, so every screen opens like the title
+const band = () => (art.has('title') ? `<div class="sheet-art" style="background-image:url(${art.src('title')})" aria-hidden="true"></div>` : '');
+// a character's round portrait (the painted face, or the monogram when the painting is not there)
+function portrait(per, size) {
+  const face = art.has('face-' + per.id) ? `<img src="${art.src('face-' + per.id)}" alt="" width="${size}" height="${size}">` : `<b>${esc((per.name.replace(/["“”]/g, '').match(/[A-Z]/g) || ['?']).slice(0, 2).join(''))}</b>`;
+  return `<span class="badge" style="--c:${per.color};--s:${size}px" aria-hidden="true">${face}</span>`;
+}
+
 // ---------- title ----------
 export function titleHtml(o) {
   const hasArt = art.has('title');
@@ -85,7 +93,7 @@ export function setupHtml(setup) {
         </div>
         ${human
           ? `<label class="field"><span>Name</span><input data-name="${k}" value="${esc(st.name || '')}" maxlength="16" placeholder="Player ${k + 1}" autocomplete="off"></label>`
-          : `<label class="field"><span>Opponent <em>(fictional character)</em></span><select data-persona="${k}">${PERSONAS.map((p) => `<option value="${p.id}" ${p.id === st.persona ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label>
+          : `<div class="field"><span id="opp-${k}">Opponent <em>(fictional character)</em></span><div class="opps" role="radiogroup" aria-labelledby="opp-${k}">${PERSONAS.map((p) => `<button type="button" class="opp" role="radio" aria-checked="${p.id === st.persona}" data-persona="${k}" data-val="${p.id}">${portrait(p, 44)}<b>${esc(p.name)}</b><small>${esc(p.role)}</small><em>Usually ${LEVEL_NAME[p.level]}</em></button>`).join('')}</div></div>
              <p class="seat-note">${esc(persona(st.persona).role)}. ${esc(persona(st.persona).line)}</p>
              <label class="field"><span>Difficulty</span><select data-level="${k}">${Object.keys(LEVEL_NAME).map((l) => `<option value="${l}" ${l === seatLevel(st) ? 'selected' : ''}>${LEVEL_NAME[l]}</option>`).join('')}</select></label>
              <p class="seat-note" data-level-note="${k}">${esc(LEVEL_BLURB[seatLevel(st)])}</p>`}
@@ -95,6 +103,7 @@ export function setupHtml(setup) {
   };
   const humans = setup.seats.filter((s) => s.kind === 'human').length;
   return `<div class="sheet setup">
+    ${band()}
     <header class="sheet-head"><h1>New game</h1><button class="iconbtn" data-go="title" aria-label="Back to the title screen">${ICON.close}</button></header>
     <ol class="seats">${setup.seats.map(seat).join('')}</ol>
     ${setup.seats.length < 4 ? '<button class="btn quiet add" data-add>Add a player</button>' : ''}
@@ -215,6 +224,7 @@ export function blankHtml() {
 
 export function pauseHtml(o) {
   return `<div class="card dialog pause" role="dialog" aria-modal="true" aria-labelledby="pause-h">
+    ${band()}
     <h2 id="pause-h">Paused</h2>
     <nav class="menu">
       <button class="btn primary" data-close>Resume</button>
@@ -298,6 +308,7 @@ export function helpHtml(tab, lex, twos = []) {
       <p>${TILES ? Object.values(TILES).reduce((a, t) => a + t.count, 0) : 0} lettered tiles and ${BLANKS} blank <b>Steam tiles</b>, which stand for any letter and score nothing. Counts and points were worked out from how often each letter appears in playable words.</p>
       <div class="tchips">${tileRow}</div>`,
     words: `<h2>Hot Springs words</h2>
+      ${art.has('card-baths') ? `<img class="help-vig" src="${art.src('card-baths')}" alt="A bathhouse hall with a marble fountain, steam and a stained-glass dome">` : ''}
       <p>${lex.data.words.length} groups of everyday words belong to the town: <b>spring</b>, <b>steam</b>, <b>bathhouse</b>, <b>tufa</b>, <b>novaculite</b>, <b>derby</b>, <b>magnolia</b> and more. Form one, across or down, and it pays a bonus and opens a card from the town's history, with its source.</p>
       <ul class="legend plain">${Object.entries(lex.categories).map(([k, c]) => `<li><span class="cat-ic">${ICON.cat[c.icon]}</span><b>${esc(c.name)}</b></li>`).join('')}</ul>
       <p>Every word you find goes into your <b>Bathhouse Register</b>, from the title screen.</p>`,
@@ -307,6 +318,7 @@ export function helpHtml(tab, lex, twos = []) {
       <ul class="keys"><li><kbd>←↑→↓</kbd> move the cursor</li><li><kbd>A</kbd>–<kbd>Z</kbd> place that letter from your rack</li><li><kbd>Space</kbd> switch between across and down</li><li><kbd>Backspace</kbd> take back the last tile</li><li><kbd>Enter</kbd> play (with a button focused, <kbd>Enter</kbd> or <kbd>Space</kbd> presses that button instead)</li><li><kbd>Esc</kbd> take back all tiles</li><li><kbd>Shift</kbd>+<kbd>R</kbd> shuffle the rack (when nothing is placed)</li><li><kbd>Shift</kbd>+<kbd>S</kbd> swap · <kbd>Shift</kbd>+<kbd>P</kbd> pass · <kbd>Shift</kbd>+<kbd>H</kbd> hint</li><li><kbd>Shift</kbd>+<kbd>B</kbd> how the placed tiles score (or tap the strip under the board)</li><li><kbd>?</kbd> help · <kbd>Esc</kbd> menu (when nothing is placed)</li></ul>`,
   }[tab];
   return `<div class="sheet help">
+    ${band()}
     <header class="sheet-head"><h1>How to play</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     <div class="tabs" role="tablist">${tabs.map(([k, t]) => `<button role="tab" aria-selected="${k === tab}" data-tab="${k}">${t}</button>`).join('')}</div>
     <div class="help-body" role="tabpanel">${body}</div>
@@ -317,6 +329,7 @@ export function helpHtml(tab, lex, twos = []) {
 export function settingsHtml(st) {
   const seg = (key, opts, label) => `<div class="setrow"><span>${label}</span><div class="seg" role="radiogroup" aria-label="${label}">${opts.map(([v, t]) => `<button role="radio" aria-checked="${st[key] === v}" data-set="${key}" data-val="${v}">${t}</button>`).join('')}</div></div>`;
   return `<div class="sheet settings">
+    ${band()}
     <header class="sheet-head"><h1>Settings</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     ${seg('sound', [[true, 'On'], [false, 'Off']], 'Sound')}
     ${seg('fx', [[true, 'On'], [false, 'Off']], 'Sound effects')}
@@ -345,6 +358,7 @@ export function registerHtml(lex, reg, noSave) {
     }).join('')}</ul></section>`;
   }).join('');
   return `<div class="sheet register">
+    ${band()}
     <header class="sheet-head"><h1>Bathhouse Register</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     ${noSave ? `<p class="note warn" role="status">${NO_SAVE}</p>` : ''}
     <p class="note">Every Hot Springs word you play is signed in here. Tap a word to read its card.</p>
@@ -361,6 +375,7 @@ export function recordsHtml(st, o) {
   const order = (k) => PERSONAS.findIndex((p) => p.id === k.split(':')[0]) * 3 + ['easy', 'medium', 'hard'].indexOf(k.split(':')[1]);
   const rows = Object.entries(st.opp).filter(([k]) => persona(k.split(':')[0]) && LEVEL_NAME[k.split(':')[1]]).sort((a, b) => order(a[0]) - order(b[0]));
   return `<div class="sheet records">
+    ${band()}
     <header class="sheet-head"><h1>Records</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     ${st.games ? '' : '<p class="note">No games on the record yet. Finish a game against the computer and your score, wins and best plays are written here.</p>'}
     <h2>Games against the town</h2>
@@ -388,6 +403,7 @@ export function recordsHtml(st, o) {
 // ---------- about ----------
 export function aboutHtml(meta) {
   return `<div class="sheet about">
+    ${band()}
     <header class="sheet-head"><h1>About</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     <p><b>Bathhouse Letters</b> is part of Hot Springs Games, an open-source (MIT) collection of browser games set in Hot Springs, Arkansas. It's an original crossword word-tile game: the board, tiles, bonuses and rules were made for it, and nothing here is endorsed by any park, business or bathhouse.</p>
     <h2>Words</h2>

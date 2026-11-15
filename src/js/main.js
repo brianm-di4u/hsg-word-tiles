@@ -244,7 +244,7 @@ function wireScreen(name) {
       showScene('setup');
     }));
     scr.querySelectorAll('[data-name]').forEach((inp) => inp.addEventListener('input', () => { st.seats[+inp.dataset.name].name = inp.value; }));
-    scr.querySelectorAll('[data-persona]').forEach((sel) => sel.addEventListener('change', () => { st.seats[+sel.dataset.persona].persona = sel.value; showScene('setup'); }));
+    scr.querySelectorAll('[data-persona]').forEach((b) => b.addEventListener('click', () => { st.seats[+b.dataset.persona].persona = b.dataset.val; showScene('setup'); scr.querySelector(`[data-persona="${b.dataset.persona}"][data-val="${b.dataset.val}"]`).focus(); }));
     scr.querySelectorAll('[data-level]').forEach((sel) => sel.addEventListener('change', () => { st.seats[+sel.dataset.level].level = sel.value; showScene('setup'); scr.querySelector(`[data-level="${sel.dataset.level}"]`).focus(); }));
     scr.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => { st.seats.splice(+b.dataset.remove, 1); showScene('setup'); }));
     const add = scr.querySelector('[data-add]');

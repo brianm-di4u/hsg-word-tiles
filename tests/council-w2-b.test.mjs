@@ -8,6 +8,8 @@ import { SUPPLEMENT } from '../src/js/supplement.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const settingsKey = 'hs-letters-settings-v1';
+// the opponent is a row of portrait cards (S4-06); the chosen one is the card with aria-checked
+const opponent = (t) => t.page.getAttribute('[data-persona="1"][aria-checked="true"]', 'data-val');
 const stored = (t) => t.page.evaluate((k) => JSON.parse(localStorage.getItem(k) || '{}'), settingsKey);
 const fresh = () => ({ ms: {}, plays: 0, points: 0, themed: 0, full: 0, featured: 0, themedPlays: 0, swap: 0, pass: 0, moves: 0 });
 
@@ -79,17 +81,17 @@ export const tests = [
     async run(t) {
       await ready(t);
       await t.page.click('#screen [data-go="setup"]');
-      t.equal(await t.page.inputValue('[data-persona="1"]'), 'hollis', 'the default opponent is Hollis');
+      t.equal(await opponent(t), 'hollis', 'the default opponent is Hollis');
       t.equal(await t.page.inputValue('[data-level="1"]'), 'medium', 'his usual level is Medium');
       t.expect(/common words and all the short ones/.test(await t.page.textContent('[data-level-note="1"]')), 'a sentence says what Medium means');
-      await t.page.selectOption('[data-persona="1"]', 'opal');
+      await t.page.click('[data-persona="1"][data-val="opal"]');
       t.equal(await t.page.inputValue('[data-level="1"]'), 'easy', 'Opal starts at Easy');
       await t.page.selectOption('[data-level="1"]', 'hard');
       t.expect(/every word in the book/.test(await t.page.textContent('[data-level-note="1"]')), 'the sentence follows the level');
-      await t.page.selectOption('[data-persona="1"]', 'lucky');
+      await t.page.click('[data-persona="1"][data-val="lucky"]');
       t.equal(await t.page.inputValue('[data-level="1"]'), 'hard', 'changing the character keeps the level the player chose');
-      const opts = await t.page.$$eval('[data-persona="1"] option', (o) => o.map((x) => x.textContent));
-      t.expect(opts.every((x) => !/Easy|Medium|Hard/.test(x)), 'the character list no longer names a level');
+      const cards = await t.page.$$eval('[data-persona="1"]', (o) => o.map((x) => x.textContent));
+      t.expect(cards.every((x) => /Usually (Easy|Medium|Hard)/.test(x)), 'each character card names only the level it usually plays at');
       await t.checkLayout({ allowScrollY: true });
       await t.shot('S3-02-setup');
       await t.page.click('#screen [data-start]');
@@ -112,7 +114,7 @@ export const tests = [
       await t.page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ lastSetup: { hints: true, seats: [{ kind: 'human', name: '' }, { kind: 'ai', persona: 'opal', level: 'godlike' }] } })), settingsKey);
       await t.reload();
       await t.page.click('#screen [data-go="setup"]');
-      t.equal(await t.page.inputValue('[data-persona="1"]'), 'hollis', 'the damaged setup is dropped');
+      t.equal(await opponent(t), 'hollis', 'the damaged setup is dropped');
       t.equal(await t.page.inputValue('[data-level="1"]'), 'medium', 'with the default level');
     },
   },
