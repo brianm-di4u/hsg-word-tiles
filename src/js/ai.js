@@ -59,15 +59,21 @@ export const rackMinus = (rack, tiles) => {
   return left;
 };
 
-// Empty Boiling Spring squares a move puts within reach of the opponent (same line, ≤ 3 away, or adjacent).
-function openedBoiling(board, tiles) {
+// What Hard takes off a play for each empty word-multiplier square it puts within reach of the opponent: a Boiling Spring
+// (triple word) and, since wave 3, a Steam square (double word). Before wave 3 only the Boiling Springs counted (steam was 0).
+export const DEFENSE = { boiling: 4, steam: 1.5 };
+
+// Empty Boiling Spring and Steam squares a move puts within reach of the opponent (same line, ≤ 3 away, or adjacent),
+// weighted by DEFENSE.
+export function openedPremium(board, tiles) {
   let n = 0;
   for (let i = 0; i < N * N; i++) {
-    if (SQUARE[i] !== 'b' || board[i]) continue;
+    const w = SQUARE[i] === 'b' ? DEFENSE.boiling : SQUARE[i] === 's' ? DEFENSE.steam : 0;
+    if (!w || board[i]) continue;
     const r = Math.floor(i / N), c = i % N;
     for (const t of tiles) {
       const tr = Math.floor(t.i / N), tc = t.i % N;
-      if ((tr === r && Math.abs(tc - c) <= 3) || (tc === c && Math.abs(tr - r) <= 3)) { n++; break; }
+      if ((tr === r && Math.abs(tc - c) <= 3) || (tc === c && Math.abs(tr - r) <= 3)) { n += w; break; }
     }
   }
   return n;
@@ -99,7 +105,7 @@ export function chooseAction(dict, lex, s, opts = {}) {
     if (bag === 0) e -= 2 * rackScore(left);                       // going out matters, leave doesn't
     else e += L.leave * (style ? style.leaveScale : 1) * leaveValue(left) * Math.min(1, bag / RACK);
     if (style && bag > 0) e += style.premium * premiumPoints(m);
-    if (L.defense && bag > 0) e -= 4 * openedBoiling(s.board, m.tiles);
+    if (L.defense && bag > 0) e -= openedPremium(s.board, m.tiles);
     return e;
   };
   const ranked = moves.slice(0, 60).map((m) => ({ m, e: equity(m) })).sort((a, b) => b.e - a.e || (a.m.key < b.m.key ? -1 : 1));
