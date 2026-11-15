@@ -2,6 +2,7 @@
 // S6-11 (a hint survives a reload), S1-02 (Enter and Space on buttons), S1-05 (tile settle), S2-05 (score breakdown),
 // S4-06 (setup cards) and S4-25 (docs).
 import { emptyStats, applyGame, hintsUsed } from '../src/js/stats.js';
+import { TILES, BLANKS } from '../src/js/tiles.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const SET = 'hs-letters-settings-v1', SAVE = 'hs-letters-save-v1';
@@ -78,6 +79,55 @@ export const tests = [
       t.expect(/1 hint used/.test(text) && !/Unaided/.test(text), 'a game with one hint says so');
       await t.shot('S3-06-results-hinted');
       await t.checkLayout({ allowScrollY: true });
+    },
+  },
+
+  // ---------- S3-12 ----------
+  {
+    name: 'S3-12 the pause sheet opens an Unseen tiles panel that counts the bag and the other racks, never your own',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(5);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      await t.page.click('#b-menu');
+      t.expect(await t.page.locator('#modal [data-open="tracker"]').count() === 1, 'the pause sheet has an Unseen tiles button');
+      await t.page.click('#modal [data-open="tracker"]');
+      const g = (await t.state()).game, mine = g.players[0].rack;
+      const want = {};
+      for (const [l, x] of Object.entries(TILES)) want[l] = x.count;
+      want['?'] = BLANKS;
+      for (const c of g.board) if (c) want[c.blank ? '?' : c.l]--;
+      for (const l of mine) want[l]--;
+      const got = await t.page.$$eval('#modal .tchip.tk', (els) => els.map((e) => [e.querySelector('b').textContent || '?', +e.querySelector('small').textContent.replace('×', '')]));
+      t.equal(got.length, 27, 'twenty-six letters and the blank');
+      for (const [l, n] of got) t.equal(n, want[l], 'unseen count for ' + l);
+      t.equal(got.reduce((a, [, n]) => a + n, 0), g.bag.length + g.players[1].rack.length, 'the total is the bag and the other rack');
+      t.expect(/91 tiles you cannot see/.test(await t.page.textContent('#modal .tracker')), 'the panel says how many in words');
+      await t.checkLayout({ allowScrollY: true });
+      await t.shot('S3-12-tracker');
+      await t.page.click('#modal [data-open="pause"]');
+      t.expect(await t.page.locator('#modal .pause').count() === 1, 'Back returns to the pause sheet');
+      await t.page.keyboard.press('Escape');
+      t.equal((await t.state()).dialog, null, 'Escape closes it');
+    },
+  },
+  {
+    name: 'S3-12 the panel is not offered while a rack is hidden in pass and play',
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seats: [{ kind: 'human', name: 'Ann' }, { kind: 'human', name: 'Bo' }] });
+      await t.waitIdle(8000);
+      t.expect((await t.state()).privacy, 'the privacy screen is up');
+      await t.game('act', 'open', 'pause');
+      t.equal(await t.page.locator('#modal [data-open="tracker"]').count(), 0, 'no tracker while the next person has not taken the device');
+      await t.game('act', 'close');
+      await t.game('act', 'reveal');
+      await t.game('act', 'open', 'pause');
+      t.equal(await t.page.locator('#modal [data-open="tracker"]').count(), 1, 'it is offered once the rack is showing');
     },
   },
 ];

@@ -3,7 +3,7 @@ import { PERSONAS, persona, LEVEL_NAME, LEVEL_BLURB, seatLevel, HUMAN_COLORS } f
 import { SHORT } from './voices.js';
 import { TILES, BLANKS } from './tiles.js';
 import { FULL_SOAK, FEATURED_BONUS } from './score.js';
-import { DAILY_TURNS } from './engine.js';
+import { DAILY_TURNS, unseen } from './engine.js';
 import { art } from './art.js';
 import { hintsUsed } from './stats.js';
 
@@ -200,6 +200,7 @@ export function pauseHtml(o) {
     <nav class="menu">
       <button class="btn primary" data-close>Resume</button>
       <button class="btn" data-open="ledger">Steam ledger</button>
+      ${o.tracker ? '<button class="btn" data-open="tracker">Unseen tiles</button>' : ''}
       <button class="btn" data-go="help">How to play</button>
       <button class="btn" data-go="settings">Settings</button>
       <button class="btn quiet" data-go="title">Save and quit to title</button>
@@ -209,6 +210,16 @@ export function pauseHtml(o) {
 
 export function ledgerHtml(s, lex) {
   return `<div class="card dialog ledger-dlg" role="dialog" aria-modal="true" aria-labelledby="ledger-h"><h2 id="ledger-h">Steam ledger</h2><ol class="log">${logHtml(s, lex) || '<li>No plays yet.</li>'}</ol><div class="dlg-btns"><button class="btn primary" data-close>Close</button></div></div>`;
+}
+
+// The tile tracker: every letter the player cannot see, from the engine's own count (the bag and the other racks).
+export function trackerHtml(s, seat) {
+  const left = unseen(s, seat), total = Object.values(left).reduce((a, n) => a + n, 0);
+  const chip = (l, label, value) => { const n = left[l] || 0; return `<span class="tchip tk${n ? '' : ' out'}" aria-label="${label}: ${n} unseen"><b>${l === '?' ? '' : l}</b>${l === '?' ? '<i>blank</i>' : `<i>${value}</i>`}<small>×${n}</small></span>`; };
+  return `<div class="card dialog tracker" role="dialog" aria-modal="true" aria-labelledby="tk-h"><h2 id="tk-h">Unseen tiles</h2>
+    <p>${plural(total, 'tile')} you cannot see: the bag and ${s.players.length > 1 ? 'the other racks' : 'nothing else'}. The small figure is each letter's points.</p>
+    <div class="tchips">${Object.keys(TILES).map((l) => chip(l, l, TILES[l].value)).join('')}${chip('?', 'Blank', 0)}</div>
+    <div class="dlg-btns"><button class="btn quiet" data-open="pause">Back</button><button class="btn primary" data-close>Close</button></div></div>`;
 }
 
 export function privacyHtml(p, k) {

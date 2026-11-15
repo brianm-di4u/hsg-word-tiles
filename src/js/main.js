@@ -803,6 +803,12 @@ function coachPlayed() {
 }
 
 // ---------- dialogs ----------
+// whose tiles the tracker counts around: the person to play, or the one person during the computer's turn; none while a rack is hidden
+function trackerSeat() {
+  if (!G.s || G.privacy) return -1;
+  if (cur().kind === 'human') return G.s.cur;
+  return humans() === 1 ? G.s.players.findIndex((p) => p.kind === 'human') : -1;
+}
 function openDialog(name, arg) {
   const m = $('#modal');
   cancelDrag();
@@ -810,7 +816,8 @@ function openDialog(name, arg) {
   let html = '';
   if (name === 'swap') html = UI.swapHtml(cur().rack);
   else if (name === 'blank') html = UI.blankHtml();
-  else if (name === 'pause') html = UI.pauseHtml({ mobile: isNarrow() });
+  else if (name === 'pause') html = UI.pauseHtml({ mobile: isNarrow(), tracker: trackerSeat() >= 0 });
+  else if (name === 'tracker') html = UI.trackerHtml(G.s, trackerSeat());
   else if (name === 'ledger') html = UI.ledgerHtml(G.s, G.lex);
   else if (name === 'fact') html = `<div class="dialog-wrap" role="dialog" aria-modal="true" aria-label="Hot Springs word card">${UI.factHtml(arg.entry, G.lex, arg.form, '<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div>')}</div>`;
   else if (name === 'confirm') html = `<div class="card dialog" role="dialog" aria-modal="true" aria-labelledby="cf-h"><h2 id="cf-h">${esc(arg.title)}</h2><p>${esc(arg.text)}</p><div class="dlg-btns"><button class="btn quiet" data-close>Cancel</button><button class="btn primary" data-ok>${esc(arg.ok)}</button></div></div>`;
