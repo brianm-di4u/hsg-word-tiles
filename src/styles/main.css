@@ -578,3 +578,6 @@ body.theme-dark #preview .bd { background: #0C0A16; }
 .dday i { font-style: normal; color: var(--accent); font-size: 0.8rem; min-height: 1em; }
 .dday:not(.on) { opacity: 0.55; }
 .par { margin: 4px 0; font-weight: 600; }
+
+/* wave 3, batch D: the stall note */
+#preview .stall { color: #F3DD8B; }

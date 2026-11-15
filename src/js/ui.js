@@ -428,6 +428,16 @@ export function aboutHtml(meta) {
 }
 
 // ---------- game over and daily results ----------
+// How near a stalled game is to its end. The game ends when every seat has passed or swapped twice in a row (engine.js), so within
+// one round of that the player is told: `passing` words it for the Pass confirmation (this pass is one of the turns), else for the strip.
+export function stallNote(s, passing) {
+  if (!s || s.over || s.mode === 'daily' || !s.players) return '';
+  const n = s.players.length, left = 2 * n - (s.scoreless || 0);
+  if (left > n) return '';
+  if (passing) return left <= 1 ? 'Passing now ends the game.' : `After this, ${left - 1} more ${left - 1 === 1 ? 'turn' : 'turns'} without a score would end the game.`;
+  return left <= 1 ? 'A turn with no score now ends the game.' : `${left} more turns without a score end the game.`;
+}
+
 export function overHtml(s, lex, dinfo, extra = {}) {
   const order = s.players.map((p, k) => ({ p, k })).sort((a, b) => b.p.score - a.p.score);
   const win = s.result.winners;

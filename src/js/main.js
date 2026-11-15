@@ -599,7 +599,7 @@ function doPlay() {
 function doPass() {
   if (!humanCanAct()) return;
   if (G.staged.length) recallAll();
-  confirmDialog('Pass this turn?', 'You keep your tiles and score nothing.', 'Pass', () => { const r = E.apply(G.s, { type: 'pass' }, ctx()); if (r.ok) afterAction(r.entry, false); });
+  confirmDialog('Pass this turn?', `You keep your tiles and score nothing.${UI.stallNote(G.s, true) ? ` ${UI.stallNote(G.s, true)}` : ''}`, 'Pass', () => { const r = E.apply(G.s, { type: 'pass' }, ctx()); if (r.ok) afterAction(r.entry, false); });
 }
 function doSwap() {
   if (!humanCanAct()) return;
@@ -771,6 +771,8 @@ function renderPreview() {
   else if (G.lastLine && G.bark) html = `<span class="bark"><b>${esc(SHORT[G.bark.persona] || '')}:</b> “${esc(G.bark.text)}”</span><span class="said">${esc(G.lastLine)}</span>`;
   else if (G.lastLine) html = esc(G.lastLine);
   else html = cur().kind === 'human' ? (G.s.move === 0 ? (isNarrow() ? 'Start on the centre square.' : 'Start on the Display Spring in the centre.') : (isNarrow() ? 'Drag tiles to the board.' : 'Drag tiles to the board to make a word.')) : '';
+  const stall = !G.s.over && !G.aiBusy && !G.hintBusy && !G.flash && !G.preview && !G.hoverInfo && cur().kind === 'human' ? UI.stallNote(G.s) : '';
+  if (stall) html += `<span class="said stall">${esc(stall)}</span>`;
   el.className = cls; el.innerHTML = html;
 }
 

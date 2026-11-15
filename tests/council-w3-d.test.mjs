@@ -1,5 +1,6 @@
 // Wave 3, batch D: S4-19, S1-04, S1-07, S2-02, S2-06, S2-09, S4-05, S4-09, S2-14 and S3-15 (feedback, teaching, help and records).
 import { BATHHOUSES, ROWS, SIZE } from '../src/js/layout.js';
+import { stallNote } from '../src/js/ui.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false })); };
@@ -181,6 +182,50 @@ export const tests = [
       t.expect(rows.every((r, k) => k === 0 || r > rows[k - 1]), 'each one is on a lower row than the one before (' + rows.join(',') + ')');
       for (const i of Object.keys(BATHHOUSES)) t.equal(ROWS[Math.floor(i / SIZE)][i % SIZE], 'B', 'square ' + i + ' is a Row square');
       for (const i of Object.keys(BATHHOUSES)) t.expect(BATHHOUSES[SIZE * SIZE - 1 - i] !== undefined, 'and it has a partner across the board (' + i + ')');
+    },
+  },
+  // ---------- S2-06 ----------
+  {
+    name: 'S2-06 the stall note counts what is left: nothing early, a count within one round, and a plain warning on the last turn',
+    node: true,
+    async run(t) {
+      const g = (n, scoreless, extra = {}) => ({ mode: 'play', over: false, players: Array.from({ length: n }, () => ({})), scoreless, ...extra });
+      t.equal(stallNote(g(2, 0)), '', 'two seats, a fresh game: nothing');
+      t.equal(stallNote(g(2, 1)), '', 'one pass: nothing');
+      t.equal(stallNote(g(2, 2)), '2 more turns without a score end the game.', 'two seats, two in a row: two more end it');
+      t.equal(stallNote(g(2, 3)), 'A turn with no score now ends the game.', 'three: the next one');
+      t.equal(stallNote(g(2, 3), true), 'Passing now ends the game.', 'the same, worded for the Pass box');
+      t.equal(stallNote(g(2, 2), true), 'After this, 1 more turn without a score would end the game.', 'two in a row, passing: one more after this');
+      t.equal(stallNote(g(4, 3)), '', 'four seats: the limit is eight, three is not near');
+      t.equal(stallNote(g(4, 4)), '4 more turns without a score end the game.', 'four seats, one round in');
+      t.equal(stallNote(g(2, 3, { mode: 'daily' })), '', 'a Daily has no stall rule');
+      t.equal(stallNote(g(2, 3, { over: true })), '', 'a finished game has no note');
+    },
+  },
+  {
+    name: 'S2-06 in the game the strip and the Pass box warn when passing would end the game, and say nothing early',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await start(t);
+      let s = await t.state();
+      await t.game('setState', { game: { ...s.game, scoreless: 1 } });
+      t.expect(!/without a score/.test(await t.page.textContent('#preview')), 'one pass in a row: the strip says nothing');
+      s = await t.state();
+      await t.game('setState', { game: { ...s.game, scoreless: 3 } });
+      t.expect(/A turn with no score now ends the game/.test(await t.page.textContent('#preview')), 'three in a row: the strip warns (' + (await t.page.textContent('#preview')).trim() + ')');
+      await t.page.click('[data-act="pass"]');
+      await t.page.waitForSelector('.dialog');
+      const dlg = await t.page.textContent('.dialog');
+      t.expect(/Passing now ends the game\./.test(dlg), 'the Pass box says so (' + dlg.trim().slice(0, 120) + ')');
+      await t.shot('S2-06-pass-ends');
+      await t.page.keyboard.press('Escape');
+      await t.waitIdle(3000);
+      s = await t.state();
+      await t.game('setState', { game: { ...s.game, scoreless: 2 } });
+      await t.page.click('[data-act="pass"]');
+      await t.page.waitForSelector('.dialog');
+      t.expect(/1 more turn without a score would end the game/.test(await t.page.textContent('.dialog')), 'two in a row: the Pass box counts one more');
     },
   },
   // ---------- S2-09 ----------
