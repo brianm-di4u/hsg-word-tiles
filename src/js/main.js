@@ -1047,11 +1047,11 @@ function drawData(now) {
 }
 function tick() { draw(); }
 
-// The corner button zooms in (on a phone, where the squares are small) and, once zoomed, shows the whole board again.
+// On a phone, where the squares are small, the button in the top bar zooms in and, once zoomed, shows the whole board again (the one in the board's corner does the same, but only when zoomed).
 const ZOOM_IN = 1.7;   // how far Zoom in goes: the squares grow from about 23 px to about 39 px on a 360 px phone
 function syncZoomBtn() {
-  const b = $('#b-zoom'), out = R.view.zoom > 1.01;
-  b.hidden = !out && !isNarrow();
+  const out = R.view.zoom > 1.01, b = $('#b-zoomin');
+  $('#b-zoom').hidden = !out;
   b.dataset.mode = out ? 'out' : 'in';
   b.setAttribute('aria-label', out ? 'Show the whole board' : 'Zoom in on the board');
 }
@@ -1408,7 +1408,8 @@ function wireStatic() {
   $('#b-sound').addEventListener('click', () => { unlock(); G.settings.sound = !G.settings.sound; saveSettings(); if (G.settings.sound) sfx('place'); });
   // the strip under the board opens the breakdown of the staged play (its button is the keyboard's way in)
   $('#preview').addEventListener('click', toggleBreakdown);
-  $('#b-zoom').addEventListener('click', () => { if (R.view.zoom > 1.01) animateView(1, R.U / 2, R.U / 2); else zoomInAt(); });
+  $('#b-zoom').addEventListener('click', () => animateView(1, R.U / 2, R.U / 2));
+  $('#b-zoomin').addEventListener('click', () => { if (R.view.zoom > 1.01) animateView(1, R.U / 2, R.U / 2); else zoomInAt(); });
   const b = $('#board');
   b.addEventListener('pointerdown', boardDown);
   window.addEventListener('pointermove', onMove, { passive: false });

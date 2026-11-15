@@ -174,24 +174,24 @@ export const tests = [
       const zoom = async () => (await t.state()).view.zoom;
       t.equal(await zoom(), 1, 'the board starts whole: it never zooms by itself');
       const v0 = (await t.state()).view;
-      t.expect(await t.page.locator('#b-zoom').isVisible(), 'the zoom button is there before anything is zoomed');
-      t.equal(await t.page.getAttribute('#b-zoom', 'aria-label'), 'Zoom in on the board', 'and says what it does');
+      t.expect(await t.page.locator('#b-zoomin').isVisible(), 'the Zoom in button is in the top bar before anything is zoomed');
+      t.equal(await t.page.getAttribute('#b-zoomin', 'aria-label'), 'Zoom in on the board', 'and says what it does');
       const [m] = await t.game('act', 'moves', 1);
       await t.game('act', 'stage', m.tiles.slice(0, 1));
       await t.shot('S1-03-zoom-button');
-      await t.page.click('#b-zoom');
-      await t.page.waitForFunction(() => { const v = window.__game.getState().view; return Math.abs(v.zoom - 1.7) < 0.01 && document.querySelector('#b-zoom').getAttribute('aria-label') === 'Show the whole board'; }, null, { timeout: 5000 });
+      await t.page.click('#b-zoomin');
+      await t.page.waitForFunction(() => { const v = window.__game.getState().view; return Math.abs(v.zoom - 1.7) < 0.01 && document.querySelector('#b-zoomin').getAttribute('aria-label') === 'Show the whole board'; }, null, { timeout: 5000 });
       const v = (await t.state()).view, frame = (2 * v0.cx - 15) / 2;   // the board's frame, from where the view was centred
       const i = m.tiles[0].i;
       t.expect(Math.abs(v.cx - (frame + (i % 15) + 0.5)) < 1.5 && Math.abs(v.cy - (frame + Math.floor(i / 15) + 0.5)) < 1.5, `the view is centred on the placed tile (centre ${v.cx}, ${v.cy}; tile column ${i % 15}, row ${Math.floor(i / 15)})`);
-      t.equal(await t.page.getAttribute('#b-zoom', 'aria-label'), 'Show the whole board', 'the button now shows the whole board');
+      t.equal(await t.page.getAttribute('#b-zoomin', 'aria-label'), 'Show the whole board', 'the button now shows the whole board');
       await t.shot('S1-03-zoomed-in');
       // a tile can still be put on the zoomed board with a finger-sized square
       const [m2] = await t.game('act', 'moves', 1);
       await t.game('act', 'recall');
       t.expect((await t.game('act', 'stage', m2.tiles)).ok, 'tiles go on the zoomed board');
-      await t.page.click('#b-zoom');
-      await t.page.waitForFunction(() => document.querySelector('#b-zoom').getAttribute('aria-label') === 'Zoom in on the board', null, { timeout: 5000 });
+      await t.page.click('#b-zoomin');
+      await t.page.waitForFunction(() => document.querySelector('#b-zoomin').getAttribute('aria-label') === 'Zoom in on the board', null, { timeout: 5000 });
       t.equal(await zoom(), 1, 'and back to Zoom in, with the whole board showing');
       await t.checkLayout();
     },
@@ -205,7 +205,7 @@ export const tests = [
       await t.seed(5);
       await t.game('newGame', { seats: SEATS });
       await t.waitIdle(8000);
-      t.expect(!(await t.page.locator('#b-zoom').isVisible()), 'hidden on a whole board');
+      t.expect(!(await t.page.locator('#b-zoom').isVisible()) && !(await t.page.locator('#b-zoomin').isVisible()), 'neither zoom button shows on a whole board');
       await t.game('act', 'zoom', 1.5);
       t.expect(await t.page.locator('#b-zoom').isVisible(), 'shown once zoomed');
       t.equal(await t.page.getAttribute('#b-zoom', 'aria-label'), 'Show the whole board', 'and it shows the whole board');
