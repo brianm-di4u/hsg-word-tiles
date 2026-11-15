@@ -32,7 +32,7 @@ const G = {
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
   preview: null, hint: null, last: new Set(), anim: new Map(), animUntil: 0,
-  breakdown: false, settle: new Map(), settleUntil: 0, aiBusy: false, aiTimer: 0, aiToken: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
+  breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
 };
 window.__G = G;
@@ -967,11 +967,15 @@ function draw() {
 }
 function frame(now) {
   raf = 0;
+  // the time since the last frame of a running animation is a real frame interval; frames drawn for any other reason are not
+  const interval = G.chainAt && now > G.chainAt && now - G.chainAt < 250 ? now - G.chainAt : 0;
+  G.chainAt = 0;
   if (G.scene !== 'game' || !G.s) return;
   const cv = $('#board'), c2 = cv.getContext('2d');
   const d = drawData(now);
   if (B3.B3.on) {
     B3.render(d); d.flatOnly = true; d.hideTiles = true; d.mode3d = true; d.cellPx = B3.cellPx();
+    if (interval) B3.noteInterval(interval);
     if (G.settings.board3d === 'auto' && B3.slowFrames()) { fallback2D('slow'); return; }
   }
   R.drawFrame(c2, d);
@@ -981,9 +985,9 @@ function frame(now) {
     c2.setTransform(R.view.dpr, 0, 0, R.view.dpr, 0, 0);
     R.drawMinimap(c2, G.s.board, G.staged, [R.view.cx - wCells / 2, R.view.cy - hCells / 2, wCells, hCells]);
   }
-  if (G.anim.size && now < G.animUntil + 50) draw();
+  if (G.anim.size && now < G.animUntil + 50) { G.chainAt = now; draw(); }
   else if (G.anim.size) G.anim.clear();
-  if (G.settle.size) { if (now < G.settleUntil) draw(); else G.settle.clear(); }
+  if (G.settle.size) { if (now < G.settleUntil) { G.chainAt = now; draw(); } else G.settle.clear(); }
   if (G.viewAnim) stepViewAnim(now);
 }
 function drawData(now) {
@@ -1010,7 +1014,7 @@ function stepViewAnim(now) {
   const a = G.viewAnim, k = Math.min(1, (now - a.t0) / a.ms), e = 1 - Math.pow(1 - k, 3);
   R.view.zoom = a.from.zoom + (a.to.zoom - a.from.zoom) * e; R.view.cx = a.from.cx + (a.to.cx - a.from.cx) * e; R.view.cy = a.from.cy + (a.to.cy - a.from.cy) * e;
   R.clampView();
-  if (k >= 1) { G.viewAnim = null; layout(); } else draw();
+  if (k >= 1) { G.viewAnim = null; layout(); } else { G.chainAt = now; draw(); }
 }
 const pxPerCell = () => (B3.B3.on ? B3.cellPx() : R.scale());
 
@@ -1457,6 +1461,7 @@ window.__game = {
       case 'toast': toast(a[0]); return true;
       case 'has': return has(G.dict, a[0]);
       case 'b3': return B3.debug ? B3.debug() : null;
+      case 'b3feed': if (a[2]) B3.B3.intervals.length = 0; for (let k = 0; k < a[1]; k++) B3.noteInterval(a[0]); return B3.slowFrames();   // n frame intervals of `ms` (after clearing the old ones if a[2]), as if animated frames had taken that long
       case 'renderSfx': return renderCue(a[0], a[1] ?? 0.35, a[2] || {});   // one sound offline, measured (nobody can listen in a test run)
       case 'timeAi': {
         // n AI turns at `level` from the current position, timed (the moves are applied outside the UI)

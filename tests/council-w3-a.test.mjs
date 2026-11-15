@@ -377,4 +377,51 @@ export const tests = [
       t.expect(!/with no image files./.test(guide), 'the guide no longer says there are no image files without the exception');
     },
   },
+
+  // ---------- S6-09 ----------
+  {
+    name: 'S6-09 the 3D board gives way to the flat one when the real frame intervals are slow, and not when they are healthy',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(31);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      const s0 = await t.state();
+      if (!s0.view.mode3d) { t.log('3D is off here (' + s0.view.reason3d + '), so the watchdog has nothing to switch off'); return; }
+      t.equal(await t.game('act', 'b3feed', 16, 80, true), false, 'healthy 16 ms frames do not trip it');
+      t.equal(await t.game('act', 'b3feed', 27, 80, true), false, 'nor do 27 ms frames');
+      t.equal(await t.game('act', 'b3feed', 40, 59, true), false, 'fifty-nine slow frames are not yet enough');
+      t.equal(await t.game('act', 'b3feed', 40, 1), true, 'sixty slow frames are');
+      await t.game('act', 'zoom', 1);
+      await t.page.waitForFunction(() => { const v = window.__game.getState().view; return !v.mode3d && v.reason3d === 'slow'; }, null, { timeout: 5000 });
+      await t.shot('S6-09-flat-fallback');
+    },
+  },
+  {
+    name: 'S6-09 frames of a running animation are timed, other frames are not',
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(31);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      const s0 = await t.state();
+      if (!s0.view.mode3d) { t.log('3D is off here (' + s0.view.reason3d + ')'); return; }
+      t.equal((await t.game('act', 'b3')).intervals.length, 0, 'nothing is timed before an animation');
+      for (let k = 0; k < 4; k++) { await t.game('act', 'zoom', 1); await t.waitFrames(3); }
+      t.equal((await t.game('act', 'b3')).intervals.length, 0, 'frames drawn for other reasons are not timed');
+      // a zoom-out animation is a run of chained frames; repeat it until some are timed (a slow machine may need more than one)
+      let iv = [];
+      for (let k = 0; k < 8 && iv.length < 2; k++) {
+        await t.game('act', 'zoom', 1.8, 7, 7);
+        await t.page.click('#b-zoom');
+        await t.page.waitForFunction(() => !window.__G.viewAnim, null, { timeout: 5000 });
+        iv = (await t.game('act', 'b3')).intervals;
+      }
+      t.expect(iv.length >= 2, 'the frames of the zoom were timed (' + iv.length + ')');
+      t.expect(iv.every((x) => x > 0 && x < 250), 'each is a plausible frame interval, under a quarter of a second');
+    },
+  },
 ];

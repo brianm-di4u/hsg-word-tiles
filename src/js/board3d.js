@@ -11,7 +11,7 @@ import { art } from './art.js';
 import { N } from './score.js';
 
 const U = R.U, HALF = U / 2, TOP = 0.3;   // board face height in world units (1 unit = 1 square)
-export const B3 = { on: false, mode: 'auto', tried: false, reason: '', renderer: null, frames: [], tiles: [], W: 0, H: 0, dpr: 1, dark: false, texKey: '' };
+export const B3 = { on: false, mode: 'auto', tried: false, reason: '', renderer: null, frames: [], intervals: [], tiles: [], W: 0, H: 0, dpr: 1, dark: false, texKey: '' };
 export function want(mode) { B3.mode = mode; B3.tried = false; }
 
 // ---------- capability ----------
@@ -157,7 +157,7 @@ function tileMesh() {
 export function destroy() {
   if (!B3.renderer) return;
   B3.renderer.dispose(); B3.renderer.forceContextLoss?.();
-  B3.on = false; B3.renderer = null; R.proj.fn = null; faceCache.clear();
+  B3.on = false; B3.renderer = null; R.proj.fn = null; faceCache.clear(); B3.intervals.length = 0;
 }
 
 export function setTheme(theme) {
@@ -252,7 +252,17 @@ export function render(d) {
   B3.renderer.render(B3.scene, B3.camera);
   const dt = performance.now() - t0; B3.frames.push(dt); if (B3.frames.length > 90) B3.frames.shift();
 }
-export function slowFrames() { if (B3.frames.length < 60) return false; const a = B3.frames.slice().sort((x, y) => x - y); return a[a.length >> 1] > 34; }
+// The flat board takes over when the 3D one is too slow. Two measures, each a median over the last 60 or more frames:
+// the time render() takes to hand the frame to the GPU (software GL is slow there), and the real time between frames
+// while an animation runs (a GPU-bound phone hands frames over quickly and then shows them late; only this one sees it).
+const SUBMIT_MS = 34;     // submit median above this falls back (unchanged)
+const FRAME_MS = 28;      // frame-interval median above this, about 35 frames a second, falls back (new in wave 3)
+const median = (a) => a.slice().sort((x, y) => x - y)[a.length >> 1];
+export function noteInterval(ms) { B3.intervals.push(ms); if (B3.intervals.length > 90) B3.intervals.shift(); }
+export function slowFrames() {
+  if (B3.frames.length >= 60 && median(B3.frames) > SUBMIT_MS) return true;
+  return B3.intervals.length >= 60 && median(B3.intervals) > FRAME_MS;
+}
 
 // board cells → screen px (for overlays), and screen px → square index (for input)
 const tmp = new THREE.Vector3();
@@ -274,4 +284,4 @@ export function cellAt(x, y) {
 }
 // approximate on-screen size of one square near the centre (for line widths)
 export function cellPx() { const [x0, y0] = screenOf(HALF - 0.5, HALF); const [x1, y1] = screenOf(HALF + 0.5, HALF); return Math.hypot(x1 - x0, y1 - y0); }
-export function debug() { return { on: B3.on, reason: B3.reason, tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, frames: B3.frames.length }; }
+export function debug() { return { on: B3.on, reason: B3.reason, tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, frames: B3.frames.length, intervals: B3.intervals.slice() }; }
