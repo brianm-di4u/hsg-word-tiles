@@ -1214,17 +1214,19 @@ function boardDown(e) {
   capture($('#board'), e.pointerId);
 }
 
+// what a square is, in a sentence: the strip shows it under the mouse, and after a tap on a phone (no hover there)
+function squareInfo(i) {
+  const k = SQUARES[i];
+  if (k === 'B') return `${BATHS[i]} Bathhouse, on Bathhouse Row: a Hot Springs word over it earns +${ROW_BONUS}`;
+  return SQUARE_INFO[k] || null;
+}
 const SQUARE_INFO = { w: 'Warm spring: doubles the letter on it', h: 'Hot spring: triples the letter on it', s: 'Steam: doubles the whole word', b: 'Boiling Spring: triples the whole word', '*': 'The Display Spring: the first word covers it' };
 function hoverSquare(e) {
   if (G.drag || e.pointerType !== 'mouse' || G.scene !== 'game' || !G.s) return;
   const r = $('#board').getBoundingClientRect();
   const i = pick(e.clientX - r.left, e.clientY - r.top);
   let info = null;
-  if (i >= 0 && !G.s.board[i] && !G.staged.length) {
-    const k = SQUARES[i];
-    if (k === 'B') info = `<b>${esc(BATHS[i])} Bathhouse</b> · Bathhouse Row: a Hot Springs word over it earns its bonus twice`;
-    else if (SQUARE_INFO[k]) info = SQUARE_INFO[k];
-  }
+  if (i >= 0 && !G.s.board[i] && !G.staged.length) info = squareInfo(i);
   if (info !== G.hoverInfo) { G.hoverInfo = info; renderPreview(); }
 }
 
@@ -1393,6 +1395,8 @@ function onUp(e) {
   const [x, y] = boardPoint(e);
   const i = pick(x, y);
   if (G.selected != null && humanCanAct() && i >= 0) { stage(G.selected, i); return; }
+  // a finger has no hover: a tap on an empty square says what it is, while nothing is placed
+  if (d.touch && i >= 0 && !G.s.board[i] && !G.staged.length && !G.aiBusy && !G.hintBusy && !G.dialog) { const info = squareInfo(i); if (info) flash(info, 3600); }
   if (i >= 0 && humanCanAct()) {
     if (G.cursor.on && G.cursor.i === i) G.cursor.dir = G.cursor.dir === 1 ? N : 1;
     G.cursor.i = i; G.cursor.on = !d.touch; draw();

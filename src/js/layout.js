@@ -20,4 +20,4 @@ export const ROWS = [
   "...B.s.w...h...",
   "......B...b...."
 ];
-export const BATHHOUSES = {"8":"Superior","26":"Hale","46":"Lamar","90":"Buckstaff","134":"Maurice","178":"Fordyce","198":"Ozark","216":"Quapaw"};
+export const BATHHOUSES = {"8":"Superior","26":"Hale","46":"Maurice","90":"Fordyce","134":"Quapaw","178":"Ozark","198":"Buckstaff","216":"Lamar"};

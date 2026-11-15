@@ -15,7 +15,7 @@ personas and square names are game logic and are labelled as such on screen.
 | Steam and tufa visuals | Steam: white curls at 15–35 % alpha; tufa: gray terraces `#9A968C` / rim `#C8C3B6` | `research/visual-style-guide.md` §Thermal water |
 
 ## 2. Bathhouse Row squares
-Eight squares named for the eight historic bathhouses, placed clockwise round the board in the confirmed
+Eight squares named for the eight historic bathhouses, placed from the top of the board to the bottom in the confirmed
 north-to-south order **Superior, Hale, Maurice, Fordyce, Quapaw, Ozark, Buckstaff, Lamar**
 (`research/bathhouse-row-layout.md` §1, four sources). Each square's medallion uses that building's
 sourced detail (`research/visual-style-guide.md` §Architecture by building):

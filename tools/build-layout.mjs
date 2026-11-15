@@ -29,9 +29,10 @@ const ORBITS = [
   ['w', [2, 3]], ['w', [1, 7]], ['w', [3, 5]], ['w', [4, 2]], ['w', [6, 3]],
 ];
 const EXTRA = [['w', [7, 3]], ['w', [7, 11]]];
-// Bathhouse Row, north to south (research/bathhouse-row-layout.md §1), placed clockwise from the top.
+// Bathhouse Row, north to south (research/visual-style-guide.md, 'Skyline recipe and row order'). The eight squares keep their
+// places (a 180° pair each), listed top to bottom, so reading the board down the page gives the Row in its sourced order.
 const ROW = ['Superior', 'Hale', 'Maurice', 'Fordyce', 'Quapaw', 'Ozark', 'Buckstaff', 'Lamar'];
-const ROW_CELLS = [[0, 8], [1, 11], [8, 14], [11, 13], [14, 6], [13, 3], [6, 0], [3, 1]];
+const ROW_CELLS = [[0, 8], [1, 11], [3, 1], [6, 0], [8, 14], [11, 13], [13, 3], [14, 6]];
 
 const grid = Array.from({ length: N }, () => Array(N).fill('.'));
 const put = (k, [r, c]) => {

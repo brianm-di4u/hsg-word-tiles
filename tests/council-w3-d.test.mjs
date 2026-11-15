@@ -1,4 +1,5 @@
 // Wave 3, batch D: S4-19, S1-04, S1-07, S2-02, S2-06, S2-09, S4-05, S4-09, S2-14 and S3-15 (feedback, teaching, help and records).
+import { BATHHOUSES, ROWS, SIZE } from '../src/js/layout.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false })); };
@@ -136,6 +137,66 @@ export const tests = [
       for (const [name, g] of seen) t.equal(g.rack + ',' + g.play, base.rack + ',' + base.play, name + ': the rack and Play stay put (' + JSON.stringify(g) + ')');
       if (t.viewport === 'mobile') t.expect(base.prev >= 52, 'the strip is two lines high on a phone (' + base.prev + ' px, was 40)');
       await t.shot('S1-07-strip');
+    },
+  },
+  // ---------- S2-02 ----------
+  {
+    name: 'S2-02 a square says what it is: under the mouse on desktop, after a tap on a phone, with the bathhouse named and the Row bonus as it is now',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await start(t);
+      const at = async (i) => t.game('act', 'screen', i);
+      const say = async (i) => {
+        const [x, y] = await at(i);
+        if (t.viewport === 'mobile') await t.tap([x, y]); else await t.page.mouse.move(x, y);
+        await t.page.waitForFunction(() => /doubles|triples|Bathhouse|Display Spring/.test(document.querySelector('#preview').textContent), null, { timeout: 3000 });
+        return (await t.page.textContent('#preview')).trim();
+      };
+      const BATH = [[8, 'Superior'], [26, 'Hale'], [216, 'Lamar']];
+      for (const [i, name] of BATH) {
+        const txt = await say(i);
+        t.expect(txt.includes(name + ' Bathhouse') && /\+20/.test(txt) && !/twice/.test(txt), 'square ' + i + ' names ' + name + ' and the +20 (' + txt + ')');
+      }
+      t.expect(/Hot spring|Warm spring|Steam|Boiling/.test(await say(4)), 'a premium square says what it multiplies');
+      t.expect(/Display Spring/.test(await say(CENTER)), 'the Display Spring is named by its name');
+      await t.shot('S2-02-square-info');
+      if (t.viewport === 'mobile') {
+        // with a tile placed the strip is for the play, not for a square
+        await t.game('act', 'stage', [{ i: CENTER, l: (await t.game('act', 'rackTile', 0))[2] }]);
+        const [x, y] = await at(4);
+        await t.tap([x, y]);
+        t.expect(!/Boiling|Steam|Warm|Hot spring/.test(await t.page.textContent('#preview')), 'a tap with tiles placed leaves the strip alone');
+      }
+    },
+  },
+  // ---------- S4-09 ----------
+  {
+    name: 'S4-09 reading the board from the top down, the Bathhouse Row squares come in the sourced order',
+    node: true,
+    async run(t) {
+      const order = Object.entries(BATHHOUSES).map(([i, n]) => [+i, n]).sort((a, b) => a[0] - b[0]).map(([, n]) => n);
+      t.equal(order.join(' '), 'Superior Hale Maurice Fordyce Quapaw Ozark Buckstaff Lamar', 'north to south, top row to bottom row');
+      const rows = Object.keys(BATHHOUSES).map((i) => Math.floor(i / SIZE));
+      t.expect(rows.every((r, k) => k === 0 || r > rows[k - 1]), 'each one is on a lower row than the one before (' + rows.join(',') + ')');
+      for (const i of Object.keys(BATHHOUSES)) t.equal(ROWS[Math.floor(i / SIZE)][i % SIZE], 'B', 'square ' + i + ' is a Row square');
+      for (const i of Object.keys(BATHHOUSES)) t.expect(BATHHOUSES[SIZE * SIZE - 1 - i] !== undefined, 'and it has a partner across the board (' + i + ')');
+    },
+  },
+  // ---------- S2-09 ----------
+  {
+    name: 'S2-09 a tap on a Featured Spring plaque names its category and what the word is worth, on a phone too',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await start(t);
+      const cat = await t.page.evaluate(() => { const f = window.__G.s.featured[0]; return { cat: window.__G.lex.categories[f.cat].name, len: f.word.length }; });
+      await t.page.click('[data-plaque="0"]');
+      const txt = (await t.page.textContent('#preview')).trim();
+      t.expect(txt.includes(cat.cat) && txt.includes(cat.len + ' letters') && /\+30/.test(txt), 'the strip says the category, the length and +30 (' + txt + ')');
+      const vis = await t.page.evaluate(() => { const b = document.querySelector('.plaque'); return { label: b.getAttribute('aria-label'), cat: getComputedStyle(b.querySelector('.pcat')).display, h: Math.round(b.getBoundingClientRect().height) }; });
+      t.expect(/Featured Spring 1/.test(vis.label) && vis.label.includes(cat.cat), 'a screen reader hears it too');
+      await t.shot('S2-09-plaques');
     },
   },
 ];
