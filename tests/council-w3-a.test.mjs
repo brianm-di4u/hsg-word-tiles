@@ -158,4 +158,57 @@ export const tests = [
       t.expect(!/will not be kept/.test(await t.page.textContent('.sheet.register')), 'no warning in the Register');
     },
   },
+
+  // ---------- S6-11 ----------
+  {
+    name: 'S6-11 a hint that was paid for is still on the board after a reload, and is not saved past the move',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(21);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      const n = await t.game('act', 'hint');
+      const before = await t.state();
+      t.expect(n > 0 && before.staged.length === n, 'the hint put tiles on the board');
+      t.equal(before.game.players[0].hints, 2, 'and cost one hint');
+      const key = (st) => st.staged.map((x) => x.i + x.l).sort().join();
+      await t.reload(); await ready(t);
+      await t.page.click('#screen [data-go="continue"]');
+      await t.waitIdle(8000);
+      const after = await t.state();
+      t.equal(key(after), key(before), 'the same tiles are on the same squares after Continue');
+      t.equal(after.game.players[0].hints, 2, 'and the hint is not charged again');
+      t.expect(after.preview && after.preview.ok, 'with the live preview');
+      await t.shot('S6-11-hint-restored');
+      await t.checkLayout();
+      const r = await t.game('act', 'play');
+      t.expect(r.ok, 'it can be played');
+      t.expect(!('hintStaged' in (await ls(t, SAVE))), 'the saved game no longer carries the hint');
+    },
+  },
+  {
+    name: 'S6-11 a hint that no longer fits is left out without an error',
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(21);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      await t.game('act', 'hint');
+      await t.page.evaluate((k) => { const g = JSON.parse(localStorage.getItem(k)); g.hintStaged.tiles[0].l = g.players[0].rack.includes('Q') ? 'Z' : 'Q'; g.hintStaged.tiles[0].blank = false; localStorage.setItem(k, JSON.stringify(g)); }, SAVE);
+      await t.reload(); await ready(t);
+      await t.page.click('#screen [data-go="continue"]');
+      await t.waitIdle(8000);
+      const st = await t.state();
+      t.equal(st.staged.length, 0, 'nothing is staged');
+      t.equal(st.game.players[0].hints, 2, 'the saved count stands');
+      await t.page.evaluate((k) => { const g = JSON.parse(localStorage.getItem(k)); g.hintStaged = { move: 99, tiles: 'x' }; localStorage.setItem(k, JSON.stringify(g)); }, SAVE);
+      await t.reload(); await ready(t);
+      await t.page.click('#screen [data-go="continue"]');
+      await t.waitIdle(8000);
+      t.equal((await t.state()).staged.length, 0, 'a damaged record is ignored too');
+    },
+  },
 ];
