@@ -241,6 +241,8 @@ export function render(d) {
       if (k2 <= 0) { g.visible = false; return; }
       const e = 1 - Math.pow(1 - k2, 3); lift = (1 - e) * 2.2; sc = 1 + (1 - e) * 0.15;
     }
+    const t0 = w.kind === 'staged' && d.settle ? d.settle.get(w.i) : null;
+    if (t0 != null) sc = 1 + 0.12 * Math.pow(1 - Math.min(1, Math.max(0, (d.now - t0) / 120)), 3);   // a tile just placed settles into its square
     g.position.set(x, TOP + lift, z); g.scale.setScalar(sc);
     g.userData.face.material = faceMaterial(w.t.l, w.t.blank);
     g.userData.body.material = w.kind === 'staged' ? B3.stagedMat : w.kind === 'last' ? B3.lastMat : B3.bodyMat;

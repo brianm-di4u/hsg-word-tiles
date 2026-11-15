@@ -32,7 +32,7 @@ const G = {
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
   preview: null, hint: null, last: new Set(), anim: new Map(), animUntil: 0,
-  breakdown: false, aiBusy: false, aiTimer: 0, aiToken: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
+  breakdown: false, settle: new Map(), settleUntil: 0, aiBusy: false, aiTimer: 0, aiToken: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
 };
 window.__G = G;
@@ -414,6 +414,7 @@ function afterAction(entry, fromAi) {
   if (entry.kind === 'play' && s.players[entry.p].kind === 'human') coachPlayed();
   // the next player's rack is ready at once (the move is applied), even while the tiles are still landing
   resetOrder(); G.hint = null; G.breakdown = false; delete s.hintStaged;
+  G.deal = !fromAi && entry.kind !== 'pass' && humans() === 1;
   if (!s.over && cur().kind === 'human') G.privacy = turnPrivacy();
   if (entry.kind === 'play') {
     G.last = new Set(entry.tiles.map((t) => t.i));
@@ -511,6 +512,7 @@ function stage(k, i, letter) {
   G.staged.push({ k, i, l: l === '?' ? letter : l, blank: l === '?' });
   G.order = G.order.filter((x) => x !== k);
   G.selected = null; G.hint = null;
+  if (animOn()) { const now = performance.now(); G.settle.set(i, now); G.settleUntil = now + 130; }
   sfx('place', { pan: colPan(i) });
   updatePreview(); renderStaging();
   return true;
@@ -644,6 +646,7 @@ function renderRack() {
     if (hk >= 0 && humans() === 1) { rack = G.s.players[hk].rack; order = rack.map((_, k) => k); dim = true; } else { rack = []; order = []; }
   }
   const size = rackTileSize(), px = Math.round(size * dpr());
+  let dealt = 0;   // a rack the move has just refilled fades in tile by tile
   el.style.setProperty('--tile', size + 'px');
   el.classList.toggle('dim', dim);
   // Buttons are reused per tile, never rebuilt wholesale, and the one a finger lifted a tile from stays in the page
@@ -657,6 +660,7 @@ function renderRack() {
     if (b) { old.delete(key); return b; }
     b = document.createElement('button');
     b.className = 'rtile'; b.dataset.key = key; b.dataset.k = k;
+    if (G.deal && animOn()) { b.classList.add('deal'); b.style.setProperty('--i', String(dealt++)); b.addEventListener('animationend', () => b.classList.remove('deal')); }
     b.setAttribute('aria-label', l === '?' ? 'Blank tile' : `${l}, ${E.tileValue(l)} points`);
     if (dim) { b.tabIndex = -1; b.disabled = true; }
     const c = document.createElement('canvas'); c.width = c.height = px;
@@ -672,11 +676,14 @@ function renderRack() {
     b.setAttribute('aria-pressed', G.selected === k); b.style.visibility = G.returning === k ? 'hidden' : '';
     return b;
   });
+  // the lifted tile leaves its own place empty until the drag ends, so the others do not slide about under the finger
+  const hole = lifted != null && d.pos0 != null ? Math.min(d.pos0, seq.length) : -1;
+  if (hole >= 0) { const x = document.createElement('span'); x.className = 'rslot'; x.setAttribute('aria-hidden', 'true'); seq.splice(hole, 0, x); }
   const keep = lifted != null ? button(lifted) : null;
   if (keep) { keep.classList.add('lifted'); delete keep.dataset.pos; }
   for (const b of old.values()) b.remove();
   el.querySelectorAll('.rslot').forEach((x) => x.remove());
-  for (let n = RACK - order.length; n > 0; n--) { const x = document.createElement('span'); x.className = 'rslot'; x.setAttribute('aria-hidden', 'true'); seq.push(x); }
+  for (let n = RACK - order.length - (hole >= 0 ? 1 : 0); n > 0; n--) { const x = document.createElement('span'); x.className = 'rslot'; x.setAttribute('aria-hidden', 'true'); seq.push(x); }
   // place everything in order around the kept node without ever moving it
   let ref = el.firstChild;
   for (const n of seq) {
@@ -685,6 +692,7 @@ function renderRack() {
     el.insertBefore(n, ref);
   }
   if (keep && !keep.isConnected) el.append(keep);
+  G.deal = false;
 }
 
 function renderPreview() {
@@ -975,6 +983,7 @@ function frame(now) {
   }
   if (G.anim.size && now < G.animUntil + 50) draw();
   else if (G.anim.size) G.anim.clear();
+  if (G.settle.size) { if (now < G.settleUntil) draw(); else G.settle.clear(); }
   if (G.viewAnim) stepViewAnim(now);
 }
 function drawData(now) {
@@ -986,7 +995,7 @@ function drawData(now) {
     badCells: p && !p.ok && p.words ? p.words.filter((w) => w.w === p.badWord).flatMap((w) => w.cells) : null,
     target: G.drag && G.drag.active ? G.drag.target : null, dragFrom: G.drag && G.drag.from === 'board' && G.drag.active ? G.drag.i : null,
     dragTile: G.drag && G.drag.active ? G.drag.tile : null, blocked: G.drag && G.drag.active ? G.drag.blocked : null,
-    anim: G.anim, now,
+    anim: G.anim, settle: G.settle, now,
   };
 }
 function tick() { draw(); }
@@ -1372,7 +1381,7 @@ function wireStatic() {
 }
 
 // ---------- test hooks ----------
-const idle = () => G.ready && !art.loading && performance.now() - (G.dialogAt || 0) > 260 && !G.aiBusy && !G.hintBusy && !G.viewAnim && G.anim.size === 0 && performance.now() >= G.busyUntil && !(G.s && !G.s.over && G.scene === 'game' && cur().kind === 'ai' && !G.s.over);
+const idle = () => G.ready && !art.loading && performance.now() - (G.dialogAt || 0) > 260 && !G.aiBusy && !G.hintBusy && !G.viewAnim && G.anim.size === 0 && G.settle.size === 0 && performance.now() >= G.busyUntil && !(G.s && !G.s.over && G.scene === 'game' && cur().kind === 'ai' && !G.s.over);
 window.__game = {
   seed(n) { G.nextSeed = n >>> 0; return true; },
   getState() {

@@ -3,7 +3,9 @@
 // S4-06 (setup cards) and S4-25 (docs).
 import { emptyStats, applyGame, hintsUsed } from '../src/js/stats.js';
 import { TILES, BLANKS } from '../src/js/tiles.js';
-import { ctx } from './lib.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { ctx, root } from './lib.mjs';
 import { createGame, evaluate } from '../src/js/engine.js';
 import { generateMoves } from '../src/js/movegen.js';
 import { explainWord } from '../src/js/score.js';
@@ -307,4 +309,55 @@ export const tests = [
       t.equal(await t.page.locator('#preview .bd').count(), 0, 'a new turn starts with it closed');
     },
   },
+
+  // ---------- S1-05 ----------
+  {
+    name: 'S1-05 a placed tile settles into its square, the rack keeps the place of a lifted tile empty, and a refilled rack fades in',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(9);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      const [m] = await t.game('act', 'moves', 1);
+      // the settle starts in the same call that stages the tile
+      const settling = await t.page.evaluate((tiles) => { window.__game.act('stage', tiles.slice(0, 1)); return window.__G.settle.size; }, m.tiles);
+      t.equal(settling, 1, 'the placed tile is settling');
+      await t.page.waitForFunction(() => window.__G.settle.size === 0, null, { timeout: 3000 });
+      await t.game('act', 'recall');
+      // a rack tile held up in a drag leaves its own place empty
+      const slots = () => t.page.evaluate(() => [...document.querySelectorAll('#rack > *')].filter((e) => !e.classList.contains('lifted')).map((e) => (e.classList.contains('rslot') ? 'slot' : 'tile')));
+      t.equal((await slots()).join(), 'tile,tile,tile,tile,tile,tile,tile', 'seven tiles to start');
+      const [x, y] = await t.game('act', 'rackTile', 2);
+      await t.page.mouse.move(x, y); await t.page.mouse.down();
+      await t.page.mouse.move(x, y - 60, { steps: 4 });
+      await t.page.waitForFunction(() => window.__game.getState().drag, null, { timeout: 3000 });
+      t.equal((await slots()).join(), 'tile,tile,slot,tile,tile,tile,tile', 'the third place is empty while the tile is held');
+      await t.shot('S1-05-rack-hole');
+      await t.page.mouse.move(x, y, { steps: 3 }); await t.page.mouse.up();
+      await t.page.waitForFunction(() => !window.__game.getState().drag && !window.__G.returning, null, { timeout: 3000 });
+      t.equal((await slots()).join(), 'tile,tile,tile,tile,tile,tile,tile', 'dropped back on the rack, the seven tiles are whole again');
+      // a play refills the rack and the new tiles fade in
+      await t.game('act', 'stage', m.tiles);
+      const dealt = await t.page.evaluate(() => { window.__game.act('play'); return document.querySelectorAll('#rack .rtile.deal').length; });
+      t.expect(dealt >= 1, 'the refilled rack fades in (' + dealt + ' tiles)');
+      await t.page.waitForFunction(() => document.querySelectorAll('#rack .rtile.deal').length === 0, null, { timeout: 5000 });
+    },
+  },
+  {
+    name: 'S1-05 with reduced motion a placed tile and a refilled rack just appear',
+    reducedMotion: true,
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(9);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      const [m] = await t.game('act', 'moves', 1);
+      const r = await t.page.evaluate((tiles) => { window.__game.act('stage', tiles); const settle = window.__G.settle.size; window.__game.act('play'); return { settle, deal: document.querySelectorAll('#rack .rtile.deal').length }; }, m.tiles);
+      t.equal(r.settle, 0, 'no settle'); t.equal(r.deal, 0, 'no fade');
+    },
+  },
+
 ];

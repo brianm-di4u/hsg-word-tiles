@@ -419,7 +419,9 @@ export function drawFrame(ctx, d) {
   const outline = (cells, color, width) => { for (const i of cells) { ctx.strokeStyle = color; ctx.lineWidth = width; poly(ctx, quad(i, 0.03)); ctx.stroke(); } };
   if (d.goodCells) outline(d.goodCells, 'rgba(42,157,143,0.95)', lw(0.06));
   if (d.badCells) outline(d.badCells, 'rgba(178,40,28,0.95)', lw(0.07));
-  if (!d.mode3d) for (const t of d.staged || []) drawTile(t.i, t, 'staged', d.dragFrom === t.i ? 0.35 : 1, cellPx * 0.04);
+  // a tile just placed settles into its square: a little larger, easing down to its size in 120 ms
+  const settle = (i) => { const t0 = d.settle && d.settle.get(i); return t0 == null ? 1 : 1 + 0.12 * Math.pow(1 - Math.min(1, Math.max(0, (now - t0) / 120)), 3); };
+  if (!d.mode3d) for (const t of d.staged || []) drawTile(t.i, t, 'staged', d.dragFrom === t.i ? 0.35 : 1, cellPx * 0.04, settle(t.i));
   // while dragging: the tile seated, translucent, in the square it will land on (projected, so it also sits on the
   // 3D board), or a red dashed outline when that square is taken
   if (d.target != null && d.target >= 0) {
