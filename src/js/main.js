@@ -1307,7 +1307,7 @@ function onKey(e) {
   if (k === '?') { e.preventDefault(); go('help'); return; }
   if (e.shiftKey && /^[RSPHB]$/.test(k.toUpperCase()) && k.length === 1) {
     e.preventDefault();
-    ({ R: () => (G.staged.length ? null : shuffleRack()), S: doSwap, P: doPass, H: doHint, B: toggleBreakdown })[k.toUpperCase()]?.();
+    ({ R: shuffleRack, S: doSwap, P: doPass, H: doHint, B: toggleBreakdown })[k.toUpperCase()]?.();
     return;
   }
   if (!humanCanAct()) { if (k === 'Escape') { e.preventDefault(); openDialog('pause'); } return; }
