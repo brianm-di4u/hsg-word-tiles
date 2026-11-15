@@ -1434,6 +1434,7 @@ function rackPosAt(x, y) {
 }
 
 // ---------- keyboard ----------
+const BLANK_ARM_MS = 3500;   // how long a second press of the same letter still means "yes, use my blank"
 function onKey(e) {
   if (G.dialog) {
     if (e.key === 'Escape') { e.preventDefault(); closeDialog(); }
@@ -1471,8 +1472,18 @@ function onKey(e) {
     const L = k.toUpperCase(), rack = cur().rack;
     let idx = G.order.find((j) => rack[j] === L);
     let blankLetter = null;
-    if (idx == null) { idx = G.order.find((j) => rack[j] === '?'); blankLetter = L; }
-    if (idx == null) { flash(`No ${L} on your rack.`); sfx('error'); return; }
+    if (idx == null) {
+      idx = G.order.find((j) => rack[j] === '?');
+      if (idx == null) { flash(`No ${L} on your rack.`); sfx('error'); return; }
+      // a letter you do not hold would spend your blank: the first press asks, the same letter again (within a few seconds) does it
+      const arm = G.blankArm;
+      if (!arm || arm.L !== L || performance.now() - arm.t > BLANK_ARM_MS) {
+        G.blankArm = { L, t: performance.now() };
+        flash(`No ${L} on your rack. Press ${L} again to use your blank.`, BLANK_ARM_MS); sfx('error'); return;
+      }
+      blankLetter = L;
+    }
+    G.blankArm = null;
     if (!c.on) { c.on = true; if (G.s.board[c.i]) c.i = CENTER; }
     // skip squares already filled
     while (G.s.board[c.i] || G.staged.some((t) => t.i === c.i)) { const nx = nextCell(c.i, c.dir); if (nx < 0) { flash('No room that way.'); return; } c.i = nx; }
