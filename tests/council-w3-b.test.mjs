@@ -1,6 +1,9 @@
 // Wave 3, batch B: S2-21 (Shuffle stays while tiles are staged), S3-16 (the computer waits for a dialog),
 // S6-08 (the checks a green run used to skip), S1-01 (the rack is yours during the computer's turn),
 // S1-03 (phone placement), S3-13 (what you missed) and S4-03 (fact cards).
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { ctx, root } from './lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
 import { generateMoves } from '../src/js/movegen.js';
@@ -288,6 +291,47 @@ export const tests = [
       await t.checkLayout();
       await t.page.click('.review [data-close]');
       t.equal((await t.state()).dialog, null, 'Close puts the results sheet back');
+    },
+  },
+  // ---------- S4-03 ----------
+  {
+    name: 'S4-03 the fact cards the finding named each tell their own fact, and every card still traces to a source', node: true,
+    async run(t) {
+      const game = JSON.parse(fs.readFileSync(path.join(root, 'data/lexicon.game.json'), 'utf8')).words;
+      const src = JSON.parse(fs.readFileSync(path.join(root, 'data/thermal-words.json'), 'utf8')).words;
+      const groups = [['tufa', 'travertine'], ['quartz', 'crystal'], ['soak', 'mineral'], ['steam', 'vapor'], ['gator', 'alligator'], ['farm', 'homer', 'ballpark'], ['cupola', 'copper']];
+      for (const g of groups) {
+        const facts = g.map((id) => game.find((w) => w.id === id).fact);
+        t.equal(new Set(facts.map((f) => f.text)).size, g.length, g.join(', ') + ': each card has its own text');
+        t.equal(new Set(facts.map((f) => f.bank || f.quote)).size, g.length, g.join(', ') + ': and its own source item');
+      }
+      t.equal(game.find((w) => w.id === 'dome').fact.bank, game.find((w) => w.id === 'mosaic').fact.bank, 'dome and mosaic still share the one item the bank holds about the Quapaw dome (reported, not fixed)');
+      for (const w of src) {
+        const g = game.find((x) => x.id === w.id);
+        t.equal(g.fact.text, w.fact.text, w.id + ': the game data and its source file agree');
+      }
+      const r = spawnSync(process.execPath, [path.join(root, 'tools/check-facts.mjs')], { cwd: root, encoding: 'utf8' });
+      t.equal(r.status, 0, 'every card still traces to the audited bank or a research quote: ' + (r.stdout || '').trim().split(String.fromCharCode(10)).slice(-1)[0]);
+    },
+  },
+  {
+    name: 'S4-03 SPRING shows the Fordyce painting (its fact is the Fordyce basement), the Great Fire and the water cards no longer swap pictures',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      const pic = async (id) => { await t.game('act', 'fact', id); await t.page.waitForSelector('.fact .vig'); const s = await t.page.getAttribute('.fact img.vig', 'src'); await t.game('act', 'close'); return s; };
+      const spring = await pic('spring');
+      t.expect(spring && spring === await pic('fountain'), 'SPRING shows the same Fordyce painting as the Fordyce fountain');
+      t.expect(spring !== await pic('tufa'), 'and not the travertine terraces the springs category uses');
+      const fire = await pic('fire'), water = await pic('water');
+      t.expect(fire && water && fire !== water, 'FIRE and WATER show different paintings');
+      await t.game('act', 'fact', 'spring');
+      await t.page.waitForSelector('.fact .vig');
+      await t.shot('S4-03-spring-card');
+      await t.checkLayout();
     },
   },
 ];

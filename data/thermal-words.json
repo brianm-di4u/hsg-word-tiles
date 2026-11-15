@@ -86,10 +86,8 @@
    "tier": 2,
    "cat": "springs",
    "fact": {
-    "text": "The town's old nickname, the Valley of Vapors, comes from the steam off the springs.",
-    "ref": "research/culture-events-food.md",
-    "quote": "nickname for the steam rising off the springs",
-    "src": "Encyclopedia of Arkansas: Hot Springs; npshistory.com"
+    "text": "The Valley of the Vapors Independent Music Festival fills small venues each March with 140-plus musicians.",
+    "bank": "hs-0460"
    }
   },
   {
@@ -114,8 +112,8 @@
    "tier": 3,
    "cat": "springs",
    "fact": {
-    "text": "Travertine, or tufa, builds up where minerals precipitate around the spring openings.",
-    "bank": "hs-0156"
+    "text": "The Hale Bathhouse's old sweat cave in the tufa bluff was called the electric cave, and it closed in 1911.",
+    "bank": "hs-0478"
    }
   },
   {
@@ -153,8 +151,8 @@
    "tier": 2,
    "cat": "springs",
    "fact": {
-    "text": "Quartz crystal became Arkansas's state mineral in 1967.",
-    "bank": "hs-0129"
+    "text": "Novaculite, the rock Arkansas whetstones are made from, is a recrystallized chert of very small quartz grains.",
+    "bank": "hs-0169"
    }
   },
   {
@@ -179,8 +177,8 @@
    "tier": 2,
    "cat": "springs",
    "fact": {
-    "text": "Hotel Hale's 9 suites have soaking tubs fed with hot springs mineral water.",
-    "bank": "hs-0101"
+    "text": "Magnet Cove, southeast of Hot Springs, is known for minerals such as lodestone (magnetite), rutile and perovskite.",
+    "bank": "hs-0180"
    }
   },
   {
@@ -496,8 +494,8 @@
    "tier": 3,
    "cat": "baths",
    "fact": {
-    "text": "A small copper cupola tops the Quapaw's chevron-mosaic dome.",
-    "bank": "hs-0082"
+    "text": "Quapaw Baths & Spa opened in the restored Quapaw Bathhouse in July 2008.",
+    "bank": "hs-0103"
    }
   },
   {
@@ -701,8 +699,8 @@
    "tier": 1,
    "cat": "park",
    "fact": {
-    "text": "Hot Springs' alligator farm dates from 1902.",
-    "bank": "hs-0298"
+    "text": "Around 1929 the alligator farm was the Hot Springs Gator Farm under Danny Older; Jack Bridges Sr. bought it in 1947 and it became the Arkansas Alligator Farm.",
+    "bank": "hs-0493"
    }
   },
   {
@@ -827,8 +825,8 @@
    "tier": 3,
    "cat": "track",
    "fact": {
-    "text": "Babe Ruth's 1918 homer at Whittington Park landed in an alligator farm.",
-    "bank": "hs-0195"
+    "text": "Whittington Park ballfield opened in 1894, replacing the Hot Springs Baseball Grounds.",
+    "bank": "hs-0196"
    }
   },
   {
@@ -1235,8 +1233,8 @@
    "tier": 1,
    "cat": "park",
    "fact": {
-    "text": "Babe Ruth's long home run of March 17, 1918, landed in the alligator farm.",
-    "bank": "hs-0183"
+    "text": "H. L. Campbell brought the first alligators for the alligator farm from the Florida Everglades, and the farm first raised gators for hides.",
+    "bank": "hs-0483"
    }
   },
   {
@@ -1315,8 +1313,8 @@
    "tier": 1,
    "cat": "baths",
    "fact": {
-    "text": "A small copper cupola tops the Quapaw's tiled dome.",
-    "bank": "hs-0082"
+    "text": "The 1922 Quapaw Bathhouse was built on the sites of two earlier bathhouses, the Horseshoe and the Magnesia.",
+    "bank": "hs-0068"
    }
   },
   {

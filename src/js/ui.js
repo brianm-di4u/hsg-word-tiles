@@ -198,11 +198,11 @@ export function factHtml(entry, lex, form, extra = '') {
 // Landmark vignettes (painted for Bathhouse Barons, same collection, MIT) that suit a word's fact.
 export const VIGNETTE = {
   bathhouse: 'vig-freebath', skylight: 'vig-fordyce', fountain: 'vig-fordyce', statue: 'vig-fordyce', museum: 'vig-fordyce',
-  massage: 'vig-buckstaff', tub: 'vig-buckstaff', soak: 'vig-hale', mineral: 'vig-hale', hotel: 'vig-eastman', alligator: 'vig-gators',
+  massage: 'vig-buckstaff', tub: 'vig-buckstaff', soak: 'vig-hale', travertine: 'vig-hale', hotel: 'vig-eastman', alligator: 'vig-gators',
   gator: 'vig-gators', farm: 'vig-gators', ostrich: 'vig-ostrich', zoo: 'vig-iqzoo', chicken: 'vig-iqzoo', ballpark: 'vig-whittington',
   homer: 'vig-whittington', baseball: 'vig-fogel', railroad: 'vig-railroad', train: 'vig-railroad', tower: 'vig-tower', mountain: 'vig-tower',
   casino: 'vig-southern', glass: 'vig-southern', poker: 'vig-southern', club: 'vig-ohio', craps: 'vig-vapors', gangster: 'vig-arlington',
-  radio: 'vig-arlington', water: 'vig-waterco', fire: 'vig-watertax',
+  radio: 'vig-arlington', water: 'vig-watertax', fire: 'vig-waterco', spring: 'vig-fordyce',
 };
 
 export function swapHtml(rack) {
