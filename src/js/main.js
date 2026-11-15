@@ -484,7 +484,7 @@ function afterAction(entry, fromAi) {
       entry.tiles.forEach((t, k) => setTimeout(() => sfx('place', { pan: colPan(t.i), step: k }), k * 90 + 200 + Math.floor(Math.random() * 24)));
       tick();
     } else sfx('play', { pan: colPan(Math.round(entry.tiles.reduce((a, t) => a + (t.i % N), 0) / entry.tiles.length)) });
-    celebrate(entry, G.bark);
+    celebrate(entry, G.bark, landed);
     try { recordRegister(entry); } catch (e) { /* the register is a keepsake: a failed write never stops the game */ }
   } else {
     sfx(entry.kind === 'swap' ? 'swap' : 'turn');
@@ -532,12 +532,14 @@ function pbLines() {
 
 const STING_LAG = 0.28;   // seconds: the score sting follows the clacks of the tiles instead of landing on them
 // Toasts and effects for a play: Full Soak, Hot Springs words, a Featured Spring.
+// `wait` is the seconds the computer's tiles take to land: the cues (not the toasts) hold back until they have
 function celebrate(e, bark, wait = 0) {
+  const s = G.s, cue = (name, opts) => later(s, wait * 1000, () => sfx(name, opts));
   const p = G.s.players[e.p];
   const themed = e.words.filter((w) => w.themed);
   let found = false;
   const who = bark ? { p, k: e.p } : null, quote = (ev) => (bark && bark.event === ev ? `“${bark.text}”` : null);
-  if (e.featured) { toast({ kind: 'featured', who, title: `Featured Spring: ${e.featured}`, sub: `${quote('themed') || `${p.name} found it`} · +${FEATURED_BONUS}`, fact: G.lex.entry(e.featured)?.id, form: e.featured }); sfx('featured'); }
+  if (e.featured) { toast({ kind: 'featured', who, title: `Featured Spring: ${e.featured}`, sub: `${quote('themed') || `${p.name} found it`} · +${FEATURED_BONUS}`, fact: G.lex.entry(e.featured)?.id, form: e.featured }); cue('featured'); }
   for (const w of themed) {
     const entry = G.lex.byId.get(w.themed);
     const fresh = p.kind === 'human' && !register()[w.w];   // celebrate runs before recordRegister: this is the first time the word is signed in
@@ -546,10 +548,10 @@ function celebrate(e, bark, wait = 0) {
     steamBurst(e.tiles.map((t) => t.i));
   }
   if (themed.length) goldSweep(e.tiles.map((t) => t.i));
-  if (themed.length && !e.featured) sfx('steam');
-  if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); sfx('chime'); }
+  if (themed.length && !e.featured) cue('steam');
+  if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); cue('chime'); }
   // one sting a play: a Featured Spring or a Full Soak has its own, then a word new to the Register, then the size of the score
-  const st = UI.stingFor(e, found); if (st) sfx(st, { delay: wait + STING_LAG });
+  const st = UI.stingFor(e, found); if (st) cue(st, { delay: STING_LAG });
   if (!e.full && bark && bark.event === 'big') toast({ kind: 'bark', who, title: `${p.name}: ${e.words[0].w} +${e.score}`, sub: quote('big') });
   scorePop(e, themed.length > 0);
 }
@@ -1589,7 +1591,7 @@ window.__game = {
   audioRender(name, seconds = 30, wantWav = false) { return audioRender(name, seconds, !!wantWav); },
   audioState() {
     const k = audio.kit, i = k && k.music.info();
-    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, holds: [...audio.holds], tune: tuneName(), bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, fxGain: audio.bus ? audio.bus.sfx.gain.value : null, musGain: audio.bus ? audio.bus.mus.gain.value : null };
+    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, holds: [...audio.holds], tune: tuneName(), bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), fxGain: audio.bus ? audio.bus.sfx.gain.value : null, musGain: audio.bus ? audio.bus.mus.gain.value : null };
   },
   async act(name, ...a) {
     switch (name) {

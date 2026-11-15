@@ -193,4 +193,28 @@ export const tests = [
       t.expect(st.fxVol === 1 && st.musicVol === 1, 'a damaged level falls back to full (' + st.fxVol + ', ' + st.musicVol + ')');
     },
   },
+  // ---------- S5-08 ----------
+  {
+    name: 'S5-08 the computer sting waits until its tiles have landed',
+    viewports: ['desktop'],
+    initScript: () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ sound: false, motion: 'full' })); },
+    async run(t) {
+      await start(t, null, { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'hard' }] });
+      const g = (await t.state()).game;
+      g.players[1].rack = 'SPRINGX'.split('');
+      await t.game('setState', { game: g });
+      await t.waitIdle(5000);
+      await t.game('act', 'pass');
+      await t.page.waitForFunction(() => window.__game.audioState().played.includes('yourturn'), null, { timeout: 15000 });
+      const log = (await t.game('audioState')).played;
+      const mine = log.slice(log.indexOf('turn') + 1);
+      t.log('heard: ' + mine.join(','));
+      const places = mine.filter((n) => n === 'place').length;
+      t.expect(places >= 2, 'the computer set down tiles one by one (' + places + ' clacks)');
+      const stings = mine.map((n, k) => ['steam', 'chime', 'featured', 'good', 'big'].includes(n) ? k : -1).filter((k) => k >= 0);
+      t.expect(stings.length > 0, 'its play earned at least one sting');
+      t.expect(stings.every((k) => k > mine.lastIndexOf('place')), 'and every one of them comes after the last tile has landed');
+      t.expect(mine.lastIndexOf('yourturn') > Math.max(...stings), 'and your turn comes last');
+    },
+  },
 ];
