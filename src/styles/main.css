@@ -178,6 +178,7 @@ body.reduce .check input, body.reduce .check input::after { transition: none; }
 #boardwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 #fx { pointer-events: none; }
 #b-zoom { position: absolute; right: 8px; top: 8px; background: rgba(20, 14, 8, 0.7); }
+#b-zoom[data-mode="out"] .zin { display: none; }
 #preview { grid-area: preview; min-height: 46px; padding: 8px 14px; border-radius: 10px; background: var(--strip); color: var(--strip-ink); display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; font-size: 0.98em; }
 #preview .words b { font: 800 1.05em var(--f-serif); letter-spacing: 0.05em; margin-right: 6px; }
 #preview .words b.themed { color: #9FE3D6; }

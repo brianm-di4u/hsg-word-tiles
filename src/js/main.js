@@ -956,7 +956,7 @@ function layout() {
   R.clampView();
   ensure3d();
   B3.resize(W, H);
-  $('#b-zoom').hidden = R.view.zoom <= 1.01;
+  syncZoomBtn();
   renderRack();
   draw();
 }
@@ -1024,6 +1024,20 @@ function drawData(now) {
 }
 function tick() { draw(); }
 
+// The corner button zooms in (on a phone, where the squares are small) and, once zoomed, shows the whole board again.
+const ZOOM_IN = 1.7;   // how far Zoom in goes: the squares grow from about 23 px to about 39 px on a 360 px phone
+function syncZoomBtn() {
+  const b = $('#b-zoom'), out = R.view.zoom > 1.01;
+  b.hidden = !out && !isNarrow();
+  b.dataset.mode = out ? 'out' : 'in';
+  b.setAttribute('aria-label', out ? 'Show the whole board' : 'Zoom in on the board');
+}
+// zoom in on what the player is working on: the tiles they have placed, else the last play, else the Display Spring
+function zoomInAt() {
+  const cells = G.staged.length ? G.staged.map((t) => t.i) : G.s ? lastTiles(G.s) : [];
+  const [cx, cy] = cells.length ? [cells.reduce((a, i) => a + (i % N), 0) / cells.length, cells.reduce((a, i) => a + Math.floor(i / N), 0) / cells.length] : [CENTER % N, Math.floor(CENTER / N)];
+  animateView(ZOOM_IN, R.FRAME + cx + 0.5, R.FRAME + cy + 0.5);
+}
 // smooth zoom/pan
 function animateView(zoom, cx, cy, ms = 220) {
   if (!animOn() || G.fast) { R.view.zoom = zoom; R.view.cx = cx; R.view.cy = cy; R.clampView(); layout(); return; }
@@ -1371,7 +1385,7 @@ function wireStatic() {
   $('#b-sound').addEventListener('click', () => { unlock(); G.settings.sound = !G.settings.sound; saveSettings(); if (G.settings.sound) sfx('place'); });
   // the strip under the board opens the breakdown of the staged play (its button is the keyboard's way in)
   $('#preview').addEventListener('click', toggleBreakdown);
-  $('#b-zoom').addEventListener('click', () => animateView(1, R.U / 2, R.U / 2));
+  $('#b-zoom').addEventListener('click', () => { if (R.view.zoom > 1.01) animateView(1, R.U / 2, R.U / 2); else zoomInAt(); });
   const b = $('#board');
   b.addEventListener('pointerdown', boardDown);
   window.addEventListener('pointermove', onMove, { passive: false });

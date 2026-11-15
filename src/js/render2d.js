@@ -323,7 +323,7 @@ export function tileSprite(l, blank, w, kind = 'board') {
     const asc = m.actualBoundingBoxAscent || w * 0.42;
     ctx.fillText(l, w * 0.47, w * 0.5 + asc / 2 - w * 0.02);
     if (!blank) {
-      ctx.font = `700 ${w * 0.27}px ${FONT_UI}`; ctx.textAlign = 'right'; ctx.fillStyle = '#1F1A12';
+      ctx.font = `700 ${Math.max(w * 0.27, Math.min(w * 0.34, 15))}px ${FONT_UI}`; ctx.textAlign = 'right'; ctx.fillStyle = '#1F1A12';   // small squares keep the value readable
       ctx.fillText(String(VALUE[l]), w - inset - w * 0.08, w - inset - w * 0.07);
     }
   }
