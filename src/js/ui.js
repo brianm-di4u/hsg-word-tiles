@@ -287,6 +287,12 @@ export function helpHtml(tab, lex, twos = []) {
       ${twos.length ? `<h2>Two-letter words</h2>
       <p>All ${twos.length} of these are playable. QI and ZA help when you are holding a lone Q or Z.</p>
       <p class="twos">${twos.join(' ')}</p>` : ''}
+      <h2>Check a word</h2>
+      <form class="wordcheck" data-wordcheck novalidate>
+        <label for="wc-in">Is it playable? Type a word to check it against the dictionary.</label>
+        <div class="wc-row"><input id="wc-in" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="15" aria-describedby="wc-out"><button class="btn" type="submit">Check</button></div>
+        <p class="wc-out" id="wc-out" role="status" aria-live="polite"></p>
+      </form>
       <h2>The end</h2>
       <p>The game ends when a player uses their last tile and the bag is empty, or when everyone has passed or swapped twice in a row. Tiles left on a rack count against their owner; whoever went out collects their value.</p>
       <p class="fine">Bathhouse Letters is an original game. Its board, tiles, bonuses and rules are game logic made for this town; the facts on its cards are history, with sources.</p>`,

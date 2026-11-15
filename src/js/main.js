@@ -27,6 +27,16 @@ const twoLetterWords = () => {
   return twoLetters;
 };
 
+// The Help sheet's word check: the same dictionary that judges a play, and a nod to the town's own words.
+function wordCheck(raw) {
+  const w = String(raw).toUpperCase().replace(/[^A-Z]/g, '');
+  if (w.length < 2) return 'Type a word of two letters or more.';
+  if (!G.dict) return 'The dictionary is still loading. Try again in a moment.';
+  if (!has(G.dict, w)) return `${w} is not in the dictionary, so a play that makes it is handed back.`;
+  const e = G.lex.entry(w);
+  return `${w} is in the dictionary and can be played.${e ? ` It is also a Hot Springs word: it pays +${G.lex.bonusOf(e)}.` : ''}`;
+}
+
 const G = {
   s: null, scene: 'title', back: 'title', dict: null, lex: makeLexicon(LEXICON), ready: false,
   settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true, tipsSeen: true },
@@ -255,6 +265,10 @@ function wireScreen(name) {
       G.settings.lastSetup = st; saveSettings();
       replaceSave(() => newGame({ mode: 'play', seats: st.seats.map((x, k) => (x.kind === 'human' ? { kind: 'human', name: (x.name || '').trim() || (st.seats.filter((y) => y.kind === 'human').length > 1 ? `Player ${k + 1}` : 'You') } : { kind: 'ai', persona: x.persona, level: seatLevel(x), name: persona(x.persona).name })), hints: st.hints }));
     });
+  }
+  if (name === 'help') {
+    const wc = scr.querySelector('[data-wordcheck]');
+    if (wc) wc.addEventListener('submit', (e) => { e.preventDefault(); wc.querySelector('.wc-out').textContent = wordCheck(wc.querySelector('input').value); });
   }
   if (name === 'help') scr.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { G.helpTab = b.dataset.tab; showScene('help'); scr.querySelector(`[data-tab="${G.helpTab}"]`).focus(); }));
   if (name === 'settings') {
