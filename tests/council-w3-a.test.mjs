@@ -3,6 +3,10 @@
 // S4-06 (setup cards) and S4-25 (docs).
 import { emptyStats, applyGame, hintsUsed } from '../src/js/stats.js';
 import { TILES, BLANKS } from '../src/js/tiles.js';
+import { ctx } from './lib.mjs';
+import { createGame, evaluate } from '../src/js/engine.js';
+import { generateMoves } from '../src/js/movegen.js';
+import { explainWord } from '../src/js/score.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const SET = 'hs-letters-settings-v1', SAVE = 'hs-letters-save-v1';
@@ -242,6 +246,65 @@ export const tests = [
       await t.page.keyboard.press('Enter');
       await t.waitIdle(8000);
       t.expect((await t.state()).game.move > move, 'Enter on the board still plays the staged tiles');
+    },
+  },
+
+  // ---------- S2-05 ----------
+  {
+    name: 'S2-05 the breakdown of a word adds up to the score the engine gave it, for the best plays of a seeded position', node: true,
+    async run(t) {
+      const c = await ctx();
+      const s = createGame({ mode: 'play', seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }], seed: 5 }, c.lex);
+      const moves = generateMoves(c.dict, s.board, s.players[0].rack, { lex: c.lex, featured: s.featured }).moves.slice(0, 30);
+      t.expect(moves.length >= 10, 'there are plays to check');
+      let words = 0, premiums = 0;
+      for (const m of moves) {
+        const ev = evaluate(s, m.tiles.map((x) => ({ i: x.i, l: x.l, blank: !!x.blank })), c);
+        const add = new Map(m.tiles.map((x) => [x.i, { l: x.l, blank: !!x.blank }]));
+        for (const w of ev.words) {
+          const x = explainWord(s.board, add, w);
+          t.equal(x.total, w.score, w.w + ' adds up'); words++;
+          if (x.wm > 1 || x.parts.some((p) => p.lm > 1)) premiums++;
+        }
+      }
+      t.expect(words >= 10 && premiums >= 1, 'some of the words cross a premium square');
+    },
+  },
+  {
+    name: 'S2-05 tapping the strip, or Shift+B, shows how the staged play adds up; again hides it',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(9);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      t.equal(await t.page.locator('#preview .bd').count(), 0, 'nothing shows before a play is staged');
+      const [m] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m.tiles);
+      const st = await t.state();
+      t.expect(st.preview.ok, 'the staged play is valid');
+      t.equal(await t.page.locator('#preview .bd').count(), 0, 'the breakdown starts closed');
+      await t.page.click('#preview .pts');
+      const text = await t.page.textContent('#preview .bd');
+      t.expect(text.includes(st.preview.words[0].w) && /= [0-9]+/.test(text), 'it names the word and shows the sum');
+      t.expect(new RegExp('Total ' + st.preview.score + ' points').test(text), 'and the total is the previewed score');
+      await t.checkLayout();
+      await t.shot('S2-05-breakdown');
+      await t.page.click('#preview .pts');
+      t.equal(await t.page.locator('#preview .bd').count(), 0, 'a second tap hides it');
+      await t.page.focus('#board');
+      await t.page.keyboard.press('Shift+B');
+      t.equal(await t.page.locator('#preview .bd').count(), 1, 'Shift+B opens it');
+      await t.page.waitForFunction(() => /Total/.test(document.querySelector('#live').textContent), null, { timeout: 3000 });
+      await t.game('act', 'recall');
+      t.equal(await t.page.locator('#preview .bd').count(), 0, 'taking the tiles back removes it');
+      await t.game('act', 'stage', m.tiles);
+      t.equal(await t.page.locator('#preview .bd').count(), 1, 'it stays open while the tiles are staged again');
+      await t.game('act', 'play');
+      await t.waitIdle(8000);
+      await t.game('act', 'stage', (await t.game('act', 'moves', 1))[0].tiles);
+      t.equal(await t.page.locator('#preview .bd').count(), 0, 'a new turn starts with it closed');
     },
   },
 ];

@@ -2,7 +2,7 @@
 import { PERSONAS, persona, LEVEL_NAME, LEVEL_BLURB, seatLevel, HUMAN_COLORS } from './personas.js';
 import { SHORT } from './voices.js';
 import { TILES, BLANKS } from './tiles.js';
-import { FULL_SOAK, FEATURED_BONUS } from './score.js';
+import { FULL_SOAK, FEATURED_BONUS, explainWord } from './score.js';
 import { DAILY_TURNS, unseen } from './engine.js';
 import { art } from './art.js';
 import { hintsUsed } from './stats.js';
@@ -107,6 +107,21 @@ export function setupHtml(setup) {
 }
 
 // ---------- game panels ----------
+// How a staged play adds up, word by word (the preview strip opens it): letters with the multiplier they earned,
+// the word multiplier, then the Hot Springs, Featured and Full Soak extras. `board` is the board without the staged tiles.
+export function breakdownHtml(p, board, staged) {
+  const add = new Map(staged.map((t) => [t.i, { l: t.l, blank: t.blank }]));
+  const rows = p.words.map((w) => {
+    const x = explainWord(board, add, w);
+    const sum = x.parts.map((q) => `${q.l} ${q.v}${q.lm > 1 ? `×${q.lm}` : ''}`).join(' + ');
+    return `<li><b>${esc(w.w)}</b> <span>${sum} = ${x.sum}${x.wm > 1 ? `, word ×${x.wm} = ${x.total}` : ''}</span></li>`;
+  });
+  for (const w of p.words) if (w.bonus) rows.push(`<li><b>Hot Springs</b> <span>${esc(w.w)} +${w.bonus}${w.bath ? ' (a Bathhouse Row square doubles it)' : ''}</span></li>`);
+  if (p.featured) rows.push(`<li><b>Featured Spring</b> <span>${esc(p.featured)} +${FEATURED_BONUS}</span></li>`);
+  if (p.full) rows.push(`<li><b>Full Soak</b> <span>all seven tiles +${FULL_SOAK}</span></li>`);
+  return `<div class="bd" role="region" aria-label="How this play scores"><ul>${rows.join('')}<li class="tot"><b>Total</b> <span>${p.score} points</span></li></ul></div>`;
+}
+
 export function scoresHtml(s, compact) {
   return s.players.map((p, k) => {
     const per = p.persona ? persona(p.persona) : null;
@@ -289,7 +304,7 @@ export function helpHtml(tab, lex, twos = []) {
     keys: `<h2>Mouse and touch</h2>
       <ul class="legend plain"><li>Drag a tile from your rack to the board, or tap a tile and then tap a square.</li><li>Tap a tile you've placed to take it back, or drag it somewhere else.</li><li>On a phone the tile floats above your finger, and the square it will land on lights up. Pinch to zoom if you like.</li></ul>
       <h2>Keyboard</h2>
-      <ul class="keys"><li><kbd>←↑→↓</kbd> move the cursor</li><li><kbd>A</kbd>–<kbd>Z</kbd> place that letter from your rack</li><li><kbd>Space</kbd> switch between across and down</li><li><kbd>Backspace</kbd> take back the last tile</li><li><kbd>Enter</kbd> play (with a button focused, <kbd>Enter</kbd> or <kbd>Space</kbd> presses that button instead)</li><li><kbd>Esc</kbd> take back all tiles</li><li><kbd>Shift</kbd>+<kbd>R</kbd> shuffle the rack (when nothing is placed)</li><li><kbd>Shift</kbd>+<kbd>S</kbd> swap · <kbd>Shift</kbd>+<kbd>P</kbd> pass · <kbd>Shift</kbd>+<kbd>H</kbd> hint</li><li><kbd>?</kbd> help · <kbd>Esc</kbd> menu (when nothing is placed)</li></ul>`,
+      <ul class="keys"><li><kbd>←↑→↓</kbd> move the cursor</li><li><kbd>A</kbd>–<kbd>Z</kbd> place that letter from your rack</li><li><kbd>Space</kbd> switch between across and down</li><li><kbd>Backspace</kbd> take back the last tile</li><li><kbd>Enter</kbd> play (with a button focused, <kbd>Enter</kbd> or <kbd>Space</kbd> presses that button instead)</li><li><kbd>Esc</kbd> take back all tiles</li><li><kbd>Shift</kbd>+<kbd>R</kbd> shuffle the rack (when nothing is placed)</li><li><kbd>Shift</kbd>+<kbd>S</kbd> swap · <kbd>Shift</kbd>+<kbd>P</kbd> pass · <kbd>Shift</kbd>+<kbd>H</kbd> hint</li><li><kbd>Shift</kbd>+<kbd>B</kbd> how the placed tiles score (or tap the strip under the board)</li><li><kbd>?</kbd> help · <kbd>Esc</kbd> menu (when nothing is placed)</li></ul>`,
   }[tab];
   return `<div class="sheet help">
     <header class="sheet-head"><h1>How to play</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>

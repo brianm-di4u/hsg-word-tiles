@@ -32,7 +32,7 @@ const G = {
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
   preview: null, hint: null, last: new Set(), anim: new Map(), animUntil: 0,
-  aiBusy: false, aiTimer: 0, aiToken: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
+  breakdown: false, aiBusy: false, aiTimer: 0, aiToken: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
 };
 window.__G = G;
@@ -413,7 +413,7 @@ function afterAction(entry, fromAi) {
   G.bark = said ? { ...said, persona: s.players[entry.p].persona } : null;
   if (entry.kind === 'play' && s.players[entry.p].kind === 'human') coachPlayed();
   // the next player's rack is ready at once (the move is applied), even while the tiles are still landing
-  resetOrder(); G.hint = null; delete s.hintStaged;
+  resetOrder(); G.hint = null; G.breakdown = false; delete s.hintStaged;
   if (!s.over && cur().kind === 'human') G.privacy = turnPrivacy();
   if (entry.kind === 'play') {
     G.last = new Set(entry.tiles.map((t) => t.i));
@@ -699,6 +699,8 @@ function renderPreview() {
     const p = G.preview;
     if (p.ok) {
       html = `<span class="words">${p.words.map((w) => `<b class="${w.themed ? 'themed' : ''}">${w.w}</b>`).join(' ')}</span><span class="pts">${p.score}<small> pts</small></span>${p.themed ? `<span class="extra">${UI.ICON.steam} +${p.themed}</span>` : ''}${p.full ? `<span class="extra">Full Soak +${FULL_SOAK}</span>` : ''}${p.featured ? `<span class="extra">Featured +${FEATURED_BONUS}</span>` : ''}`;
+      html += `<button class="bdbtn" tabindex="-1">${G.breakdown ? 'Hide' : 'How it scores'}</button>`;
+      if (G.breakdown) html += UI.breakdownHtml(p, G.s.board, G.staged);
       cls = 'ok';
     } else { html = esc(p.error); cls = 'bad'; }
   } else if (G.hoverInfo) html = G.hoverInfo;
@@ -758,6 +760,13 @@ function showToast() {
 }
 function hideToastNow() { const el = $('#toast'); clearTimeout(toastTimer); el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; $('#app').classList.remove('toasting'); }
 function hideToast() { const el = $('#toast'); el.dataset.busy = '0'; el.className = ''; $('#app').classList.remove('toasting'); setTimeout(showToast, 200); }
+
+// The strip under the board (or Shift+B) opens how the staged play adds up; the words are read out for a screen reader.
+function toggleBreakdown() {
+  if (!G.preview || !G.preview.ok || !G.staged.length || G.aiBusy || G.flash) return;
+  G.breakdown = !G.breakdown; renderPreview();
+  if (G.breakdown) { const bd = $('#preview .bd'); if (bd) liveSay(bd.textContent.replace(/\s+/g, ' ').trim()); }
+}
 
 // ---------- first-run tips ----------
 // A newcomer's first game gets four short tips, one at a time, in the card that takes the ledger's place: where to start,
@@ -1283,9 +1292,9 @@ function onKey(e) {
   if (G.privacy && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('#privacy [data-reveal]')?.click(); return; }
   const k = e.key;
   if (k === '?') { e.preventDefault(); go('help'); return; }
-  if (e.shiftKey && /^[RSPH]$/.test(k.toUpperCase()) && k.length === 1) {
+  if (e.shiftKey && /^[RSPHB]$/.test(k.toUpperCase()) && k.length === 1) {
     e.preventDefault();
-    ({ R: () => (G.staged.length ? null : shuffleRack()), S: doSwap, P: doPass, H: doHint })[k.toUpperCase()]?.();
+    ({ R: () => (G.staged.length ? null : shuffleRack()), S: doSwap, P: doPass, H: doHint, B: toggleBreakdown })[k.toUpperCase()]?.();
     return;
   }
   if (!humanCanAct()) { if (k === 'Escape') { e.preventDefault(); openDialog('pause'); } return; }
@@ -1326,6 +1335,8 @@ function ensureVisible(i) {
 function wireStatic() {
   $('#b-menu').addEventListener('click', () => { unlock(); openDialog('pause'); });
   $('#b-sound').addEventListener('click', () => { unlock(); G.settings.sound = !G.settings.sound; saveSettings(); if (G.settings.sound) sfx('place'); });
+  // the strip under the board opens the breakdown of the staged play (its button is the keyboard's way in)
+  $('#preview').addEventListener('click', toggleBreakdown);
   $('#b-zoom').addEventListener('click', () => animateView(1, R.U / 2, R.U / 2));
   const b = $('#board');
   b.addEventListener('pointerdown', boardDown);

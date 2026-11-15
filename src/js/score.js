@@ -98,6 +98,22 @@ export function wordScore(board, add, word) {
   return sum * mult;
 }
 
+// How one word reached its score, for the preview's breakdown: each letter's points and the letter multiplier it
+// earned on a newly covered square, the letters' sum, the word multiplier and the product. Always equals wordScore.
+export function explainWord(board, add, word) {
+  const parts = [];
+  let sum = 0, wm = 1;
+  for (const k of word.cells) {
+    const t = add.get(k) || board[k];
+    const v = t.blank ? 0 : VALUE[t.l];
+    let lm = 1;
+    if (add.has(k)) { lm = LETTER_MULT[SQUARE[k]] || 1; wm *= WORD_MULT[SQUARE[k]] || 1; }
+    parts.push({ l: t.l, v, lm });
+    sum += v * lm;
+  }
+  return { parts, sum, wm, total: sum * wm };
+}
+
 // Full scoring of a geometrically valid placement. `lex` may be null (no bonuses), `featured` is the
 // game's featured list (claimed ones are skipped). Returns totals and a per-word breakdown.
 export function scorePlay(board, found, tilesPlaced, lex, featured) {
