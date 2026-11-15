@@ -27,6 +27,19 @@ export function cleanStats(raw) {
 // A seat with unlimited hints (`unl`) counts them as it goes in `taken`.
 export const hintsUsed = (p) => (p.unl ? Math.max(0, Math.floor(p.taken) || 0) : p.hints == null ? 0 : Math.max(0, 3 - p.hints));
 
+// The Daily Soak streak. Playing the day after the last one adds a day. One missed day is forgiven by a rest day, which can
+// be used once in any seven days (`rest` holds the date it was last used, so it is saved with the daily record).
+// Returns { streak, rest, rested } for playing on `date` with `d` = { streak, last, rest }.
+export const REST_EVERY = 7;   // days that must pass before another rest day can be used
+const dayNumber = (date) => { const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(date || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000 : NaN; };
+export function nextStreak(d, date) {
+  const gap = dayNumber(date) - dayNumber(d.last), rest = typeof d.rest === 'string' ? d.rest : null;
+  const spare = rest == null || !(dayNumber(date) - dayNumber(rest) < REST_EVERY);
+  if (gap === 1) return { streak: (d.streak || 0) + 1, rest, rested: false };
+  if (gap === 2 && spare && (d.streak || 0) > 0) return { streak: d.streak + 1, rest: date, rested: true };
+  return { streak: 1, rest, rested: false };
+}
+
 export const oppKey = (p) => `${p.persona}:${p.level || 'medium'}`;
 
 // Folds one finished game into the record. Returns { stats, pb } where pb says what the game set:

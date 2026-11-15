@@ -11,7 +11,7 @@ import { store, KEYS, createGameSaves, validRegister, validDaily } from './stora
 import { startAi, aiMove, aiHint, aiClient } from './aiclient.js';
 import { PERSONAS, persona, LEVEL_NAME, seatLevel } from './personas.js';
 import { barkFor, endBark, SHORT } from './voices.js';
-import { cleanStats, applyGame, applyDaily } from './stats.js';
+import { cleanStats, applyGame, applyDaily, nextStreak } from './stats.js';
 import * as B3 from './board3d.js';
 import * as UI from './ui.js';
 import { generateMoves } from './movegen.js';
@@ -153,10 +153,8 @@ function recordDaily() {
   const prev = d.days[date];
   d.days[date] = { score: prev ? Math.max(prev.score, score) : score, plays: (prev ? prev.plays : 0) + 1 };
   if (d.last !== date) {
-    const y = new Date(date + 'T12:00:00'); y.setDate(y.getDate() - 1);
-    const yd = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`;
-    d.streak = d.last === yd ? d.streak + 1 : 1;
-    d.last = date;
+    const n = nextStreak(d, date);
+    d.streak = n.streak; d.rest = n.rest; d.last = date;
   }
   store.put(KEYS.daily, d);
   return { score, streak: d.streak };
@@ -231,7 +229,7 @@ function screenHtml(name) {
       if (G.s.mode !== 'daily') return UI.overHtml(G.s, lex, null, { pb: pbLines(), review: reviewSeat(G.s) != null, barks: G.s.players.map((p, k) => (p.kind === 'ai' ? endBark(G.s, k) : null)) });
       const d = store.json(KEYS.daily, { days: {}, streak: 0 }, validDaily), date = G.s.daily.date, day = d.days[date];
       const label = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      return UI.overHtml(G.s, lex, { label, best: day ? day.score : G.s.players[0].score, streak: d.streak || 1 }, { review: reviewSeat(G.s) != null });
+      return UI.overHtml(G.s, lex, { label, best: day ? day.score : G.s.players[0].score, streak: d.streak || 1, rested: d.rest === date }, { review: reviewSeat(G.s) != null });
     }
   }
   return '';

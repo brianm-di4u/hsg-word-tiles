@@ -1,7 +1,7 @@
 // Wave 3, batch C: P-N02 (a word check in Help), S2-15 (hint allowance), S3-07 (Hot Springs bonuses), S3-08 (Daily streak),
 // P-N03 (words with no tie to their fact), S4-24 / S4-02 (the Bathhouse Row medallions) and S3-03 (Daily par and history).
 import { ctx, root } from './lib.mjs';
-import { emptyStats, applyGame, hintsUsed } from '../src/js/stats.js';
+import { emptyStats, applyGame, hintsUsed, nextStreak } from '../src/js/stats.js';
 import { ROW_BONUS } from '../src/js/score.js';
 import { generateMoves } from '../src/js/movegen.js';
 
@@ -15,6 +15,24 @@ const game = (extra) => ({
   log: [{ p: 0, kind: 'play', n: 0, score: 91, full: 0, words: [{ w: 'SPRING', score: 91, bonus: 0 }] }, { kind: 'end' }],
   result: { why: 'out', out: 0, adjust: [0, 0], winners: [0] },
 });
+
+const DAILY = 'hs-letters-daily-v1';
+// play a game to its end as a person would: the best scoring play each turn, a pass when nothing fits
+async function playOut(t, max = 120) {
+  for (let n = 0; n < max; n++) {
+    const s = (await t.state()).game;
+    if (s.over) return s;
+    if (s.players[s.cur].kind !== 'human') { await t.page.waitForFunction(() => { const g = window.__game.getState(); return g.game.over || g.game.players[g.game.cur].kind === 'human'; }, null, { timeout: 20000 }); continue; }
+    const mv = await t.game('act', 'moves', 1);
+    if (mv && mv.length) {
+      const st = await t.game('act', 'stage', mv[0].tiles);
+      const r = st.ok ? await t.game('act', 'play') : { ok: false };
+      if (!r.ok) { await t.game('act', 'recall'); await t.game('act', 'pass'); }
+    } else await t.game('act', 'pass');
+    await t.page.waitForTimeout(60);
+  }
+  return (await t.state()).game;
+}
 
 export const tests = [
   // ---------- P-N02 ----------
@@ -148,6 +166,46 @@ export const tests = [
       t.expect(text.includes('Hot Springs word +10 / 18 / 30'), 'the bonus line says 10 / 18 / 30');
       t.expect(/earns 20 more/.test(text), 'the Row line says 20 more');
       t.expect(!/earns its bonus twice/.test(text), 'and no longer says twice');
+    },
+  },
+  // ---------- S3-08 ----------
+  {
+    name: 'S3-08 one missed day is forgiven by a rest day, once in any seven; two missed days still end the streak',
+    node: true,
+    async run(t) {
+      const a = nextStreak({ streak: 5, last: '2026-11-10', rest: null }, '2026-11-11');
+      t.equal(a.streak, 6, 'the next day adds one'); t.expect(!a.rested, 'with no rest day used');
+      const b = nextStreak({ streak: 5, last: '2026-11-10', rest: null }, '2026-11-12');
+      t.equal(b.streak, 6, 'one missed day keeps the streak and adds the day'); t.expect(b.rested && b.rest === '2026-11-12', 'and uses the rest day');
+      const c = nextStreak({ streak: 6, last: '2026-11-12', rest: '2026-11-12' }, '2026-11-14');
+      t.equal(c.streak, 1, 'a second gap within seven days of the rest ends the streak');
+      const d = nextStreak({ streak: 6, last: '2026-11-18', rest: '2026-11-12' }, '2026-11-20');
+      t.equal(d.streak, 7, 'seven days after the rest, another gap is forgiven'); t.equal(d.rest, '2026-11-20', 'and the new rest is remembered');
+      t.equal(nextStreak({ streak: 5, last: '2026-11-10', rest: null }, '2026-11-13').streak, 1, 'two missed days end the streak');
+      t.equal(nextStreak({ streak: 0, last: null }, '2026-11-13').streak, 1, 'a first play starts a streak of one');
+      t.equal(nextStreak({ streak: 5, last: '2026-02-28', rest: null }, '2026-03-02').streak, 6, 'a gap across the end of February is one day, not three');
+      t.equal(nextStreak({ streak: 5, last: '2026-11-10', rest: 7 }, '2026-11-12').streak, 6, 'a damaged rest field is ignored');
+    },
+  },
+  {
+    name: 'S3-08 playing the Daily after one missed day keeps the saved streak, says why, and the best streak holds it',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ days: { '2026-11-10': { score: 120, plays: 1 } }, streak: 5, last: '2026-11-10' })), DAILY);
+      await t.game('newGame', { mode: 'daily', date: '2026-11-12' });
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'game', null, { timeout: 8000 });
+      await playOut(t);
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 8000 });
+      const rec = await t.page.evaluate((k) => JSON.parse(localStorage.getItem(k)), DAILY);
+      t.equal(rec.streak, 6, 'the streak went 5 to 6'); t.equal(rec.rest, '2026-11-12', 'the rest day is saved'); t.equal(rec.last, '2026-11-12', 'with the day');
+      const st = await t.page.evaluate(() => JSON.parse(localStorage.getItem('hs-letters-stats-v1')));
+      t.equal(st.daily.bestStreak, 6, 'and the best streak is 6');
+      t.expect(/rest day kept your streak/.test(await t.page.textContent('.daily-box')), 'the results card says a rest day was used');
+      await t.shot('S3-08-rest-day');
+      await t.game('scene', 'records');
+      t.expect(/once in any seven days/.test(await t.page.textContent('.sheet')), 'Records explains it');
     },
   },
 ];
