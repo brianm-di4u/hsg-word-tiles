@@ -15,6 +15,7 @@ import { cleanStats, applyGame, applyDaily, nextStreak } from './stats.js';
 import * as B3 from './board3d.js';
 import * as UI from './ui.js';
 import { generateMoves } from './movegen.js';
+import { dailyPar } from './par.js';
 import { reviewSeat, reviewSteps, summarize } from './review.js';
 
 const { qs: $, esc } = UI;
@@ -133,6 +134,20 @@ function dailyInfo() {
   const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
   return { ...d, today: d.days[G.dailyDate || today()] || null };
 }
+// Works out par for a Daily date once (a few turns of each computer player, with a pause between turns so the screen stays
+// alive), keeps it with the day's record and refreshes the results sheet if it is showing.
+const parBusy = new Set();
+async function findPar(date, s) {
+  const d0 = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
+  if ((d0.days[date] && d0.days[date].par) || parBusy.has(date) || !G.dict) return;
+  parBusy.add(date);
+  try {
+    const par = await dailyPar({ dict: G.dict, lex: G.lex }, date, () => new Promise((r) => setTimeout(r, 0)));
+    const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
+    if (d.days[date]) { d.days[date].par = par; store.put(KEYS.daily, d); }
+    if (G.scene === 'over' && G.s === s) showScene('over');
+  } catch (e) { /* par is a comparison, never needed to play */ } finally { parBusy.delete(date); }
+}
 function recordRegister(entry) {
   if (!entry || entry.kind !== 'play') return;
   const p = G.s.players[entry.p];
@@ -151,7 +166,10 @@ function recordDaily() {
   const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
   const date = s.daily.date, score = s.players[0].score;
   const prev = d.days[date];
+  // `first` is the score of the first try on the day (absent on days saved before it was kept); `par` is what Hollis and Maestro Fitch score on the same tiles
   d.days[date] = { score: prev ? Math.max(prev.score, score) : score, plays: (prev ? prev.plays : 0) + 1 };
+  if (prev && prev.first != null) d.days[date].first = prev.first; else if (!prev) d.days[date].first = score;
+  if (prev && prev.par) d.days[date].par = prev.par;
   if (d.last !== date) {
     const n = nextStreak(d, date);
     d.streak = n.streak; d.rest = n.rest; d.last = date;
@@ -223,13 +241,13 @@ function screenHtml(name) {
     case 'help': return UI.helpHtml(G.helpTab, lex, twoLetterWords());
     case 'settings': return UI.settingsHtml(G.settings);
     case 'register': return UI.registerHtml(lex, register(), G.noSave);
-    case 'records': return UI.recordsHtml(stats(), { found: lex.data.words.filter((e) => e.forms.some((f) => register()[f])).length, total: lex.data.words.length, daily: dailyInfo() });
+    case 'records': return UI.recordsHtml(stats(), { found: lex.data.words.filter((e) => e.forms.some((f) => register()[f])).length, total: lex.data.words.length, daily: dailyInfo(), today: today() });
     case 'about': return UI.aboutHtml(META);
     case 'over': {
       if (G.s.mode !== 'daily') return UI.overHtml(G.s, lex, null, { pb: pbLines(), review: reviewSeat(G.s) != null, barks: G.s.players.map((p, k) => (p.kind === 'ai' ? endBark(G.s, k) : null)) });
       const d = store.json(KEYS.daily, { days: {}, streak: 0 }, validDaily), date = G.s.daily.date, day = d.days[date];
       const label = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      return UI.overHtml(G.s, lex, { label, best: day ? day.score : G.s.players[0].score, streak: d.streak || 1, rested: d.rest === date }, { review: reviewSeat(G.s) != null });
+      return UI.overHtml(G.s, lex, { label, best: day ? day.score : G.s.players[0].score, streak: d.streak || 1, rested: d.rest === date, first: day ? day.first : null, plays: day ? day.plays : 1, par: day ? day.par || null : null }, { review: reviewSeat(G.s) != null });
     }
   }
   return '';
@@ -482,7 +500,7 @@ function finishGame() {
   if (finishedGames.has(s)) return;
   finishedGames.add(s);
   save(s);
-  if (s.mode === 'daily') G.dailyStreak = recordDaily().streak;
+  if (s.mode === 'daily') { G.dailyStreak = recordDaily().streak; findPar(s.daily.date, s); }
   try { recordStats(s); } catch (e) { /* the records are a keepsake: a failed write never stops the game */ }
   const humanWon = s.result.winners.some((k) => s.players[k].kind === 'human');
   sfx(humanWon || s.mode === 'daily' ? 'fanfare' : 'turn');

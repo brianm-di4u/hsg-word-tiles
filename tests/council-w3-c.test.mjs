@@ -3,6 +3,10 @@
 import { ctx, root } from './lib.mjs';
 import { emptyStats, applyGame, hintsUsed, nextStreak } from '../src/js/stats.js';
 import { ROW_BONUS } from '../src/js/score.js';
+import { createGame, curateBag } from '../src/js/engine.js';
+import { dailyPar } from '../src/js/par.js';
+import { TILES, BLANKS } from '../src/js/tiles.js';
+const TOTAL = Object.values(TILES).reduce((a, x) => a + x.count, 0) + BLANKS;
 import { generateMoves } from '../src/js/movegen.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
@@ -261,6 +265,89 @@ export const tests = [
       await t.game('newGame', { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
       await t.waitIdle(8000);
       await t.shot('S4-02-row-medallions');
+    },
+  },
+  // ---------- S3-03 ----------
+  {
+    name: 'S3-03 the first two Daily racks hold 2 to 4 vowels on every one of 400 dates, and the bag is the same tiles',
+    node: true,
+    async run(t) {
+      const c = await ctx();
+      const d0 = Date.UTC(2026, 0, 1, 12);
+      let bad = 0, changed = 0;
+      for (let k = 0; k < 400; k++) {
+        const date = new Date(d0 + k * 86400000).toISOString().slice(0, 10);
+        const s = createGame({ mode: 'daily', date }, c.lex);
+        const all = s.players[0].rack.concat(s.bag);
+        for (const part of [all.slice(0, 7), all.slice(7, 14)]) { const v = part.filter((l) => 'AEIOU'.includes(l)).length; if (v < 2 || v > 4) bad++; }
+        t.equal(all.length, TOTAL, 'the whole bag is still there (' + date + ')');
+        if (all.slice().sort().join('') !== (() => { const f = createGame({ mode: 'daily', date }, c.lex); return f.players[0].rack.concat(f.bag).sort().join(''); })()) changed++;
+      }
+      t.equal(bad, 0, 'no rack with fewer than 2 or more than 4 vowels');
+      t.equal(changed, 0, 'and a date is dealt the same twice');
+      const sample = ['Q', 'Z', 'X', 'K', 'J', 'B', 'C', 'D', 'T', 'N', 'S', 'R', 'L', 'M', 'A', 'E', 'I', 'O', 'U', 'A'];
+      curateBag(sample);
+      t.expect(sample.slice(0, 7).filter((l) => 'AEIOU'.includes(l)).length >= 2, 'a rack of consonants gets vowels from later in the bag');
+      t.equal(sample.slice().sort().join(''), ['Q', 'Z', 'X', 'K', 'J', 'B', 'C', 'D', 'T', 'N', 'S', 'R', 'L', 'M', 'A', 'E', 'I', 'O', 'U', 'A'].sort().join(''), 'and nothing is lost');
+    },
+  },
+  {
+    name: 'S3-03 par for a date is the same every time and Hard scores at least as much as Medium on average',
+    node: true,
+    async run(t) {
+      const c = await ctx();
+      let hard = 0, med = 0;
+      for (const date of ['2026-11-12', '2026-11-13', '2026-11-14']) {
+        const a = await dailyPar(c, date), b = await dailyPar(c, date);
+        t.equal(JSON.stringify(a), JSON.stringify(b), date + ': the same par twice');
+        t.expect(a.m > 0 && a.h > 0, date + ': both are real scores (' + a.m + ', ' + a.h + ')');
+        hard += a.h; med += a.m;
+      }
+      t.expect(hard > med, 'over three days Maestro Fitch out-scores Hollis Crane (' + hard + ' against ' + med + ')');
+    },
+  },
+  {
+    name: 'S3-03 the Daily results show par and the first try, Records shows fourteen days with stars, and the record keeps first and par',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { mode: 'daily', date: '2026-11-12' });
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'game', null, { timeout: 8000 });
+      const first = (await playOut(t)).players[0].score;
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over' && /scored [0-9]+ and .* [0-9]+ on these tiles/.test(document.querySelector('.daily-box').textContent), null, { timeout: 20000 });
+      t.expect(/Hollis Crane scored [0-9]+ and Maestro Julian Fitch [0-9]+ on these tiles/.test(await t.page.textContent('.daily-box')), 'par is on the results box');
+      let rec = await t.page.evaluate((k) => JSON.parse(localStorage.getItem(k)), DAILY);
+      t.equal(rec.days['2026-11-12'].first, first, 'the first try is saved'); t.expect(rec.days['2026-11-12'].par && rec.days['2026-11-12'].par.h > 0, 'and par');
+      await t.shot('S3-03-daily-par');
+      // a second try on the same day keeps the first try and says so
+      await t.game('newGame', { mode: 'daily', date: '2026-11-12' });
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'game', null, { timeout: 8000 });
+      await playOut(t);
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 8000 });
+      t.expect(new RegExp('Your first try today: ' + first + "[.]").test(await t.page.textContent('.daily-box')), 'the replay shows the first try');
+      rec = await t.page.evaluate((k) => JSON.parse(localStorage.getItem(k)), DAILY);
+      t.equal(rec.days['2026-11-12'].first, first, 'the first try is not overwritten'); t.equal(rec.days['2026-11-12'].plays, 2, 'two plays');
+      // fourteen days with stars, from a record with par on some days
+      const today = await t.page.evaluate(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); });
+      await t.page.evaluate(([k, td]) => {
+        const day = (n) => { const [y, m, d] = td.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d - n, 12)).toISOString().slice(0, 10); };
+        localStorage.setItem(k, JSON.stringify({ streak: 3, last: td, days: {
+          [day(0)]: { score: 400, first: 400, plays: 1, par: { m: 300, h: 350 } },
+          [day(1)]: { score: 320, first: 320, plays: 1, par: { m: 300, h: 350 } },
+          [day(2)]: { score: 200, first: 200, plays: 2, par: { m: 300, h: 350 } },
+          [day(3)]: { score: 250, plays: 1 },
+        } }));
+      }, [DAILY, today]);
+      await t.game('scene', 'records');
+      t.equal(await t.page.locator('.dstrip li').count(), 14, 'fourteen days');
+      const label = (n) => t.page.getAttribute('.dstrip li:nth-child(' + (14 - n) + ')', 'aria-label');
+      t.expect(/2 stars/.test(await label(0)), 'beating Hard par: two stars'); t.expect(/1 star/.test(await label(1)), 'beating Medium only: one star (' + await label(1) + ')');
+      t.expect(/no stars/.test(await label(2)), 'under both: none'); t.expect(!/star/.test(await label(3)) && /250 points/.test(await label(3)), 'a day with no par shows only its score');
+      t.expect(/not played/.test(await label(5)), 'an empty day says so');
+      await t.page.locator('.dstrip').scrollIntoViewIfNeeded();
+      await t.shot('S3-03-history-strip');
+      await t.checkLayout({ allowScrollY: true });
     },
   },
 ];

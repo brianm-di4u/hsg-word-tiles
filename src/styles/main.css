@@ -566,3 +566,12 @@ body.reduce .coach-target, body.reduce #boardwrap.coach-target::after { animatio
 #preview .bd li span { font-variant-numeric: tabular-nums; }
 body.theme-dark #preview .bd { background: #0C0A16; }
 #preview .bd li.tot { border-top: 1px solid rgba(255, 255, 255, 0.25); padding-top: 4px; color: #F3DD8B; }
+/* the Daily Soak's last fourteen days */
+.dhead { margin: 10px 0 4px; font: 600 1rem var(--f-serif); }
+.dstrip { list-style: none; padding: 0; margin: 0 0 6px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.dday { display: grid; justify-items: center; padding: 4px 2px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); line-height: 1.2; }
+.dday small { color: var(--muted); font-size: 0.7rem; }
+.dday b { font: 600 0.95rem var(--f-serif); font-variant-numeric: tabular-nums; }
+.dday i { font-style: normal; color: var(--accent); font-size: 0.8rem; min-height: 1em; }
+.dday:not(.on) { opacity: 0.55; }
+.par { margin: 4px 0; font-weight: 600; }

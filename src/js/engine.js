@@ -34,9 +34,32 @@ export function createGame(opts, lex) {
     daily: mode === 'daily' ? { date: opts.date, turns: DAILY_TURNS } : null,
   };
   s.bag = shuffle(s, 'bag', fullBag());
+  if (mode === 'daily') curateBag(s.bag);
   if (lex) s.featured = pickFeatured(s, lex);
   for (const p of s.players) draw(s, p);
   return s;
+}
+
+// The Daily's first two racks (the first fourteen tiles) each hold 2 to 4 vowels, so no one opens on a rack of consonants.
+// Tiles are swapped with the nearest later ones, in order, so the deal for a date is still the same everywhere.
+export const VOWELS = 'AEIOU';
+export const VOWELS_MIN = 2, VOWELS_MAX = 4;
+export function curateBag(bag) {
+  const isV = (l) => VOWELS.includes(l);
+  for (const [a, b] of [[0, RACK], [RACK, 2 * RACK]]) {
+    for (;;) {
+      let v = 0;
+      for (let i = a; i < b; i++) if (isV(bag[i])) v++;
+      const want = v < VOWELS_MIN ? true : v > VOWELS_MAX ? false : null;
+      if (want === null) break;
+      let from = -1, to = -1;
+      for (let i = a; i < b && from < 0; i++) if (isV(bag[i]) === !want && bag[i] !== '?') from = i;
+      for (let j = 2 * RACK; j < bag.length && to < 0; j++) if (isV(bag[j]) === want && bag[j] !== '?') to = j;
+      if (from < 0 || to < 0) break;
+      [bag[from], bag[to]] = [bag[to], bag[from]];
+    }
+  }
+  return bag;
 }
 
 // Three featured words from three different categories, each showing one letter to start.

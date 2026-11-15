@@ -404,6 +404,7 @@ export function recordsHtml(st, o) {
     }).join('')}</tbody></table><p class="note">A win counts when your score beats that opponent's.</p>` : '<p class="note">Each opponent and difficulty you play gets a line here.</p>'}
     <h2>Daily Soak</h2>
     <div class="stats">${stat(days.length, 'days played')}${stat(days.length ? Math.max(...days.map((d) => d.score)) : '-', 'best day')}${stat(day.streak || 0, 'day streak')}${stat(Math.max(day.streak || 0, st.daily.bestStreak), 'best streak')}</div>
+    ${dailyStrip(day.days || {}, o.today)}
     <p class="note">Miss a single day and a rest day keeps your streak going, once in any seven days.</p>
     <h2>Bathhouse Register</h2>
     <p>${o.found} of ${o.total} Hot Springs words found.</p>
@@ -442,7 +443,7 @@ export function overHtml(s, lex, dinfo, extra = {}) {
   return `<div class="sheet over">
     ${art.has('title') ? `<div class="over-art" style="background-image:url(${art.src('title')})" aria-hidden="true"></div>` : ''}
     <header class="masthead"><p class="mast-kicker">The Steam Ledger</p><h1>${daily ? 'Daily Soak' : 'Final Soak'}</h1><p class="mast-sub">${esc(why)}</p></header>
-    ${dinfo ? `<div class="daily-box"><p class="daily-date">${esc(dinfo.label)}</p><div class="daily-stats"><div><b>${s.players[0].score}</b><small>this soak</small></div><div><b>${dinfo.best}</b><small>best today</small></div><div><b>${dinfo.streak}</b><small>day streak</small></div></div><p class="note">Everyone gets the same tiles today. Come back tomorrow for a new soak.</p>${dinfo.rested ? '<p class="note rest-note">You missed a day, and a rest day kept your streak going. You get one in any seven days.</p>' : ''}</div>` : ''}
+    ${dinfo ? `<div class="daily-box"><p class="daily-date">${esc(dinfo.label)}</p><div class="daily-stats"><div><b>${s.players[0].score}</b><small>this soak</small></div><div><b>${dinfo.best}</b><small>best today</small></div><div><b>${dinfo.streak}</b><small>day streak</small></div></div><p class="note">Everyone gets the same tiles today. Come back tomorrow for a new soak.</p>${dinfo.par ? `<p class="par">${esc(persona('hollis').name)} scored ${dinfo.par.m} and ${esc(persona('julian').name)} ${dinfo.par.h} on these tiles.</p>` : ''}${dinfo.plays > 1 && dinfo.first != null ? `<p class="par">Your first try today: ${dinfo.first}.</p>` : ''}${dinfo.rested ? '<p class="note rest-note">You missed a day, and a rest day kept your streak going. You get one in any seven days.</p>' : ''}</div>` : ''}
     ${daily ? '' : `<div class="winner">${badge(top.p, top.k, 92)}<div class="wmeta"><span class="ribbon">${win.length > 1 ? 'Tied for first' : 'Winner'}</span><b>${win.map((k) => esc(s.players[k].name)).join(' &amp; ')}</b><small class="wlines">${line(top.p, top.k)}</small>${say(top.k)}</div><b class="wscore">${top.p.score}</b></div>`}
     ${pbs}
     <ol class="final">${order.slice(daily ? 0 : 1).map(({ p, k }) => `<li>${badge(p, k, 40)}<div><b>${esc(p.name)}</b><small class="wlines">${line(p, k)}</small>${say(k)}</div><b class="fscore">${p.score}</b></li>`).join('')}</ol>
@@ -462,6 +463,22 @@ export function reviewHtml(r) {
       ${r.misses.length ? `<ol class="rv-list">${r.misses.map((m) => `<li><b>Turn ${m.turn}</b> ${m.kind === 'play' ? `You played <em>${esc(m.word)}</em> for ${m.score}.` : m.kind === 'swap' ? 'You swapped tiles.' : 'You passed.'} <em>${esc(m.best.word)}</em> would have scored ${m.best.score}.</li>`).join('')}</ol>` : '<p>No play left more than a few points behind the best one on offer.</p>'}
       <p class="note">This counts points only. A smaller play that keeps good tiles can be the better one.${r.skipped ? ` ${plural(r.skipped, 'turn')} from before this was kept could not be looked at.` : ''}</p>`;
   return `<div class="card dialog review" role="dialog" aria-modal="true" aria-labelledby="rv-h"><h2 id="rv-h">What you missed</h2>${body}<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div></div>`;
+}
+
+// The last fourteen days of the Daily Soak, oldest first: the score of the first try (or the day's score where the first try
+// was not kept), one star for beating Hollis Crane's score on the day and two for beating Maestro Fitch's.
+export function dailyStrip(days, today) {
+  const t = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(today || '');
+  if (!t) return '';
+  const cells = [];
+  for (let k = 13; k >= 0; k--) {
+    const d = new Date(Date.UTC(+t[1], +t[2] - 1, +t[3] - k, 12)), key = d.toISOString().slice(0, 10), e = days[key];
+    const ref = e ? (e.first != null ? e.first : e.score) : null;
+    const stars = e && e.par ? (ref > e.par.h ? 2 : ref > e.par.m ? 1 : 0) : 0;
+    const said = e ? `${ref} points${e.par ? `, ${stars ? plural(stars, 'star') : 'no stars'}` : ''}` : 'not played';
+    cells.push(`<li class="dday${e ? ' on' : ''}" aria-label="${key}: ${said}"><small>${d.getUTCDate()}</small><b>${e ? ref : '·'}</b><i aria-hidden="true">${'★'.repeat(stars) || '&nbsp;'}</i></li>`);
+  }
+  return `<h3 class="dhead">Last 14 days</h3><ol class="dstrip">${cells.join('')}</ol><p class="note">Your first try each day. One star beats ${esc(persona('hollis').name)} on that day's tiles, two beat ${esc(persona('julian').name)}.</p>`;
 }
 
 export function dailyLine(d) {
