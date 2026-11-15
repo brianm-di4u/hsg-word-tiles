@@ -1,6 +1,6 @@
 // Wave 3, batch D: S4-19, S1-04, S1-07, S2-02, S2-06, S2-09, S4-05, S4-09, S2-14 and S3-15 (feedback, teaching, help and records).
 import { BATHHOUSES, ROWS, SIZE } from '../src/js/layout.js';
-import { stallNote } from '../src/js/ui.js';
+import { stallNote, decisiveLine, outcome } from '../src/js/ui.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false })); };
@@ -242,6 +242,58 @@ export const tests = [
       const vis = await t.page.evaluate(() => { const b = document.querySelector('.plaque'); return { label: b.getAttribute('aria-label'), cat: getComputedStyle(b.querySelector('.pcat')).display, h: Math.round(b.getBoundingClientRect().height) }; });
       t.expect(/Featured Spring 1/.test(vis.label) && vis.label.includes(cat.cat), 'a screen reader hears it too');
       await t.shot('S2-09-plaques');
+    },
+  },
+  // ---------- S4-05 and S2-14 ----------
+  {
+    name: 'S4-05 and S2-14 the results card changes with the outcome, says what decided the game, and unfound Featured Springs open their card',
+    node: true,
+    async run(t) {
+      const win = finished({ you: 300, opal: 250, winners: [0], log: [play(0, 80, { themed: 40, words: [{ w: 'STEAM', score: 40, bonus: 40, themed: 'steam' }] }), play(1, 60)] });
+      const lose = finished({ you: 250, opal: 300, winners: [1], log: [play(0, 60), play(1, 70, { themed: 40, words: [{ w: 'TUFA', score: 30, bonus: 40, themed: 'tufa' }] })] });
+      const tie = finished({ you: 280, opal: 280, winners: [0, 1], log: [play(0, 60), play(1, 60)] });
+      t.equal(outcome(win), 'win', 'a win'); t.equal(outcome(lose), 'loss', 'a loss'); t.equal(outcome(tie), 'tie', 'a tie');
+      t.equal(outcome({ ...win, players: win.players.map((p) => ({ ...p, kind: 'ai' })) }), 'none', 'computers only: none');
+      t.equal(decisiveLine(win), 'You won by 50: 40 more points from Hot Springs words.', 'the win: the Hot Springs bonuses decided it');
+      t.equal(decisiveLine(lose), 'Opal won by 50: 40 more points from Hot Springs words.', 'the loss says the same of the winner');
+      t.equal(decisiveLine(tie), 'The scores finished level.', 'a tie');
+      const close = finished({ you: 300, opal: 296, winners: [0], log: [play(0, 50), play(1, 49)] });
+      t.equal(decisiveLine(close), 'You won by 4, with no one play deciding it.', 'a narrow win with no clear reason says so');
+      const soak = finished({ you: 340, opal: 250, winners: [0], log: [play(0, 70, { full: 1 }), play(0, 20), play(1, 65)] });
+      t.equal(decisiveLine(soak), 'You won by 90: 1 more Full Soak.', 'a Full Soak is named');
+      const fin = finished({ you: 300, opal: 280, winners: [0], adjust: [14, -6], log: [play(0, 40), play(1, 40)] });
+      t.equal(decisiveLine(fin), 'You won by 20: a better finish, with going out and the tiles left over.', 'going out is named');
+    },
+  },
+  {
+    name: 'S4-05 the results screen differs for a win, a loss and a tie, and a Featured Spring nobody found opens its fact card',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      const feat = await t.page.evaluate(() => { const l = window.__G.lex; return [{ word: 'SPRING', cat: l.entry('SPRING').cat, shown: [0], by: null }, { word: 'TUFA', cat: l.entry('TUFA').cat, shown: [1], by: 0 }]; });
+      const mk = (you, opal, winners) => finished({ you, opal, winners, featured: feat, log: [play(0, 80, { themed: 40, words: [{ w: 'STEAM', score: 40, bonus: 40, themed: 'steam' }] }), play(1, 60)] });
+      const look = async (g, name) => {
+        await t.game('setState', { game: g, scene: 'over' });
+        await t.page.waitForSelector('.sheet.over');
+        return { cls: await t.page.getAttribute('.sheet.over', 'class'), kick: (await t.page.textContent('.mast-kicker')).trim(), dec: (await t.page.textContent('.decisive')).trim(), filter: await t.page.evaluate(() => getComputedStyle(document.querySelector('.over-art')).filter) };
+      };
+      const w = await look(mk(300, 250, [0]), 'win');
+      t.expect(/over-win/.test(w.cls) && /Lamps lit/.test(w.kick), 'a win: lamps lit (' + w.kick + ')');
+      t.expect(/You won by 50/.test(w.dec), 'and the deciding line (' + w.dec + ')');
+      await t.shot('S4-05-results-win');
+      const l = await look(mk(250, 300, [1]), 'loss');
+      t.expect(/over-loss/.test(l.cls) && /Dusk on the Row/.test(l.kick), 'a loss: dusk (' + l.kick + ')');
+      t.expect(l.filter !== w.filter, 'the painting is toned differently (' + w.filter + ' against ' + l.filter + ')');
+      await t.shot('S4-05-results-loss');
+      const e = await look(mk(280, 280, [0, 1]), 'tie');
+      t.expect(/over-tie/.test(e.cls) && /All square/.test(e.kick), 'a tie: all square (' + e.kick + ')');
+      const chips = await t.page.locator('.fchip').count();
+      t.equal(chips, 2, 'both Featured Springs, found or not, are buttons');
+      await t.page.locator('.fchip', { hasText: 'stayed hidden' }).click();
+      await t.page.waitForFunction(() => window.__game.getState().dialog === 'fact', null, { timeout: 3000 });
+      t.expect(/SPRING/.test(await t.page.textContent('.fact h2')), 'the unfound word opens its card');
+      await t.checkLayout({ allowScrollY: true });
     },
   },
 ];

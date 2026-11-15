@@ -438,6 +438,40 @@ export function stallNote(s, passing) {
   return left <= 1 ? 'A turn with no score now ends the game.' : `${left} more turns without a score end the game.`;
 }
 
+// win, loss, tie or none (computers only) from the point of view of the people at the table
+export function outcome(s) {
+  const w = s.result && s.result.winners || [];
+  if (!s.players.some((p) => p.kind === 'human')) return 'none';
+  if (w.length > 1) return 'tie';
+  return w.some((k) => s.players[k].kind === 'human') ? 'win' : 'loss';
+}
+const KICKER = { win: 'Lamps lit', loss: 'Dusk on the Row', tie: 'All square', none: 'The Steam Ledger' };
+
+// One line on what decided a game: the biggest gap, in points, between the winner and the runner-up among Hot Springs bonuses,
+// Full Soaks, Featured Springs, the best single turn and the finish (going out, tiles left). Empty for a Daily or a tie.
+export function decisiveLine(s) {
+  if (s.mode === 'daily' || s.players.length < 2 || !s.result) return '';
+  const order = s.players.map((p, k) => ({ p, k })).sort((a, b) => b.p.score - a.p.score);
+  const [a, b] = order, margin = a.p.score - b.p.score;
+  if (margin <= 0) return 'The scores finished level.';
+  const tally = (k) => {
+    const t = { themed: 0, full: 0, feat: 0, best: 0 };
+    for (const e of s.log) if (e.kind === 'play' && e.p === k) { t.themed += e.themed || 0; t.full += e.full ? 1 : 0; t.feat += e.featured ? 1 : 0; t.best = Math.max(t.best, e.score); }
+    return t;
+  };
+  const x = tally(a.k), y = tally(b.k), adj = (s.result.adjust[a.k] || 0) - (s.result.adjust[b.k] || 0);
+  const cands = [
+    [x.themed - y.themed, (d) => `${d} more points from Hot Springs words`],
+    [(x.full - y.full) * FULL_SOAK, () => `${plural(x.full - y.full, 'more Full Soak')}`],
+    [(x.feat - y.feat) * FEATURED_BONUS, () => `${plural(x.feat - y.feat, 'more Featured Spring')}`],
+    [x.best - y.best, () => `a bigger best turn, ${x.best} against ${y.best}`],
+    [adj, () => 'a better finish, with going out and the tiles left over'],
+  ].sort((p, q) => q[0] - p[0]);
+  const [d, say] = cands[0];
+  const who = a.p.name;
+  return d >= Math.max(10, margin * 0.4) ? `${esc(who)} won by ${margin}: ${say(d)}.` : `${esc(who)} won by ${margin}, with no one play deciding it.`;
+}
+
 export function overHtml(s, lex, dinfo, extra = {}) {
   const order = s.players.map((p, k) => ({ p, k })).sort((a, b) => b.p.score - a.p.score);
   const win = s.result.winners;
@@ -450,16 +484,17 @@ export function overHtml(s, lex, dinfo, extra = {}) {
   const line = (p, k) => `<span>${p.best ? `Best word ${esc(p.best.word)} (${p.best.score})` : 'No words played'}</span>${aid(p)}${s.result.adjust[k] > 0 ? `<span>Went out: +${s.result.adjust[k]}</span>` : s.result.adjust[k] < 0 ? `<span>Tiles left: −${-s.result.adjust[k]}</span>` : ''}`;
   const say = (k) => (extra.barks && extra.barks[k] ? `<small class="bark"><b>${esc(SHORT[s.players[k].persona] || '')}:</b> “${esc(extra.barks[k].text)}”</small>` : '');
   const pbs = extra.pb && extra.pb.length ? `<ul class="pbs" aria-label="Personal bests">${extra.pb.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '';
-  return `<div class="sheet over">
+  const oc = outcome(s), why2 = daily ? '' : decisiveLine(s);
+  return `<div class="sheet over over-${oc}">
     ${art.has('title') ? `<div class="over-art" style="background-image:url(${art.src('title')})" aria-hidden="true"></div>` : ''}
-    <header class="masthead"><p class="mast-kicker">The Steam Ledger</p><h1>${daily ? 'Daily Soak' : 'Final Soak'}</h1><p class="mast-sub">${esc(why)}</p></header>
+    <header class="masthead"><p class="mast-kicker">${daily ? 'The Steam Ledger' : KICKER[oc]}</p><h1>${daily ? 'Daily Soak' : 'Final Soak'}</h1><p class="mast-sub">${esc(why)}</p>${why2 ? `<p class="decisive">${why2}</p>` : ''}</header>
     ${dinfo ? `<div class="daily-box"><p class="daily-date">${esc(dinfo.label)}</p><div class="daily-stats"><div><b>${s.players[0].score}</b><small>this soak</small></div><div><b>${dinfo.best}</b><small>best today</small></div><div><b>${dinfo.streak}</b><small>day streak</small></div></div><p class="note">Everyone gets the same tiles today. Come back tomorrow for a new soak.</p>${dinfo.par ? `<p class="par">${esc(persona('hollis').name)} scored ${dinfo.par.m} and ${esc(persona('julian').name)} ${dinfo.par.h} on these tiles.</p>` : ''}${dinfo.plays > 1 && dinfo.first != null ? `<p class="par">Your first try today: ${dinfo.first}.</p>` : ''}${dinfo.rested ? '<p class="note rest-note">You missed a day, and a rest day kept your streak going. You get one in any seven days.</p>' : ''}</div>` : ''}
     ${daily ? '' : `<div class="winner">${badge(top.p, top.k, 92)}<div class="wmeta"><span class="ribbon">${win.length > 1 ? 'Tied for first' : 'Winner'}</span><b>${win.map((k) => esc(s.players[k].name)).join(' &amp; ')}</b><small class="wlines">${line(top.p, top.k)}</small>${say(top.k)}</div><b class="wscore">${top.p.score}</b></div>`}
     ${pbs}
     <ol class="final">${order.slice(daily ? 0 : 1).map(({ p, k }) => `<li>${badge(p, k, 40)}<div><b>${esc(p.name)}</b><small class="wlines">${line(p, k)}</small>${say(k)}</div><b class="fscore">${p.score}</b></li>`).join('')}</ol>
     <div class="over-cols">
-      <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}">${t.w} <small>+${t.pts}</small></button>`).join('')}</div>` : '<p class="note">None this game. They hide in everyday words like SPA, STEAM and ROCK.</p>'}</section>
-      ${s.featured.length ? `<section><h2>Featured Springs</h2><ul class="feat-list">${s.featured.map((f) => `<li class="${f.by != null ? 'got' : ''}"><b>${f.word}</b><small>${f.by != null ? `found by ${esc(s.players[f.by].name)}` : 'stayed hidden'}</small></li>`).join('')}</ul></section>` : ''}
+      <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}">${t.w} <small>+${t.pts}</small></button>`).join('')}</div>` : '<p class="note">None this game. A word like SPA, STEAM or ROCK pays a bonus and opens a card of local history.</p>'}</section>
+      ${s.featured.length ? `<section><h2>Featured Springs</h2><ul class="feat-list">${s.featured.map((f) => { const id = lex.entry(f.word)?.id, inner = `<b>${f.word}</b><small>${f.by != null ? `found by ${esc(s.players[f.by].name)}` : 'stayed hidden'}${id ? ' · read the card' : ''}</small>`; return `<li class="${f.by != null ? 'got' : ''}">${id ? `<button type="button" class="fchip" data-fact="${id}" data-form="${f.word}">${inner}</button>` : inner}</li>`; }).join('')}</ul></section>` : ''}
     </div>
     <div class="dlg-btns">${daily ? '' : '<button class="btn primary" data-again>Play again</button>'}${extra.review ? '<button class="btn" data-review>What you missed</button>' : ''}<button class="btn ${daily ? 'primary' : ''}" data-go="title">Title screen</button></div>
   </div>`;

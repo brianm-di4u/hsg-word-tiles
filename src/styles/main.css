@@ -579,5 +579,14 @@ body.theme-dark #preview .bd { background: #0C0A16; }
 .dday:not(.on) { opacity: 0.55; }
 .par { margin: 4px 0; font-weight: 600; }
 
-/* wave 3, batch D: the stall note */
+/* wave 3, batch D: results ceremony by outcome, the deciding line, Featured Spring chips that open their card, the stall note */
+.decisive { margin: 6px 0 0; font: 600 0.98rem var(--f-serif); color: var(--ink); }
+.over-win .over-art { filter: saturate(1.2) brightness(1.1) sepia(0.12); background-position: center 40%; }
+.over-loss .over-art { filter: saturate(0.5) brightness(0.72) hue-rotate(-14deg); background-position: center 85%; }
+.over-tie .over-art { filter: saturate(0.85) brightness(0.92); }
+.over-loss .mast-kicker { color: var(--muted); }
+.feat-list li:has(.fchip) { padding: 0; }
+.fchip { display: flex; flex-direction: column; align-items: flex-start; min-height: 44px; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.fchip:hover { background: rgba(138, 106, 30, 0.12); }
+.fchip small { text-decoration: underline; text-decoration-color: rgba(120, 100, 60, 0.5); }
 #preview .stall { color: #F3DD8B; }
