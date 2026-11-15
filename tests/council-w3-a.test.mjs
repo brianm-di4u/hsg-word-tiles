@@ -211,4 +211,37 @@ export const tests = [
       t.equal((await t.state()).staged.length, 0, 'a damaged record is ignored too');
     },
   },
+
+  // ---------- S1-02 ----------
+  {
+    name: 'S1-02 Enter and Space press the focused button; on the board Enter still plays',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(3);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      await t.page.focus('#b-menu');
+      await t.page.keyboard.press('Enter');
+      t.equal((await t.state()).dialog, 'pause', 'Enter on Menu opens the pause sheet');
+      await t.game('act', 'close');
+      await t.page.focus('[data-act="swap"]');
+      await t.page.keyboard.press('Space');
+      t.equal((await t.state()).dialog, 'swap', 'Space on Swap opens the swap sheet');
+      await t.game('act', 'close');
+      await t.page.focus('[data-act="pass"]');
+      await t.page.keyboard.press('Enter');
+      t.equal((await t.state()).dialog, 'confirm', 'Enter on Pass asks to confirm');
+      t.equal((await t.state()).staged.length, 0, 'and nothing was played');
+      await t.game('act', 'close');
+      const [m] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m.tiles);
+      await t.page.focus('#board');
+      const move = (await t.state()).game.move;
+      await t.page.keyboard.press('Enter');
+      await t.waitIdle(8000);
+      t.expect((await t.state()).game.move > move, 'Enter on the board still plays the staged tiles');
+    },
+  },
 ];
