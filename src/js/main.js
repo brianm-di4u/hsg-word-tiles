@@ -520,22 +520,27 @@ function pbLines() {
   return out;
 }
 
+const STING_LAG = 0.28;   // seconds: the score sting follows the clacks of the tiles instead of landing on them
 // Toasts and effects for a play: Full Soak, Hot Springs words, a Featured Spring.
-function celebrate(e, bark) {
+function celebrate(e, bark, wait = 0) {
   const p = G.s.players[e.p];
   const themed = e.words.filter((w) => w.themed);
+  let found = false;
   const who = bark ? { p, k: e.p } : null, quote = (ev) => (bark && bark.event === ev ? `“${bark.text}”` : null);
   if (e.featured) { toast({ kind: 'featured', who, title: `Featured Spring: ${e.featured}`, sub: `${quote('themed') || `${p.name} found it`} · +${FEATURED_BONUS}`, fact: G.lex.entry(e.featured)?.id, form: e.featured }); sfx('featured'); }
   for (const w of themed) {
     const entry = G.lex.byId.get(w.themed);
     const fresh = p.kind === 'human' && !register()[w.w];   // celebrate runs before recordRegister: this is the first time the word is signed in
+    if (fresh) found = true;
     toast({ kind: 'themed', title: `${w.w} +${w.bonus}${w.bath ? ` · Row +${ROW_BONUS}` : ''}`, sub: fresh ? 'New in your Register' : G.lex.categories[entry.cat].name, fact: entry.id, form: w.w });
     steamBurst(e.tiles.map((t) => t.i));
   }
   if (themed.length) goldSweep(e.tiles.map((t) => t.i));
   if (themed.length && !e.featured) sfx('steam');
   if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); sfx('chime'); }
-  else if (bark && bark.event === 'big') toast({ kind: 'bark', who, title: `${p.name}: ${e.words[0].w} +${e.score}`, sub: quote('big') });
+  // one sting a play: a Featured Spring or a Full Soak has its own, then a word new to the Register, then the size of the score
+  const st = UI.stingFor(e, found); if (st) sfx(st, { delay: wait + STING_LAG });
+  if (!e.full && bark && bark.event === 'big') toast({ kind: 'bark', who, title: `${p.name}: ${e.words[0].w} +${e.score}`, sub: quote('big') });
   scorePop(e, themed.length > 0);
 }
 

@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { root } from './lib.mjs';
+import { stingFor } from '../src/js/ui.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false })); };
@@ -54,6 +55,68 @@ export const tests = [
       await t.page.keyboard.press('?');
       await t.page.click('[data-tab="keys"]');
       t.expect(/press it twice to use your blank/.test(await t.page.textContent('#screen')), 'the Controls tab says how');
+    },
+  },
+  // ---------- S3-19 ----------
+  {
+    name: 'S3-19 the sting a play earns: by score, with its own for a new Register word, a Featured Spring and a Full Soak', node: true,
+    async run(t) {
+      const sf = (score, o = {}, nw = false) => stingFor({ score, ...o }, nw);
+      t.equal(sf(24), null, '24 points earns none'); t.equal(sf(25), 'good', '25 earns the rising pair'); t.equal(sf(44), 'good', '44 the same');
+      t.equal(sf(45), 'big', '45 earns the run and thump'); t.equal(sf(120), 'big', 'and so does 120');
+      t.equal(sf(60, {}, true), 'discover', 'a word new to the Register beats the size');
+      t.equal(sf(60, { featured: 'SPRING' }), null, 'a Featured Spring keeps its own bell'); t.equal(sf(60, { full: 50 }, true), null, 'a Full Soak keeps its own chime');
+    },
+  },
+  {
+    name: 'S3-19 in the game: a small play is quiet, a Hot Springs word new to the Register has its own sting, the same word later gets the one for its size',
+    viewports: ['desktop'],
+    initScript: quiet,
+    async run(t) {
+      // stage and play in one turn of the event loop and read the cues it made before any reply can add its own
+      const playNow = (tiles) => t.page.evaluate(async (tl) => {
+        await window.__game.act('stage', tl);
+        const r = await window.__game.act('play');
+        const g = window.__game.getState();
+        return { ok: r.ok, sfx: g.sfx, entry: g.game.log.filter((x) => x.kind === 'play').pop() };
+      }, tiles);
+      const stings = (r) => r.sfx.slice(r.sfx.lastIndexOf('play')).filter((n) => ['good', 'big', 'discover'].includes(n));
+      await start(t, 'SPRINGE');
+      let r = await playNow([{ i: CENTER, l: 'I' }, { i: CENTER + 1, l: 'N' }]);
+      t.expect(r.ok && r.entry.score < 25 && !stings(r).length, 'IN for ' + r.entry.score + ' makes no sting');
+      // SPRING is a Hot Springs word: new to a fresh Register it has the discovery sting
+      await start(t, 'SPRINGE');
+      r = await playNow(across('SPRING'));
+      t.expect(r.ok, 'SPRING was played');
+      t.equal(stings(r).join(','), r.entry.featured ? '' : 'discover', 'a word new to the Register makes the discovery sting (' + r.entry.score + ' points)');
+      // the second time it is no longer new, so what is heard is the size of the score
+      await start(t, 'SPRINGE');
+      r = await playNow(across('SPRING'));
+      const size = r.entry.score >= 45 ? 'big' : r.entry.score >= 25 ? 'good' : '';
+      t.equal(stings(r).join(','), r.entry.featured ? '' : size, 'the same word again (' + r.entry.score + ' points) makes the sting for its size');
+      t.expect(r.entry.score >= 25, 'and that is a size that has one');
+    },
+  },
+  {
+    name: 'S3-19 the new cues sit in the mix and nothing they are played with clips at full volume',
+    viewports: ['desktop'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      const med = (p) => [...p].sort((x, y) => x - y)[p.length >> 1], SPREAD = 10 ** (1.5 / 20);
+      const render = async (n, vol) => { const p = []; for (let k = 0; k < 20; k++) p.push((await t.game('act', 'renderSfx', n, vol)).peak); return p; };
+      for (const n of ['good', 'big', 'discover']) {
+        const p = await render(n, 0.35);
+        t.log(n + ' median ' + med(p));
+        t.expect(med(p) >= 0.2 && med(p) <= 0.45, n + ' is typically between 0.2 and 0.45 (median ' + med(p) + ')');
+        t.expect(Math.min(...p) >= 0.2 / SPREAD && Math.max(...p) <= 0.45 * SPREAD, n + ' never strays more than 1.5 dB outside it');
+      }
+      // what each is heard with: the tiles, and the steam of a Hot Springs word
+      for (const n of ['play+good@0.28', 'play+big@0.28+steam', 'play+steam+discover@0.28']) {
+        const p = await render(n, 1);
+        t.log(n + ' full-volume most ' + Math.max(...p));
+        t.expect(Math.max(...p) < 0.95, n + ' stays under 0.95 with the volume at full (' + Math.max(...p) + ')');
+      }
     },
   },
 ];

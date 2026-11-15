@@ -10,7 +10,7 @@ const DEFAULT_VOL = 0.35;
 // volume the tile sounds peak between 0.2 and 0.45 and sit clearly over the music and the bed. Set it to 1 to undo.
 const CUE_GAIN = 6;
 // bells and steam are the loudest cues: a little less so they do not outrun the tile sounds
-const TRIM = { featured: 0.6, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5 };
+const TRIM = { featured: 0.6, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, good: 1.8, big: 0.57, discover: 0.6 };
 const musicGain = (vol = audio.vol) => Math.min(1.5, vol / DEFAULT_VOL);   // the Volume slider moves the music with the cues
 // Above the shipped volume the cues rise more gently than the slider: to about twice the shipped level at full, not
 // 2.9 times. With the slider at full the loudest repeats of steam and place overshot the limiter and clipped (peaks
@@ -105,11 +105,12 @@ const bell = (t, f, g = 0.12) => [1, 2.76, 5.4].forEach((m, k) => tone(f * m, t,
 
 const DUCK = { chime: [6, 900], featured: [6, 1400], fanfare: [6, 1800] };
 
-// opts: pan (-1..1, kept within +-0.7: the board column of a tile) and step (0.. : semitones up along a word)
+// opts: pan (-1..1, kept within +-0.7: the board column of a tile), step (0.. : semitones up along a word) and delay
+// (seconds from now: a sting that waits for the tiles it belongs to)
 export function sfx(name, opts = {}) {
   audio.played.push(name); if (audio.played.length > 30) audio.played.shift();
   if (!audio.on || !audio.fx || !audio.ctx) return;
-  const c = audio.ctx, t = c.currentTime, step = opts.step || 0;
+  const c = audio.ctx, t = c.currentTime + (opts.delay || 0), step = opts.step || 0;
   try {
     OUT = audio.sfxOut || c.destination;
     if (opts.pan && c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = Math.max(-0.7, Math.min(0.7, opts.pan)); p.connect(OUT); OUT = p; }
@@ -126,6 +127,11 @@ export function sfx(name, opts = {}) {
       case 'featured': bell(t, 659, 0.14); bell(t + 0.28, 988, 0.12); noise(t + 0.1, 0.9, 0.12, 5200, 0.6, 'highpass', 0.25); break;
       case 'turn': tone(660, t, 0.12, 'sine', 0.05); break;
       case 'error': tone(196, t, 0.16, 'triangle', 0.1, -40); break;
+      // a play worth 25 or more earns a rising pair of notes over its clacks; 45 or more, a short run up and a low thump
+      case 'good': tone(659, t, 0.22, 'sine', 0.06); tone(988, t + 0.09, 0.3, 'sine', 0.055); break;
+      case 'big': [523, 659, 784, 1047].forEach((f, k) => tone(f, t + k * 0.065, 0.28, 'triangle', 0.05)); tone(98, t, 0.3, 'sine', 0.16, -30); break;
+      // the first time a person signs a Hot Springs word into the Register: two bells, the second a fifth above
+      case 'discover': bell(t, 784, 0.08); bell(t + 0.16, 1175, 0.08); break;
       case 'fanfare': [523, 659, 784, 1047].forEach((f, k) => bell(t + k * 0.14, f, 0.08)); break;
     }
     if (DUCK[name] && audio.kit && c === audio.live) audio.kit.music.duck(...DUCK[name]);
@@ -147,6 +153,7 @@ export function audioRender(name, seconds, wantWav) {
   }, seconds, { wav: !!wantWav });
 }
 
+// (a name like 'play+big@0.28+steam' renders those cues together, each after the delay in seconds that follows its @)
 // One cue rendered offline through the same limiter the player hears, without touching the live audio. The cue is
 // made a quarter of a second in, as it would be in a running game (a limiter that has only just started eats the
 // first few milliseconds of whatever it is given).
@@ -156,7 +163,7 @@ export async function renderCue(name, vol, opts) {
   await off.suspend(0.25);
   const prev = { ctx: audio.ctx, on: audio.on, vol: audio.vol, fx: audio.fx, sfxOut: audio.sfxOut };
   audio.ctx = off; audio.on = true; audio.fx = true; audio.sfxOut = g.sfx; audio.vol = vol;
-  try { sfx(name, opts); } finally { Object.assign(audio, prev); }
+  try { for (const n of name.split('+')) { const [cue, d] = n.split('@'); sfx(cue, { ...opts, delay: d ? +d : 0 }); } } finally { Object.assign(audio, prev); }
   off.resume();
   const d = (await done).getChannelData(0);
   let peak = 0, sum = 0, last = 0, zc = 0;

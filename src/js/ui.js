@@ -430,6 +430,15 @@ export function aboutHtml(meta) {
 // ---------- game over and daily results ----------
 // How near a stalled game is to its end. The game ends when every seat has passed or swapped twice in a row (engine.js), so within
 // one round of that the player is told: `passing` words it for the Pass confirmation (this pass is one of the turns), else for the strip.
+// The one sting a play earns on top of its tile sounds (S3-19). A Featured Spring and a Full Soak have their own cues; then a
+// word new to the Register; then the size of the score: this many points earns a rising pair of notes, and this many a run up
+// with a low thump.
+export const SCORE_GOOD = 25, SCORE_BIG = 45;
+export function stingFor(e, newWord) {
+  if (e.featured || e.full) return null;
+  if (newWord) return 'discover';
+  return e.score >= SCORE_BIG ? 'big' : e.score >= SCORE_GOOD ? 'good' : null;
+}
 export function stallNote(s, passing) {
   if (!s || s.over || s.mode === 'daily' || !s.players) return '';
   const n = s.players.length, left = 2 * n - (s.scoreless || 0);
