@@ -356,7 +356,17 @@ const lastTiles = (s) => { const e = [...s.log].reverse().find((x) => x.kind ===
 const cur = () => G.s.players[G.s.cur];
 const humans = () => G.s.players.filter((p) => p.kind === 'human').length;
 // the rack order and staging belong to one move (orderMove), so a turn's start never wipes what the player already did
-function resetOrder() { G.order = G.s ? cur().rack.map((_, k) => k) : []; G.staged = []; G.selected = null; G.orderMove = G.s ? G.s.move : -1; }
+// While the one computer opponent plays, the person's own rack stays in view and theirs to rearrange (waitSeat); the order they
+// leave it in (G.kept) is the one the rack has when their turn comes round, if the tiles are still the same.
+const waitSeat = () => (G.s && !G.s.over && cur().kind === 'ai' && humans() === 1 ? G.s.players.find((p) => p.kind === 'human') : null);
+const waiting = () => !!waitSeat() && G.scene === 'game' && !G.dialog && !G.privacy;
+function resetOrder() {
+  const w = G.s ? waitSeat() : null, rack = G.s ? (w || cur()).rack : [], kept = G.kept;
+  G.kept = null;
+  const same = !w && kept && kept.key === rack.join('') && kept.order.length === rack.length && rack.every((_, k) => kept.order.includes(k));
+  G.order = same ? [...kept.order] : rack.map((_, k) => k);
+  G.staged = []; G.selected = null; G.orderMove = G.s ? G.s.move : -1;
+}
 // pass and play: hide the rack until the next person is ready
 const turnPrivacy = () => cur().kind === 'human' && humans() >= 2 && G.revealed !== G.s.cur;
 
@@ -635,7 +645,7 @@ function renderActions() {
   el.innerHTML = UI.actionsHtml({ staged: G.staged.length > 0, canSwap: s.bag.length >= RACK, canPlay: G.staged.length > 0 && G.preview && G.preview.ok, hints: p.hints != null && p.kind === 'human' ? p.hints : null });
   el.classList.toggle('waiting', !human || s.over);
   el.querySelectorAll('[data-act]').forEach((b) => {
-    if (!human || s.over) b.disabled = true;
+    if ((!human || s.over) && !(b.dataset.act === 'shuffle' && waitSeat())) b.disabled = true;
     b.addEventListener('click', () => { unlock(); ({ play: doPlay, pass: doPass, swap: doSwap, hint: doHint, recall: recallAll, shuffle: shuffleRack })[b.dataset.act](); });
   });
 }
@@ -646,33 +656,35 @@ function renderRack() {
   const p = cur();
   const show = p.kind === 'human' && !G.privacy;
   // whose rack shows: the current human's; during AI turns, the last human's tiles stay visible but dimmed
+  const wait = waitSeat();
   let rack = p.rack, order = G.order, dim = false;
   if (!show) {
     const hk = G.s.players.findIndex((x) => x.kind === 'human');
-    if (hk >= 0 && humans() === 1) { rack = G.s.players[hk].rack; order = rack.map((_, k) => k); dim = true; } else { rack = []; order = []; }
+    if (wait) { rack = wait.rack; dim = true; G.kept = { key: rack.join(''), order: [...order] }; }
+    else if (hk >= 0 && humans() === 1) { rack = G.s.players[hk].rack; order = rack.map((_, k) => k); dim = true; } else { rack = []; order = []; }
   }
   const size = rackTileSize(), px = Math.round(size * dpr());
   let dealt = 0;   // a rack the move has just refilled fades in tile by tile
   el.style.setProperty('--tile', size + 'px');
-  el.classList.toggle('dim', dim);
+  el.classList.toggle('dim', dim); el.classList.toggle('live', !!wait);
   // Buttons are reused per tile, never rebuilt wholesale, and the one a finger lifted a tile from stays in the page
   // (hidden) until the drag ends: iOS WebKit sends the rest of a touch to the node it began on, and a removed node
   // never passes the pointerup on, which left tiles stuck in the air.
-  const d = G.drag, lifted = show && d && d.active && d.from === 'rack' && !order.includes(d.k) ? d.k : null;
+  const d = G.drag, lifted = (show || wait) && d && d.active && d.from === 'rack' && !order.includes(d.k) ? d.k : null;
   const old = new Map([...el.querySelectorAll('.rtile')].map((b) => [b.dataset.key, b]));
   const button = (k) => {
-    const l = rack[k], key = `${k}|${l}|${px}|${dim ? 1 : 0}`;
+    const l = rack[k], key = `${k}|${l}|${px}|${dim ? (wait ? 2 : 1) : 0}`;
     let b = old.get(key);
     if (b) { old.delete(key); return b; }
     b = document.createElement('button');
     b.className = 'rtile'; b.dataset.key = key; b.dataset.k = k;
     if (G.deal && animOn()) { b.classList.add('deal'); b.style.setProperty('--i', String(dealt++)); b.addEventListener('animationend', () => b.classList.remove('deal')); }
     b.setAttribute('aria-label', l === '?' ? 'Blank tile' : `${l}, ${E.tileValue(l)} points`);
-    if (dim) { b.tabIndex = -1; b.disabled = true; }
+    if (dim) { b.tabIndex = -1; b.disabled = !wait; }
     const c = document.createElement('canvas'); c.width = c.height = px;
     c.getContext('2d').drawImage(R.tileSprite(l === '?' ? '' : l, l === '?', px, 'rack'), 0, 0);
     b.append(c);
-    if (!dim) b.addEventListener('pointerdown', (e) => rackDown(e, k));
+    if (!dim || wait) b.addEventListener('pointerdown', (e) => rackDown(e, k));
     b.addEventListener('click', (e) => { if (e.detail === 0 && !dim) { G.selected = G.selected === k ? null : k; renderRack(); } }); // keyboard activation
     return b;
   };
@@ -1075,7 +1087,7 @@ function claimPointer(e) {
 function capture(el, id) { try { el.setPointerCapture(id); } catch (err) { /* synthetic or already gone */ } }
 
 function rackDown(e, k) {
-  if (!humanCanAct() || e.button > 0) return;
+  if (!(humanCanAct() || waiting()) || e.button > 0) return;
   if (!claimPointer(e)) return;
   unlock();
   e.preventDefault();
@@ -1084,7 +1096,7 @@ function rackDown(e, k) {
   capture($('#app'), e.pointerId);
   sfx('pick');
 }
-const tileOf = (k) => { const l = cur().rack[k]; return { l: l === '?' ? '' : l, blank: l === '?' }; };
+const tileOf = (k) => { const l = (waitSeat() || cur()).rack[k]; return { l: l === '?' ? '' : l, blank: l === '?' }; };
 
 function boardDown(e) {
   if (G.scene !== 'game') return;
@@ -1143,6 +1155,7 @@ function squareNear(x, y, m = 0.5) {
 const boxes = (d) => d.boxes || (d.boxes = { board: $('#board').getBoundingClientRect(), bar: $('#rackbar').getBoundingClientRect() });
 function inRackbar(e, d) { const r = boxes(d).bar; return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; }
 function updateDragTarget(d, e) {
+  if (waitSeat()) { d.hover = -1; d.target = null; d.blocked = null; return; }   // the computer's turn: a tile can only be moved about the rack
   const r = boxes(d).board;
   const x = e.clientX - r.left, y = e.clientY - d.lift - r.top;   // the tile's centre on the board canvas
   // where the tile is decides, not the finger: on a short phone the bottom rows sit right above the rack, so the finger
@@ -1280,7 +1293,7 @@ function onUp(e) {
   }
   if (d.active) { layout(); return; } // pan ended
   // a tap
-  if (d.from === 'rack') { G.selected = G.selected === d.k ? null : d.k; renderRack(); return; }
+  if (d.from === 'rack') { if (!waitSeat()) G.selected = G.selected === d.k ? null : d.k; renderRack(); return; }
   if (d.from === 'board') { unstage(d.i); return; }
   const [x, y] = boardPoint(e);
   const i = pick(x, y);
