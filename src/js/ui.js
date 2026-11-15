@@ -345,6 +345,8 @@ export function settingsHtml(st) {
     ${seg('music', [[true, 'On'], [false, 'Off']], 'Music')}
     ${seg('amb', [[true, 'On'], [false, 'Off']], 'Ambience')}
     <div class="setrow"><span>Volume</span><input type="range" min="0" max="1" step="0.05" value="${st.vol}" data-vol aria-label="Volume"></div>
+    <div class="setrow"><span>Effects level</span><input type="range" min="0" max="1" step="0.05" value="${st.fxVol}" data-fxvol aria-label="Effects level, under the Volume"></div>
+    <div class="setrow"><span>Music level</span><input type="range" min="0" max="1" step="0.05" value="${st.musicVol}" data-musicvol aria-label="Music and ambience level, under the Volume"></div>
     ${seg('theme', [['auto', 'Auto'], ['light', 'Day'], ['dark', 'Night']], 'Theme')}
     ${seg('motion', [['system', 'Auto'], ['full', 'Full'], ['reduce', 'Reduced']], 'Motion')}
     ${seg('text', [[1, '100%'], [1.15, '115%'], [1.3, '130%']], 'Text size')}

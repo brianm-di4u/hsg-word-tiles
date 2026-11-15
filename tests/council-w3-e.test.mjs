@@ -150,4 +150,47 @@ export const tests = [
       t.expect(Math.abs(mean(a) - mean(b)) > 0.15 * mean(b), 'it does not sound like the plain turn cue (' + mean(a).toFixed(0) + ' against ' + mean(b).toFixed(0) + ' zero crossings)');
     },
   },
+  // ---------- S5-06 ----------
+  {
+    name: 'S5-06 Effects level and Music level sit under Volume, are kept across a reload, and move only their own bus',
+    viewports: ['desktop', 'mobile'],
+    initScript: () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', fx: true, music: true, amb: true })); },
+    async run(t) {
+      await ready(t);
+      let set = await t.page.evaluate(() => JSON.parse(localStorage.getItem('hs-letters-settings-v1')));
+      t.expect(set.fxVol == null && set.musicVol == null, 'a save from before has neither key');
+      t.equal((await t.state()).settings.fxVol, 1, 'so Effects level starts full (nothing a player had gets quieter)');
+      t.equal((await t.state()).settings.musicVol, 1, 'and so does Music level');
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="amb"][data-val="true"]');   // a press in Settings starts the audio
+      await t.page.waitForFunction(() => window.__game.audioState().ctx === 'running', null, { timeout: 8000 });
+      await t.shot('S5-06-settings');
+      const slide = (attr, v) => t.page.evaluate(([a, val]) => { const r = document.querySelector('[' + a + ']'); r.value = val; r.dispatchEvent(new Event('input', { bubbles: true })); }, [attr, v]);
+      await slide('data-fxvol', 0.3);
+      await t.page.waitForFunction(() => Math.abs(window.__game.audioState().fxGain - 0.3) < 0.02, null, { timeout: 5000 });
+      let a = await t.game('audioState');
+      t.expect(Math.abs(a.musGain - 1) < 0.02, 'the effects slider leaves the music bus alone (' + a.musGain.toFixed(2) + ')');
+      await slide('data-musicvol', 0.5);
+      await t.page.waitForFunction(() => Math.abs(window.__game.audioState().musGain - 0.5) < 0.02, null, { timeout: 5000 });
+      a = await t.game('audioState');
+      t.expect(Math.abs(a.fxGain - 0.3) < 0.02, 'the music slider leaves the effects bus alone (' + a.fxGain.toFixed(2) + ')');
+      set = await t.page.evaluate(() => JSON.parse(localStorage.getItem('hs-letters-settings-v1')));
+      t.expect(set.fxVol === 0.3 && set.musicVol === 0.5, 'both are saved (' + set.fxVol + ', ' + set.musicVol + ')');
+      await t.reload();
+      t.equal((await t.state()).settings.fxVol, 0.3, 'Effects level survives a reload'); t.equal((await t.state()).settings.musicVol, 0.5, 'and so does Music level');
+      await t.game('scene', 'settings');
+      await t.page.waitForSelector('[data-fxvol]');
+      t.equal(await t.page.inputValue('[data-fxvol]'), '0.3', 'the slider shows it');
+      // the master Volume is still the master: it moves both
+      await t.page.click('[data-set="amb"][data-val="true"]');
+      await t.page.waitForFunction(() => window.__game.audioState().ctx === 'running', null, { timeout: 8000 });
+      await slide('data-vol', 0.7);
+      await t.page.waitForFunction(() => Math.abs(window.__game.audioState().musGain - 0.75) < 0.02, null, { timeout: 5000 });
+      // a hand-edited value out of range is dropped, not trusted
+      await t.page.evaluate(() => { const s = JSON.parse(localStorage.getItem('hs-letters-settings-v1')); s.fxVol = 7; s.musicVol = -1; localStorage.setItem('hs-letters-settings-v1', JSON.stringify(s)); });
+      await t.reload();
+      const st = (await t.state()).settings;
+      t.expect(st.fxVol === 1 && st.musicVol === 1, 'a damaged level falls back to full (' + st.fxVol + ', ' + st.musicVol + ')');
+    },
+  },
 ];

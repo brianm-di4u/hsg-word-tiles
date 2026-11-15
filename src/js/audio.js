@@ -4,14 +4,14 @@
 // Featured Spring. No two tile sounds are alike: every cue is nudged in pitch, level and colour as it is made.
 import { makeAudioKit, measureAudio, SCORES, SCENES } from './music.js';
 
-export const audio = { ctx: null, on: true, vol: 0.35, fx: true, music: true, amb: true, played: [], live: null, sfxOut: null, bus: null, kit: null, want: null, holds: new Set() };
+export const audio = { ctx: null, on: true, vol: 0.35, fxVol: 1, musicVol: 1, fx: true, music: true, amb: true, played: [], live: null, sfxOut: null, bus: null, kit: null, want: null, holds: new Set() };
 const DEFAULT_VOL = 0.35;
 // Cues are built this much louder than they were before the music arrived (that was 1), so that at the shipped
 // volume the tile sounds peak between 0.2 and 0.45 and sit clearly over the music and the bed. Set it to 1 to undo.
 const CUE_GAIN = 6;
 // bells and steam are the loudest cues: a little less so they do not outrun the tile sounds
 const TRIM = { featured: 0.6, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, yourturn: 2, good: 1.8, big: 0.57, discover: 0.6 };
-const musicGain = (vol = audio.vol) => Math.min(1.5, vol / DEFAULT_VOL);   // the Volume slider moves the music with the cues
+const musicGain = (vol = audio.vol, level = audio.musicVol) => Math.min(1.5, vol / DEFAULT_VOL) * level;   // the Volume slider moves the music with the cues
 // Above the shipped volume the cues rise more gently than the slider: to about twice the shipped level at full, not
 // 2.9 times. With the slider at full the loudest repeats of steam and place overshot the limiter and clipped (peaks
 // of 1.03 in 60 renders). The music is held back above the shipped volume in the same way (musicGain).
@@ -23,7 +23,7 @@ function graph(ctx, dest, seed) {
   lim.threshold.value = -3; lim.knee.value = 3; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.2;
   lim.connect(dest);
   const sfx = ctx.createGain(); sfx.connect(lim);
-  const mus = ctx.createGain(); mus.gain.value = musicGain(DEFAULT_VOL); mus.connect(lim);
+  const mus = ctx.createGain(); mus.gain.value = musicGain(DEFAULT_VOL, 1); mus.connect(lim);
   return { lim, sfx, mus, kit: makeAudioKit(ctx, mus, { seed, music: 1, ambience: 1 }) };
 }
 
@@ -51,6 +51,7 @@ export function syncAudio() {
   k.music.play(sound && audio.music && audio.want ? SCORES[audio.want] : null, { fade: 2.5 });
   k.amb.play(sound && audio.amb ? SCENES.bathhouse : null, { fade: 3 });
   audio.bus.mus.gain.setTargetAtTime(musicGain(), audio.ctx.currentTime, 0.05);
+  audio.bus.sfx.gain.setTargetAtTime(audio.fxVol, audio.ctx.currentTime, 0.05);
 }
 export function setTune(name) { audio.want = name; syncAudio(); }
 // the pause card and a hidden tab fade the music and bed out and schedule nothing; the last hold released brings them back
