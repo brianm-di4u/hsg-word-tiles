@@ -208,4 +208,59 @@ export const tests = [
       t.expect(/once in any seven days/.test(await t.page.textContent('.sheet')), 'Records explains it');
     },
   },
+  // ---------- S4-02 and S4-24 ----------
+  {
+    name: 'S4-02 each Bathhouse Row square is painted with its own medallion, and the painted pictures are all used (S4-24)',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      const r = await t.page.evaluate(async () => {
+        const base = (f) => new URL('src/js/' + f, location.href).href;
+        const { art } = await import(base('art.js'));
+        const R = await import(base('render2d.js'));
+        const { BATHHOUSES } = await import(base('layout.js'));
+        const { ART_LIST } = await import(base('art-list.js'));
+        const names = Object.entries(BATHHOUSES).map(([i, n]) => [+i, 'bath-' + n.toLowerCase()]);
+        const load = async (n) => { const im = new Image(); im.src = 'assets/' + n + '.webp'; await im.decode(); return im; };
+        const size = 1200, cell = size / R.U, N = 15;
+        const sample = (cv, i) => {
+          const c = cv.getContext('2d'), x = (R.FRAME + (i % N) + 0.2) * cell, y = (R.FRAME + Math.floor(i / N) + 0.2) * cell, w = cell * 0.6;
+          const d = c.getImageData(Math.round(x), Math.round(y), Math.round(w), Math.round(w)).data;
+          const W = Math.round(w), G = 4, grid = new Array(G * G * 3).fill(0), cnt = new Array(G * G).fill(0);
+          for (let py = 0; py < W; py++) for (let px = 0; px < W; px++) {
+            const gi = Math.floor(py * G / W) * G + Math.floor(px * G / W), k = (py * W + px) * 4;
+            for (let q = 0; q < 3; q++) grid[gi * 3 + q] += d[k + q];
+            cnt[gi]++;
+          }
+          return grid.map((v, j) => v / cnt[Math.floor(j / 3)]);
+        };
+        art.on = true; art.imgs = {};
+        const plain = R.paintBoard(size, 'light');
+        const without = names.map(([i]) => sample(plain, i));
+        for (const [, n] of names) art.imgs[n] = await load(n);
+        const painted = R.paintBoard(size, 'light');
+        const withArt = names.map(([i]) => sample(painted, i));
+        art.imgs = {};
+        return { names: names.map((x) => x[1]), without, withArt, list: ART_LIST.filter((n) => /^bath-/.test(n)) };
+      });
+      const dist = (u, v) => u.reduce((acc, x, j) => acc + Math.abs(x - v[j]), 0) / u.length;
+      t.equal(r.names.length, 8, 'eight Row squares');
+      t.equal(JSON.stringify(r.list.slice().sort()), JSON.stringify(r.names.slice().sort()), 'and eight medallions in the art list, one for each');
+      for (let k = 0; k < 8; k++) {
+        const d = dist(r.without[k], r.withArt[k]);
+        t.expect(d > 25, r.names[k] + ' changes the square (mean difference ' + d.toFixed(1) + ' of 255)');
+      }
+      // the eight are eight different pictures
+      let minApart = 1e9;
+      for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) minApart = Math.min(minApart, dist(r.withArt[a], r.withArt[b]));
+      t.expect(minApart > 8, 'no two medallions look alike (closest pair ' + minApart.toFixed(1) + ' apart)');
+      // in the game itself the preloaded pictures are used by the board: nothing failed to load, and the board shows them
+      const g = await t.page.evaluate(() => ({ failed: window.__G ? 0 : -1 }));
+      t.expect(g.failed === 0, 'the game is running');
+      await t.game('newGame', { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(8000);
+      await t.shot('S4-02-row-medallions');
+    },
+  },
 ];
