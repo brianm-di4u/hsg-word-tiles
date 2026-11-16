@@ -1,4 +1,4 @@
-// Wave 4, batch A: C4-01, C4-04, C4-05, C4-06, C4-08.
+// Wave 4, batch A: C4-01, C4-04, C4-05, C4-06, C4-08, C4-09.
 import fs from 'node:fs';
 import path from 'node:path';
 import { root } from './lib.mjs';
@@ -273,6 +273,16 @@ export const tests = [
       await t.reload(); await ready(t);
       await t.page.click('#screen [data-go="continue"]'); await t.waitIdle(8000);
       t.equal((await t.state()).staged.length, 0, 'nothing is put back after the reload');
+    },
+  },
+
+  {
+    name: 'C4-09 the "How near a stalled game is to its end" comment sits above stallNote (Node)', node: true,
+    async run(t) {
+      const src = read('src/js/ui.js');
+      const i = src.indexOf('// How near a stalled game'), j = src.indexOf('export function stallNote'), k = src.indexOf('export function stingFor');
+      t.expect(i > 0 && j > i && src.slice(i, j).split('\n').length <= 4, 'the comment is directly above stallNote');
+      t.expect(i > k, 'and no longer above the stingFor block');
     },
   },
 ];
