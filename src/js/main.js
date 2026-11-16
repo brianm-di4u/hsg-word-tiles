@@ -1425,6 +1425,8 @@ function cancelDrag() {
   updatePreview(); renderStaging();
 }
 
+// how far a press moves before the tile lifts: a finger never holds still, so it keeps its dead zone; a mouse needs less (it was 6 for both)
+const DRAG_PX_TOUCH = 6, DRAG_PX_MOUSE = 3;
 function onMove(e) {
   hoverSquare(e);
   const d = G.drag;
@@ -1447,7 +1449,7 @@ function onMove(e) {
     }
     return;
   }
-  if (!d.active && dist > 6) {
+  if (!d.active && dist > (d.touch ? DRAG_PX_TOUCH : DRAG_PX_MOUSE)) {
     // the tile may have moved since the press (typed onto the board, recalled): then there is nothing to lift
     if (d.from === 'board' ? !G.staged.some((t) => t.i === d.i && t.k === d.k) : !G.order.includes(d.k)) { G.drag = null; return; }
     d.active = true;

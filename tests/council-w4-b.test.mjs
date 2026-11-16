@@ -16,6 +16,17 @@ const brass = (t, i) => t.page.evaluate(async (cell) => {
   return n;
 }, i);
 
+// press on the first rack tile with a pointer of the given kind, move `px` pixels sideways, report whether the tile has lifted
+const liftAt = (t, type, px) => t.page.evaluate(([type, px]) => {
+  const el = document.querySelector('#rack .rtile[data-pos="0"]'), r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const o = { pointerId: 41, pointerType: type, isPrimary: true, bubbles: true, cancelable: true };
+  el.dispatchEvent(new PointerEvent('pointerdown', { ...o, buttons: 1, clientX: x, clientY: y }));
+  window.dispatchEvent(new PointerEvent('pointermove', { ...o, buttons: 1, clientX: x + px, clientY: y }));
+  const lifted = !!window.__game.getState().drag;
+  window.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0, clientX: x + px, clientY: y }));
+  return lifted;
+}, [type, px]);
+
 export const tests = [
   {
     name: 'S2-11 the last play wears a dark brass ring and a corner pip, and the glow ends; older tiles do not',
@@ -43,6 +54,20 @@ export const tests = [
       for (const i of older) t.equal(await brass(t, i), 0, 'the player\'s earlier tile ' + i + ' has none');
       await t.page.clock.resume();
       await t.shot('S2-11-last-play');
+    },
+  },
+  {
+    name: 'S1-12 a mouse lifts a tile after 3 px, a finger still needs more than 6 px',
+    viewports: ['desktop', 'mobile'], initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(5);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      t.equal(await liftAt(t, 'mouse', 2), false, 'a mouse that has moved 2 px has not lifted it');
+      t.equal(await liftAt(t, 'mouse', 4), true, 'a mouse that has moved 4 px has');
+      t.equal(await liftAt(t, 'touch', 5), false, 'a finger that has moved 5 px has not');
+      t.equal(await liftAt(t, 'touch', 7), true, 'a finger that has moved 7 px has');
     },
   },
 ];
