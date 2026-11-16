@@ -310,6 +310,36 @@ export const tests = [
     },
   },
 
+  {
+    name: 'S2-05 / S3-07 the breakdown of a Hot Springs word on a Bathhouse Row square says what the bonus is made of, with no template text left in it',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(3);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      // a position made by hand: M of STEAM already stands on the board, and the rack holds the other four letters,
+      // so STEAM (a Hot Springs word) runs down column J from the Bathhouse Row square at the top
+      const g = (await t.state()).game;
+      g.board[8 + 15 * 4] = { l: 'M' };
+      g.players[0].rack = ['S', 'T', 'E', 'A', 'O', 'R', 'N'];
+      await t.page.evaluate((game) => window.__game.setState({ game }), g);
+      const found = { tiles: [8, 23, 38, 53].map((i, k) => ({ i, l: 'STEA'[k] })) };
+      await t.game('act', 'stage', found.tiles);
+      const pv = (await t.state()).preview;
+      t.expect(pv.ok && pv.words.some((w) => w.w === 'STEAM' && w.bath && w.bonus === 38), 'STEAM is valid, themed and on the Row: 18 + 20');
+      await t.page.click('#preview .pts');
+      const text = await t.page.textContent('#preview .bd');
+      t.expect(!text.includes('${') && !text.includes('ROW_BONUS'), 'no template text is printed to the player (' + text + ')');
+      const row = text.match(/Hot Springs\s*([A-Z]+) \+(\d+) \((\d+) for the word, (\d+) for a Bathhouse Row square\)/);
+      t.expect(row, 'the Hot Springs line splits the bonus into the word and the Row square');
+      if (row) { t.equal(+row[2], 38, 'the line gives the bonus the engine paid'); t.equal(+row[3] + +row[4], +row[2], 'and its two parts add up to it'); t.equal(+row[4], 20, 'the Row square is the flat 20'); }
+      await t.checkLayout();
+      await t.shot('S3-07-row-breakdown');
+    },
+  },
+
   // ---------- S1-05 ----------
   {
     name: 'S1-05 a placed tile settles into its square, the rack keeps the place of a lifted tile empty, and a refilled rack fades in',

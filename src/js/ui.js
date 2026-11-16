@@ -126,7 +126,7 @@ export function breakdownHtml(p, board, staged) {
     const sum = x.parts.map((q) => `${q.l} ${q.v}${q.lm > 1 ? `×${q.lm}` : ''}`).join(' + ');
     return `<li><b>${esc(w.w)}</b> <span>${sum} = ${x.sum}${x.wm > 1 ? `, word ×${x.wm} = ${x.total}` : ''}</span></li>`;
   });
-  for (const w of p.words) if (w.bonus) rows.push(`<li><b>Hot Springs</b> <span>${esc(w.w)} +${w.bonus}${w.bath ? ' (a Bathhouse Row square adds ${ROW_BONUS})' : ''}</span></li>`);
+  for (const w of p.words) if (w.bonus) rows.push(`<li><b>Hot Springs</b> <span>${esc(w.w)} +${w.bonus}${w.bath ? ` (${w.bonus - ROW_BONUS} for the word, ${ROW_BONUS} for a Bathhouse Row square)` : ''}</span></li>`);
   if (p.featured) rows.push(`<li><b>Featured Spring</b> <span>${esc(p.featured)} +${FEATURED_BONUS}</span></li>`);
   if (p.full) rows.push(`<li><b>Full Soak</b> <span>all seven tiles +${FULL_SOAK}</span></li>`);
   return `<div class="bd" role="region" aria-label="How this play scores"><ul>${rows.join('')}<li class="tot"><b>Total</b> <span>${p.score} points</span></li></ul></div>`;
