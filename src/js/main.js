@@ -711,6 +711,7 @@ async function doHint() {
   G.hintAlts = list; G.hintIx = 0; G.hintMove = s.move;   // the other plays are free to look at: the one hint was paid for
   putHint(list[0]);
 }
+const HINT_CLACK_S = 0.06, HINT_CLACK_GAIN = 0.5;   // seconds between the tiles of a hint as they are staged; how loud each clack is
 // A Spring Guide play becomes a staged play the player can accept with Play, move, or recall.
 function putHint(m) {
   const s = G.s;
@@ -720,6 +721,7 @@ function putHint(m) {
     if (k >= 0) { G.staged.push({ k, i: t.i, l: t.l, blank: t.blank }); G.order = G.order.filter((x) => x !== k); }
   }
   G.hint = null; clearToasts();
+  G.staged.forEach((t, k) => sfx('place', { pan: colPan(t.i), step: k, delay: k * HINT_CLACK_S, gain: HINT_CLACK_GAIN }));   // the tiles of a hint are set down one after another, softly
   s.hintStaged = { move: s.move, tiles: G.staged.map((t) => ({ i: t.i, l: t.l, blank: t.blank })) };   // kept in the save: the hint is paid for, so a reload must not lose it
   updatePreview(); save(s); renderGame();
   const keep = m.keep.length ? m.keep.map((l) => (l === '?' ? 'a blank' : l)).join('') : 'no tiles';
@@ -1515,7 +1517,7 @@ function onUp(e) {
     // back to the rack, at the drop position when dropped on the rack
     const pos = rackPosAt(e.clientX, e.clientY);
     if (d.from === 'board' || d.blocked != null) sfx(d.blocked != null ? 'error' : 'recall');
-    if (pos != null) { $('#ghost').hidden = true; G.order.splice(pos, 0, d.k); updatePreview(); renderStaging(); }
+    if (pos != null) { $('#ghost').hidden = true; G.order.splice(pos, 0, d.k); if (d.from === 'rack') sfx('pick'); updatePreview(); renderStaging(); }   // a tile set down in a new place on the rack
     // a staged tile dropped on a taken square goes back to its own square
     else if (d.from === 'board' && d.blocked != null) { G.drag = d; cancelDrag(); }
     else returnToRack(d);

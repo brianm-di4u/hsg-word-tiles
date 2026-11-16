@@ -99,4 +99,42 @@ export const tests = [
       }
     },
   },
+  // ---------- S5-14 ----------
+  {
+    name: 'S5-14 a hint sets its tiles down one after another, softly, and dropping a rack tile in a new place makes the pick sound',
+    viewports: ['desktop', 'mobile'],
+    initScript: seeded(21),
+    async run(t) {
+      await ready(t);
+      await t.seed(21);
+      await t.game('newGame', { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(8000);
+      const since = async (total) => { const a = await t.game('audioState'); return a.cues.slice(a.cues.length - (a.total - total)); };
+      let total = (await t.game('audioState')).total;
+      const n = await t.game('act', 'hint');
+      let heard = await since(total);
+      const places = heard.slice(heard.map((c) => c.name).lastIndexOf('hint') + 1).filter((c) => c.name === 'place');
+      t.expect(n >= 2 && places.length === n, 'one clack for each of the ' + n + ' tiles of the hint (' + places.length + ')');
+      t.expect(places.every((c, k) => Math.abs(c.delay - k * 0.06) < 1e-9), 'each 60 ms after the one before (' + places.map((c) => c.delay).join(', ') + ')');
+      t.expect(places.every((c) => c.gain === 0.5), 'each at half the level of a tile you place yourself');
+      // a tile of the rack dragged to another place on the rack
+      await t.game('act', 'recall');
+      await t.waitForStable(200);
+      const first = await t.game('act', 'rackTile', 0), third = await t.game('act', 'rackTile', 3);
+      const orderBefore = (await t.state()).order;
+      total = (await t.game('audioState')).total;
+      await t.page.mouse.move(third[0], third[1]); await t.page.mouse.down();
+      await t.page.mouse.move((third[0] + first[0]) / 2, third[1], { steps: 6 });
+      await t.page.mouse.move(first[0] - 10, first[1], { steps: 6 }); await t.page.mouse.up();
+      const order = (await t.state()).order;
+      heard = (await since(total)).map((c) => c.name);
+      t.expect(order[0] === orderBefore[3], 'the fourth tile moved to the front of the rack (' + orderBefore.join('') + ' became ' + order.join('') + ')');
+      t.equal(heard.join(','), 'pick,pick', 'it was picked up and set down again, both with the pick sound');
+      // a drag that ends where it started on the rack still sounds; a tap does not drop anything
+      total = (await t.game('audioState')).total;
+      const tile = await t.game('act', 'rackTile', 2);
+      await t.page.mouse.click(tile[0], tile[1]);
+      t.equal((await since(total)).map((c) => c.name).join(','), 'pick', 'a tap on a rack tile is one pick only');
+    },
+  },
 ];

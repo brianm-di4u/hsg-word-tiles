@@ -131,8 +131,8 @@ const bell = (t, f, g = 0.12) => {
 
 const DUCK = { chime: [6, 900], featured: [6, 1400], fanfare: [6, 1800] };
 
-// opts: pan (-1..1, kept within +-0.7: the board column of a tile), step (0.. : semitones up along a word) and delay
-// (seconds from now: a sting that waits for the tiles it belongs to)
+// opts: pan (-1..1, kept within +-0.7: the board column of a tile), step (0.. : semitones up along a word), delay
+// (seconds from now: a sting that waits for the tiles it belongs to) and gain (a factor on the cue's level, 1 when left out)
 export function sfx(name, opts = {}) {
   audio.played.push(name); audio.cues.push({ name, delay: opts.delay || 0, gain: opts.gain ?? 1 }); audio.total++; if (audio.played.length > 30) { audio.played.shift(); audio.cues.shift(); }
   if (!audio.on || !audio.fx || !audio.ctx) return;
@@ -140,7 +140,7 @@ export function sfx(name, opts = {}) {
   try {
     OUT = audio.sfxOut || c.destination;
     if (opts.pan && c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = Math.max(-0.7, Math.min(0.7, opts.pan)); p.connect(OUT); OUT = p; }
-    CJ = jit(25, 1.5); CJ.g *= TRIM[name] || 1;
+    CJ = jit(25, 1.5); CJ.g *= (TRIM[name] || 1) * (opts.gain ?? 1);
     switch (name) {
       case 'pick': noise(t, 0.03, 0.12, 4600, 3); tone(1500, t, 0.025, 'triangle', 0.07); break;
       case 'place': clack(t, 1, step); break;
