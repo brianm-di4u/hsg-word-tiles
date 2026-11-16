@@ -1,4 +1,4 @@
-// Wave 4, batch A: C4-01, C4-04, C4-05, C4-06, C4-08, C4-09.
+// Wave 4, batch A: C4-01, C4-04, C4-05, C4-06, C4-08, C4-09, S1-06.
 import fs from 'node:fs';
 import path from 'node:path';
 import { root } from './lib.mjs';
@@ -283,6 +283,65 @@ export const tests = [
       const i = src.indexOf('// How near a stalled game'), j = src.indexOf('export function stallNote'), k = src.indexOf('export function stingFor');
       t.expect(i > 0 && j > i && src.slice(i, j).split('\n').length <= 4, 'the comment is directly above stallNote');
       t.expect(i > k, 'and no longer above the stingFor block');
+    },
+  },
+
+  {
+    name: 'S1-06 a tap on the board lets the computer\'s move land, and a second press ends the hand-over beat',
+    viewports: ['desktop', 'mobile'],
+    initScript: normal,
+    async run(t) {
+      await ready(t);
+      await freezeClock(t);
+      await t.seed(5);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      await stopClock(t);                           // from here every timer in the game stands still until the test says so
+      const [m] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m.tiles);
+      t.expect((await t.game('act', 'play')).ok, 'the human move is played');
+      await t.page.clock.runFor(400);
+      await t.page.waitForFunction(() => { const g = window.__game.getState(); return g.aiThinking && g.aiWait.reply; }, null, { timeout: 15000, polling: 50 });
+      t.equal((await t.state()).game.move, 1, 'the computer has worked out a reply but waits its turn (700 ms at Normal)');
+      const [x, y] = await t.game('act', 'screen', 40);
+      await t.page.mouse.click(x, y);
+      await t.page.waitForFunction(() => window.__game.getState().game.move === 2, null, { timeout: 5000, polling: 50 });
+      let st = await t.state();
+      t.expect(!st.aiThinking, 'the reply landed at once without the clock moving');
+      t.expect(st.aiWait.turn, 'the tiles flying in and the hand-over are still ahead');
+      await t.page.keyboard.press('Space');
+      await t.page.waitForFunction(() => !window.__game.getState().aiWait.turn, null, { timeout: 5000, polling: 50 });
+      st = await t.state();
+      t.equal(st.game.cur, 0, 'and it is the human\'s turn');
+      t.expect(st.staged.length === 0 && !st.aiThinking, 'with nothing in the way');
+      await t.page.clock.resume();
+      await t.shot('S1-06-after-skip');
+    },
+  },
+  {
+    name: 'S1-06 Enter while the computer thinks does the same, and a press while a menu is open does not',
+    viewports: ['desktop'],
+    initScript: normal,
+    async run(t) {
+      await ready(t);
+      await freezeClock(t);
+      await t.seed(5);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      await stopClock(t);
+      const [m] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m.tiles); await t.game('act', 'play');
+      await t.page.clock.runFor(400);
+      await t.page.waitForFunction(() => { const g = window.__game.getState(); return g.aiThinking && g.aiWait.reply; }, null, { timeout: 15000, polling: 50 });
+      await t.game('act', 'open', 'pause');
+      const [x, y] = await t.game('act', 'screen', 40);
+      await t.page.mouse.click(x, y);
+      await t.page.keyboard.press('Enter');
+      t.equal((await t.state()).game.move, 1, 'with the pause menu open nothing is skipped');
+      await t.game('act', 'close');
+      await t.page.keyboard.press('Enter');
+      await t.page.waitForFunction(() => window.__game.getState().game.move === 2, null, { timeout: 5000, polling: 50 });
+      t.equal((await t.state()).game.move, 2, 'Enter lets the move land');
     },
   },
 ];

@@ -435,7 +435,7 @@ const turnPrivacy = () => cur().kind === 'human' && humans() >= 2 && G.revealed 
 // ---------- turn flow ----------
 function startTurn() {
   const s = G.s;
-  clearTimeout(G.aiTimer); G.aiHeld = null;
+  clearTimeout(G.aiTimer); G.aiHeld = null; G.aiFire = null;
   // a new turn drops any AI reply still on its way (it carries the old token) and any tile still in the air from an
   // earlier move; tiles the player placed while the last move's tiles were landing stay where they are
   G.aiToken++; G.aiBusy = false;
@@ -451,7 +451,7 @@ function startTurn() {
 
 function scheduleAi() {
   const s = G.s;
-  G.aiBusy = true;
+  G.aiBusy = true; G.aiSkip = false;
   renderPreview();
   const delay = G.fast ? 0 : ({ normal: 700, fast: 250, instant: 0 })[G.settings.ai] ?? 700;
   const t0 = performance.now();
@@ -464,15 +464,35 @@ function scheduleAi() {
     afterAction(res.ok ? res.entry : s.log[s.log.length - 1], true);
   };
   aiMove(s, cur().level, cur().persona).then((r) => {
-    const wait = Math.max(0, delay - (performance.now() - t0));
+    const wait = G.aiSkip ? 0 : Math.max(0, delay - (performance.now() - t0));
     const fire = () => {
+      G.aiFire = null;
       if (!live()) { if (token === G.aiToken) G.aiBusy = false; return; }
       s.rng.ai = r.rngAi;
       act(r.action);
     };
     // a hidden tab, or an open menu or ledger, holds the reply (and its cue) until the player is back
-    G.aiTimer = setTimeout(() => { if (document.hidden || G.dialog) G.aiHeld = fire; else fire(); }, wait);
+    G.aiFire = fire;
+    G.aiTimer = setTimeout(() => { if (document.hidden || G.dialog) { G.aiFire = null; G.aiHeld = fire; } else fire(); }, wait);
   }).catch((err) => { console.warn('AI failed, passing', err); if (live()) act({ type: 'pass' }); });
+}
+
+// A tap on the board, or Space or Enter, while the computer is taking its turn lets its move land at once (the same path as the
+// Instant speed, for this move only): the wait for its reply, then the tiles flying in and the hand-over beat. Never during a menu.
+function skipComputerWait() {
+  if (G.scene !== 'game' || G.dialog || !G.s || G.s.over || G.privacy) return false;
+  if (G.aiBusy) {
+    G.aiSkip = true;   // the reply is still being worked out: it lands the moment it is ready
+    if (G.aiFire) { clearTimeout(G.aiTimer); const f = G.aiFire; G.aiFire = null; f(); }
+    return true;
+  }
+  if (G.turnWait && G.turnWait.fromAi && performance.now() < G.busyUntil) {
+    clearTimeout(G.turnWait.id); G.turnWait = null;
+    G.anim.clear(); G.animUntil = 0; G.busyUntil = 0;
+    startTurn();
+    return true;
+  }
+  return false;
 }
 
 // lets a held reply land once the tab is back and no dialog is open
@@ -521,7 +541,7 @@ function afterAction(entry, fromAi) {
   rollScores();
   const wait = G.fast ? 0 : (fromAi && animOn() ? Math.max(0, G.animUntil - performance.now()) + 250 : 150);
   G.busyUntil = performance.now() + wait;
-  setTimeout(() => { if (G.s === s) startTurn(); }, wait);
+  G.turnWait = { fromAi, id: setTimeout(() => { G.turnWait = null; if (G.s === s) startTurn(); }, wait) };
   renderGame();
 }
 
@@ -1519,6 +1539,7 @@ function onKey(e) {
   if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
   // Enter and Space on a focused button or link press it (Swap, Pass, Hint, Menu...); on the board or the page they play and turn the cursor
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.closest && e.target.closest('button, a')) return;
+  if ((e.key === 'Enter' || e.key === ' ') && !G.staged.length && skipComputerWait()) { e.preventDefault(); return; }
   if (G.privacy && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('#privacy [data-reveal]')?.click(); return; }
   const k = e.key;
   if (k === '?') { e.preventDefault(); go('help'); return; }
@@ -1604,6 +1625,9 @@ function wireStatic() {
   b.addEventListener('blur', () => { G.cursor.on = false; draw(); });
   document.addEventListener('keydown', onKey);
   window.addEventListener('pointerdown', (e) => { G.input = e.pointerType === 'touch' ? 'touch' : 'mouse'; }, true);
+  let boardTap = null;
+  window.addEventListener('pointerdown', (e) => { boardTap = e.isPrimary && e.target.closest && e.target.closest('#boardwrap') ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null; }, true);
+  window.addEventListener('pointerup', (e) => { const t = boardTap; boardTap = null; if (t && t.id === e.pointerId && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 10) skipComputerWait(); }, true);
   window.addEventListener('keydown', (e) => { if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) G.input = 'key'; }, true);
   window.addEventListener('resize', () => { if (G.drag) G.drag.boxes = null; layout(); if (G.scene === 'game') renderGame(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySettings);
@@ -1618,7 +1642,7 @@ window.__game = {
   seed(n) { G.nextSeed = n >>> 0; return true; },
   getState() {
     return JSON.parse(JSON.stringify({ scene: G.scene, dialog: G.dialog, game: G.s, staged: G.staged, order: G.order, preview: G.preview, settings: G.settings,
-      view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, ready: G.ready, privacy: G.privacy,
+      view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, aiWait: { reply: !!G.aiFire, turn: !!(G.turnWait && G.turnWait.fromAi) }, ready: G.ready, privacy: G.privacy,
       drag: G.drag && G.drag.active ? { from: G.drag.from, target: G.drag.target, blocked: G.drag.blocked, lift: G.drag.lift, size: G.drag.size } : null,
       ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, wisps: steam.parts.map((p) => p.i), sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
   },
