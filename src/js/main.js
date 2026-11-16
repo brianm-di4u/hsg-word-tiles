@@ -577,7 +577,7 @@ function celebrate(e, bark, wait = 0) {
   if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); cue('chime'); }
   // one sting a play: a Featured Spring or a Full Soak has its own, then a word new to the Register, then the size of the score
   const done = p.kind === 'human' ? UI.categoriesCompleted(G.lex, register(), e.words) : [];
-  for (const ck of done) toast({ kind: 'themed', title: `${G.lex.categories[ck].name}: complete`, sub: 'All its words are in your Register.' });
+  for (const ck of done) toast({ kind: 'themed', title: `${G.lex.categories[ck].name}: complete`, sub: 'All its words are in your Register.', keep: true });
   const st = done.length && !e.featured && !e.full ? 'fanfare' : UI.stingFor(e, found); if (st) cue(st, { delay: STING_LAG });
   if (!e.full && bark && bark.event === 'big') toast({ kind: 'bark', who, title: `${p.name}: ${e.words[0].w} +${e.score}`, sub: quote('big') });
   scorePop(e, themed.length > 0);
@@ -881,7 +881,7 @@ function showToast() {
   const el = $('#toast');
   if (!G.toastQ.length) { el.className = ''; el.innerHTML = ''; return; }
   if (el.dataset.busy === '1') return;
-  const t = G.toastQ.shift();
+  const t = G.toastNow = G.toastQ.shift();
   el.dataset.busy = '1';
   el.className = `on ${t.kind}`;
   $('#app').classList.add('toasting');
@@ -892,7 +892,11 @@ function showToast() {
   toastTimer = setTimeout(hideToast, t.kind === 'themed' ? 5200 : 3200);
 }
 // the player has gone back to planning: a banner still over the preview strip would hide the score and the errors, so it goes (the ledger keeps the word)
-function clearToasts() { G.toastQ = []; if ($('#toast').classList.contains('on')) hideToastNow(); }
+// A toast marked `keep` (a finished Register category) survives it: it is the one thing the player has earned and could not yet read.
+function clearToasts() {
+  G.toastQ = G.toastQ.filter((t) => t.keep);
+  if ($('#toast').classList.contains('on') && !(G.toastNow && G.toastNow.keep)) { hideToastNow(); showToast(); }
+}
 function hideToastNow() { const el = $('#toast'); clearTimeout(toastTimer); el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; $('#app').classList.remove('toasting'); }
 function hideToast() { const el = $('#toast'); el.dataset.busy = '0'; el.className = ''; $('#app').classList.remove('toasting'); setTimeout(showToast, 200); }
 

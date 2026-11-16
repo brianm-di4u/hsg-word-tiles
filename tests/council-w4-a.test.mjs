@@ -1,9 +1,10 @@
-// Wave 4, batch A: C4-01, C4-04, C4-05.
+// Wave 4, batch A: C4-01, C4-04, C4-05, C4-06.
 import fs from 'node:fs';
 import path from 'node:path';
 import { root } from './lib.mjs';
 import { createGameSaves, KEYS } from '../src/js/storage.js';
 import { dailyStars, dailyStrip } from '../src/js/ui.js';
+import { makeLexicon } from '../src/js/lexicon.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const SAVE = 'hs-letters-save-v1', SET = 'hs-letters-settings-v1', DAILY = 'hs-letters-daily-v1';
@@ -188,6 +189,40 @@ export const tests = [
       await t.page.locator('.dstrip').scrollIntoViewIfNeeded();
       await t.shot('C4-05-star-strip');
       await t.checkLayout({ allowScrollY: true });
+    },
+  },
+
+  {
+    name: 'C4-06 the finished-category toast is still shown after the next tile is placed',
+    viewports: ['desktop', 'mobile'],
+    initScript: new Function(`window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ sound: false }));`),
+    async run(t) {
+      const lex = lexicon();
+      const club = lex.data.words.filter((w) => w.cat === 'club');
+      const target = club.slice().sort((a, b) => a.forms[0].length - b.forms[0].length)[0], word = target.forms[0];
+      const reg = {}; for (const e of club) if (e !== target) reg[e.forms[0]] = { id: e.id, first: '2026-01-01', count: 1, best: 10 };
+      await ready(t);
+      await t.page.evaluate((r) => localStorage.setItem('hs-letters-register-v1', JSON.stringify(r)), reg);
+      await t.reload(); await ready(t);
+      // two people at the table: nothing answers in between, so the tile is placed in the same breath as the play
+      await t.game('newGame', { seed: 3, seats: [{ kind: 'human', name: 'Ann' }, { kind: 'human', name: 'Bo' }] });
+      await t.waitIdle(5000);
+      const s = await t.state();
+      s.game.players[0].rack = (word + 'EEEEEEE').slice(0, 7).split(''); s.game.players[1].rack = 'EEEEEEE'.split('');
+      await t.game('setState', { game: s.game }); await t.waitIdle();
+      const out = await t.page.evaluate(async (tl) => {
+        const g = window.__game, toasts = [];
+        const staged = await g.act('stage', tl); const played = await g.act('play');
+        toasts.push(document.querySelector('#toast').textContent);
+        const tile = await g.act('stage', [{ i: 127, l: 'E' }]);
+        toasts.push(document.querySelector('#toast').textContent);
+        return { staged: staged.ok, played: played.ok, tile: tile.ok, toasts };
+      }, across(word));
+      t.expect(out.staged && out.played && out.tile, 'the word is played and the next player places a tile (' + JSON.stringify(out) + ')');
+      t.expect(/\+\d+/.test(out.toasts[0]) && !/complete/.test(out.toasts[0]), 'the word\'s own toast is showing first (' + out.toasts[0] + ')');
+      t.expect(/Clubs & casinos: complete/.test(out.toasts[1]), 'after the tile is placed the category toast is showing (' + out.toasts[1] + ')');
+      await t.game('act', 'reveal');   // lift the hand-over curtain so the strip and the toast can be seen
+      await t.shot('C4-06-category-toast', { wait: false });
     },
   },
 ];
