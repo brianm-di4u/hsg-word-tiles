@@ -33,6 +33,7 @@ function wordCheck(raw) {
   const w = String(raw).toUpperCase().replace(/[^A-Z]/g, '');
   if (w.length < 2) return 'Type a word of two letters or more.';
   if (!G.dict) return 'The dictionary is still loading. Try again in a moment.';
+  if (G.s && G.s.challenge && !G.s.over) return 'The word check is off while a Challenge game is in progress.';
   if (!has(G.dict, w)) return `${w} is not in the dictionary, so a play that makes it is handed back.`;
   const e = G.lex.entry(w);
   return `${w} is in the dictionary and can be played.${e ? ` It is also a Hot Springs word: it pays +${G.lex.bonusOf(e)}.` : ''}`;
@@ -67,7 +68,7 @@ const SETTING_OK = {
   vol: (v) => typeof v === 'number' && v >= 0 && v <= 1, fxVol: (v) => typeof v === 'number' && v >= 0 && v <= 1, musicVol: (v) => typeof v === 'number' && v >= 0 && v <= 1,
   theme: (v) => ['auto', 'light', 'dark'].includes(v), motion: (v) => ['system', 'full', 'reduce'].includes(v),
   text: (v) => [1, 1.15, 1.3].includes(v), board3d: (v) => ['auto', 'on', 'off'].includes(v), ai: (v) => ['normal', 'fast', 'instant'].includes(v),
-  lastSetup: (v) => !!v && typeof v === 'object' && typeof v.hints === 'boolean' && Array.isArray(v.seats) && v.seats.length >= 2 && v.seats.length <= 4
+  lastSetup: (v) => !!v && typeof v === 'object' && typeof v.hints === 'boolean' && (v.challenge == null || typeof v.challenge === 'boolean') && Array.isArray(v.seats) && v.seats.length >= 2 && v.seats.length <= 4
     && v.seats.every((x) => !!x && ((x.kind === 'human' && (x.name == null || typeof x.name === 'string')) || (x.kind === 'ai' && PERSONAS.some((p) => p.id === x.persona) && (x.level == null || !!LEVEL_NAME[x.level])))),
 };
 function loadSettings() {
@@ -302,9 +303,10 @@ function wireScreen(name) {
     if (add) add.addEventListener('click', () => { const used = new Set(st.seats.map((x) => x.persona)); st.seats.push({ kind: 'ai', persona: (PERSONAS.find((p) => !used.has(p.id)) || PERSONAS[0]).id }); showScene('setup'); });
     scr.querySelector('[data-hints]').addEventListener('change', (e) => { st.hints = e.target.checked; scr.querySelector('[data-hints-unl]').disabled = !e.target.checked; });
     scr.querySelector('[data-hints-unl]').addEventListener('change', (e) => { st.hintsUnl = e.target.value === 'unl'; });
+    scr.querySelector('[data-challenge]').addEventListener('change', (e) => { st.challenge = e.target.checked; });
     scr.querySelector('[data-start]').addEventListener('click', () => {
       G.settings.lastSetup = st; saveSettings();
-      replaceSave(() => newGame({ mode: 'play', hintsUnl: !!st.hintsUnl, seats: st.seats.map((x, k) => (x.kind === 'human' ? { kind: 'human', name: (x.name || '').trim() || (st.seats.filter((y) => y.kind === 'human').length > 1 ? `Player ${k + 1}` : 'You') } : { kind: 'ai', persona: x.persona, level: seatLevel(x), name: persona(x.persona).name })), hints: st.hints }));
+      replaceSave(() => newGame({ mode: 'play', hintsUnl: !!st.hintsUnl, challenge: !!st.challenge, seats: st.seats.map((x, k) => (x.kind === 'human' ? { kind: 'human', name: (x.name || '').trim() || (st.seats.filter((y) => y.kind === 'human').length > 1 ? `Player ${k + 1}` : 'You') } : { kind: 'ai', persona: x.persona, level: seatLevel(x), name: persona(x.persona).name })), hints: st.hints }));
     });
   }
   if (name === 'help') {
@@ -339,7 +341,7 @@ function wireScreen(name) {
     scr.querySelectorAll('[data-fact]').forEach((b) => b.addEventListener('click', () => openFact(b.dataset.fact, b.dataset.form)));
     scr.querySelector('[data-review]')?.addEventListener('click', openReview);
     const again = scr.querySelector('[data-again]');
-    if (again) again.addEventListener('click', () => newGame({ mode: 'play', seats: G.s.players.map((p) => ({ kind: p.kind, name: p.name, persona: p.persona, level: p.level })), hints: G.s.players.some((p) => p.hints != null), hintsUnl: G.s.players.some((p) => p.unl) }));
+    if (again) again.addEventListener('click', () => newGame({ mode: 'play', seats: G.s.players.map((p) => ({ kind: p.kind, name: p.name, persona: p.persona, level: p.level })), hints: G.s.players.some((p) => p.hints != null), hintsUnl: G.s.players.some((p) => p.unl), challenge: !!G.s.challenge }));
   }
 }
 
@@ -609,6 +611,7 @@ function announce(e) {
   const p = G.s.players[e.p];
   let t;
   if (e.kind === 'play') t = `${p.name} played ${e.words.map((w) => w.w).join(' and ')} for ${e.score}${e.themed ? `, including a Hot Springs bonus of ${e.themed}` : ''}${e.full ? ', with a Full Soak' : ''}.`;
+  else if (e.challenge) t = `${p.name} played ${e.challenge}, which is not in the dictionary, and lost the turn.`;
   else t = e.kind === 'swap' ? `${p.name} swapped ${UI.plural(e.count, 'tile')}.` : `${p.name} passed.`;
   const live = $('#live'); live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30);
   G.lastLine = t;
@@ -619,7 +622,8 @@ const stagedTiles = () => G.staged.map((t) => ({ i: t.i, l: t.l, blank: t.blank 
 function updatePreview() {
   if (G.flash) { G.flash = null; clearTimeout(flashTimer); }
   if (!G.s || !G.staged.length) { G.preview = null; return; }
-  G.preview = E.evaluate(G.s, stagedTiles(), ctx());
+  // a Challenge game does not say whether the words are in the dictionary until they are played
+  G.preview = E.evaluate(G.s, stagedTiles(), G.s.challenge ? { ...ctx(), skipDict: true } : ctx());
 }
 function stage(k, i, letter) {
   const s = G.s;
@@ -663,8 +667,17 @@ function doPlay() {
   cancelDrag();   // a staged tile still in the air goes back to its square and counts
   if (!G.staged.length) { flash('Place tiles on the board first.'); oops(); return; }
   const r = E.apply(G.s, { type: 'play', tiles: stagedTiles() }, ctx());
+  if (!r.ok && r.badWord && G.s.challenge) { loseTurn(r.badWord); return; }
   if (!r.ok) { flash(r.error); oops(); shake(); return; }
   buzz('play');
+  afterAction(r.entry, false);
+}
+// Challenge: the word was not in the dictionary, so the play is not made and the turn is lost, as if the player had passed
+function loseTurn(word) {
+  const r = E.apply(G.s, { type: 'pass' }, ctx());
+  if (!r.ok) return;
+  r.entry.challenge = word;
+  oops(); shake();
   afterAction(r.entry, false);
 }
 function doPass() {
@@ -853,7 +866,7 @@ function renderPreview() {
   else if (G.preview) {
     const p = G.preview;
     if (p.ok) {
-      html = `<span class="words">${p.words.map((w) => `<b class="${w.themed ? 'themed' : ''}">${w.w}</b>`).join(' ')}</span><span class="pts">${p.score}<small> pts</small></span>${p.themed ? `<span class="extra">${UI.ICON.steam} +${p.themed}</span>` : ''}${p.full ? `<span class="extra">Full Soak +${FULL_SOAK}</span>` : ''}${p.featured ? `<span class="extra">Featured +${FEATURED_BONUS}</span>` : ''}`;
+      html = `<span class="words">${p.words.map((w) => `<b class="${w.themed ? 'themed' : ''}">${w.w}</b>`).join(' ')}</span><span class="pts">${p.score}<small> pts</small></span>${p.themed ? `<span class="extra">${UI.ICON.steam} +${p.themed}</span>` : ''}${p.full ? `<span class="extra">Full Soak +${FULL_SOAK}</span>` : ''}${p.featured ? `<span class="extra">Featured +${FEATURED_BONUS}</span>` : ''}${G.s.challenge ? '<span class="extra">words checked when you play</span>' : ''}`;
       if (hintLive()) html += `<span class="extra">keeps ${G.hintAlts[G.hintIx].keep.length ? G.hintAlts[G.hintIx].keep.map((l) => (l === '?' ? 'blank' : l)).join('') : 'nothing'}</span><button class="bdbtn" data-hintnext aria-label="Show another Spring Guide play, ${G.hintIx + 1} of ${G.hintAlts.length} shown">Other plays ${G.hintIx + 1}/${G.hintAlts.length}</button>`;
       html += `<button class="bdbtn" tabindex="-1">${G.breakdown ? 'Hide' : 'How it scores'}</button>`;
       if (G.breakdown) html += UI.breakdownHtml(p, G.s.board, G.staged);
@@ -1178,7 +1191,7 @@ function drawData(now) {
   return {
     board: G.s.board, staged: G.staged, last: G.last, lastPulse: G.lastPulse, hint: G.hint, theme: dark() ? 'dark' : 'light',
     cursor: G.cursor.on && humanCanAct() ? G.cursor : null,
-    goodCells: p && p.ok ? [...new Set(p.words.flatMap((w) => w.cells))] : null,
+    goodCells: p && p.ok && !G.s.challenge ? [...new Set(p.words.flatMap((w) => w.cells))] : null,
     badCells: p && !p.ok && p.words ? p.words.filter((w) => w.w === p.badWord).flatMap((w) => w.cells) : null,
     target: G.drag && G.drag.active ? G.drag.target : null, dragFrom: G.drag && G.drag.from === 'board' && G.drag.active ? G.drag.i : null,
     dragTile: G.drag && G.drag.active ? G.drag.tile : null, blocked: G.drag && G.drag.active ? G.drag.blocked : null,
@@ -1670,7 +1683,7 @@ window.__game = {
     const seats = (opts.seats || [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'hollis' }]).map((x, k) => (x.kind === 'ai'
       ? { kind: 'ai', persona: x.persona || 'hollis', level: x.level || persona(x.persona || 'hollis').level, name: x.name || persona(x.persona || 'hollis').name }
       : { kind: 'human', name: x.name || (k ? `Player ${k + 1}` : 'You') }));
-    newGame({ mode: 'play', seats, hints: opts.hints !== false, hintsUnl: !!opts.hintsUnl });
+    newGame({ mode: 'play', seats, hints: opts.hints !== false, hintsUnl: !!opts.hintsUnl, challenge: !!opts.challenge });
     return true;
   },
   audioList() { return audioList(); },

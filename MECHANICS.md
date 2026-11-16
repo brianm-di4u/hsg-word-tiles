@@ -60,6 +60,7 @@ Racks are arrays of letters, `'?'` for a blank. A placed blank stores the letter
 - Swap 1–7 rack tiles while at least 7 tiles are in the bag: draw first, then the returned tiles go to the
   **bottom** of the bag in alphabetical order (no shuffle, so a seed fixes the whole draw sequence).
 - Pass: nothing changes.
+- **Challenge mode** (an option in the setup, off by default; a game keeps the rule it started with, `challenge: true` in its state): a play with a word that is not in the dictionary is not refused but costs the turn, as a pass, and the lost turn is logged with the word (`challenge`). While it is on, the live preview does not check the dictionary (`evaluate` with `skipDict`) and the Help word check is off. Never in the Daily.
 - A swap, a pass, or a play that scores 0 counts as scoreless.
 
 ### Drawing and ending

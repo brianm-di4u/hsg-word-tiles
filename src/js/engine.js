@@ -33,6 +33,8 @@ export function createGame(opts, lex) {
     featured: [], log: [],
     daily: mode === 'daily' ? { date: opts.date, turns: DAILY_TURNS } : null,
   };
+  // Challenge: a play with a word that is not in the dictionary costs the turn. Only written when on, so every other game and save is as before.
+  if (opts.challenge && mode === 'play') s.challenge = true;
   s.bag = shuffle(s, 'bag', fullBag());
   if (mode === 'daily') curateBag(s.bag);
   if (lex) s.featured = pickFeatured(s, lex);
@@ -111,7 +113,8 @@ export function evaluate(s, tiles, ctx) {
   if (found.error) return { ok: false, error: found.error };
   conn = connectError(s.board, tiles);
   if (conn) return { ok: false, error: conn };
-  const bad = found.words.find((w) => !has(ctx.dict, w.w));
+  // `skipDict` is for the live preview of a Challenge game, which must not tell the player whether a word is in the dictionary
+  const bad = ctx.skipDict ? null : found.words.find((w) => !has(ctx.dict, w.w));
   if (bad) return { ok: false, error: `${bad.w} is not in the dictionary.`, badWord: bad.w, words: found.words.map((w) => ({ w: w.w, cells: w.cells })) };
   const sc = scorePlay(s.board, found, tiles.length, ctx.lex, s.featured);
   return { ok: true, ...sc };

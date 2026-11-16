@@ -52,6 +52,7 @@ export function validSavedGame(s, categories = categoriesV1) {
   if (!object(s) || s.v !== 1 || s.over !== false || !['play', 'daily'].includes(s.mode)) return false;
   if (!Array.isArray(s.players) || !s.players.length || s.players.length > 4) return false;
   const seat = n => integer(n) && n < s.players.length;
+  if ('challenge' in s && s.challenge !== true) return false;
   if (!seat(s.cur) || !integer(s.move) || !integer(s.round) || !integer(s.scoreless)) return false;
   if (!object(s.rng) || !uint(s.rng.bag) || !uint(s.rng.ai) || ('seed' in s && !uint(s.seed))) return false;
   if (!Array.isArray(s.board) || s.board.length !== 225 || !s.board.every(t => t === null || (object(t) && typeof t.l === 'string' && /^[A-Z]$/.test(t.l) && (t.blank == null || typeof t.blank === 'boolean')))) return false;

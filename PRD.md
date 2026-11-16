@@ -76,7 +76,7 @@ and ≤ 1.2 s (Hard) at 4× throttle.
 
 ### Placement and validation
 4. A play must be in one line, without gaps, connected (or covering the centre with ≥ 2 tiles first); each illegal case is refused with a specific message and the player keeps the turn.
-5. Every word formed (main and cross words) must be in the dictionary; an invalid play is refused, naming the word.
+5. Every word formed (main and cross words) must be in the dictionary; an invalid play is refused, naming the word (unless the optional Challenge mode is on: then it costs the turn).
 6. Blanks ask for a letter, show it ghosted, and score 0.
 7. While staging, a live preview shows the words formed, the score, and whether the play is valid.
 

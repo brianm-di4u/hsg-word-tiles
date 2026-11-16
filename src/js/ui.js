@@ -110,6 +110,8 @@ export function setupHtml(setup) {
     ${setup.seats.length < 4 ? '<button class="btn quiet add" data-add>Add a player</button>' : ''}
     <label class="check"><input type="checkbox" data-hints ${setup.hints ? 'checked' : ''}> Spring Guide hints</label>
     <label class="field hint-allow"><span>Hints for each player</span><select data-hints-unl ${setup.hints ? '' : 'disabled'}><option value="3" ${setup.hintsUnl ? '' : 'selected'}>Three</option><option value="unl" ${setup.hintsUnl ? 'selected' : ''}>Unlimited (a game with hints sets no personal best)</option></select></label>
+    <label class="check"><input type="checkbox" data-challenge ${setup.challenge ? 'checked' : ''}> Challenge mode: invalid words cost your turn</label>
+    <p class="seat-note">Off by default. When it is on, the board stops saying whether a word is in the dictionary: play one that is not and you lose the turn, like a pass.</p>
     <p class="goal"><b>The goal:</b> score more than the others by building words.</p>
     <p class="note">${humans >= 2 ? 'Pass and play: each person\'s tiles stay hidden until they tap to take their turn.' : humans === 1 ? 'You against the computer.' : 'Computers only: sit back and watch.'}</p>
     <button class="btn primary big" data-start>Start</button>
@@ -175,7 +177,7 @@ export function logHtml(s, lex) {
       const extras = [e.full ? `Full Soak +${FULL_SOAK}` : '', e.themed ? `Hot Springs +${e.themed}` : '', e.featured ? `Featured +${FEATURED_BONUS}` : ''].filter(Boolean).join(' · ');
       return `<li><b class="who">${esc(p.name)}</b> ${ws} <em>${e.score}</em>${extras ? `<small>${extras}</small>` : ''}</li>`;
     }
-    return `<li><b class="who">${esc(p.name)}</b> ${e.kind === 'swap' ? `swapped ${plural(e.count, 'tile')}` : 'passed'}</li>`;
+    return `<li><b class="who">${esc(p.name)}</b> ${e.kind === 'swap' ? `swapped ${plural(e.count, 'tile')}` : 'passed'}${e.challenge ? ` <small>(${esc(e.challenge)} is not a word)</small>` : ''}</li>`;
   }).join('');
 }
 
@@ -307,7 +309,7 @@ export function helpHtml(tab, lex, twos = []) {
         <li>Draw back up to seven tiles from the bag.</li>
       </ol>
       ${workedExample()}
-      <p>Words come from the public-domain ENABLE list (168,000 words; no proper nouns) with a few additions: the two-letter words below and some everyday ones such as EMAIL, APP and BLOG. A play with a word that isn't on the list is handed back and you keep your turn. While you place tiles, the strip under the board shows the words, the score and any bonus.</p>
+      <p>Words come from the public-domain ENABLE list (168,000 words; no proper nouns) with a few additions: the two-letter words below and some everyday ones such as EMAIL, APP and BLOG. A play with a word that isn't on the list is handed back and you keep your turn (unless you chose Challenge mode in the setup: then the strip does not say whether a word is valid, and a word that isn't on the list costs you the turn). While you place tiles, the strip under the board shows the words, the score and any bonus.</p>
       <p>Stuck? The <b>Spring Guide</b> (Hint) sets a strong play on the board for you to keep, move or take back. <b>Other plays</b> under the board shows its next two choices, and the tiles each one keeps, for no extra charge. Three hints per player in a game against the computer or pass-and-play (or unlimited, if you choose that in the setup; such a game sets no personal best), none in the Daily Soak.</p>
       ${twos.length ? `<h2>Two-letter words</h2>
       <p>All ${twos.length} of these are playable. QI and ZA help when you are holding a lone Q or Z.</p>
