@@ -1,4 +1,4 @@
-// Wave 4, batch A: C4-01, C4-04, C4-05, C4-06, C4-08, C4-09, S1-06.
+// Wave 4, batch A: C4-01, C4-04, C4-05, C4-06, C4-08, C4-09, S1-06, S6-14.
 import fs from 'node:fs';
 import path from 'node:path';
 import { root } from './lib.mjs';
@@ -342,6 +342,17 @@ export const tests = [
       await t.page.keyboard.press('Enter');
       await t.page.waitForFunction(() => window.__game.getState().game.move === 2, null, { timeout: 5000, polling: 50 });
       t.equal((await t.state()).game.move, 2, 'Enter lets the move land');
+    },
+  },
+
+  {
+    name: 'S6-14 the page carries the theme colour and, by the owner\'s ruling, no install file yet (Node)', node: true,
+    async run(t) {
+      for (const f of ['src/index.html', 'index.html']) {
+        const html = read(f);
+        t.expect(/<meta name="theme-color" content="#2B1A10">/.test(html), f + ' has the dark theme colour');
+        t.expect(!/rel="manifest"|apple-mobile-web-app-capable/.test(html), f + ' has no manifest or standalone tag (they wait for the icons)');
+      }
     },
   },
 ];
