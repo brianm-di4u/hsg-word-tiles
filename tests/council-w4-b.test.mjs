@@ -1,6 +1,9 @@
 // Wave 4, batch B: S2-11, S1-12, S2-12, S3-09, S3-10, S6-13, P-N05, S4-10.
-import { ctx } from './lib.mjs';
+import { ctx, root } from './lib.mjs';
 import { createGame, evaluate } from '../src/js/engine.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { LEVELS, DEFENSE } from '../src/js/ai.js';
 import { validSavedGame } from '../src/js/storage.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
@@ -152,6 +155,20 @@ export const tests = [
           t.equal((await t.state()).game.move, 0, 'with the turn kept');
         }
       }
+    },
+  },
+  {
+    name: 'S3-09 MECHANICS.md states the percentile window, the slip and the short-word range that ai.js uses (Node)', node: true,
+    async run(t) {
+      const doc = fs.readFileSync(path.join(root, 'MECHANICS.md'), 'utf8').replace(/\s+/g, ' ');
+      const pct = (x) => Math.round(x * 100) + 'th';
+      const [lo, hi] = LEVELS.easy.pick;
+      t.expect(doc.includes('from the ' + pct(lo) + '–' + pct(hi) + ' percentile of its 30 best plays'), 'the document gives Easy\'s window as ' + pct(lo) + '–' + pct(hi));
+      t.expect(doc.includes('`slip` ' + LEVELS.easy.slip), 'and its slip of ' + LEVELS.easy.slip);
+      t.expect(doc.includes('`pick: [' + lo + ', ' + hi + ']`'), 'and the setting itself');
+      t.expect(doc.includes('every word of 2–' + (LEVELS.medium.freeLen - 1) + ' letters (`freeLen` ' + LEVELS.medium.freeLen + ')'), 'and Medium\'s short words');
+      t.expect(doc.includes('− ' + DEFENSE.boiling + ' per empty Boiling Spring (and ' + DEFENSE.steam + ' per empty Steam square)'), 'and Hard\'s penalties');
+      t.expect(!/50th–80th/.test(doc), 'and nothing says 50th-80th any more');
     },
   },
   {
