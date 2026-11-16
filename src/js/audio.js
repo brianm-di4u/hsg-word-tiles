@@ -119,8 +119,15 @@ const clack = (t, g = 1, step = 0) => {
   if (V.ring) tone(V.ring, at, 0.07, 'sine', 0.035 * g);
   CJ = keep;
 };
-// brass: inharmonic partials with a slow decay
-const bell = (t, f, g = 0.12) => [1, 2.76, 5.4].forEach((m, k) => tone(f * m, t, 1.2 / (k + 1), 'sine', g / (k + 1)));
+// brass: inharmonic partials with a slow decay: the fundamental, then 2.76x and 5.4x, each shorter and quieter than the one
+// below (the top one a sixth of the level and a quarter of a second, so a fanfare of five notes does not hiss), all through a
+// low-pass at about 5 kHz so the 6 kHz partial of the high notes is rounded off. It was 1.2 s / 0.6 s / 0.4 s at 1, 1/2 and 1/3.
+const BELL_PARTIALS = [[1, 1.2, 1], [2.76, 0.6, 1 / 2], [5.4, 0.25, 1 / 6]], BELL_TOP = 5000;
+const bell = (t, f, g = 0.12) => {
+  const keep = OUT, lp = audio.ctx.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = BELL_TOP; lp.connect(keep); OUT = lp;
+  try { BELL_PARTIALS.forEach(([m, dur, gain]) => tone(f * m, t, dur, 'sine', g * gain)); } finally { OUT = keep; }
+};
 
 const DUCK = { chime: [6, 900], featured: [6, 1400], fanfare: [6, 1800] };
 
@@ -182,7 +189,11 @@ export function audioRender(name, seconds, wantWav) {
 // made a quarter of a second in, as it would be in a running game (a limiter that has only just started eats the
 // first few milliseconds of whatever it is given).
 export async function renderCue(name, vol, opts) {
-  const off = new OfflineAudioContext(1, 44100 * 2, 44100), g = graph(off, off.destination, 1);
+  const off = new OfflineAudioContext(1, 44100 * 2, 44100);
+  // opts.hp: measure only what lies above that many Hz (the cue is heard through a high-pass filter)
+  let dest = off.destination;
+  if (opts && opts.hp) { dest = off.createBiquadFilter(); dest.type = 'highpass'; dest.frequency.value = opts.hp; dest.Q.value = 0.7; dest.connect(off.destination); }
+  const g = graph(off, dest, 1);
   const done = off.startRendering();
   await off.suspend(0.25);
   const prev = { ctx: audio.ctx, on: audio.on, vol: audio.vol, fx: audio.fx, sfxOut: audio.sfxOut };

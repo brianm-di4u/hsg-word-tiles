@@ -75,4 +75,28 @@ export const tests = [
       t.expect(steam.ms >= 700 && steam.peak > 0.05, 'the longest noise cue still plays to its end (' + steam.ms + ' ms, peak ' + steam.peak + ')');
     },
   },
+  // ---------- S5-12 ----------
+  {
+    name: 'S5-12 the bells are rounder: less above 5 kHz than before, and they still ring and sit where they did',
+    viewports: ['desktop'],
+    initScript: seeded(5),
+    async run(t) {
+      await ready(t);
+      const med = (p) => [...p].sort((x, y) => x - y)[p.length >> 1];
+      // measured on this seed before the change (medians of 12 repeats at the shipped volume, peak of what lies above 5 kHz):
+      // chime 0.106, fanfare 0.094, discover 0.070; after: 0.075, 0.066, 0.049
+      const LIMIT = { chime: 0.09, fanfare: 0.08, discover: 0.06 };
+      for (const n of Object.keys(LIMIT)) {
+        const hi = [], whole = [], ms = [];
+        for (let k = 0; k < 12; k++) {
+          hi.push((await t.game('act', 'renderSfx', n, 0.35, { hp: 5000 })).peak);
+          const r = await t.game('act', 'renderSfx', n, 0.35); whole.push(r.peak); ms.push(r.ms);
+        }
+        t.log(n + ' above 5 kHz median ' + med(hi) + ', whole ' + med(whole) + ', rings ' + med(ms) + ' ms');
+        t.expect(med(hi) < LIMIT[n], n + ' has little above 5 kHz (median ' + med(hi) + ', under ' + LIMIT[n] + ')');
+        t.expect(med(whole) >= 0.15 && med(whole) <= 0.45, n + ' is still as loud as a bell was (median ' + med(whole) + ')');
+        t.expect(med(ms) >= 1000, n + ' still rings for a second or more (' + med(ms) + ' ms)');
+      }
+    },
+  },
 ];
