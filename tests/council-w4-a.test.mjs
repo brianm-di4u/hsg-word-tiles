@@ -1,8 +1,9 @@
-// Wave 4, batch A: C4-01, C4-04.
+// Wave 4, batch A: C4-01, C4-04, C4-05.
 import fs from 'node:fs';
 import path from 'node:path';
 import { root } from './lib.mjs';
 import { createGameSaves, KEYS } from '../src/js/storage.js';
+import { dailyStars, dailyStrip } from '../src/js/ui.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const SAVE = 'hs-letters-save-v1', SET = 'hs-letters-settings-v1', DAILY = 'hs-letters-daily-v1';
@@ -148,6 +149,45 @@ export const tests = [
       await t.shot('C4-04-setup-cards');
       await t.checkLayout({ allowScrollY: true });
       t.equal(await ls(t, SET).then((s) => (s && s.lastSetup) || null), null, 'nothing is saved by choosing: the choice is written when the game starts');
+    },
+  },
+
+  {
+    name: 'C4-05 stars come from the two pars sorted, so the second star never comes without the first (Node)', node: true,
+    async run(t) {
+      const usual = { m: 300, h: 350 }, flipped = { m: 350, h: 300 };
+      for (const [ref, want] of [[200, 0], [300, 0], [301, 1], [350, 1], [351, 2]]) t.equal(dailyStars(ref, usual), want, 'usual day, ' + ref);
+      for (const [ref, want] of [[200, 0], [300, 0], [320, 1], [350, 1], [351, 2]]) t.equal(dailyStars(ref, flipped), want, 'flipped day, ' + ref + ' (the old rule gave 2 at 320)');
+      const html = dailyStrip({ '2026-11-12': { score: 320, first: 320, plays: 1, par: flipped } }, '2026-11-12');
+      t.expect(/2026-11-12: 320 points, 1 star"/.test(html), 'the strip labels it one star');
+      t.expect(/lower of Hollis Crane/.test(html), 'and the note says what a star means on such a day');
+      const plain = dailyStrip({ '2026-11-12': { score: 320, first: 320, plays: 1, par: usual } }, '2026-11-12');
+      t.expect(/One star beats Hollis Crane on that day's tiles, two beat Maestro Julian Fitch\./.test(plain), 'a strip with no such day keeps its old sentence (' + plain.slice(-120) + ')');
+    },
+  },
+  {
+    name: 'C4-05 the records strip shows one star for a score between the pars when Medium is above Hard',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      const today = await t.page.evaluate(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); });
+      await t.page.evaluate(([k, td]) => {
+        const day = (n) => { const [y, m, d] = td.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d - n, 12)).toISOString().slice(0, 10); };
+        localStorage.setItem(k, JSON.stringify({ streak: 2, last: td, days: {
+          [day(0)]: { score: 320, first: 320, plays: 1, par: { m: 350, h: 300 } },
+          [day(1)]: { score: 400, first: 400, plays: 1, par: { m: 350, h: 300 } },
+          [day(2)]: { score: 250, first: 250, plays: 1, par: { m: 350, h: 300 } },
+        } }));
+      }, [DAILY, today]);
+      await t.game('scene', 'records');
+      const label = (n) => t.page.getAttribute('.dstrip li:nth-child(' + (14 - n) + ')', 'aria-label');
+      t.expect(/1 star$/.test(await label(0)), 'between the pars: one star (' + await label(0) + ')');
+      t.expect(/2 stars$/.test(await label(1)), 'above both: two (' + await label(1) + ')');
+      t.expect(/no stars$/.test(await label(2)), 'below both: none (' + await label(2) + ')');
+      await t.page.locator('.dstrip').scrollIntoViewIfNeeded();
+      await t.shot('C4-05-star-strip');
+      await t.checkLayout({ allowScrollY: true });
     },
   },
 ];

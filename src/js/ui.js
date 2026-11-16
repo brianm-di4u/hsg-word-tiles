@@ -554,20 +554,26 @@ export function reviewHtml(r) {
   return `<div class="card dialog review" role="dialog" aria-modal="true" aria-labelledby="rv-h"><h2 id="rv-h">What you missed</h2>${body}<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div></div>`;
 }
 
+// Stars for a Daily score: one for beating the lower of the two pars, two for beating both. Hollis Crane (Medium) usually scores
+// less than Maestro Fitch (Hard), but on some dates she scores more, and a score never earns the second star without the first.
+export const dailyStars = (ref, par) => (ref > Math.min(par.m, par.h) ? 1 : 0) + (ref > Math.max(par.m, par.h) ? 1 : 0);
+
 // The last fourteen days of the Daily Soak, oldest first: the score of the first try (or the day's score where the first try
-// was not kept), one star for beating Hollis Crane's score on the day and two for beating Maestro Fitch's.
+// was not kept) and its stars.
 export function dailyStrip(days, today) {
   const t = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(today || '');
   if (!t) return '';
   const cells = [];
+  let flipped = false;   // a day in view where Hollis Crane's par is above Maestro Fitch's
   for (let k = 13; k >= 0; k--) {
     const d = new Date(Date.UTC(+t[1], +t[2] - 1, +t[3] - k, 12)), key = d.toISOString().slice(0, 10), e = days[key];
     const ref = e ? (e.first != null ? e.first : e.score) : null;
-    const stars = e && e.par ? (ref > e.par.h ? 2 : ref > e.par.m ? 1 : 0) : 0;
+    const stars = e && e.par ? dailyStars(ref, e.par) : 0;
+    if (e && e.par && e.par.m > e.par.h) flipped = true;
     const said = e ? `${ref} points${e.par ? `, ${stars ? plural(stars, 'star') : 'no stars'}` : ''}` : 'not played';
     cells.push(`<li class="dday${e ? ' on' : ''}" aria-label="${key}: ${said}"><small>${d.getUTCDate()}</small><b>${e ? ref : '·'}</b><i aria-hidden="true">${'★'.repeat(stars) || '&nbsp;'}</i></li>`);
   }
-  return `<h3 class="dhead">Last 14 days</h3><ol class="dstrip">${cells.join('')}</ol><p class="note">Your first try each day. One star beats ${esc(persona('hollis').name)} on that day's tiles, two beat ${esc(persona('julian').name)}.</p>`;
+  return `<h3 class="dhead">Last 14 days</h3><ol class="dstrip">${cells.join('')}</ol><p class="note">Your first try each day. ${flipped ? `One star beats the lower of ${esc(persona('hollis').name)}'s and ${esc(persona('julian').name)}'s scores on that day's tiles, two beat both.` : `One star beats ${esc(persona('hollis').name)} on that day's tiles, two beat ${esc(persona('julian').name)}.`}</p>`;
 }
 
 export function dailyLine(d) {
