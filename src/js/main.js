@@ -1732,6 +1732,7 @@ window.__game = {
       case 'has': return has(G.dict, a[0]);
       case 'b3': return B3.debug ? B3.debug() : null;
       case 'b3feed': if (a[2]) B3.B3.intervals.length = 0; for (let k = 0; k < a[1]; k++) B3.noteInterval(a[0]); return B3.slowFrames();   // n frame intervals of `ms` (after clearing the old ones if a[2]), as if animated frames had taken that long
+      case 'sfx': sfx(a[0], a[1] || {}); return true;   // a cue on the live audio, for the tests
       case 'renderSfx': return renderCue(a[0], a[1] ?? 0.35, a[2] || {});   // one sound offline, measured (nobody can listen in a test run)
       case 'timeAi': {
         // n AI turns at `level` from the current position, timed (the moves are applied outside the UI)

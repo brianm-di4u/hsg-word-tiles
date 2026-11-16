@@ -38,6 +38,7 @@ export function unlock() {
     audio.bus = graph(ctx, ctx.destination, (Math.random() * 0xffffff) | 0);
     audio.bus.mus.gain.value = musicGain();
     audio.sfxOut = audio.bus.sfx; audio.kit = audio.bus.kit;
+    noiseBank(ctx);
     audio.kit.start();
     syncAudio();
   } catch (e) { audio.ctx = audio.live = audio.kit = audio.bus = audio.sfxOut = null; }
@@ -74,13 +75,29 @@ function tone(f, t0, dur, type = 'sine', g = 0.3, slide = 0) {
   a.gain.setValueAtTime(0.0001, t0); a.gain.exponentialRampToValueAtTime(g * CJ.g * CUE_GAIN * cueVol(), t0 + 0.006); a.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   o.connect(a).connect(OUT); o.start(t0); o.stop(t0 + dur + 0.02);
 }
+// The noise every cue is cut from: three buffers made once for an audio context and reused, each cue starting at a random
+// point in one of them, so a cue no longer allocates and fills a buffer of its own (a shuffle made five, a swap seven).
+const NOISE_BUFFERS = 3, NOISE_SECONDS = 1.5;   // the longest cue (steam, 0.9 s) still has 0.5 s of room for its random start
+const noiseBanks = new WeakMap();
+function noiseBank(c) {
+  let bank = noiseBanks.get(c);
+  if (!bank) {
+    bank = [];
+    for (let k = 0; k < NOISE_BUFFERS; k++) {
+      const b = c.createBuffer(1, Math.floor(c.sampleRate * NOISE_SECONDS), c.sampleRate), d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      bank.push(b);
+    }
+    noiseBanks.set(c, bank);
+  }
+  return bank;
+}
 function noise(t0, dur, g = 0.2, freq = 2400, q = 1.2, type = 'bandpass', attack = 0.004) {
-  const c = audio.ctx, n = Math.floor(c.sampleRate * dur), b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
-  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  const c = audio.ctx, bank = noiseBank(c);
   const src = c.createBufferSource(), f = c.createBiquadFilter(), a = c.createGain();
-  a.gain.value = 0.0001; src.buffer = b; f.type = type; f.frequency.value = freq * CJ.f; f.Q.value = q;
+  a.gain.value = 0.0001; src.buffer = bank[Math.floor(Math.random() * bank.length)]; f.type = type; f.frequency.value = freq * CJ.f; f.Q.value = q;
   a.gain.setValueAtTime(0.0001, t0); a.gain.exponentialRampToValueAtTime(g * CJ.g * CUE_GAIN * cueVol(), t0 + attack); a.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  src.connect(f).connect(a).connect(OUT); src.start(t0); src.stop(t0 + dur + 0.02);
+  src.connect(f).connect(a).connect(OUT); src.start(t0, Math.random() * (NOISE_SECONDS - dur - 0.05)); src.stop(t0 + dur + 0.02);
 }
 // A glazed tile set down on marble: a bright tick over a short low knock. Four variants (different colour of the
 // tick, a triangle or a sine knock, a small glaze ring on two of them), a nudge of +-8% on the tick, +-0.5 semitone on

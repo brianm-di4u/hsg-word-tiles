@@ -48,4 +48,31 @@ export const tests = [
       t.expect([...typical].sort((x, y) => x - y)[10] > 0.3, 'the bell is still heard at full volume (median ' + [...typical].sort((x, y) => x - y)[10] + ')');
     },
   },
+  // ---------- S5-11 ----------
+  {
+    name: 'S5-11 cues cut their noise from shared buffers: playing them allocates no new audio buffer, and they still differ and last',
+    viewports: ['desktop'],
+    initScript: new Function(`
+      window.__TEST_TIPS__ = false; window.__buffers = 0;
+      if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant' }));
+      const made = BaseAudioContext.prototype.createBuffer;
+      BaseAudioContext.prototype.createBuffer = function (...a) { window.__buffers++; return made.apply(this, a); };`),
+    async run(t) {
+      await ready(t);
+      await t.page.click('#screen [data-go="setup"]');
+      await t.page.waitForFunction(() => window.__game.audioState().ctx === 'running', null, { timeout: 5000 });
+      await t.waitForStable(300);
+      const before = await t.page.evaluate(() => window.__buffers);
+      t.expect(before >= 3, 'the three shared buffers were made when the audio started (' + before + ')');
+      const after = await t.page.evaluate(async () => {
+        for (let k = 0; k < 5; k++) for (const n of ['shuffle', 'swap', 'steam', 'featured', 'play', 'place', 'pick', 'recall']) await window.__game.act('sfx', n);
+        return window.__buffers;
+      });
+      t.equal(after, before, 'forty cues (shuffle, swap, steam, featured and more) made no new buffer');
+      const sigs = []; for (let k = 0; k < 8; k++) sigs.push((await t.game('act', 'renderSfx', 'shuffle', 0.35)).sig);
+      t.expect(new Set(sigs).size >= 7, 'repeats of a shuffle still differ (' + new Set(sigs).size + ' of 8)');
+      const steam = await t.game('act', 'renderSfx', 'steam', 0.35);
+      t.expect(steam.ms >= 700 && steam.peak > 0.05, 'the longest noise cue still plays to its end (' + steam.ms + ' ms, peak ' + steam.peak + ')');
+    },
+  },
 ];
