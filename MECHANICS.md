@@ -116,10 +116,13 @@ one more letter clears, never past `length − 2` letters shown. Once claimed, t
   completes words; down moves use the same code on the transposed board.
 - Every move is scored with the engine's own `score` function (bonuses included).
 - Levels:
-  - **Easy:** only common words, at most 6 letters; picks at random from the 50th–80th percentile of its 30 best plays.
-  - **Medium:** common words plus every 2–3 letter word; maximises score + ½ × leave value.
-  - **Hard:** maximises score + leave value − 0.5 × opened Boiling Spring lanes; with the bag empty in a
-    2-player game it looks one reply ahead (the opponent's rack is known by then).
+  - **Easy:** common words plus every word of 2–3 letters, any length; ignores the rack it keeps. It plays its best-scoring play except
+    about one turn in four (`slip` 0.25), when it picks at random from the 20th–50th percentile of its 30 best plays
+    (`pick: [0.2, 0.5]` in `ai.js`). Before wave 2 it drew from that window every turn.
+  - **Medium:** common words plus every word of 2–4 letters (`freeLen` 5); maximises score + ½ × leave value.
+  - **Hard:** the whole dictionary; maximises score + leave value − 4 per empty Boiling Spring (and 1.5 per empty Steam square) its
+    play leaves within reach (`DEFENSE` in `ai.js`); with the bag empty in a 2-player game it looks one reply ahead (the
+    opponent's rack is known by then).
 - Leave values (`leave-table.js`) are fitted by `tools/selfplay.mjs`.
 - Determinism: no wall-clock cutoffs; a node budget caps the search. Ties break by a fixed key.
 
