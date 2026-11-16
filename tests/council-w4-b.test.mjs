@@ -237,6 +237,52 @@ export const tests = [
     },
   },
   {
+    name: 'S4-10 the phone camera leans back and leaves a strip of counter above the board without making the squares smaller to hit, and the desktop view is untouched',
+    viewports: ['desktop', 'mobile'], initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(5);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      t.expect((await t.state()).view.mode3d, 'the 3D board is on');
+      const m = await t.page.evaluate(async () => {
+        const g = window.__game, all = [];
+        for (let i = 0; i < 225; i++) all.push(await g.act('cell', i));
+        const d = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+        const cv = document.getElementById('board').getBoundingClientRect();
+        let wrong = 0;
+        for (let i = 0; i < 225; i++) if ((await g.act('cellAt', all[i][0], all[i][1])) !== i) wrong++;
+        return {
+          w: cv.width, h: cv.height, wrong,
+          hpitch: [0, 7, 14].map((r) => d(all[r * 15 + 7], all[r * 15 + 8])),
+          vpitchCentre: d(all[6 * 15 + 7], all[7 * 15 + 7]),
+          vpitchMin: Math.min(...Array.from({ length: 14 }, (_, r) => d(all[r * 15 + 7], all[(r + 1) * 15 + 7]))),
+          xs: [Math.min(...all.map((p) => p[0])), Math.max(...all.map((p) => p[0]))], ys: [Math.min(...all.map((p) => p[1])), Math.max(...all.map((p) => p[1]))],
+        };
+      });
+      t.equal(m.wrong, 0, 'every square is still found at its own centre');
+      if (t.viewport === 'mobile') {
+        // measured on the build before this item (CSS px, 390x844): across 23.1 / 23.4 / 23.7 on the top, middle and bottom rows,
+        // 23.2 between row centres in the middle, 22.8 at the tightest, centres from y = 23 to y = 349 of a 378 px square
+        t.expect(m.hpitch[1] >= 23.4 * 0.98, 'a square is as wide in the middle (' + m.hpitch[1].toFixed(1) + ' px, was 23.4)');
+        t.expect(Math.min(...m.hpitch) >= 23.1 * 0.96, 'and at its narrowest (' + Math.min(...m.hpitch).toFixed(1) + ' px, was 23.1)');
+        t.expect(m.vpitchCentre >= 23.2 * 0.98, 'and as tall in the middle (' + m.vpitchCentre.toFixed(1) + ' px, was 23.2)');
+        t.expect(m.vpitchMin >= 22.8 * 0.94, 'and at its flattest (' + m.vpitchMin.toFixed(1) + ' px, was 22.8)');
+        t.expect(m.ys[0] >= 33, 'the top row sits lower, with a strip of counter above it (centre at y = ' + m.ys[0].toFixed(0) + ', was 23)');
+        t.expect(m.ys[1] + 0.5 * m.vpitchMin <= m.h - 3 && m.xs[0] - 0.5 * m.hpitch[0] >= 0 && m.xs[1] + 0.5 * m.hpitch[2] <= m.w, 'and every square is still fully inside the board area');
+      } else {
+        t.expect(Math.abs(m.hpitch[1] - 37.3) < 0.3 && Math.abs(m.hpitch[0] - 35.3) < 0.3 && Math.abs(m.hpitch[2] - 39.5) < 0.3, 'the desktop squares are the size they were (' + m.hpitch.map((x) => x.toFixed(1)).join(' / ') + ', was 35.3 / 37.3 / 39.5)');
+        t.expect(Math.abs(m.ys[0] - 96) < 1.5 && Math.abs(m.ys[1] - 595) < 1.5, 'and where they were');
+      }
+      await t.shot('S4-10-camera');
+      // the same camera with a tile on the board and the view zoomed in: the squares are found where they are drawn
+      await t.game('act', 'zoom', 1.7, 7.5 + 0.5, 7.5 + 0.5);
+      await t.waitForStable(300);
+      const [x, y] = await t.game('act', 'cell', 112);
+      t.equal(await t.game('act', 'cellAt', x, y), 112, 'zoomed in, the centre square is still found at its centre');
+    },
+  },
+  {
     name: 'S2-12 a game in progress keeps its rule after a reload',
     viewports: ['desktop', 'mobile'], initScript: instant,
     async run(t) {

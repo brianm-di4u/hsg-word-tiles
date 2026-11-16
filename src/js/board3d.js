@@ -182,6 +182,10 @@ export function setTheme(theme) {
 
 // ---------- camera ----------
 let TILT = 0.5, MARGIN = 0.02;
+// Portrait (phone) camera. The board is fitted at the old, nearly top-down tilt (PORTRAIT_FIT_TILT, 0.06 rad) so the squares keep the size and
+// the camera distance they had, then the camera leans back to PORTRAIT_TILT and looks a little past the middle (PORTRAIT_SHIFT, in board
+// units, negative = the board sits lower), which gives the far edge a strip of the walnut counter above it and costs the bottom of the frame.
+const PORTRAIT_FIT_TILT = 0.06, PORTRAIT_TILT = 0.15, PORTRAIT_SHIFT = -0.3;
 export function resize(w, h) {
   if (!B3.renderer) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -189,11 +193,12 @@ export function resize(w, h) {
   B3.renderer.setPixelRatio(dpr); B3.renderer.setSize(w, h, false);
   B3.camera.aspect = w / h; B3.camera.updateProjectionMatrix();
   const tall = h > w * 0.98;
-  TILT = tall ? 0.06 : 0.3; MARGIN = tall ? 0.004 : 0.025;
+  TILT = tall ? PORTRAIT_FIT_TILT : 0.3; MARGIN = tall ? 0.004 : 0.025;
   // on phones the board fills the width and the frame runs off the edges; the props would only show as slivers
   B3.tall = tall; B3.towels.visible = B3.bell.visible = !tall;
   B3.top.clearcoat = tall ? 0.08 : 0.18;
   B3.fit = fitDistance();
+  if (tall) TILT = PORTRAIT_TILT;
 }
 function applyPose(tx, tz, dist) {
   const c = B3.camera;
@@ -214,7 +219,7 @@ function fitDistance() {
 }
 function pose() {
   const v = R.view;
-  return { tx: v.cx - HALF, tz: v.cy - HALF + (v.zoom > 1.01 ? 0 : 0.2), dist: B3.fit / v.zoom };
+  return { tx: v.cx - HALF, tz: v.cy - HALF + (v.zoom > 1.01 ? 0 : B3.tall ? PORTRAIT_SHIFT : 0.2), dist: B3.fit / v.zoom };
 }
 
 // ---------- per frame ----------
