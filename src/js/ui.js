@@ -45,6 +45,7 @@ export function badge(p, k, size = 40) {
 
 // shown where progress would be kept, when the browser will not store anything (a private window, blocked site data)
 export const NO_SAVE = 'Saving is blocked in this browser, so your progress will not be kept.';
+export const NEWER_SAVE = 'This visit is not being saved: your saved game comes from a newer version of Bathhouse Letters, and it is left as it is.';
 
 // the painted band at the head of a sheet, the same picture as the results screen's, so every screen opens like the title
 const band = () => (art.has('title') ? `<div class="sheet-art" style="background-image:url(${art.src('title')})" aria-hidden="true"></div>` : '');
@@ -66,7 +67,7 @@ export function titleHtml(o) {
         <p class="tag">Build words. Find the springs.</p>
       </div>
     </div>
-    ${o.noSave ? `<p class="storage-note" role="status">${NO_SAVE}</p>` : ''}
+    ${o.noSave ? `<p class="storage-note" role="status">${NO_SAVE}</p>` : o.newerSave ? `<p class="storage-note" role="status">${NEWER_SAVE}</p>` : ''}
     <nav class="menu" aria-label="Main menu">
       ${o.canContinue ? `<button class="btn primary" data-go="continue">Continue <small>${esc(o.continueLine)}</small></button>` : ''}
       <button class="btn ${o.canContinue ? '' : 'primary'}" data-go="setup">New game</button>
@@ -380,7 +381,7 @@ export function settingsHtml(st, canVibrate = false) {
 }
 
 // ---------- register ----------
-export function registerHtml(lex, reg, noSave) {
+export function registerHtml(lex, reg, noSave, newerSave) {
   const groups = Object.entries(lex.categories).map(([ck, c]) => {
     const entries = lex.data.words.filter((w) => w.cat === ck);
     const found = entries.filter((e) => e.forms.some((f) => reg[f]));
@@ -394,7 +395,7 @@ export function registerHtml(lex, reg, noSave) {
   return `<div class="sheet register">
     ${band()}
     <header class="sheet-head"><h1>Bathhouse Register</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
-    ${noSave ? `<p class="note warn" role="status">${NO_SAVE}</p>` : ''}
+    ${noSave ? `<p class="note warn" role="status">${NO_SAVE}</p>` : newerSave ? `<p class="note warn" role="status">${NEWER_SAVE}</p>` : ''}
     <p class="note">Every Hot Springs word you play is signed in here. Tap a word to read its card.</p>
     ${groups}
   </div>`;

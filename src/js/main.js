@@ -106,6 +106,9 @@ function storageBlocked() {
 }
 async function boot() {
   G.noSave = storageBlocked();
+  // a saved game from a newer version of the game is left alone: this visit writes nothing, under any key, and says so
+  G.newerSave = gameSaves.read().kind === 'newer';
+  if (G.newerSave) store.frozen = true;
   loadSettings();
   if (window.__TEST__) G.settings.ai = G.settings.ai || 'normal';
   loadArt(() => { R.invalidateBoardTexture(); draw(); if (G.scene === 'title' && !G.dialog) showScene('title'); if (G.scene === 'game') renderGame(); });
@@ -126,6 +129,10 @@ const gameHandles = new WeakMap(), saveNotices = new WeakSet();
 function saveNotice(s, outcome) {
   if (outcome.ok || !s || saveNotices.has(s)) return;
   saveNotices.add(s);
+  if (outcome.reason === 'newer') {
+    if (!G.newerTold) { G.newerTold = true; toast({ kind: 'save', title: 'This game is not saved', sub: UI.NEWER_SAVE }); }
+    return;
+  }
   toast({ kind: 'save', title: 'This game is not saved', sub: outcome.reason === 'conflict' || outcome.reason === 'untrusted-stamp'
     ? 'The saved slot no longer matches this game. This game stays in this tab.'
     : 'Storage is unavailable. This game stays in this tab; keep it open to continue.' });
@@ -243,12 +250,12 @@ function screenHtml(name) {
       const found = lex.data.words.filter((e) => e.forms.some((f) => reg[f])).length;
       const di = dailyInfo();
       const rec = stats();
-      return UI.titleHtml({ records: rec.games ? `${UI.plural(rec.games, 'game')} · ${UI.plural(rec.wins, 'win')}` : 'Your wins and bests', noSave: G.noSave, canContinue: !!sv, continueLine: sv ? (sv.mode === 'daily' ? 'Daily Soak in progress' : `${sv.players.map((p) => p.name).join(' vs ')} · move ${sv.move + 1}`) : '', dailyLine: UI.dailyLine(di), found, total: lex.data.words.length, loading: !G.ready });
+      return UI.titleHtml({ records: rec.games ? `${UI.plural(rec.games, 'game')} · ${UI.plural(rec.wins, 'win')}` : 'Your wins and bests', noSave: G.noSave, newerSave: G.newerSave, canContinue: !!sv, continueLine: sv ? (sv.mode === 'daily' ? 'Daily Soak in progress' : `${sv.players.map((p) => p.name).join(' vs ')} · move ${sv.move + 1}`) : '', dailyLine: UI.dailyLine(di), found, total: lex.data.words.length, loading: !G.ready });
     }
     case 'setup': return UI.setupHtml(G.setup);
     case 'help': return UI.helpHtml(G.helpTab, lex, twoLetterWords());
     case 'settings': return UI.settingsHtml(G.settings, typeof navigator.vibrate === 'function');
-    case 'register': return UI.registerHtml(lex, register(), G.noSave);
+    case 'register': return UI.registerHtml(lex, register(), G.noSave, G.newerSave);
     case 'records': return UI.recordsHtml(stats(), { found: lex.data.words.filter((e) => e.forms.some((f) => register()[f])).length, total: lex.data.words.length, daily: dailyInfo(), today: today() });
     case 'about': return UI.aboutHtml(META);
     case 'over': {

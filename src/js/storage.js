@@ -6,10 +6,13 @@ export const KEYS = {
   daily: 'hs-letters-daily-v1',
   stats: 'hs-letters-stats-v1',
 };
+// Set for a visit whose stored game comes from a newer version of the game: nothing is written or removed under any key.
+export const SAVE_VERSION = 1;
 export const store = {
+  frozen: false,
   get(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } },
-  set(k, v) { try { window.localStorage.setItem(k, v); return true; } catch (e) { return false; } },
-  del(k) { try { window.localStorage.removeItem(k); } catch (e) { /* nothing to do */ } },
+  set(k, v) { if (this.frozen) return false; try { window.localStorage.setItem(k, v); return true; } catch (e) { return false; } },
+  del(k) { if (this.frozen) return; try { window.localStorage.removeItem(k); } catch (e) { /* nothing to do */ } },
   // `valid` rejects a value of the wrong shape: the key is dropped and the fallback returned, so one bad value never bricks the game
   json(k, fallback, valid) { try { const v = JSON.parse(this.get(k) || 'null'); if (v == null) return fallback; if (valid && !valid(v)) { this.del(k); return fallback; } return v; } catch (e) { return fallback; } },
   put(k, v) { return this.set(k, JSON.stringify(v)); },
@@ -68,6 +71,7 @@ function generation() {
 }
 
 export function createGameSaves(getStorage, { categories = categoriesV1, newGeneration = generation } = {}) {
+  let newer = false;
   const records = new WeakSet(), intents = new WeakSet(), used = new WeakSet(), controls = new WeakMap();
   const rawRead = () => { try { const raw = getStorage().getItem(KEYS.save); return typeof raw === 'string' || raw === null ? { ok: true, raw } : { ok: false, reason: 'unreadable' }; } catch { return { ok: false, reason: 'unreadable' }; } };
   const result = (c, value) => (c.last = value);
@@ -77,6 +81,8 @@ export function createGameSaves(getStorage, { categories = categoriesV1, newGene
     if (r.raw === null) return { kind: 'absent', raw: null, game: null };
     try {
       const game = JSON.parse(r.raw);
+      // a version number above this build's: left exactly as it is, for the newer build to find (a damaged save is still `invalid`)
+      if (object(game) && finite(game.v) && game.v > SAVE_VERSION) { newer = true; return { kind: 'newer', raw: r.raw, game: null }; }
       if (!validSavedGame(game, categories)) return { kind: 'invalid', raw: r.raw, game: null };
       const record = { kind: 'saved', raw: r.raw, game, stamp: Object.freeze(stampOf(game)) }; Object.freeze(record); records.add(record); return record;
     } catch { return { kind: 'invalid', raw: r.raw, game: null }; }
@@ -109,6 +115,7 @@ export function createGameSaves(getStorage, { categories = categoriesV1, newGene
   function save(handle, game) {
     const c = controls.get(handle);
     if (!c || c.game !== game) return { ok: false, reason: 'wrong-game' };
+    if (newer) return result(c, { ok: false, reason: 'newer' });
     if (c.retired) return result(c, { ok: true, action: 'already-retired' });
     if (c.conflicted) return result(c, { ok: false, reason: 'conflict' });
     if (!c.base.ok) return result(c, { ok: false, reason: 'no-known-base' });
