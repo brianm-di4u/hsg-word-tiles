@@ -1,9 +1,11 @@
 // Wave 4, batch B: S2-11, S1-12, S2-12, S3-09, S3-10, S6-13, P-N05, S4-10.
 import { ctx, root } from './lib.mjs';
-import { createGame, evaluate } from '../src/js/engine.js';
+import { createGame, evaluate, apply } from '../src/js/engine.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import { LEVELS, DEFENSE } from '../src/js/ai.js';
+import { chooseAction, LEVELS, DEFENSE, tiedWithBest } from '../src/js/ai.js';
+import { seedState } from '../src/js/rng.js';
+import { dailyPar } from '../src/js/par.js';
 import { validSavedGame } from '../src/js/storage.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
@@ -169,6 +171,43 @@ export const tests = [
       t.expect(doc.includes('every word of 2–' + (LEVELS.medium.freeLen - 1) + ' letters (`freeLen` ' + LEVELS.medium.freeLen + ')'), 'and Medium\'s short words');
       t.expect(doc.includes('− ' + DEFENSE.boiling + ' per empty Boiling Spring (and ' + DEFENSE.steam + ' per empty Steam square)'), 'and Hard\'s penalties');
       t.expect(!/50th–80th/.test(doc), 'and nothing says 50th-80th any more');
+    },
+  },
+  {
+    name: 'S3-10 Medium and Hard vary among plays tied within 1.5 points, a seed still gives the same game, and the Daily par is unchanged (Node)', node: true,
+    async run(t) {
+      const c = await ctx();
+      const seats = [{ kind: 'ai', level: 'hard', persona: 'julian', name: 'H' }, { kind: 'ai', level: 'medium', persona: 'hollis', name: 'M' }];
+      const play = (seed) => {
+        const s = createGame({ mode: 'play', seats, seed }, c.lex);
+        for (let n = 0; !s.over && n < 400; n++) { const { action } = chooseAction(c.dict, c.lex, s, {}); if (!apply(s, action, c).ok) throw new Error('illegal move'); }
+        return s.log.map((e) => e.kind + ':' + (e.tiles ? e.tiles.map((x) => x.i + x.l).join('') : '')).join('|') + '#' + s.players.map((p) => p.score).join(',');
+      };
+      t.equal(play(1003), play(1003), 'the same seed gives the same game twice');
+      t.expect(play(1003) !== play(1004), 'and another seed another game');
+      // the window itself: a play 1.5 equity points behind is tied, one a hair further back is not
+      t.equal(tiedWithBest([{ e: 10 }, { e: 8.5 }, { e: 8.49 }, { e: 3 }]).length, 2, 'a play 1.5 points behind the best is tied with it, 1.51 behind is not');
+      t.equal(tiedWithBest([{ e: 4 }, { e: 4 }, { e: 4 }]).length, 3, 'and exactly equal plays are tied');
+      // one position, many draws of the seeded stream: Hard and Medium do not always answer alike; exact: true always does
+      const s = createGame({ mode: 'play', seats, seed: 1003 }, c.lex);
+      let varied = 0, positions = 0;
+      for (let n = 0; !s.over && n < 12; n++) {
+        const answers = (level, exact) => new Set(Array.from({ length: 16 }, (_, k) => {
+          const copy = JSON.parse(JSON.stringify(s)); copy.rng.ai = seedState(k + 1);
+          return JSON.stringify(chooseAction(c.dict, c.lex, copy, { level, exact }).action);
+        }));
+        for (const level of ['hard', 'medium']) {
+          positions++;
+          if (answers(level, false).size > 1) varied++;
+          t.equal(answers(level, true).size, 1, level + ' with exact: true has one answer in turn ' + n);
+        }
+        const { action } = chooseAction(c.dict, c.lex, s, {});
+        apply(s, action, c);
+      }
+      t.expect(varied >= 3, 'in at least three of ' + positions + ' positions the answer depends on the stream (' + varied + ')');
+      // the Daily par does not move: these were read from the game before this item
+      const PAR = { '2026-01-15': { m: 405, h: 402 }, '2026-03-02': { m: 403, h: 429 }, '2026-07-04': { m: 296, h: 380 }, '2026-11-16': { m: 434, h: 405 }, '2026-12-25': { m: 398, h: 396 } };
+      for (const [date, want] of Object.entries(PAR)) t.equal(JSON.stringify(await dailyPar(c, date)), JSON.stringify(want), 'par for ' + date);
     },
   },
   {

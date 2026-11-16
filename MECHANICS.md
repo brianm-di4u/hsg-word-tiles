@@ -124,11 +124,15 @@ one more letter clears, never past `length − 2` letters shown. Once claimed, t
     play leaves within reach (`DEFENSE` in `ai.js`); with the bag empty in a 2-player game it looks one reply ahead (the
     opponent's rack is known by then).
 - Leave values (`leave-table.js`) are fitted by `tools/selfplay.mjs`.
-- Determinism: no wall-clock cutoffs; a node budget caps the search. Ties break by a fixed key.
+- Medium and Hard count plays within `TIE_WINDOW` (1.5) equity points of their best as tied and draw one of them with `rng.ai`, so
+  two opponents of one level do not always answer a position alike. Before wave 4 only plays with exactly equal equity were tied, and the one with the lowest key was taken.
+  The Daily's par (`par.js`) passes `exact: true` and keeps that old order, so a date's par is unchanged.
+- Determinism: no wall-clock cutoffs; a node budget caps the search. A seed gives the same game every time: ties are drawn from the
+  seeded `rng.ai`, and equal draws break by a fixed key.
 
 ## 7. RNG
 mulberry32, two streams stored in the state: `rng.bag` (bag order, featured picks) and `rng.ai`
-(Easy's percentile pick). The Daily seed is a hash of the local date `YYYY-MM-DD`.
+(Easy's percentile pick, and the draw among tied plays for Medium and Hard). The Daily seed is a hash of the local date `YYYY-MM-DD`.
 
 ## 8. Saves (`localStorage`, every call in try/catch; the game works without storage)
 | Key | Contents |

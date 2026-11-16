@@ -1,5 +1,6 @@
 // The par for a Daily Soak: what a computer player scores on the same tiles. No DOM.
-// Medium and Hard play their best move every turn from the seeded bag, so a date has one answer for each.
+// Medium and Hard play their best move every turn from the seeded bag, so a date has one answer for each (exact: true keeps the
+// tied plays in their fixed order: the computers on the board vary their choice among near ties, the par does not).
 import { createGame, apply } from './engine.js';
 import { chooseAction } from './ai.js';
 
@@ -12,7 +13,7 @@ export async function dailyScore(c, date, seat, pause) {
   const s = createGame({ mode: 'daily', date, seats: [{ kind: 'human', name: 'You' }] }, c.lex);
   s.players[0].level = seat.level;
   for (let n = 0; !s.over && n < 40; n++) {
-    const { action } = chooseAction(c.dict, c.lex, s, { level: seat.level, persona: seat.persona });
+    const { action } = chooseAction(c.dict, c.lex, s, { level: seat.level, persona: seat.persona, exact: true });
     if (!apply(s, action, c).ok) apply(s, { type: 'pass' }, c);
     if (pause && !s.over) await pause();
   }

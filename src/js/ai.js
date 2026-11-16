@@ -10,7 +10,9 @@ import { LEAVE } from './leave-table.js';
 // the first length that must be common). Easy plays its best word except about one turn in four (slip),
 // when it takes an ordinary one from the middle of its list, and ignores the rack it keeps. Medium always
 // plays its best and weighs its leave. Hard knows the whole dictionary, weighs the rack it keeps, the
-// Boiling Springs it opens and the endgame.
+// Boiling Springs it opens and the endgame. Medium and Hard play the best play by their own measure (equity); plays within
+// TIE_WINDOW equity points of it count as tied and the choice among them is drawn from state.rng.ai (before wave 4 a tie went to
+// the play whose key sorts first, so a position had one answer and every opponent of a level played the same way).
 // Before wave 2 Easy was { commonOnly, maxLen: 6, pick: [0.2, 0.5], budget: 400000 }: no short non-common
 // words and no slip (it picked from the middle of its list every turn), which Medium beat 100 games out
 // of 100.
@@ -62,6 +64,12 @@ export const rackMinus = (rack, tiles) => {
 // What Hard takes off a play for each empty word-multiplier square it puts within reach of the opponent: a Boiling Spring
 // (triple word) and, since wave 3, a Steam square (double word). Before wave 3 only the Boiling Springs counted (steam was 0).
 export const DEFENSE = { boiling: 4, steam: 1.5 };
+
+// Equity points within which Medium and Hard treat two plays as tied and choose between them with the seeded stream (0 = the old rule).
+export const TIE_WINDOW = 1.5;
+
+// The plays tied with the best one: `ranked` is sorted by equity, best first.
+export const tiedWithBest = (ranked) => ranked.filter((r) => r.e >= ranked[0].e - TIE_WINDOW);
 
 // Empty Boiling Spring and Steam squares a move puts within reach of the opponent (same line, ≤ 3 away, or adjacent),
 // weighted by DEFENSE.
@@ -130,7 +138,9 @@ export function chooseAction(dict, lex, s, opts = {}) {
     return { action: { type: 'play', tiles: best.m.tiles }, nodes, move: best.m };
   }
 
-  const pick = ranked[0];
+  // varied: a seeded draw among the plays tied with the best (the Daily's par passes exact: true, so a date keeps one answer)
+  const near = opts.exact ? [] : tiedWithBest(ranked);
+  const pick = near.length > 1 ? near[Math.floor(rand(s, 'ai') * near.length)] : ranked[0];
   // a weak play with a bad rack: swap instead (Medium and Hard)
   if (bag >= RACK && pick.m.score < 8 && leaveValue(p.rack) < -6) return { action: fallback(p.rack, bag), nodes };
   return { action: { type: 'play', tiles: pick.m.tiles }, nodes, move: pick.m };
