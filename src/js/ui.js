@@ -450,7 +450,8 @@ export function aboutHtml(meta) {
     <h2>History</h2>
     <p>Each Hot Springs word card cites its source: the National Park Service, the Encyclopedia of Arkansas, Wikipedia, and other sources checked for the collection's trivia game. The opponents are fictional characters.</p>
     <h2>Type and art</h2>
-    <p>Limelight, Fraunces and Josefin Sans (SIL Open Font License). Board and tiles are drawn in code; paintings were made for the collection.</p>
+    <p>Limelight, Fraunces and Josefin Sans (SIL Open Font License). Board and tiles are drawn in code.</p>
+    <p>Art: painted with AI image tools for this game.</p>
     <p class="fine">Hot Springs Games · hsargames.com</p>
   </div>`;
 }

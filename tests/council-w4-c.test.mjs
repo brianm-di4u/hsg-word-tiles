@@ -207,4 +207,29 @@ export const tests = [
       await t.shot('S1-20-big-pop', { wait: false });
     },
   },
+  // ---------- C4-02 ----------
+  {
+    name: 'C4-02 About says how the art was made, in one plain line that fits at both sizes',
+    viewports: ['desktop', 'mobile'],
+    initScript: seeded(1),
+    async run(t) {
+      await ready(t);
+      await t.game('scene', 'about');
+      await t.waitForStable(300);
+      const r = await t.page.evaluate(() => {
+        const sheet = document.querySelector('.sheet.about'), line = [...sheet.querySelectorAll('p')].find((p) => /^Art:/.test(p.textContent));
+        if (!line) return null;
+        line.scrollIntoView({ block: 'center' });
+        const b = line.getBoundingClientRect(), s = sheet.getBoundingClientRect();
+        const lineCount = Math.round(b.height / parseFloat(getComputedStyle(line).lineHeight));
+        return { text: line.textContent, left: b.left, right: b.right, vw: innerWidth, sheetOver: sheet.scrollWidth - sheet.clientWidth, docOver: document.documentElement.scrollWidth - innerWidth, lineCount, all: sheet.textContent };
+      });
+      t.expect(r, 'the About sheet has an Art line');
+      t.equal(r.text, 'Art: painted with AI image tools for this game.', 'it says exactly that');
+      t.expect(!/OpenAI|Codex|Midjourney|Claude/i.test(r.all), 'and names no company or product');
+      t.expect(r.left >= 0 && r.right <= r.vw && r.sheetOver <= 1 && r.docOver <= 0, 'nothing overflows (line ' + Math.round(r.left) + ' to ' + Math.round(r.right) + ' of ' + r.vw + ' px)');
+      t.expect(r.lineCount <= 2, 'it fits in two lines at most (' + r.lineCount + ')');
+      await t.shot('C4-02-about-art-line', { wait: false });
+    },
+  },
 ];
