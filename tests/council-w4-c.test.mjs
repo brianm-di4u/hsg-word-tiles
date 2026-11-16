@@ -137,4 +137,74 @@ export const tests = [
       t.equal((await since(total)).map((c) => c.name).join(','), 'pick', 'a tap on a rack tile is one pick only');
     },
   },
+  // ---------- S1-20 ----------
+  {
+    name: 'S1-20 a bigger play has a bigger, longer score pop and a big everyday play throws brass sparks; a small play and a Hot Springs word do not',
+    viewports: ['desktop', 'mobile'],
+    initScript: seeded(3),
+    async run(t) {
+      // two people, so no reply from the computer adds a pop of its own
+      const twoPeople = { seats: [{ kind: 'human', name: 'A' }, { kind: 'human', name: 'B' }] };
+      const best = async (rack, pick) => {
+        await start(t, rack, twoPeople);
+        const list = await t.game('act', 'moves', 200);
+        const ok = list.filter((m) => !m.words.some((w) => w.themed || w.bonus));
+        return pick(ok);
+      };
+      const playNow = (tiles) => t.page.evaluate(async (tl) => {
+        await window.__game.act('stage', tl);
+        const r = await window.__game.act('play');
+        const pops = [...document.querySelectorAll('.pop')], el = pops[pops.length - 1], st = window.__game.getState();
+        const cs = el && getComputedStyle(el);
+        return { ok: r.ok, size: el ? parseFloat(cs.fontSize) : 0, secs: el ? parseFloat(cs.animationDuration) : 0, text: el ? el.textContent : '', sparks: st.sparks, sweeps: st.sweeps,
+          inside: el ? (() => { const a = el.getBoundingClientRect(), b = document.querySelector('#boardwrap').getBoundingClientRect(); return a.left >= b.left - 1 && a.right <= b.right + 1; })() : false };
+      }, tiles);
+      const small = await best('AEIRSTN', (ok) => ok.reduce((a, m) => (m.score < a.score ? m : a)));
+      const smallPlay = await playNow(small.tiles);
+      t.expect(smallPlay.ok && small.score <= 14, 'a small everyday play of ' + small.score + ' points');
+      t.equal(smallPlay.size, 25.6, 'its pop is the plain size (1.6 rem)'); t.equal(smallPlay.secs, 1.3, 'and the plain 1.3 s');
+      t.equal(smallPlay.sparks, 0, 'no sparks');
+      const big = await best('PLAYING', (ok) => ok.reduce((a, m) => (m.score > a.score ? m : a)));   // all seven tiles: a Full Soak, which is not a Hot Springs word
+      const bigPlay = await playNow(big.tiles);
+      t.expect(bigPlay.ok && big.score >= 45, 'a big everyday play of ' + big.score + ' points');
+      const w = Math.min(1, Math.max(0, (big.score - 14) / 46));
+      t.expect(Math.abs(bigPlay.size - 25.6 * (1 + 0.6 * w)) < 0.1 && bigPlay.size > smallPlay.size + 5, 'its pop is bigger (' + bigPlay.size + ' px against ' + smallPlay.size + ')');
+      t.expect(Math.abs(bigPlay.secs - 1.3 * (1 + 0.3 * w)) < 0.02 && bigPlay.secs > smallPlay.secs, 'and lasts longer (' + bigPlay.secs + ' s against ' + smallPlay.secs + ')');
+      t.expect(bigPlay.sparks >= 5 * big.tiles.length, 'it throws brass sparks (' + bigPlay.sparks + ' for ' + big.tiles.length + ' tiles)');
+      t.expect(bigPlay.inside, 'the pop is inside the board area');
+      // a Hot Springs word keeps its steam and sweep and gets no sparks
+      await t.page.waitForFunction(() => window.__game.getState().sparks === 0, null, { timeout: 5000 });   // the first play's sparks have gone
+      await start(t, 'SPRINGE', twoPeople);
+      const themed = await playNow(across('SPRING'));
+      t.expect(themed.ok && themed.sweeps > 0 && themed.sparks === 0, 'a Hot Springs word sweeps gold and throws no sparks');
+    },
+  },
+  {
+    name: 'S1-20 with animation off there is no pop and no sparks for a big play',
+    viewports: ['desktop'],
+    reducedMotion: true,
+    initScript: seeded(3),
+    async run(t) {
+      await start(t, 'PLAYING', { seats: [{ kind: 'human', name: 'A' }, { kind: 'human', name: 'B' }] });
+      const list = await t.game('act', 'moves', 200);
+      const m = list.filter((x) => !x.words.some((w) => w.themed || w.bonus)).reduce((a, x) => (x.score > a.score ? x : a));
+      await t.game('act', 'stage', m.tiles); await t.game('act', 'play');
+      t.expect(m.score >= 45, 'a big play of ' + m.score);
+      t.equal(await t.page.locator('.pop').count(), 0, 'no pop');
+      t.equal((await t.state()).sparks, 0, 'no sparks');
+    },
+  },
+  {
+    name: 'S1-20 the big pop and the brass sparks over the tiles, as a player sees them',
+    viewports: ['desktop', 'mobile'],
+    initScript: new Function(`window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'slow', sound: false }));`),
+    async run(t) {
+      await start(t, 'PLAYING');
+      const list = await t.game('act', 'moves', 50);
+      const m = list.reduce((a, x) => (x.score > a.score ? x : a));
+      await t.game('act', 'stage', m.tiles); await t.game('act', 'play');
+      t.expect((await t.state()).sparks > 0 && await t.page.locator('.pop').count() === 1, 'the pop and the sparks are showing (' + m.score + ' points)');
+      await t.shot('S1-20-big-pop', { wait: false });
+    },
+  },
 ];
