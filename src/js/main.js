@@ -608,6 +608,7 @@ function stage(k, i, letter) {
   G.staged.push({ k, i, l: l === '?' ? letter : l, blank: l === '?' });
   G.order = G.order.filter((x) => x !== k);
   G.selected = null; G.hint = null;
+  forgetHint(s);
   clearToasts();
   if (animOn()) { const now = performance.now(); G.settle.set(i, now); G.settleUntil = now + 130; }
   sfx('place', { pan: colPan(i) }); buzz('stage');
@@ -618,12 +619,15 @@ function unstage(i, toPos) {
   const t = G.staged.find((x) => x.i === i);
   if (!t) return;
   G.staged = G.staged.filter((x) => x !== t);
+  forgetHint(G.s);
   clearToasts();
   if (toPos != null) G.order.splice(toPos, 0, t.k); else G.order.push(t.k);
   sfx('recall');
   updatePreview(); renderStaging();
 }
-function recallAll() { if (!G.staged.length) return; for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; sfx('recall'); updatePreview(); renderStaging(); }
+// a paid hint comes back after a reload only while its tiles are untouched: taking them back, or staging another tile, ends it
+function forgetHint(s) { if (s && s.hintStaged) { delete s.hintStaged; save(s); } }
+function recallAll() { if (!G.staged.length) return; for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
 function shuffleRack() {
   const o = G.order;
   for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; }

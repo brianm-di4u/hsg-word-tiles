@@ -1,4 +1,4 @@
-// Wave 4, batch A: C4-01, C4-04, C4-05, C4-06.
+// Wave 4, batch A: C4-01, C4-04, C4-05, C4-06, C4-08.
 import fs from 'node:fs';
 import path from 'node:path';
 import { root } from './lib.mjs';
@@ -223,6 +223,56 @@ export const tests = [
       t.expect(/Clubs & casinos: complete/.test(out.toasts[1]), 'after the tile is placed the category toast is showing (' + out.toasts[1] + ')');
       await t.game('act', 'reveal');   // lift the hand-over curtain so the strip and the toast can be seen
       await t.shot('C4-06-category-toast', { wait: false });
+    },
+  },
+
+  {
+    name: 'C4-08 tiles taken back after a paid hint do not come back after a reload; an untouched hint still does',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(21);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      const n = await t.game('act', 'hint');
+      t.expect(n > 0, 'the hint staged tiles');
+      let saved = await ls(t, SAVE);
+      t.expect(saved.hintStaged && saved.hintStaged.tiles.length === n, 'the paid hint is in the save');
+      await t.reload(); await ready(t);
+      await t.page.click('#screen [data-go="continue"]'); await t.waitIdle(8000);
+      t.equal((await t.state()).staged.length, n, 'an untouched hint comes back after a reload');
+      await t.game('act', 'recall');
+      t.equal((await t.state()).staged.length, 0, 'tiles taken back');
+      saved = await ls(t, SAVE);
+      t.expect(!('hintStaged' in saved), 'the save no longer carries the hint');
+      await t.reload(); await ready(t);
+      await t.page.click('#screen [data-go="continue"]'); await t.waitIdle(8000);
+      const after = await t.state();
+      t.equal(after.staged.length, 0, 'Continue leaves the board clear');
+      t.equal(after.game.players[0].hints, 2, 'and the hint stays paid for');
+    },
+  },
+  {
+    name: 'C4-08 staging a different tile after a hint ends the saved hint too',
+    viewports: ['desktop'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.seed(21);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      const n = await t.game('act', 'hint');
+      const st = await t.state();
+      const spare = st.game.players[0].rack.filter((_, k) => !st.staged.some((x) => x.k === k));
+      t.expect(n > 0 && spare.length > 0, 'the hint leaves a tile on the rack (' + spare.length + ')');
+      const free = st.game.board.findIndex((x, i) => !x && !st.staged.some((q) => q.i === i) && i > 150);
+      const r = await t.game('act', 'stage', [{ i: free, l: spare[0] === '?' ? 'E' : spare[0], blank: spare[0] === '?' }]);
+      t.expect(r.ok, 'another tile is staged');
+      t.expect(!('hintStaged' in (await ls(t, SAVE))), 'the saved hint is gone');
+      await t.reload(); await ready(t);
+      await t.page.click('#screen [data-go="continue"]'); await t.waitIdle(8000);
+      t.equal((await t.state()).staged.length, 0, 'nothing is put back after the reload');
     },
   },
 ];
