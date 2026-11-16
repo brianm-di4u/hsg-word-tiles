@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ctx, root } from './lib.mjs';
 import { has } from '../src/js/dict.js';
 import { createGame } from '../src/js/engine.js';
+import { SQUARE } from '../src/js/score.js';
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 // the cues are random on purpose; the test seeds them, so a run gives the same peaks every time
 const seeded = (seed) => new Function(`
@@ -269,4 +270,73 @@ export const tests = [
       t.equal(feat('2026-03-04'), 'DOMED,CHAPELS,PINBALLS', 'the Featured Springs of 4 March 2026 are as they were');
     },
   },
+  // ---------- S2-24 ----------
+  {
+    name: 'S2-24 open glass and Bathhouse Row squares are dimmed once tiles cover the board, over the 3D board',
+    viewports: ['desktop', 'mobile'],
+    initScript: seeded(2),
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 3 });
+      await t.waitIdle(5000);
+      await t.waitForStable(300);   // the board has been painted with its glass
+      t.log('board mode: ' + ((await t.state()).view.mode3d ? '3D' : 'flat'));
+      // an open premium square far from the first word, and a Bathhouse Row one
+      const pick = (kind, from) => SQUARE.findIndex((k, i) => k === kind && i >= from);
+      const squares = { glass: pick('h', 15 * 2), row: pick('B', 15 * 2) };
+      // the overlay canvas: mean alpha and mean luminance in a patch near a square's corner (clear of its figures and of any tile)
+      const patch = (i) => t.page.evaluate(async (cell) => {
+        const cv = document.getElementById('board'), k = cv.width / cv.clientWidth, [x, y] = await window.__game.act('cell', cell), [x2] = await window.__game.act('cell', cell + 1);
+        const c = Math.abs(x2 - x), r = Math.round(0.07 * c * k), px = Math.round((x - 0.36 * c) * k), py = Math.round((y - 0.36 * c) * k);
+        const d = cv.getContext('2d').getImageData(px - r, py - r, 2 * r, 2 * r).data;
+        let a = 0, l = 0, n = 0;
+        for (let j = 0; j < d.length; j += 4) { a += d[j + 3]; l += (d[j] + d[j + 1] + d[j + 2]) / 3; n++; }
+        return { alpha: a / n, lum: l / n };
+      }, i);
+      t.expect(squares.glass > 0 && squares.glass < 105 && squares.row > 0 && squares.row < 105, 'the squares measured are open ones (' + squares.glass + ', ' + squares.row + ')');
+      const empty = { glass: await patch(squares.glass), row: await patch(squares.row) };
+      // tiles along the middle row and the one below: about 24, so the wash is at its most
+      const g = (await t.state()).game;
+      for (let k = 0; k < 24; k++) g.board[105 + k] = { l: 'ETAOINSHR'[k % 9], blank: false };
+      await t.game('setState', { game: g });
+      await t.waitIdle(5000);
+      await t.waitForStable(300);
+      const full = { glass: await patch(squares.glass), row: await patch(squares.row) };
+      const mode3d = (await t.state()).view.mode3d;
+      for (const key of ['glass', 'row']) {
+        t.log(key + ' square (' + (mode3d ? '3D overlay' : 'flat') + '): alpha ' + empty[key].alpha.toFixed(1) + ' to ' + full[key].alpha.toFixed(1) + ', luminance ' + empty[key].lum.toFixed(1) + ' to ' + full[key].lum.toFixed(1));
+        if (mode3d) t.expect(empty[key].alpha < 1 && full[key].alpha > 25 && full[key].alpha < 55, key + ' square: no wash on the empty board, then a light one (alpha ' + full[key].alpha.toFixed(1) + ')');
+        else t.expect(full[key].lum < empty[key].lum * 0.92 && full[key].lum > empty[key].lum * 0.75, key + ' square is dimmer once tiles cover the board, but not dark (' + empty[key].lum.toFixed(0) + ' to ' + full[key].lum.toFixed(0) + ')');
+      }
+      await t.shot('S2-24-dimmed-discs-' + (mode3d ? '3d' : 'flat'));
+    },
+  },
+  {
+    name: 'S2-24 the START banner on the flat board is wider than the old 0.84 of the square and still holds its word',
+    viewports: ['desktop', 'mobile'],
+    url: 'index.html?gl=0',
+    initScript: seeded(2),
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 3 });
+      await t.waitIdle(5000);
+      t.expect(!(await t.state()).view.mode3d, 'the flat board is showing');
+      const r = await t.page.evaluate(async () => {
+        const cv = document.getElementById('board'), k = cv.width / cv.clientWidth, [x, y] = await window.__game.act('cell', 112), [x2] = await window.__game.act('cell', 113), c = Math.abs(x2 - x);
+        const row = cv.getContext('2d').getImageData(Math.round((x - 0.6 * c) * k), Math.round(y * k), Math.round(1.2 * c * k), 1).data;   // the line across the middle of the banner: its dark ends lie outside the letters
+        let lo = -1, hi = -1;
+        for (let j = 0; j < row.length; j += 4) if (row[j] < 70 && row[j + 1] < 65 && row[j + 2] < 60) { if (lo < 0) lo = j / 4; hi = j / 4; }
+        const mid = row;
+        let gold = 0;
+        for (let j = 0; j < mid.length; j += 4) if (mid[j] > 200 && mid[j + 1] > 170 && mid[j + 2] < 150) gold++;
+        return { wide: (hi - lo + 1) / (k * c), gold, cell: c };
+      });
+      t.log('START banner ' + r.wide.toFixed(2) + ' of a cell wide, ' + r.gold + ' gold pixels on its middle line');
+      t.expect(r.wide >= 0.84, 'the banner is at least 0.84 of a cell wide inside its rim (it was 0.77; now ' + r.wide.toFixed(2) + ')');
+      t.expect(r.wide <= 0.98, 'and stays inside its square');
+      t.expect(r.gold > 8, 'the letters are drawn on it (' + r.gold + ' gold pixels)');
+      await t.shot('S2-24-start-banner');
+    },
+  },
 ];
+tests.push({ ...tests.find((x) => x.name.startsWith('S2-24 open glass')), name: 'S2-24 open glass and Bathhouse Row squares are dimmed once tiles cover the board, on the flat board', url: 'index.html?gl=0' });

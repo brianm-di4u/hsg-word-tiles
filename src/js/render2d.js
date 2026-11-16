@@ -243,11 +243,14 @@ export function paintBoard(size, theme = 'light') {
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, w * 0.38, 0, Math.PI * 2); ctx.fill();
       }
       // START on an ink banner across the pool, like the scoring discs
-      const bw = w * 0.84, bh = w * 0.3;
+      // (S2-24: the banner is a little larger than it was, 0.84 of the square by 0.3, with larger letters, so the first square to play reads from across the table)
+      const bw = w * START_BANNER[0], bh = w * START_BANNER[1];
       ctx.fillStyle = 'rgba(22,19,15,0.92)'; roundRect(ctx, cx - bw / 2, cy - bh / 2, bw, bh, bh * 0.3); ctx.fill();
       ctx.strokeStyle = '#E9C766'; ctx.lineWidth = Math.max(1, w * 0.02); ctx.stroke();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#F3DD8B';
-      ctx.font = `800 ${cell * 0.19}px ${FONT_TILE}`;
+      ctx.font = `800 ${cell * START_TEXT}px ${FONT_TILE}`;
+      const fit = Math.min(1, (bw * 0.86) / ctx.measureText('START').width);
+      if (fit < 1) ctx.font = `800 ${cell * START_TEXT * fit}px ${FONT_TILE}`;
       ctx.fillText('START', cx, cy + w * 0.012);
     } else if (k === 'B') {
       const name = BATHHOUSES[i];
@@ -364,6 +367,12 @@ export const cellCenter = (i) => project(FRAME + (i % N) + 0.5, FRAME + Math.flo
 const quad = (i, k = 0.04) => { const bx = FRAME + (i % N), by = FRAME + Math.floor(i / N); return [[k, k], [1 - k, k], [1 - k, 1 - k], [k, 1 - k]].map(([u, v]) => project(bx + u, by + v)); };
 const poly = (ctx, pts) => { ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); };
 
+const START_BANNER = [0.94, 0.38], START_TEXT = 0.225;   // the START banner as a share of its square (was 0.84 by 0.3) and its letters as a share of a cell (was 0.19)
+// S2-24: as tiles cover the board the glass discs and Bathhouse Row medallions of the squares still open step back: a wash of
+// DIM_STEP more per tile on the board, up to DIM_MAX, so the tiles are the loudest thing on it
+const DIM_STEP = 0.012, DIM_MAX = 0.16;
+const DIMMABLE = SQUARE.map((k, i) => (PREMIUM[k] || k === 'B' ? i : -1)).filter((i) => i >= 0);
+
 let boardTex = null, boardKey = '';
 export function boardTexture(theme) {
   const size = 2048;
@@ -386,6 +395,15 @@ export function drawFrame(ctx, d) {
     ctx.fillStyle = '#3A2414'; ctx.fillRect(ox, oy, U * s, U * s); ctx.restore();
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(boardTexture(d.theme), ox, oy, U * s, U * s);
+  }
+  // the squares nobody has covered, dimmed a little more with every tile down (the same wash on the flat and the 3D board)
+  const down = d.board.reduce((n, t) => n + (t ? 1 : 0), 0), dim = Math.min(DIM_MAX, DIM_STEP * down);
+  if (dim > 0) {
+    ctx.fillStyle = 'rgba(30,20,10,' + dim.toFixed(3) + ')';
+    for (const i of DIMMABLE) {
+      if (d.board[i] || (d.staged && d.staged.some((t) => t.i === i))) continue;
+      poly(ctx, quad(i, 0.035)); ctx.fill();
+    }
   }
   const cellPx = s, tilePx = cellPx * dpr;
   const at = (i) => toScreen(FRAME + (i % N), FRAME + Math.floor(i / N));
