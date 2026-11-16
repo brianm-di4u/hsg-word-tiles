@@ -1,8 +1,8 @@
-// Wave 4, batch A: C4-01, C4-04, C4-05, C4-06, C4-08, C4-09, S1-06, S6-14.
+// Wave 4, batch A: C4-01, C4-04, C4-05, C4-06, C4-08, C4-09, S1-06, S6-14, S3-23.
 import fs from 'node:fs';
 import path from 'node:path';
 import { root } from './lib.mjs';
-import { createGameSaves, KEYS } from '../src/js/storage.js';
+import { createGameSaves, KEYS, pruneDays, validDaily, DAILY_DAYS } from '../src/js/storage.js';
 import { dailyStars, dailyStrip } from '../src/js/ui.js';
 import { makeLexicon } from '../src/js/lexicon.js';
 
@@ -353,6 +353,49 @@ export const tests = [
         t.expect(/<meta name="theme-color" content="#2B1A10">/.test(html), f + ' has the dark theme colour');
         t.expect(!/rel="manifest"|apple-mobile-web-app-capable/.test(html), f + ' has no manifest or standalone tag (they wait for the icons)');
       }
+    },
+  },
+
+  {
+    name: 'S3-23 the daily record keeps the last 400 days, the best day and the streak (Node)', node: true,
+    async run(t) {
+      const key = (n) => new Date(Date.UTC(2025, 0, 1 + n, 12)).toISOString().slice(0, 10);
+      const days = {}; for (let n = 0; n < 450; n++) days[key(n)] = { score: n === 3 ? 999 : 100 + n, plays: 1 };
+      const kept = pruneDays(days);
+      const dates = Object.keys(kept).sort();
+      t.equal(DAILY_DAYS, 400, 'the cap is 400');
+      t.equal(dates.length, 401, 'the newest 400 and the best day (' + dates.length + ')');
+      t.equal(dates[dates.length - 1], key(449), 'the newest day is kept');
+      t.expect(kept[key(3)] && kept[key(3)].score === 999, 'the best day survives its age, so "best day" never goes down');
+      t.expect(!kept[key(4)] && !kept[key(49)] && kept[key(50)], 'the oldest 49 days but the best are the ones dropped');
+      t.equal(Object.keys(pruneDays(days, 400, key(10))).length, 402, 'the day being written is always kept');
+      const few = { [key(0)]: { score: 1, plays: 1 } };
+      t.equal(pruneDays(few), few, 'a record under the cap is returned as it is');
+      t.expect(validDaily({ days: kept, streak: 4, last: key(449) }), 'what is left is a valid daily record');
+    },
+  },
+  {
+    name: 'S3-23 playing a Daily on a record of 450 days leaves 400 and keeps the streak',
+    viewports: ['desktop'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      const key = (n) => new Date(Date.UTC(2024, 0, 1 + n, 12)).toISOString().slice(0, 10);
+      await t.page.evaluate(([k, ks]) => {
+        const days = {}; ks.forEach((d, n) => { days[d] = { score: n === 5 ? 700 : 100 + (n % 50), plays: 1 }; });
+        localStorage.setItem(k, JSON.stringify({ days, streak: 7, last: ks[ks.length - 1] }));
+      }, [DAILY, Array.from({ length: 450 }, (_, n) => key(n))]);
+      const date = key(450);   // the day after the last one: the streak goes up by one
+      await t.game('newGame', { mode: 'daily', date });
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'game', null, { timeout: 8000 });
+      await t.game('act', 'autoplay');
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 20000 });
+      const rec = await ls(t, DAILY);
+      const dates = Object.keys(rec.days);
+      t.expect(dates.length === 400 || dates.length === 401, 'about 400 days are kept (' + dates.length + ')');
+      t.expect(rec.days[date] && rec.days[date].score > 0, 'today is in it');
+      t.equal(rec.days[key(5)].score, 700, 'the best day is still there');
+      t.equal(rec.streak, 8, 'the streak went on from 7');
     },
   },
 ];

@@ -25,6 +25,18 @@ export const validRegister = r => plain(r) && Object.values(r).every(e => plain(
 export const validDaily = d => plain(d) && plain(d.days) && Object.values(d.days).every(e => plain(e) && num(e.score) && num(e.plays))
   && (d.streak === undefined || num(d.streak)) && (d.last == null || typeof d.last === 'string');
 
+// The Daily record keeps the last DAILY_DAYS played dates (the strip shows fourteen); older ones are dropped when a day is written.
+// The day with the best score (and the day being written) is kept whatever its age, so "best day" never goes down, and the streak lives outside the days.
+export const DAILY_DAYS = 400;
+export function pruneDays(days, keep = DAILY_DAYS, also = null) {
+  const dates = Object.keys(days).sort();
+  if (dates.length <= keep) return days;
+  const best = dates.reduce((b, k) => (days[k].score > days[b].score ? k : b), dates[0]);
+  const kept = new Set(dates.slice(dates.length - keep));
+  kept.add(best); if (also != null && days[also]) kept.add(also);
+  return Object.fromEntries(dates.filter((k) => kept.has(k)).map((k) => [k, days[k]]));
+}
+
 // Optional persistence metadata in the existing v1 game key, never rules/RNG data.
 export const SAVE_STAMP = '_hsgSlotV1';
 const object = x => !!x && typeof x === 'object' && !Array.isArray(x);

@@ -7,7 +7,7 @@ import { seedState } from './rng.js';
 import * as R from './render2d.js';
 import { audio, unlock, sfx, pauseAudio, resumeAudio, setTune, holdAudio, releaseAudio, syncAudio, audioList, audioRender, renderCue, tuneName } from './audio.js';
 import { art, loadArt } from './art.js';
-import { store, KEYS, createGameSaves, validRegister, validDaily } from './storage.js';
+import { store, KEYS, createGameSaves, validRegister, validDaily, pruneDays } from './storage.js';
 import { startAi, aiMove, aiHint, aiClient } from './aiclient.js';
 import { PERSONAS, persona, LEVEL_NAME, seatLevel } from './personas.js';
 import { barkFor, endBark, SHORT } from './voices.js';
@@ -189,6 +189,7 @@ function recordDaily() {
     const n = nextStreak(d, date);
     d.streak = n.streak; d.rest = n.rest; d.last = date;
   }
+  d.days = pruneDays(d.days, undefined, date);
   store.put(KEYS.daily, d);
   return { score, streak: d.streak };
 }
