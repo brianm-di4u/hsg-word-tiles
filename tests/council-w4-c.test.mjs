@@ -1,5 +1,10 @@
 // Wave 4, batch C: sound (C4-07, S5-11, S5-12, S5-14); layout and accessibility, world, words and ceremony
 // (S1-20, C4-02, C4-03, S2-24).
+import fs from 'node:fs';
+import path from 'node:path';
+import { ctx, root } from './lib.mjs';
+import { has } from '../src/js/dict.js';
+import { createGame } from '../src/js/engine.js';
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 // the cues are random on purpose; the test seeds them, so a run gives the same peaks every time
 const seeded = (seed) => new Function(`
@@ -230,6 +235,38 @@ export const tests = [
       t.expect(r.left >= 0 && r.right <= r.vw && r.sheetOver <= 1 && r.docOver <= 0, 'nothing overflows (line ' + Math.round(r.left) + ' to ' + Math.round(r.right) + ' of ' + r.vw + ' px)');
       t.expect(r.lineCount <= 2, 'it fits in two lines at most (' + r.lineCount + ')');
       await t.shot('C4-02-about-art-line', { wait: false });
+    },
+  },
+  // ---------- C4-03 ----------
+  {
+    name: 'C4-03 three card texts and eleven bonus words, as the owner approved them; every form is in the dictionary; the deal of a Daily does not move', node: true,
+    async run(t) {
+      const REWRITES = {"trail": "Seven of Phase One's 14 miles of the Northwoods trail system opened on Nov. 17, 2018.", "cupola": "The Quapaw's chevron-mosaic dome is topped by a small copper cupola.", "copper": "Wikipedia describes the Fordyce's marquee as stained glass and copper, with a Greek-motif parapet."};
+      const NEW = [["cold", ["COLD"], 1, "springs", "Mountain Valley water comes out of its spring cold, not hot; the cold spring is about a dozen miles north of downtown Hot Springs."], ["pharmacist", ["PHARMACIST", "PHARMACISTS"], 3, "town", "Pharmacist Peter E. Greene first sold Mountain Valley water in 1871; he and his brother John renamed the water for a nearby community."], ["mob", ["MOB", "MOBS", "MOBSTER", "MOBSTERS"], 1, "club", "The Gangster Museum of America, on Central Avenue, is dedicated to Hot Springs' mob history."], ["bass", ["BASS", "BASSES"], 1, "park", "Striped bass must be stocked in Lake Ouachita every year because they do not reproduce naturally there."], ["cruise", ["CRUISE", "CRUISES"], 1, "park", "Lake Ouachita State Park runs eagle-watch cruises in January and February to look for bald eagles."], ["jellyfish", ["JELLYFISH", "JELLYFISHES"], 2, "park", "Lake Ouachita has non-stinging freshwater jellyfish, and freshwater sponges too."], ["cedar", ["CEDAR", "CEDARS"], 1, "park", "AGFC and the Corps mostly used cedar for new fish brush piles in Lake Ouachita."], ["film", ["FILM", "FILMS"], 1, "town", "Sy Gomberg's 1991 visit inspired the Hot Springs Documentary Film Festival. Gomberg then headed the Academy's documentary branch."], ["movie", ["MOVIE", "MOVIES"], 1, "town", "The Fordyce, the Arlington and Maxine's were three Hot Springs locations used to film the movie Arkansas."], ["mare", ["MARE", "MARES"], 1, "track", "Zenyatta, an unbeaten mare, won Oaklawn's Apple Blossom in 2008 and 2010; the 2010 win was her 16th straight victory."], ["bleacher", ["BLEACHER", "BLEACHERS"], 2, "track", "The surviving cement bleachers on the hillside at Hot Springs' old Ban Johnson Park are called the \"Wolves Den,\" which was a fan section."]];
+      const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/thermal-words.json'), 'utf8')), game = JSON.parse(fs.readFileSync(path.join(root, 'data/lexicon.game.json'), 'utf8'));
+      const c = await ctx();
+      for (const [id, text] of Object.entries(REWRITES)) {
+        t.equal(raw.words.find((w) => w.id === id).fact.text, text, id + ' card text');
+        t.equal(game.words.find((w) => w.id === id).fact.text, text, id + ' card text in the built data');
+      }
+      const copper = game.words.find((w) => w.id === 'copper').fact;
+      t.expect(/Wikipedia/.test(copper.src), 'the COPPER card names Wikipedia as its source (' + copper.src + ')');
+      for (const [id, forms, tier, cat, text] of NEW) {
+        const w = raw.words.find((x) => x.id === id);
+        t.expect(!!w && JSON.stringify(w.forms) === JSON.stringify(forms) && w.tier === tier && w.cat === cat && w.fact.text === text, id + ' is in with its forms, tier, category and card');
+        for (const f of forms) t.expect(has(c.dict, f) && c.lex.entry(f) && c.lex.entry(f).id === id, f + ' is a dictionary word and a bonus word');
+      }
+      for (const f of ['RACE', 'RACER']) t.expect(!!c.lex.entry(f), f + ' keeps its bonus');
+      const forms = raw.words.reduce((a, w) => a + w.forms.length, 0);
+      t.equal(raw.words.length, 107, '107 entries'); t.equal(forms, 290, '290 forms');
+      t.equal(game.words.length, raw.words.length, 'the built data has them all');
+      const PRD = fs.readFileSync(path.join(root, 'PRD.md'), 'utf8'), REPORT = fs.readFileSync(path.join(root, 'REPORT.md'), 'utf8');
+      t.expect(PRD.includes('107 entries / 290 forms') && REPORT.includes('107 entries, 290 playable forms'), 'PRD.md and REPORT.md state the new counts');
+      // a Daily's three Featured Springs come from a pool that stays the size it was (82), so no past or future date is dealt differently
+      t.expect(!c.lex.featurable.some((f) => NEW.some((n) => n[0] === f.id)), 'none of the new words can be a Featured Spring');
+      t.equal(c.lex.featurable.length, 82, 'the Featured Spring pool is the size it was');
+      const feat = (date) => createGame({ mode: 'daily', date, seats: [{ kind: 'human', name: 'You' }] }, c.lex).featured.map((f) => f.word).join();
+      t.equal(feat('2026-03-04'), 'DOMED,CHAPELS,PINBALLS', 'the Featured Springs of 4 March 2026 are as they were');
     },
   },
 ];

@@ -494,8 +494,8 @@
    "tier": 3,
    "cat": "baths",
    "fact": {
-    "text": "Quapaw Baths & Spa opened in the restored Quapaw Bathhouse in July 2008.",
-    "bank": "hs-0103"
+    "text": "The Quapaw's chevron-mosaic dome is topped by a small copper cupola.",
+    "bank": "hs-0082"
    }
   },
   {
@@ -660,7 +660,7 @@
    "tier": 1,
    "cat": "park",
    "fact": {
-    "text": "Phase One of the Northwoods trail system is 14 miles long.",
+    "text": "Seven of Phase One's 14 miles of the Northwoods trail system opened on Nov. 17, 2018.",
     "bank": "hs-0142"
    }
   },
@@ -1313,8 +1313,10 @@
    "tier": 1,
    "cat": "baths",
    "fact": {
-    "text": "The 1922 Quapaw Bathhouse was built on the sites of two earlier bathhouses, the Horseshoe and the Magnesia.",
-    "bank": "hs-0068"
+    "text": "Wikipedia describes the Fordyce's marquee as stained glass and copper, with a Greek-motif parapet.",
+    "ref": "research/bathhouse-row-and-springs.md",
+    "quote": "a stained glass and copper marquee with a Greek-motif parapet",
+    "src": "Wikipedia: Bathhouse Row"
    }
   },
   {
@@ -1375,6 +1377,150 @@
    "fact": {
     "text": "In the 1913 fire, Little Rock's hoses arrived by train around 8 p.m. but didn't fit the local hydrants.",
     "bank": "hs-0027"
+   }
+  },
+  {
+   "id": "cold",
+   "forms": [
+    "COLD"
+   ],
+   "tier": 1,
+   "cat": "springs",
+   "fact": {
+    "text": "Mountain Valley water comes out of its spring cold, not hot; the cold spring is about a dozen miles north of downtown Hot Springs.",
+    "bank": "hs-0394"
+   }
+  },
+  {
+   "id": "pharmacist",
+   "forms": [
+    "PHARMACIST",
+    "PHARMACISTS"
+   ],
+   "tier": 3,
+   "cat": "town",
+   "fact": {
+    "text": "Pharmacist Peter E. Greene first sold Mountain Valley water in 1871; he and his brother John renamed the water for a nearby community.",
+    "bank": "hs-0349"
+   }
+  },
+  {
+   "id": "mob",
+   "forms": [
+    "MOB",
+    "MOBS",
+    "MOBSTER",
+    "MOBSTERS"
+   ],
+   "tier": 1,
+   "cat": "club",
+   "fact": {
+    "text": "The Gangster Museum of America, on Central Avenue, is dedicated to Hot Springs' mob history.",
+    "bank": "hs-0467"
+   }
+  },
+  {
+   "id": "bass",
+   "forms": [
+    "BASS",
+    "BASSES"
+   ],
+   "tier": 1,
+   "cat": "park",
+   "fact": {
+    "text": "Striped bass must be stocked in Lake Ouachita every year because they do not reproduce naturally there.",
+    "bank": "hs-0138"
+   }
+  },
+  {
+   "id": "cruise",
+   "forms": [
+    "CRUISE",
+    "CRUISES"
+   ],
+   "tier": 1,
+   "cat": "park",
+   "fact": {
+    "text": "Lake Ouachita State Park runs eagle-watch cruises in January and February to look for bald eagles.",
+    "bank": "hs-0175"
+   }
+  },
+  {
+   "id": "jellyfish",
+   "forms": [
+    "JELLYFISH",
+    "JELLYFISHES"
+   ],
+   "tier": 2,
+   "cat": "park",
+   "fact": {
+    "text": "Lake Ouachita has non-stinging freshwater jellyfish, and freshwater sponges too.",
+    "bank": "hs-0511"
+   }
+  },
+  {
+   "id": "cedar",
+   "forms": [
+    "CEDAR",
+    "CEDARS"
+   ],
+   "tier": 1,
+   "cat": "park",
+   "fact": {
+    "text": "AGFC and the Corps mostly used cedar for new fish brush piles in Lake Ouachita.",
+    "bank": "hs-0139"
+   }
+  },
+  {
+   "id": "film",
+   "forms": [
+    "FILM",
+    "FILMS"
+   ],
+   "tier": 1,
+   "cat": "town",
+   "fact": {
+    "text": "Sy Gomberg's 1991 visit inspired the Hot Springs Documentary Film Festival. Gomberg then headed the Academy's documentary branch.",
+    "bank": "hs-0426"
+   }
+  },
+  {
+   "id": "movie",
+   "forms": [
+    "MOVIE",
+    "MOVIES"
+   ],
+   "tier": 1,
+   "cat": "town",
+   "fact": {
+    "text": "The Fordyce, the Arlington and Maxine's were three Hot Springs locations used to film the movie Arkansas.",
+    "bank": "hs-0462"
+   }
+  },
+  {
+   "id": "mare",
+   "forms": [
+    "MARE",
+    "MARES"
+   ],
+   "tier": 1,
+   "cat": "track",
+   "fact": {
+    "text": "Zenyatta, an unbeaten mare, won Oaklawn's Apple Blossom in 2008 and 2010; the 2010 win was her 16th straight victory.",
+    "bank": "hs-0242"
+   }
+  },
+  {
+   "id": "bleacher",
+   "forms": [
+    "BLEACHER",
+    "BLEACHERS"
+   ],
+   "tier": 2,
+   "cat": "track",
+   "fact": {
+    "text": "The surviving cement bleachers on the hillside at Hot Springs' old Ban Johnson Park are called the \"Wolves Den,\" which was a fan section.",
+    "bank": "hs-0246"
    }
   }
  ]

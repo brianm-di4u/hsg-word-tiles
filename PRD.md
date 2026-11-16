@@ -30,7 +30,7 @@ help screen in our own words with diagrams.
 | Where | Content | Source |
 |---|---|---|
 | Board | 47 springs (46 premium squares + Display Spring); 8 Bathhouse Row squares with building motifs | `research/town-content.md` §1–2 |
-| Bonus words | 96 entries / 267 forms in 6 categories, each with a fact card | `data/thermal-words.json`, §3 |
+| Bonus words | 107 entries / 290 forms in 6 categories, each with a fact card | `data/thermal-words.json`, §3 |
 | Featured Springs | 3 bonus words per game on steam-fogged plaques | same |
 | Register | every bonus word you've played, with its card | same |
 | Opponents | 4 fictional town archetypes | §4 |
