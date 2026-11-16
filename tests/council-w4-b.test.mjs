@@ -211,6 +211,32 @@ export const tests = [
     },
   },
   {
+    name: 'S6-13 after midnight the title shows the new day, not the Daily last played',
+    viewports: ['desktop', 'mobile'],
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-daily-v1')) {
+        localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false }));
+        localStorage.setItem('hs-letters-daily-v1', JSON.stringify({ days: { '2026-11-16': { score: 123, plays: 1 } }, streak: 1, last: '2026-11-16' }));
+      }
+    },
+    async run(t) {
+      await t.page.clock.install({ time: new Date(2026, 10, 16, 12, 0, 0) });
+      await t.reload(); await ready(t);
+      const line = () => t.page.textContent('#screen [data-go="daily"] small');
+      t.equal(await line(), 'Today: 123 pts · streak 1', 'on the day itself the button shows the score');
+      await t.game('act', 'daily');                                  // a Daily is started, which used to remember its date for good
+      await t.waitIdle(8000);
+      await t.game('scene', 'title');
+      t.equal(await line(), 'Today: 123 pts · streak 1', 'it still does after a Daily has been started');
+      await t.page.clock.setSystemTime(new Date(2026, 10, 17, 9, 0, 0));
+      await t.game('scene', 'title');
+      t.expect(!/Today/.test(await line()), 'the next morning it no longer shows yesterday\'s score (' + await line() + ')');
+      t.expect(/10 turns/.test(await line()), 'it offers the new day instead');
+      await t.shot('S6-13-title-next-day');
+    },
+  },
+  {
     name: 'S2-12 a game in progress keeps its rule after a reload',
     viewports: ['desktop', 'mobile'], initScript: instant,
     async run(t) {

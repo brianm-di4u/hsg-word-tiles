@@ -148,7 +148,8 @@ const register = () => store.json(KEYS.register, {}, validRegister);
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 function dailyInfo() {
   const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
-  return { ...d, today: d.days[G.dailyDate || today()] || null };
+  // today's day is read afresh every time: a tab left open past midnight shows the new day, not the one last played
+  return { ...d, today: d.days[today()] || null };
 }
 // Works out par for a Daily date once (a few turns of each computer player, with a pause between turns so the screen stays
 // alive), keeps it with the day's record and refreshes the results sheet if it is showing.
@@ -382,8 +383,7 @@ function newGame(opts) {
 function startDaily(date) {
   const intent = gameSaves.newIntent();
   whenReady(() => {
-    G.dailyDate = date || today();
-    const s = E.createGame({ mode: 'daily', date: G.dailyDate, seats: [{ kind: 'human', name: 'You' }] }, G.lex);
+    const s = E.createGame({ mode: 'daily', date: date || today(), seats: [{ kind: 'human', name: 'You' }] }, G.lex);
     s.players[0].hints = null;
     beginGame(s, intent);
   });
