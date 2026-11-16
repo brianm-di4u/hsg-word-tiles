@@ -410,12 +410,25 @@ export function drawFrame(ctx, d) {
         const e = 1 - Math.pow(1 - k, 3);
         drawTile(i, t, 'board', Math.min(1, k * 1.6), (1 - e) * cellPx * 0.9, 1 + (1 - e) * 0.25);
       } else drawTile(i, t, 'board');
-      if (d.last && d.last.has(i)) {
-        const [x, y] = at(i);
-        ctx.strokeStyle = 'rgba(217,162,58,0.95)'; ctx.lineWidth = Math.max(1.5, cellPx * 0.06);
-        roundRect(ctx, x + cellPx * 0.06, y + cellPx * 0.06, cellPx * 0.88, cellPx * 0.88, cellPx * 0.14); ctx.stroke();
-      }
     }
+  }
+  // the last play: a dark brass ring with a pale line inside it and a corner pip, so it shows on cream marble and is not only a
+  // colour; a brief glow when the computer's tiles have just landed (also drawn over the 3D board, where the tiles are not)
+  if (d.last && d.last.size) {
+    const k = d.lastPulse ? Math.min(1, Math.max(0, (now - d.lastPulse.t0) / d.lastPulse.dur)) : 1;
+    const w = Math.max(1.5, (d.cellPx || cellPx) * 0.07), brass = 'rgba(122,75,7,0.97)';
+    ctx.lineJoin = 'round';
+    for (const i of d.last) {
+      if (!d.board[i]) continue;
+      const a = d.anim && d.anim.get(i);
+      if (a && now < a.t0 + a.dur) continue;   // still flying in
+      const q = quad(i, 0.04), q2 = quad(i, 0.1), pip = (a, b) => [a[0] + (b[0] - a[0]) * 0.3, a[1] + (b[1] - a[1]) * 0.3];
+      if (k < 1) { ctx.fillStyle = 'rgba(240,213,122,' + (0.55 * (1 - k)).toFixed(3) + ')'; poly(ctx, q); ctx.fill(); }
+      ctx.strokeStyle = brass; ctx.lineWidth = w; poly(ctx, q); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,243,196,0.9)'; ctx.lineWidth = Math.max(1, w * 0.3); poly(ctx, q2); ctx.stroke();
+      ctx.fillStyle = brass; poly(ctx, [q[0], pip(q[0], q[1]), pip(q[0], q[3])]); ctx.fill();
+    }
+    ctx.lineJoin = 'miter';
   }
   if (d.hint) for (const t of d.hint) drawTile(t.i, t, 'ghost', 0.6);
   // word outlines for the live preview (projected quads, so they also sit on the 3D board)

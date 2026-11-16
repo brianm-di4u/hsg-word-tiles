@@ -43,7 +43,7 @@ const G = {
   settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, fxVol: 1, musicVol: 1, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true, tipsSeen: true, vibrate: matchMedia('(pointer: coarse)').matches },
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
-  preview: null, hint: null, last: new Set(), anim: new Map(), animUntil: 0,
+  preview: null, hint: null, last: new Set(), lastPulse: null, anim: new Map(), animUntil: 0,
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
 };
@@ -521,11 +521,12 @@ function afterAction(entry, fromAi) {
   // seconds until the computer's tiles have landed (nothing to wait for on a pass or swap, or with animation off)
   const landed = fromAi && animOn() && entry.kind === 'play' ? (entry.tiles.length * 90 + 200) / 1000 : 0;
   if (entry.kind === 'play') {
-    G.last = new Set(entry.tiles.map((t) => t.i));
+    G.last = new Set(entry.tiles.map((t) => t.i)); G.lastPulse = null;
     if (fromAi && animOn()) {
       const t0 = performance.now();
       entry.tiles.forEach((t, k) => G.anim.set(t.i, { t0: t0 + k * 90, dur: 320 }));
       G.animUntil = t0 + entry.tiles.length * 90 + 340;
+      G.lastPulse = { t0: G.animUntil - 20, dur: 900 };
       entry.tiles.forEach((t, k) => setTimeout(() => sfx('place', { pan: colPan(t.i), step: k }), k * 90 + 200 + Math.floor(Math.random() * 24)));
       tick();
     } else sfx('play', { pan: colPan(Math.round(entry.tiles.reduce((a, t) => a + (t.i % N), 0) / entry.tiles.length)) });
@@ -1168,13 +1169,14 @@ function frame(now) {
   }
   if (G.anim.size && now < G.animUntil + 50) { G.chainAt = now; draw(); }
   else if (G.anim.size) G.anim.clear();
+  if (G.lastPulse) { if (now < G.lastPulse.t0 + G.lastPulse.dur) { G.chainAt = now; draw(); } else G.lastPulse = null; }
   if (G.settle.size) { if (now < G.settleUntil) { G.chainAt = now; draw(); } else G.settle.clear(); }
   if (G.viewAnim) stepViewAnim(now);
 }
 function drawData(now) {
   const p = G.preview;
   return {
-    board: G.s.board, staged: G.staged, last: G.last, hint: G.hint, theme: dark() ? 'dark' : 'light',
+    board: G.s.board, staged: G.staged, last: G.last, lastPulse: G.lastPulse, hint: G.hint, theme: dark() ? 'dark' : 'light',
     cursor: G.cursor.on && humanCanAct() ? G.cursor : null,
     goodCells: p && p.ok ? [...new Set(p.words.flatMap((w) => w.cells))] : null,
     badCells: p && !p.ok && p.words ? p.words.filter((w) => w.w === p.badWord).flatMap((w) => w.cells) : null,
@@ -1643,7 +1645,7 @@ window.__game = {
   seed(n) { G.nextSeed = n >>> 0; return true; },
   getState() {
     return JSON.parse(JSON.stringify({ scene: G.scene, dialog: G.dialog, game: G.s, staged: G.staged, order: G.order, preview: G.preview, settings: G.settings,
-      view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, aiWait: { reply: !!G.aiFire, turn: !!(G.turnWait && G.turnWait.fromAi) }, ready: G.ready, privacy: G.privacy,
+      view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, pulse: !!G.lastPulse, aiWait: { reply: !!G.aiFire, turn: !!(G.turnWait && G.turnWait.fromAi) }, ready: G.ready, privacy: G.privacy,
       drag: G.drag && G.drag.active ? { from: G.drag.from, target: G.drag.target, blocked: G.drag.blocked, lift: G.drag.lift, size: G.drag.size } : null,
       ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, wisps: steam.parts.map((p) => p.i), sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
   },
