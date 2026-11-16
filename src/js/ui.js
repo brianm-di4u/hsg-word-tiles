@@ -94,7 +94,7 @@ export function setupHtml(setup) {
         </div>
         ${human
           ? `<label class="field"><span>Name</span><input data-name="${k}" value="${esc(st.name || '')}" maxlength="16" placeholder="Player ${k + 1}" autocomplete="off"></label>`
-          : `<div class="field"><span id="opp-${k}">Opponent <em>(fictional character)</em></span><div class="opps" role="radiogroup" aria-labelledby="opp-${k}">${PERSONAS.map((p) => `<button type="button" class="opp" role="radio" aria-checked="${p.id === st.persona}" data-persona="${k}" data-val="${p.id}">${portrait(p, 44)}<b>${esc(p.name)}</b><small>${esc(p.role)}</small><em>Usually ${LEVEL_NAME[p.level]}</em></button>`).join('')}</div></div>
+          : `<div class="field"><span id="opp-${k}">Opponent <em>(fictional character)</em></span><div class="opps" role="radiogroup" aria-labelledby="opp-${k}">${PERSONAS.map((p) => `<button type="button" class="opp" role="radio" aria-checked="${p.id === st.persona}" tabindex="${p.id === st.persona ? 0 : -1}" data-persona="${k}" data-val="${p.id}">${portrait(p, 44)}<b>${esc(p.name)}</b><small>${esc(p.role)}</small><em>Usually ${LEVEL_NAME[p.level]}</em></button>`).join('')}</div></div>
              <p class="seat-note">${esc(persona(st.persona).role)}. ${esc(persona(st.persona).line)}</p>
              <label class="field"><span>Difficulty</span><select data-level="${k}">${Object.keys(LEVEL_NAME).map((l) => `<option value="${l}" ${l === seatLevel(st) ? 'selected' : ''}>${LEVEL_NAME[l]}</option>`).join('')}</select></label>
              <p class="seat-note" data-level-note="${k}">${esc(LEVEL_BLURB[seatLevel(st)])}</p>`}

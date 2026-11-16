@@ -287,6 +287,14 @@ function wireScreen(name) {
     }));
     scr.querySelectorAll('[data-name]').forEach((inp) => inp.addEventListener('input', () => { st.seats[+inp.dataset.name].name = inp.value; }));
     scr.querySelectorAll('[data-persona]').forEach((b) => b.addEventListener('click', () => { st.seats[+b.dataset.persona].persona = b.dataset.val; showScene('setup'); scr.querySelector(`[data-persona="${b.dataset.persona}"][data-val="${b.dataset.val}"]`).focus(); }));
+    // the four portrait cards are one radio group: the arrow keys move to the neighbour and choose it (Tab leaves the group)
+    scr.querySelectorAll('[data-persona]').forEach((b) => b.addEventListener('keydown', (e) => {
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (!step || e.altKey || e.ctrlKey || e.metaKey) return;
+      const cards = [...b.parentElement.querySelectorAll('[data-persona]')];
+      e.preventDefault();
+      cards[(cards.indexOf(b) + step + cards.length) % cards.length].click();
+    }));
     scr.querySelectorAll('[data-level]').forEach((sel) => sel.addEventListener('change', () => { st.seats[+sel.dataset.level].level = sel.value; showScene('setup'); scr.querySelector(`[data-level="${sel.dataset.level}"]`).focus(); }));
     scr.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => { st.seats.splice(+b.dataset.remove, 1); showScene('setup'); }));
     const add = scr.querySelector('[data-add]');

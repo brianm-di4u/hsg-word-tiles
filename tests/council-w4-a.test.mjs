@@ -1,4 +1,4 @@
-// Wave 4, batch A: C4-01.
+// Wave 4, batch A: C4-01, C4-04.
 import fs from 'node:fs';
 import path from 'node:path';
 import { root } from './lib.mjs';
@@ -110,6 +110,44 @@ export const tests = [
       t.expect(!/not saved/.test(await t.page.textContent('#toast')), 'with no warning');
       await t.game('scene', 'settings'); await t.page.click('[data-set="theme"][data-val="dark"]');
       t.equal((await ls(t, SET)).theme, 'dark', 'settings are saved');
+    },
+  },
+
+  {
+    name: 'C4-04 the arrow keys move between the opponent cards, wrap at the ends, and Tab leaves the group',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.page.click('#screen [data-go="setup"]');
+      const vals = await t.page.$$eval('.opp[role="radio"]', (els) => els.map((e) => e.dataset.val));
+      t.equal(vals.length, 4, 'four cards');
+      const tabs = await t.page.$$eval('.opp[role="radio"]', (els) => els.map((e) => e.tabIndex));
+      t.equal(tabs.filter((x) => x === 0).length, 1, 'one card is a Tab stop (roving tabindex: ' + tabs.join() + ')');
+      const checked = () => t.page.getAttribute('.opp[aria-checked="true"]', 'data-val');
+      const active = () => t.page.evaluate(() => document.activeElement.dataset.val);
+      await t.page.click('.opp[data-val="' + vals[0] + '"]');
+      t.equal(await checked(), vals[0], 'the first card is chosen');
+      await t.page.keyboard.press('ArrowRight');
+      t.equal(await checked(), vals[1], 'Right chooses the next card');
+      t.equal(await active(), vals[1], 'and moves the focus with it');
+      await t.page.keyboard.press('ArrowDown');
+      t.equal(await checked(), vals[2], 'Down does the same');
+      await t.page.keyboard.press('ArrowLeft'); await t.page.keyboard.press('ArrowUp');
+      t.equal(await checked(), vals[0], 'Left and Up go back');
+      await t.page.keyboard.press('ArrowLeft');
+      t.equal(await checked(), vals[3], 'Left from the first wraps to the last');
+      await t.page.keyboard.press('ArrowRight');
+      t.equal(await checked(), vals[0], 'Right from the last wraps to the first');
+      t.equal(await t.page.$$eval('.opp[role="radio"]', (els) => els.filter((e) => e.tabIndex === 0).map((e) => e.dataset.val).join()), vals[0], 'the Tab stop follows the choice');
+      await t.page.keyboard.press('Tab');
+      t.expect(!(await t.page.evaluate(() => document.activeElement.classList.contains('opp'))), 'Tab leaves the group instead of visiting every card');
+      await t.page.focus('.opp[aria-checked="true"]');
+      await t.page.keyboard.press('Enter');
+      t.equal(await checked(), vals[0], 'Enter still chooses the focused card');
+      await t.shot('C4-04-setup-cards');
+      await t.checkLayout({ allowScrollY: true });
+      t.equal(await ls(t, SET).then((s) => (s && s.lastSetup) || null), null, 'nothing is saved by choosing: the choice is written when the game starts');
     },
   },
 ];
