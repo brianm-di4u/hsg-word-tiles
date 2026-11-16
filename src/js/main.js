@@ -598,7 +598,7 @@ function celebrate(e, bark, wait = 0) {
   }
   if (themed.length) goldSweep(e.tiles.map((t) => t.i));
   if (themed.length && !e.featured) cue('steam');
-  if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); cue('chime'); }
+  if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); cue('chime', e.featured ? { delay: STING_LAG } : {}); }   // with a Featured Spring the chime follows its bell by a beat, so the two do not stack at full volume
   // one sting a play: a Featured Spring or a Full Soak has its own, then a word new to the Register, then the size of the score
   const done = p.kind === 'human' ? UI.categoriesCompleted(G.lex, register(), e.words) : [];
   for (const ck of done) toast({ kind: 'themed', title: `${G.lex.categories[ck].name}: complete`, sub: 'All its words are in your Register.', keep: true });
@@ -1690,7 +1690,7 @@ window.__game = {
   audioRender(name, seconds = 30, wantWav = false) { return audioRender(name, seconds, !!wantWav); },
   audioState() {
     const k = audio.kit, i = k && k.music.info();
-    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, holds: [...audio.holds], tune: tuneName(), bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), total: audio.total, fxGain: audio.bus ? audio.bus.sfx.gain.value : null, musGain: audio.bus ? audio.bus.mus.gain.value : null };
+    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, holds: [...audio.holds], tune: tuneName(), bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), total: audio.total, cues: audio.cues.slice(), fxGain: audio.bus ? audio.bus.sfx.gain.value : null, musGain: audio.bus ? audio.bus.mus.gain.value : null };
   },
   async act(name, ...a) {
     switch (name) {

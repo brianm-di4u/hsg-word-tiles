@@ -4,13 +4,14 @@
 // Featured Spring. No two tile sounds are alike: every cue is nudged in pitch, level and colour as it is made.
 import { makeAudioKit, measureAudio, SCORES, SCENES } from './music.js';
 
-export const audio = { ctx: null, on: true, vol: 0.35, fxVol: 1, musicVol: 1, fx: true, music: true, amb: true, played: [], total: 0, live: null, sfxOut: null, bus: null, kit: null, want: null, holds: new Set() };
+export const audio = { ctx: null, on: true, vol: 0.35, fxVol: 1, musicVol: 1, fx: true, music: true, amb: true, played: [], cues: [], total: 0, live: null, sfxOut: null, bus: null, kit: null, want: null, holds: new Set() };
 const DEFAULT_VOL = 0.35;
 // Cues are built this much louder than they were before the music arrived (that was 1), so that at the shipped
 // volume the tile sounds peak between 0.2 and 0.45 and sit clearly over the music and the bed. Set it to 1 to undo.
 const CUE_GAIN = 6;
-// bells and steam are the loudest cues: a little less so they do not outrun the tile sounds
-const TRIM = { featured: 0.6, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 0.9, hint: 0.6, yourturn: 2, good: 1.8, big: 0.57, discover: 0.6 };
+// bells and steam are the loudest cues: a little less so they do not outrun the tile sounds (featured was 0.6: a play
+// that finds a Featured Spring peaked at up to 0.98 with the volume at full, so the bell is 3 dB quieter)
+const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 0.9, hint: 0.6, yourturn: 2, good: 1.8, big: 0.57, discover: 0.6 };
 const musicGain = (vol = audio.vol, level = audio.musicVol) => Math.min(1.5, vol / DEFAULT_VOL) * level;   // the Volume slider moves the music with the cues
 // Above the shipped volume the cues rise more gently than the slider: to about twice the shipped level at full, not
 // 2.9 times. With the slider at full the loudest repeats of steam and place overshot the limiter and clipped (peaks
@@ -109,7 +110,7 @@ const DUCK = { chime: [6, 900], featured: [6, 1400], fanfare: [6, 1800] };
 // opts: pan (-1..1, kept within +-0.7: the board column of a tile), step (0.. : semitones up along a word) and delay
 // (seconds from now: a sting that waits for the tiles it belongs to)
 export function sfx(name, opts = {}) {
-  audio.played.push(name); audio.total++; if (audio.played.length > 30) audio.played.shift();
+  audio.played.push(name); audio.cues.push({ name, delay: opts.delay || 0, gain: opts.gain ?? 1 }); audio.total++; if (audio.played.length > 30) { audio.played.shift(); audio.cues.shift(); }
   if (!audio.on || !audio.fx || !audio.ctx) return;
   const c = audio.ctx, t = c.currentTime + (opts.delay || 0), step = opts.step || 0;
   try {
