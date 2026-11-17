@@ -1573,7 +1573,7 @@ function onKey(e) {
   if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
   // Enter and Space on a focused button or link press it (Swap, Pass, Hint, Menu...); on the board or the page they play and turn the cursor
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.closest && e.target.closest('button, a')) return;
-  if ((e.key === 'Enter' || e.key === ' ') && !G.staged.length && skipComputerWait()) { e.preventDefault(); return; }
+  if ((e.key === 'Enter' || e.key === ' ') && !e.repeat && !G.staged.length && skipComputerWait()) { e.preventDefault(); return; }
   if (G.privacy && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('#privacy [data-reveal]')?.click(); return; }
   const k = e.key;
   if (k === '?') { e.preventDefault(); go('help'); return; }
