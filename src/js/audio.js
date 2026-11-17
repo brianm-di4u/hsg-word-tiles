@@ -194,8 +194,10 @@ export async function renderCue(name, vol, opts) {
   let dest = off.destination;
   if (opts && opts.hp) { dest = off.createBiquadFilter(); dest.type = 'highpass'; dest.frequency.value = opts.hp; dest.Q.value = 0.7; dest.connect(off.destination); }
   const g = graph(off, dest, 1);
-  const done = off.startRendering();
-  await off.suspend(0.25);
+  // the stop is asked for before rendering starts: on a machine that renders fast, asking once it has begun can come too late
+  // ("suspend failed ... earlier than the current frame") and the cue is never measured
+  const stopped = off.suspend(0.25), done = off.startRendering();
+  await stopped;
   const prev = { ctx: audio.ctx, on: audio.on, vol: audio.vol, fx: audio.fx, sfxOut: audio.sfxOut };
   audio.ctx = off; audio.on = true; audio.fx = true; audio.sfxOut = g.sfx; audio.vol = vol;
   try { for (const n of name.split('+')) { const [cue, d] = n.split('@'); sfx(cue, { ...opts, delay: d ? +d : 0 }); } } finally { Object.assign(audio, prev); }

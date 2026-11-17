@@ -6,6 +6,8 @@ export const tests = [
   {
     name: 'every sound is audible, unclipped and short',
     viewports: ['desktop'],
+    // the cues are random on purpose (pitch, level and colour are nudged as each is made); a fixed seed gives the same peaks every run
+    initScript: new Function('window.__TEST_TIPS__ = false; let a = 7 >>> 0; Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };'),
     async run(t) {
       await ready(t);
       const rows = [];
