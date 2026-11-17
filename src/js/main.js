@@ -903,6 +903,7 @@ function rollScores() {
 const POP_MS = 1300, POP_THEMED_MS = 1600;   // how long a score pop lives; a Hot Springs word's stays 0.3 s longer
 // A bigger play has a bigger and longer pop: the plain size up to POP_FROM points, growing to POP_SCALE times that size and
 // POP_LONGER (30%) more time at POP_TOP points. A play worth SCORE_BIG or more that is not a Hot Springs word also throws brass sparks.
+const POP_SWELL = 1.1, POP_LIFT = 0.6, POP_RISE = 120;   // the pop swells to 1.1x at 15% of its life, sits 60% of its height above its cell then, and rises 120% more (main.css, @keyframes pop)
 const POP_FROM = 14, POP_TOP = 60, POP_SCALE = 1.6, POP_LONGER = 0.3, POP_REM = 1.6;
 const popWeight = (score) => Math.min(1, Math.max(0, (score - POP_FROM) / (POP_TOP - POP_FROM)));
 function scorePop(e, themed) {
@@ -914,7 +915,13 @@ function scorePop(e, themed) {
   el.className = themed ? 'pop themed' : 'pop'; el.textContent = `+${e.score}`;
   el.style.left = x + 'px'; el.style.top = y + 'px';
   el.style.fontSize = (POP_REM * (1 + (POP_SCALE - 1) * w)).toFixed(2) + 'rem'; el.style.animationDuration = ms + 'ms';
-  $('#boardwrap').append(el);
+  const box = $('#boardwrap');
+  box.append(el);
+  // the box clips what leaves it: a pop near an edge starts far enough in to stay whole (its swell is 10% bigger) and rises only as far as there is room
+  const pw = el.offsetWidth * POP_SWELL / 2, ph = el.offsetHeight, top = ph * (POP_LIFT + (POP_SWELL - 1) / 2);
+  const px = Math.min(Math.max(x, pw), Math.max(pw, box.clientWidth - pw)), py = Math.max(y, top);
+  el.style.left = px + 'px'; el.style.top = py + 'px';
+  el.style.setProperty('--rise', Math.round(Math.min(POP_RISE, (py - top) / ph * 100)) + '%');
   setTimeout(() => el.remove(), ms + 100);
 }
 

@@ -285,7 +285,7 @@ body.theme-dark .plaque.claimed { background: linear-gradient(160deg, #8FCFC2, #
 /* score pop */
 .pop { position: absolute; z-index: 5; transform: translate(-50%, -50%); font: 800 1.6rem var(--f-serif); color: #F3DD8B; text-shadow: 0 2px 0 #4B2A0E, 0 0 12px rgba(0, 0, 0, 0.6); pointer-events: none; animation: pop 1.3s ease-out forwards; }
 .pop.themed { animation-duration: 1.6s; }
-@keyframes pop { 0% { opacity: 0; transform: translate(-50%, -30%) scale(0.7); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -180%) scale(1); } }
+@keyframes pop { 0% { opacity: 0; transform: translate(-50%, -30%) scale(0.7); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, calc(-60% - var(--rise, 120%))) scale(1); } }
 
 /* last-resort notice for an uncaught error */
 #crash { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 70; display: flex; gap: 12px; align-items: center; max-width: calc(100vw - 32px); padding: 8px 12px; border-radius: 10px; border: 1.5px solid #6E4B1E; background: linear-gradient(160deg, #FBF3D9, #F0D57A 70%, #D9B85A); color: #2A1E0C; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
