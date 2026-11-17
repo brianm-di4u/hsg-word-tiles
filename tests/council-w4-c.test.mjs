@@ -54,6 +54,27 @@ export const tests = [
       t.expect([...typical].sort((x, y) => x - y)[10] > 0.3, 'the bell is still heard at full volume (median ' + [...typical].sort((x, y) => x - y)[10] + ')');
     },
   },
+  {
+    name: 'C4-07 a plain Full Soak (no Featured Spring) has its chime follow the play and stays under 0.95 at full volume',
+    viewports: ['desktop'],
+    initScript: seeded(17),
+    async run(t) {
+      await start(t, 'SEALING');
+      const r = await t.page.evaluate(async (tl) => {
+        await window.__game.act('stage', tl);
+        const ok = await window.__game.act('play');
+        const a = window.__game.audioState(), at = a.cues.map((c) => c.name).lastIndexOf('play');
+        return { ok: ok.ok, cues: a.cues.slice(at), entry: window.__game.getState().game.log.filter((x) => x.kind === 'play').pop() };
+      }, across('SEALING'));
+      t.expect(r.ok && !r.entry.featured && r.entry.full > 0, 'SEALING was a Full Soak and not a Featured Spring');
+      const chime = r.cues.find((c) => c.name === 'chime');
+      t.expect(chime && chime.delay > 0.2, 'the chime is scheduled after the play, not on it (delay ' + (chime && chime.delay) + ')');
+      const mix = r.cues.filter((c) => ['play', 'chime'].includes(c.name)).map((c) => c.name + '@' + c.delay).join('+');
+      const p = []; for (let k = 0; k < 40; k++) p.push((await t.game('act', 'renderSfx', mix, 1)).peak);
+      t.log(mix + ' at full volume: ' + Math.min(...p) + '..' + Math.max(...p));
+      t.expect(Math.max(...p) < 0.95, mix + ' stays under 0.95 with the volume at full (' + Math.max(...p) + ')');
+    },
+  },
   // ---------- S5-11 ----------
   {
     name: 'S5-11 cues cut their noise from shared buffers: playing them allocates no new audio buffer, and they still differ and last',

@@ -599,7 +599,7 @@ function celebrate(e, bark, wait = 0) {
   if (themed.length) goldSweep(e.tiles.map((t) => t.i));
   if (!themed.length && e.score >= UI.SCORE_BIG) sparkBurst(e.tiles.map((t) => t.i));
   if (themed.length && !e.featured) cue('steam');
-  if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); cue('chime', e.featured ? { delay: STING_LAG } : {}); }   // with a Featured Spring the chime follows its bell by a beat, so the two do not stack at full volume
+  if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); cue('chime', { delay: STING_LAG }); }   // the chime follows the play (and a Featured Spring's bell) by a beat, so they do not stack at full volume
   // one sting a play: a Featured Spring or a Full Soak has its own, then a word new to the Register, then the size of the score
   const done = p.kind === 'human' ? UI.categoriesCompleted(G.lex, register(), e.words) : [];
   for (const ck of done) toast({ kind: 'themed', title: `${G.lex.categories[ck].name}: complete`, sub: 'All its words are in your Register.', keep: true });
