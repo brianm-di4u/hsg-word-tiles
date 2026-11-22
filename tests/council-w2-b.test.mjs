@@ -204,7 +204,7 @@ export const tests = [
       await t.page.click('#screen [data-back]');
       await t.page.click('#screen [data-go="about"]');
       const about = await t.page.textContent('#screen .about');
-      t.expect(/168,295 words/.test(about) && /plus 28 added by the game/.test(about), 'About gives the packed count and the 28 additions');
+      t.expect(/168,271 words/.test(about) && /plus 28 added by the game/.test(about), 'About gives the packed count and the 28 additions');
       await t.shot('P-N01-about');
     },
   },
