@@ -244,7 +244,15 @@ export const tests = [
       await t.seed(5);
       await t.game('newGame', { seats: SEATS });
       await t.waitIdle(8000);
-      t.expect((await t.state()).view.mode3d, 'the 3D board is on');
+      // The camera only exists on the 3D board, which software GL does not get (board3d.js): there the test checks the fallback and
+      // stops, as 20-board3d does. Run with --gpu to cover the camera.
+      const v0 = (await t.state()).view;
+      if (!v0.mode3d && !t.gpu) {
+        t.equal(v0.reason3d, 'software-gl', 'without a GPU the game uses the flat board');
+        t.log('3D is off here (software GL), so the camera check was skipped; run with --gpu to cover it');
+        return;
+      }
+      t.expect(v0.mode3d, 'the 3D board is on');
       const m = await t.page.evaluate(async () => {
         const g = window.__game, all = [];
         for (let i = 0; i < 225; i++) all.push(await g.act('cell', i));
