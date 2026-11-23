@@ -334,11 +334,16 @@ export const tests = [
       await t.page.clock.runFor(400);
       await t.page.waitForFunction(() => { const g = window.__game.getState(); return g.aiThinking && g.aiWait.reply; }, null, { timeout: 15000, polling: 50 });
       await t.game('act', 'open', 'pause');
-      const [x, y] = await t.game('act', 'screen', 40);
-      await t.page.mouse.click(x, y);
+      t.expect(!!(await t.state()).dialog, 'the pause menu is open');
       await t.page.keyboard.press('Enter');
       t.equal((await t.state()).game.move, 1, 'with the pause menu open nothing is skipped');
-      await t.game('act', 'close');
+      // A click where the board is lands on the menu's backdrop, which closes the menu (as it has since v1.0, main.js); that click
+      // must not let the move land either. (The test used to click there and then press Enter, but by then no menu was open.)
+      if ((await t.state()).dialog !== 'pause') await t.game('act', 'open', 'pause');
+      const [x, y] = await t.game('act', 'screen', 40);
+      await t.page.mouse.click(x, y);
+      const s1 = await t.state();
+      t.expect(!s1.dialog && s1.game.move === 1, `a click outside the menu closes it and lets nothing land (dialog ${s1.dialog}, move ${s1.game.move})`);
       await t.page.keyboard.press('Enter');
       await t.page.waitForFunction(() => window.__game.getState().game.move === 2, null, { timeout: 5000, polling: 50 });
       t.equal((await t.state()).game.move, 2, 'Enter lets the move land');
