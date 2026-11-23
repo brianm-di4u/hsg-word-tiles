@@ -181,9 +181,9 @@ export function walk(d, word, node = d.root) {
   return edge;
 }
 
-// Words the shipped word list still holds that the blocklist (data/blocklist.txt) now removes. The next
-// tools/build-dict.mjs run drops them from the data, after which this list is redundant. The same words
-// are listed in the blocklist file; keep the two in step.
+// Words the blocklist (data/blocklist.txt) added for P-N04. The packed list was rebuilt without them on 2026-11-22;
+// the set stays as a guard, so a dictionary built from an older blocklist still cannot accept or play one. The same
+// words are listed in the blocklist file; keep the two in step.
 export const BLOCKED = new Set([
   'RETARD', 'RETARDS', 'RETARDED', 'RETARDATE', 'RETARDATES', 'SPASTIC', 'SPASTICS', 'WHITEY', 'WHITEYS', 'MONGOLOID', 'MONGOLOIDS',
   'JEWED', 'JEWING', 'POOFTER', 'POOFTERS', 'TURD', 'TURDS', 'PENIS', 'PENISES', 'VAGINA', 'VAGINAE', 'VAGINAS', 'SEMEN', 'SEMENS',

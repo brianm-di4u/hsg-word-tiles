@@ -19,7 +19,7 @@ import { dailyPar } from './par.js';
 import { reviewSeat, reviewSteps, summarize } from './review.js';
 
 const { qs: $, esc } = UI;
-const META = { words: 168295, added: 0 };
+const META = { words: 168271, added: 0 };
 // every two-letter word the dictionary holds, for the Help sheet (built once the dictionary is loaded)
 let twoLetters = null;
 const twoLetterWords = () => {
