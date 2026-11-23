@@ -36,9 +36,10 @@ for (const s of [10, 20, 35, 40, 50]) for (const kind of ['english', 'american']
 const packed = zlib.deflateRawSync(Buffer.from(encodeWordList(list, (w) => common.has(w)), 'latin1'), { level: 9 });
 const b64 = packed.toString('base64');
 
-// Verify through the same loader the game uses.
+// Verify through the same loader the game uses. The supplement (src/js/supplement.js) is merged in on load, not
+// packed, so it is left out here: the check is that the packed file holds exactly the filtered list.
 const t0 = performance.now();
-const d = await loadDict(b64);
+const d = await loadDict(b64, []);
 const buildMs = performance.now() - t0;
 let i = 0;
 for (const w of dictWords(d)) {

@@ -8,7 +8,8 @@ An original crossword word-tile game for 1–4 players set among the hot springs
   medallion of one historic bathhouse, double the bonus of a Hot Springs word laid over them.
 - **Tiles:** 98 (2 blank "Steam tiles"), with counts and values computed from the dictionary's letter frequencies
   (`tools/build-tiles.mjs`), not taken from any commercial table.
-- **Words:** ENABLE (public domain), 168,295 words, minus a curated blocklist of slurs and crude words.
+- **Words:** ENABLE (public domain) minus a curated blocklist of slurs and crude words: 168,271 words (168,295 before
+  the P-N04 blocklist additions were rebuilt into the data on 2026-11-22), plus the owner's 28-word supplement.
 - **Hot Springs words:** 107 entries, 290 playable forms, each paying +10 / +18 / +30 (by the word's tier) and opening a fact card with
   its source (59 from the audited trivia bank, 11 quoting the research corpus, all verified by `tools/check-facts.mjs`).
   Three Featured Springs per game hide in steam on brass plaques (+30, a letter clears every round). The Bathhouse

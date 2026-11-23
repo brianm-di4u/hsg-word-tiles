@@ -29,7 +29,7 @@ export const tests = [
       t.equal(dict.packed, meta.words, 'the packed words are all there');
       t.equal(dict.added.length, 28, 'every supplement word was new');
       t.equal(list.length, meta.words + 28, 'word count');
-      t.equal(crypto.createHash('sha256').update(list.join('\n')).digest('hex'), '21e12a106362fad5070b3dbf6f8f8f4fc5f79d6a63d643b2cc66cd3847dcdef4', 'merged word list hash');
+      t.equal(crypto.createHash('sha256').update(list.join('\n')).digest('hex'), '12485f1d2d27b20f525de63fe22010a9b41d608a8c0a6df78d261a5533d06ccb', 'merged word list hash');
       t.equal(list.filter((w) => isCommon(dict, w)).length, meta.common + 15, 'common count: the 15 everyday words are common, the two-letter tools are not');
       t.expect(list.every((w) => /^[A-Z]{2,15}$/.test(w)), 'A–Z, 2–15 letters');
       t.expect(list.every((w, k) => !k || list[k - 1] < w), 'the list is still sorted');
