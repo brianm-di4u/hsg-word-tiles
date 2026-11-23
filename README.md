@@ -43,6 +43,16 @@ WebKit and Firefox need `cd shared/test-harness && npx playwright install webkit
 Design docs: `PRD.md`, `MECHANICS.md`, `DEV-PLAN.md`, `SAMPLES.md`, `REPORT.md`, `VISUAL-PLAN.md`, `VISUAL-REPORT.md`,
 `TEST-CAMPAIGN.md`, `research/town-content.md`, `art-src/PROMPTS.md`.
 
+## Paths outside this repo
+
+The game and its build use files inside this repo. The tools below can also use shared material from the Hot
+Springs Games workspace (`reference/`, `research/`, or a sibling checkout in `repos/`). They find the workspace through the
+`HSG_WORKSPACE` environment variable; when it is unset, the workspace is this repo's grandparent, which is right when the
+repo sits at `<workspace>/repos/<repo>`. When the workspace copy is not there, each tool falls back to a path in this repo or
+skips that step with a message.
+
+- `tools/raw-dir.mjs`: raw lists in `reference/word-lists/`, else `data/raw/` here. The word-list tools use it, and so do the dictionary tests in `npm test`, which skip when no `enable1.txt` is found.
+
 ## Credits and licences
 
 - Code: MIT (see `LICENSE`). Third-party code in `vendor/` keeps its own licence (three.js, MIT).
