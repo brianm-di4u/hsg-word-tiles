@@ -339,7 +339,7 @@ function screenHtml(name) {
     case 'records': return UI.recordsHtml(stats(), { found: lex.data.words.filter((e) => e.forms.some((f) => register()[f])).length, total: lex.data.words.length, daily: dailyInfo(), today: today() });
     case 'about': return UI.aboutHtml(META);
     case 'over': {
-      if (G.s.mode !== 'daily') return UI.overHtml(G.s, lex, null, { pb: pbLines(), review: reviewSeat(G.s) != null, barks: G.s.players.map((p, k) => (p.kind === 'ai' ? endBark(G.s, k) : null)) });
+      if (G.s.mode !== 'daily') return UI.overHtml(G.s, lex, null, { pb: pbLines(), review: reviewSeat(G.s) != null, dailyPlayed: !!dailyInfo().today, barks: G.s.players.map((p, k) => (p.kind === 'ai' ? endBark(G.s, k) : null)) });
       const d = store.json(KEYS.daily, { days: {}, streak: 0 }, validDaily), date = G.s.daily.date, day = d.days[date];
       const dr = dailyDone.get(G.s);
       const official = day ? (day.first != null ? day.first : day.score) : G.s.players[0].score;
@@ -462,6 +462,22 @@ function wireScreen(name) {
     scr.querySelector('[data-review]')?.addEventListener('click', openReview);
     const again = scr.querySelector('[data-again]');
     if (again) again.addEventListener('click', () => newGame({ mode: 'play', seats: G.s.players.map((p) => ({ kind: p.kind, name: p.name, persona: p.persona, level: p.level })), hints: G.s.players.some((p) => p.hints != null), hintsUnl: G.s.players.some((p) => p.unl), challenge: !!G.s.challenge }));
+    const nextOpp = scr.querySelector('[data-next-opp]');
+    if (nextOpp) nextOpp.addEventListener('click', () => {
+      const per = persona(nextOpp.dataset.nextOpp);
+      if (!per) return;
+      const human = G.s.players.find((p) => p.kind === 'human');
+      newGame({
+        mode: 'play',
+        seats: [
+          { kind: 'human', name: human ? human.name : 'You' },
+          { kind: 'ai', persona: per.id, level: per.level, name: per.name },
+        ],
+        hints: G.s.players.some((p) => p.hints != null),
+        hintsUnl: G.s.players.some((p) => p.unl),
+        challenge: !!G.s.challenge,
+      });
+    });
   }
 }
 
@@ -1254,7 +1270,7 @@ function toast(t) {
   if (G.toastQ.length > 4) G.toastQ.shift();
   showToast();
 }
-let toastTimer = 0;
+let toastTimer = 0, toastNextTimer = 0;
 function syncToastStaging() {
   const el = $('#toast'), app = $('#app');
   if (!el || !app) return;
@@ -1265,8 +1281,9 @@ function syncToastStaging() {
 }
 function showToast() {
   const el = $('#toast');
-  if (!G.toastQ.length) { G.toastNow = null; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app')?.classList.remove('toasting'); return; }
   if (el.dataset.busy === '1') return;
+  clearTimeout(toastNextTimer); toastNextTimer = 0;
+  if (!G.toastQ.length) { G.toastNow = null; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app')?.classList.remove('toasting'); return; }
   const t = G.toastNow = G.toastQ.shift();
   el.dataset.busy = '1';
   el.className = `on ${t.kind}`;
@@ -1297,8 +1314,8 @@ function blurToastFocus(el) {
   if (!G.dialog && G.scene === 'game') { const b = $('#board'); if (b) { b.focus({ preventScroll: true }); return; } }
   document.activeElement.blur();
 }
-function hideToastNow() { const el = $('#toast'); clearTimeout(toastTimer); blurToastFocus(el); G.toastNow = null; el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); }
-function hideToast() { const el = $('#toast'); clearTimeout(toastTimer); blurToastFocus(el); G.toastNow = null; el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); setTimeout(showToast, 200); }
+function hideToastNow() { const el = $('#toast'); clearTimeout(toastTimer); clearTimeout(toastNextTimer); toastNextTimer = 0; blurToastFocus(el); G.toastNow = null; el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); }
+function hideToast() { const el = $('#toast'); clearTimeout(toastTimer); clearTimeout(toastNextTimer); blurToastFocus(el); G.toastNow = null; el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); toastNextTimer = setTimeout(showToast, 200); }
 
 // The strip under the board (or Shift+B) opens how the staged play adds up; the words are read out for a screen reader.
 function toggleBreakdown() {

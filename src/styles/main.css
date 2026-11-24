@@ -222,7 +222,14 @@ body.reduce .house-rules summary::after { transition: none; }
 }
 body.theme-dark #turnline .mode-badge { background: #D4AF37; border-color: #F3DD8B; color: #14121F; }
 #turnline .bag { font-size: 0.85em; color: #E6D8BC; }
-#turnline .bag.phase-final, #turnline .bag.phase-empty { color: #F3DD8B; font-weight: 700; }
+#turnline .bag.phase-final, #turnline .bag.phase-empty {
+  display: inline-flex; align-items: center; align-self: flex-start;
+  margin-top: 2px; padding: 1px 8px; border-radius: 99px;
+  font-weight: 700; line-height: 1.25;
+}
+#turnline .bag.phase-final { background: rgba(243, 221, 139, 0.16); border: 1px solid rgba(243, 221, 139, 0.58); color: #FFF8E6; }
+#turnline .bag.phase-empty { background: #8E3622; border: 1px solid #F3DD8B; color: #FFF8E6; }
+body.theme-dark #turnline .bag.phase-empty { background: #D4AF37; border-color: #F3DD8B; color: #14121F; }
 #turnline .daily-head { display: flex; align-items: center; gap: 6px; overflow: visible; }
 #turnline .daily-row { align-items: center; gap: 6px; }
 #turnline .daily-turn {
@@ -694,7 +701,7 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   #turnline { align-items: center; }
   #turnline .chips { display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap; }
   #turnline .bag { font-size: 0.78em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-  #turnline .bag.phase-final, #turnline .bag.phase-empty { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; }
+  #turnline .bag.phase-final, #turnline .bag.phase-empty { align-self: center; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; padding: 1px 7px; }
   #turnline .daily-turn { font-size: 0.78rem; padding: 2px 8px; }
   #turnline .daily-sub { justify-content: center; font-size: 0.76em; }
   .springs-drawer .plaque { min-height: 44px; width: 100%; min-width: 0; padding: 6px 10px; gap: 8px; }

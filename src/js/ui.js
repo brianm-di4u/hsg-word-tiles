@@ -609,6 +609,22 @@ export function decisiveLine(s) {
   return d >= Math.max(10, margin * 0.4) ? `${esc(who)} won by ${margin}: ${say(d)}.` : `${esc(who)} won by ${margin}, with no one play deciding it.`;
 }
 
+export function nextFunnel(s, dailyPlayed = false) {
+  if (!s || s.mode === 'daily' || !s.result) return null;
+  const oc = outcome(s);
+  const humans = s.players.filter((p) => p.kind === 'human');
+  const ais = s.players.filter((p) => p.kind === 'ai');
+  if (oc === 'win' && humans.length === 1 && ais.length === 1) {
+    const ix = PERSONAS.findIndex((p) => p.id === ais[0].persona);
+    if (ix >= 0 && ix < PERSONAS.length - 1) {
+      const next = PERSONAS[ix + 1];
+      return { kind: 'challenge', persona: next.id, level: next.level, label: `Challenge ${next.name}` };
+    }
+  }
+  if (!dailyPlayed) return { kind: 'daily', label: "Try today's Daily Soak" };
+  return null;
+}
+
 export function overHtml(s, lex, dinfo, extra = {}) {
   const order = s.players.map((p, k) => ({ p, k })).sort((a, b) => b.p.score - a.p.score);
   const win = s.result.winners;
@@ -622,6 +638,10 @@ export function overHtml(s, lex, dinfo, extra = {}) {
   const say = (k) => (extra.barks && extra.barks[k] ? `<small class="bark"><b>${esc(SHORT[s.players[k].persona] || '')}:</b> “${esc(extra.barks[k].text)}”</small>` : '');
   const pbs = extra.pb && extra.pb.length ? `<ul class="pbs" aria-label="Personal bests">${extra.pb.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '';
   const oc = outcome(s), why2 = daily ? '' : decisiveLine(s);
+  const nextCta = !daily ? nextFunnel(s, !!extra.dailyPlayed) : null;
+  const nextBtn = !nextCta ? '' : nextCta.kind === 'challenge'
+    ? `<button class="btn" data-next-opp="${esc(nextCta.persona)}">${esc(nextCta.label)}</button>`
+    : `<button class="btn" data-go="daily">${esc(nextCta.label)}</button>`;
   const dOfficial = dinfo ? (dinfo.official != null ? dinfo.official : (dinfo.first != null ? dinfo.first : dinfo.best)) : 0;
   const dReplay = !!(dinfo && dinfo.isReplay);
   return `<div class="sheet over over-${oc}">
@@ -635,7 +655,7 @@ export function overHtml(s, lex, dinfo, extra = {}) {
       <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}">${t.w} <small>+${t.pts}</small></button>`).join('')}</div>` : '<p class="note">None this game. A word like SPA, STEAM or ROCK pays a bonus and opens a card of local history.</p>'}</section>
       ${s.featured.length ? `<section><h2>Featured Springs</h2><ul class="feat-list">${s.featured.map((f) => { const id = lex.entry(f.word)?.id, inner = `<b>${f.word}</b><small>${f.by != null ? `found by ${esc(s.players[f.by].name)}` : 'stayed hidden'}${id ? ' · read the card' : ''}</small>`; return `<li class="${f.by != null ? 'got' : ''}">${id ? `<button type="button" class="fchip" data-fact="${id}" data-form="${f.word}">${inner}</button>` : inner}</li>`; }).join('')}</ul></section>` : ''}
     </div>
-    <div class="dlg-btns">${daily ? '' : '<button class="btn primary" data-again>Play again</button>'}${extra.review ? '<button class="btn" data-review>What you missed</button>' : ''}<button class="btn ${daily ? 'primary' : ''}" data-go="title">Title screen</button></div>
+    <div class="dlg-btns">${daily ? '' : '<button class="btn primary" data-again>Play again</button>'}${nextBtn}${extra.review ? '<button class="btn" data-review>What you missed</button>' : ''}<button class="btn ${daily ? 'primary' : ''}" data-go="title">Title screen</button></div>
   </div>`;
 }
 

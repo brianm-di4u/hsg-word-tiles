@@ -1,4 +1,5 @@
-// Wave 2, batch W2-B09: W2-P-N05 (dismissible non-blocking toasts & keep-toast yield during staging/drag/hover).
+// Wave 2, batch W2-B09: W2-P-N05, W2-S4-01, W2-S4-02, W2-S4-04.
+import { nextFunnel } from '../src/js/ui.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const CENTER = 112;
@@ -269,6 +270,100 @@ export const tests = [
       await t.page.click('#coach [data-coach="got"]');
       t.equal(await t.page.locator('#coach .coach-card').count(), 0, 'Got it finishes beat 4');
       t.equal((await t.state()).settings.tipsSeen, true, 'tipsSeen saved after finishing beat 4');
+    },
+  },
+  {
+    name: 'W2-S4-04 nextFunnel climbs the town roster (Opal -> Hollis -> Lucky -> Julian) after wins and offers today\'s Daily Soak when unplayed (Node)',
+    node: true,
+    async run(t) {
+      const mk = (opp, winners, mode = 'play') => ({
+        mode, over: true,
+        players: [
+          { kind: 'human', name: 'You', score: winners.includes(0) ? 310 : 210 },
+          { kind: 'ai', name: opp, persona: opp, level: 'medium', score: winners.includes(1) ? 310 : 210 },
+        ],
+        result: { why: 'out', out: winners[0], adjust: [0, 0], winners },
+      });
+      t.equal(nextFunnel(mk('opal', [0]), false).persona, 'hollis', 'win vs Opal -> Challenge Hollis Crane');
+      t.equal(nextFunnel(mk('opal', [0]), true).label, 'Challenge Hollis Crane', 'win vs Opal still offers Hollis even when Daily is played');
+      t.equal(nextFunnel(mk('hollis', [0]), false).persona, 'lucky', 'win vs Hollis -> Challenge "Lucky" Delmar');
+      t.equal(nextFunnel(mk('lucky', [0]), false).persona, 'julian', 'win vs Lucky -> Challenge Maestro Julian Fitch');
+      t.equal(nextFunnel(mk('julian', [0]), false).kind, 'daily', 'win vs Julian (unplayed Daily) -> Try today\'s Daily Soak');
+      t.equal(nextFunnel(mk('julian', [0]), true), null, 'win vs Julian (Daily played) -> no redundant CTA');
+      t.equal(nextFunnel(mk('opal', [1]), false).label, "Try today's Daily Soak", 'loss vs Opal (unplayed Daily) -> Try today\'s Daily Soak');
+      t.equal(nextFunnel(mk('opal', [1]), true), null, 'loss vs Opal (Daily played) -> null');
+      t.equal(nextFunnel(mk('opal', [0], 'daily'), false), null, 'Daily results -> null');
+    },
+  },
+  {
+    name: 'W2-S4-04 #turnline phase badges render crisply and Final Soak offers contextual Challenge <next regular> / Try today\'s Daily Soak CTAs',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await startWithRack(t, 'SPRINGE');
+
+      // 1) Crisp phase badges in #turnline at bag < 7 and bag === 0 (WCAG >= 4.5:1, bordered pill, unclipped)
+      let st = (await t.state()).game;
+      st.bag = Array(4).fill('E');
+      await t.game('setState', { game: st });
+      const bFinal = await t.page.evaluate(() => {
+        const el = document.querySelector('#turnline .bag.phase-final');
+        const cs = el ? getComputedStyle(el) : null;
+        return el ? { text: el.textContent.trim(), border: cs.borderTopWidth, radius: parseFloat(cs.borderRadius), clipped: el.scrollWidth > el.clientWidth + 1 } : null;
+      });
+      t.expect(bFinal && /Final stretch · swaps closed/.test(bFinal.text) && bFinal.radius >= 12 && !bFinal.clipped, `bag < 7 renders crisp unclipped phase badge (${JSON.stringify(bFinal)})`);
+      t.equal((await t.contrastReport({ selector: '#turnline .bag.phase-final', min: 4.5, largeMin: 3 })).fails.length, 0, 'phase-final badge passes WCAG contrast');
+
+      st = (await t.state()).game;
+      st.bag = [];
+      await t.game('setState', { game: st });
+      const bEmpty = await t.page.evaluate(() => {
+        const el = document.querySelector('#turnline .bag.phase-empty');
+        const cs = el ? getComputedStyle(el) : null;
+        return el ? { text: el.textContent.trim(), bg: cs.backgroundColor, radius: parseFloat(cs.borderRadius), clipped: el.scrollWidth > el.clientWidth + 1 } : null;
+      });
+      t.expect(bEmpty && /Bag empty · go out to collect remaining tiles/.test(bEmpty.text) && bEmpty.radius >= 12 && !bEmpty.clipped, `bag === 0 renders crisp unclipped climax badge (${JSON.stringify(bEmpty)})`);
+      t.equal((await t.contrastReport({ selector: '#turnline .bag.phase-empty', min: 4.5, largeMin: 3 })).fails.length, 0, 'phase-empty badge passes WCAG contrast');
+
+      // 2) Final Soak after winning vs Opal: shows "Challenge Hollis Crane" beside "Play again", and clicking starts vs Hollis (medium)
+      const finished = (opp, winners) => ({
+        mode: 'play', seed: 1, rng: { bag: 1, ai: 2 }, over: true, scoreless: 0, round: 5, move: 12, cur: 0, bag: [], board: Array(225).fill(null),
+        featured: [],
+        players: [
+          { kind: 'human', name: 'You', score: winners.includes(0) ? 320 : 210, best: { word: 'SPRING', score: 42 }, hints: 3, rack: [] },
+          { kind: 'ai', name: opp === 'opal' ? 'Opal Vance' : 'Hollis Crane', persona: opp, level: opp === 'opal' ? 'easy' : 'medium', score: winners.includes(1) ? 320 : 210, best: null, hints: null, rack: [] },
+        ],
+        log: [{ p: 0, kind: 'play', n: 0, score: 42, full: 0, themed: 10, words: [{ w: 'SPRING', score: 32, bonus: 10, themed: 'spring' }], tiles: [] }, { kind: 'end' }],
+        result: { why: 'out', out: winners[0], adjust: [0, 0], winners },
+      });
+      await t.game('setState', { game: finished('opal', [0]), scene: 'over' });
+      await t.page.waitForSelector('.over [data-next-opp="hollis"]', { timeout: 3000 });
+      const winFoot = await t.page.evaluate(() => {
+        const btn = document.querySelector('.over [data-next-opp="hollis"]');
+        const r = btn.getBoundingClientRect();
+        const scr = document.querySelector('#screen');
+        return { text: btn.textContent.trim(), h: r.height, bottom: r.bottom, H: innerHeight, overflowX: scr.scrollWidth - scr.clientWidth };
+      });
+      t.equal(winFoot.text, 'Challenge Hollis Crane', 'win vs Opal offers Challenge Hollis Crane');
+      t.expect(winFoot.h >= 44 && winFoot.bottom <= winFoot.H + 0.5 && winFoot.overflowX <= 0, `Challenge CTA >= 44px & above fold (${JSON.stringify(winFoot)})`);
+      t.equal((await t.contrastReport({ selector: '.over .dlg-btns', min: 4.5, largeMin: 3 })).fails.length, 0, 'Final Soak footer passes WCAG contrast');
+      await t.shot('w2-b09-over-challenge-next');
+      await t.page.click('.over [data-next-opp="hollis"]');
+      await t.waitIdle(8000);
+      const nextGame = (await t.state()).game;
+      t.equal(nextGame.players[1].persona, 'hollis', 'clicking Challenge Hollis Crane starts a game against Hollis');
+      t.equal(nextGame.players[1].level, 'medium', 'at Hollis\'s usual Medium level');
+
+      // 3) Final Soak after a loss when Daily is unplayed: offers "Try today's Daily Soak" and launches Daily
+      await t.page.evaluate(() => { localStorage.removeItem('hs-letters-daily-v1'); localStorage.removeItem('hs-letters-save-v1'); });
+      await t.game('setState', { game: finished('opal', [1]), scene: 'over' });
+      await t.page.waitForSelector('.over .dlg-btns [data-go="daily"]', { timeout: 3000 });
+      const dailyText = (await t.page.textContent('.over .dlg-btns [data-go="daily"]')).trim();
+      t.equal(dailyText, "Try today's Daily Soak", 'loss with unplayed Daily offers Try today\'s Daily Soak');
+      await t.shot('w2-b09-over-daily-cta');
+      await t.page.click('.over .dlg-btns [data-go="daily"]');
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'game' && window.__game.getState().game.mode === 'daily', null, { timeout: 10000 });
+      t.equal((await t.state()).game.mode, 'daily', 'clicking Try today\'s Daily Soak launches Daily Soak');
     },
   },
 ];
