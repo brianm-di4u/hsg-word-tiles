@@ -162,7 +162,7 @@ export const tests = [
       const text = await t.page.textContent('.sheet.records');
       t.expect(/61%/.test(text), 'the win rate is shown (14 of 23)'); t.expect(/325/.test(text), 'the average is shown (7480 / 23)');
       t.expect(/JUXTAPOSE/.test(text) && /MAGNOLIA/.test(text), 'the best word and best turn are shown');
-      t.expect((await t.page.locator('.opp tbody tr').count()) === 4, 'four opponent rows');
+      t.expect((await t.page.locator('.opp-table tbody tr').count()) === 4, 'four opponent rows');
       await t.shot('S3-01-records-full');
       await t.game('scene', 'title');
       await t.shot('S3-01-title');

@@ -189,13 +189,14 @@ export function actionsHtml(o) {
     ? (o.staged ? b('recall', ICON.recall, 'Recall', 'Esc') : b('shuffle', ICON.shuffle, 'Shuffle', '⇧R'))
     : b('shuffle', ICON.shuffle, 'Shuffle', '⇧R');
   const slot2 = o.mobile ? '' : b('recall', ICON.recall, 'Recall', 'Esc', o.staged ? '' : 'disabled');
+  const playText = o.canPlay && o.playScore != null ? `Play <em class="play-pts">+${o.playScore}</em>` : 'Play';
   return [
     slot1,
     slot2,
     b('swap', ICON.swap, 'Swap', '⇧S', o.canSwap ? '' : 'disabled'),
     b('pass', ICON.pass, 'Pass', '⇧P'),
     o.hints != null ? b('hint', ICON.hint, `Hint <em>${o.unlimited ? '∞' : o.hints}</em>`, '⇧H', o.hints > 0 || o.unlimited ? '' : 'disabled') : '',
-    b('play', ICON.play, 'Play', 'Enter', o.canPlay ? '' : 'aria-disabled="true"'),
+    b('play', ICON.play, playText, 'Enter', o.canPlay ? '' : 'aria-disabled="true"'),
   ].join('');
 }
 
@@ -456,12 +457,12 @@ export function recordsHtml(st, o) {
       <li><span>Hints used</span><b>${st.hints}</b></li>
     </ul>
     <h2>By opponent</h2>
-    ${rows.length ? `<table class="opp"><thead><tr><th scope="col">Opponent</th><th scope="col">Games</th><th scope="col">Won</th><th scope="col">Best</th></tr></thead><tbody>${rows.map(([k, r]) => {
+    ${rows.length ? `<table class="opp-table"><thead><tr><th scope="col">Opponent</th><th scope="col">Games</th><th scope="col">Won</th><th scope="col">Best</th></tr></thead><tbody>${rows.map(([k, r]) => {
       const [pid, lv] = k.split(':');
       return `<tr><th scope="row">${esc(persona(pid).name)} <small>${LEVEL_NAME[lv]}</small></th><td>${r.games}</td><td>${r.wins}</td><td>${r.best}</td></tr>`;
     }).join('')}</tbody></table><p class="note">A win counts when your score beats that opponent's.</p>` : '<p class="note">Each opponent and difficulty you play gets a line here.</p>'}
     <h2>Daily Soak</h2>
-    <div class="stats">${stat(days.length, 'days played')}${stat(days.length ? Math.max(...days.map((d) => d.score)) : '-', 'best day')}${stat(day.streak || 0, 'day streak')}${stat(Math.max(day.streak || 0, st.daily.bestStreak), 'best streak')}</div>
+    <div class="stats cols4">${stat(days.length, 'days played')}${stat(days.length ? Math.max(...days.map((d) => d.score)) : '-', 'best day')}${stat(day.streak || 0, 'day streak')}${stat(Math.max(day.streak || 0, st.daily.bestStreak), 'best streak')}</div>
     ${dailyStrip(day.days || {}, o.today)}
     <p class="note">Miss a single day and a rest day keeps your streak going, once in any seven days.</p>
     <h2>Bathhouse Register</h2>

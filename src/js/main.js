@@ -819,7 +819,9 @@ function renderGame() {
   const mobile = isNarrow();
   if (!mobile) G.springsOpen = false;
   syncPlaqueSnap(s);
-  $('#scores').innerHTML = mobile ? '' : UI.scoresHtml(s, false);
+  const scoresEl = $('#scores');
+  scoresEl.classList.toggle('many', !mobile && s.players.length >= 3);
+  scoresEl.innerHTML = mobile ? '' : UI.scoresHtml(s, false);
   const springs = $('#springs');
   springs.innerHTML = UI.springsHtml(s, G.lex, mobile, G.springsOpen);
   springs.classList.toggle('open', mobile && G.springsOpen);
@@ -869,7 +871,7 @@ function trimLedger() {
 function renderActions() {
   const s = G.s, p = cur(), human = p.kind === 'human' && !G.privacy;
   const el = $('#actions');
-  el.innerHTML = UI.actionsHtml({ mobile: isNarrow(), staged: G.staged.length > 0, canSwap: s.bag.length >= RACK, canPlay: G.staged.length > 0 && G.preview && G.preview.ok, hints: p.hints != null && p.kind === 'human' ? p.hints : null, unlimited: !!p.unl });
+  el.innerHTML = UI.actionsHtml({ mobile: isNarrow(), staged: G.staged.length > 0, canSwap: s.bag.length >= RACK, canPlay: G.staged.length > 0 && G.preview && G.preview.ok, playScore: G.staged.length > 0 && G.preview && G.preview.ok ? G.preview.score : null, hints: p.hints != null && p.kind === 'human' ? p.hints : null, unlimited: !!p.unl });
   el.classList.toggle('waiting', !human || s.over);
   el.querySelectorAll('[data-act]').forEach((b) => {
     if ((!human || s.over) && !(b.dataset.act === 'shuffle' && waitSeat())) b.disabled = true;
