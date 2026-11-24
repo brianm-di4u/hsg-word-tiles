@@ -1365,28 +1365,31 @@ function rollScores(entry) {
 const POP_MS = 1300, POP_THEMED_MS = 1600, POP_STATIC_MS = 950;   // how long a score pop lives; a Hot Springs word's stays 0.3 s longer; reduced motion uses a 0 px fade
 // A bigger play has a bigger and longer pop: the plain size up to POP_FROM points, growing to POP_SCALE times that size and
 // POP_LONGER (30%) more time at POP_TOP points. A play worth SCORE_BIG or more that is not a Hot Springs word also throws brass sparks.
-const POP_SWELL = 1.1, POP_LIFT = 0.6, POP_RISE = 120;   // the pop swells to 1.1x at 15% of its life, sits 60% of its height above its cell then, and rises 120% more (main.css, @keyframes pop)
+const POP_SWELL = 1.12, POP_LIFT = 0.6, POP_RISE = 120;
 const POP_FROM = 14, POP_TOP = 60, POP_SCALE = 1.6, POP_LONGER = 0.3, POP_REM = 1.6;
 const popWeight = (score) => Math.min(1, Math.max(0, (score - POP_FROM) / (POP_TOP - POP_FROM)));
 function scorePop(e, themed) {
   if (G.fast || !e.tiles.length) return;
-  const red = reduced();
+  const red = reduced(), box = $('#boardwrap');
+  // Clear any prior live .pop so rapid consecutive plays never collide into '+2214' (W4-S3-02).
+  box.querySelectorAll('.pop').forEach((n) => n.remove());
   const i = e.tiles[e.tiles.length - 1].i;
   const [x, y] = R.cellCenter(i, R.TILE_LIFT);
+  const y0 = y - (red ? 0 : pxPerCell() * 0.35);
   const w = red ? 0 : popWeight(e.score), ms = red ? POP_STATIC_MS : Math.round((themed ? POP_THEMED_MS : POP_MS) * (1 + POP_LONGER * w));
   const el = document.createElement('div');
   el.className = red ? 'pop static' : (themed ? 'pop themed' : 'pop'); el.textContent = `+${e.score}`;
-  el.style.left = x + 'px'; el.style.top = y + 'px';
+  el.style.left = x + 'px'; el.style.top = y0 + 'px';
   if (!red) el.style.fontSize = (POP_REM * (1 + (POP_SCALE - 1) * w)).toFixed(2) + 'rem';
   el.style.animationDuration = ms + 'ms';
-  const box = $('#boardwrap');
   box.append(el);
-  // the box clips what leaves it: a pop near an edge starts far enough in to stay whole (its swell is 10% bigger) and rises only as far as there is room
   const swell = red ? 1 : POP_SWELL, lift = red ? 0.5 : POP_LIFT;
-  const pw = el.offsetWidth * swell / 2, ph = el.offsetHeight, top = ph * (lift + (swell - 1) / 2);
-  const px = Math.min(Math.max(x, pw), Math.max(pw, box.clientWidth - pw)), py = Math.max(y, top);
+  const pw = Math.ceil(el.offsetWidth * swell / 2) + 2, ph = el.offsetHeight;
+  const top = Math.ceil(ph * (lift + (swell - 1) / 2)) + 2, bot = Math.ceil(ph * (1 - lift + (swell - 1) / 2)) + 2;
+  const px = Math.min(Math.max(x, pw), Math.max(pw, box.clientWidth - pw));
+  const py = Math.min(Math.max(y0, top), Math.max(top, box.clientHeight - bot));
   el.style.left = px + 'px'; el.style.top = py + 'px';
-  el.style.setProperty('--rise', red ? '0%' : Math.round(Math.min(POP_RISE, (py - top) / ph * 100)) + '%');
+  el.style.setProperty('--rise', red ? '0%' : Math.max(0, Math.floor(Math.min(POP_RISE, (py - top) / ph * 100))) + '%');
   setTimeout(() => el.remove(), ms + 100);
 }
 
@@ -1783,7 +1786,7 @@ function stepViewAnim(now) {
 const pxPerCell = () => (B3.B3.on ? B3.cellPx() : R.scale());
 
 // ---------- VFX overlay (#fx: 3-Read grammar, pre-baked stamps, swap-remove pool; not part of isIdle) ----------
-const MAX_PARTICLES = 48, MAX_AMBIENT = 6, SWEEP_MS = 800, ARC_MS = 680, FLASH_PEAK_MS = 95;
+const MAX_PARTICLES = 48, MAX_AMBIENT = 6, SWEEP_MS = 650, ARC_MS = 680, FLASH_PEAK_MS = 95;
 const FX_SHAPES = Object.freeze({ steam: 'ribbon', score: 'star', letter: 'ring', word: 'oct', row: 'oct' });
 const steam = { parts: [], sweeps: [], flashes: [], arcs: [], arcLog: [], last: 0, on: false, emit: 0, wakeTimer: 0 };
 const ambientSteam = () => animOn() && G.scene === 'game' && !!G.s;
@@ -1800,11 +1803,11 @@ function fxStamps() {
   const mk = (fn) => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; fn(cv.getContext('2d'), 32); return cv; };
   const wisp = mk((g, c) => {
     g.lineCap = 'round';
-    for (const [w, col, dx] of [[15, 'rgba(127,200,184,0.34)', 0], [9, 'rgba(218,244,238,0.58)', -1.5], [4.5, 'rgba(255,255,255,0.85)', -2]]) {
+    for (const [w, col, dx] of [[16, 'rgba(127,200,184,0.52)', 0], [9, 'rgba(195,238,228,0.68)', -1.5], [4, 'rgba(248,255,253,0.86)', -2]]) {
       g.strokeStyle = col; g.lineWidth = w; g.beginPath(); g.moveTo(c - 10 + dx, c + 19); g.bezierCurveTo(c - 20 + dx, c + 5, c + 18 + dx, c - 4, c + 5 + dx, c - 19); g.stroke();
     }
     const core = g.createRadialGradient(c - 2, c + 2, 1, c, c, 24);
-    core.addColorStop(0, 'rgba(255,255,255,0.42)'); core.addColorStop(0.55, 'rgba(127,200,184,0.18)'); core.addColorStop(1, 'rgba(127,200,184,0)');
+    core.addColorStop(0, 'rgba(240,253,250,0.44)'); core.addColorStop(0.55, 'rgba(127,200,184,0.28)'); core.addColorStop(1, 'rgba(127,200,184,0)');
     g.fillStyle = core; g.beginPath(); g.arc(c, c, 24, 0, Math.PI * 2); g.fill();
   });
   const star = mk((g, c) => {
@@ -1889,10 +1892,10 @@ function emitAmbientWisp() {
 function steamBurst(cells) {
   if (!animOn() || !cells.length) return;
   fxFlash(cells, FX_SHAPES.steam, { dur: 190, color: '#7FC8B8' });
-  const perTile = Math.max(2, Math.min(4, Math.floor(24 / Math.max(1, cells.length))));
+  const perTile = Math.max(2, Math.min(3, Math.floor(21 / Math.max(1, cells.length))));
   for (const i of cells) for (let k = 0; k < perTile; k++) {
-    const ang = (k / perTile) * Math.PI * 2 + Math.random() * 0.8;
-    pushPart({ kind: 'steam', i, x: Math.cos(ang) * 0.44, y: Math.sin(ang) * 0.44, vx: Math.cos(ang) * 0.24 + (Math.random() - 0.5) * 0.16, vy: 0.48 + Math.random() * 0.48, life: 0, max: 1.0 + Math.random() * 0.55, r: 0.24 + Math.random() * 0.14, a: 0.21, rot: (Math.random() - 0.5) * 0.9, vrot: (Math.random() - 0.5) * 0.65, phase: Math.random() * 6.28 });
+    const ang = (k / perTile) * Math.PI * 2 + Math.random() * 0.7;
+    pushPart({ kind: 'steam', i, x: Math.cos(ang) * 0.50, y: Math.sin(ang) * 0.50, vx: Math.cos(ang) * 0.28 + (Math.random() - 0.5) * 0.14, vy: 0.45 + Math.random() * 0.42, life: 0, max: 0.95 + Math.random() * 0.45, r: 0.20 + Math.random() * 0.10, a: 0.20, rot: (Math.random() - 0.5) * 0.9, vrot: (Math.random() - 0.5) * 0.65, phase: Math.random() * 6.28 });
   }
   startSteam();
 }
@@ -1966,19 +1969,32 @@ function steamLoop(now) {
       c.globalAlpha = a; c.translate(sx, sy); c.rotate(p.rot); c.drawImage(st.star, -sz / 2, -sz / 2, sz, sz); c.restore();
     } else {
       p.vx *= vxDrag; p.vy *= vyDrag; p.x += (p.vx + Math.sin(p.life * 3.4 + (p.phase || 0)) * 0.14) * dt; p.y += p.vy * dt; p.rot = (p.rot || 0) + (p.vrot || 0) * dt;
-      const scale = 1 + 0.45 * (1 - Math.pow(1 - t, 3)), a = (t < 0.14 ? t / 0.14 : Math.pow(1 - (t - 0.14) / 0.86, 1.35)) * (p.a || 0.21), sz = p.r * cell * 2 * scale;
-      c.save(); c.globalAlpha = a; c.translate(cx + p.x * cell, cy - p.y * cell); c.rotate(p.rot); c.drawImage(st.wisp, -sz / 2, -sz / 2, sz, sz); c.restore();
+      const scale = 1 + 0.45 * (1 - Math.pow(1 - t, 3));
+      let a = (t < 0.14 ? t / 0.14 : Math.pow(1 - (t - 0.14) / 0.86, 1.35)) * (p.a || 0.20);
+      const px = cx + p.x * cell, py = cy - p.y * cell, sz = p.r * cell * 2 * scale;
+      if (p.kind === 'steam' && G.drag && G.drag.active && G.drag.bx != null) {
+        const dist = Math.hypot(px - G.drag.bx, py - G.drag.by);
+        if (dist < 2 * cell) a *= Math.max(0.06, (dist / (2 * cell)) * 0.65);
+      }
+      c.save(); c.globalAlpha = a; c.translate(px, py); c.rotate(p.rot); c.drawImage(st.wisp, -sz / 2, -sz / 2, sz, sz); c.restore();
     }
   }
   compactInPlace(steam.sweeps, (w) => now - w.t0 < SWEEP_MS);
   for (let sIx = 0; sIx < steam.sweeps.length; sIx++) {
     const w = steam.sweeps[sIx], n = w.cells.length, u = Math.min(1, Math.max(0, (now - w.t0) / SWEEP_MS));
-    const eased = u < 0.72 ? (1 - Math.pow(1 - u / 0.72, 1.85)) * 0.90 : 0.90 + 0.10 * ((u - 0.72) / 0.28);
-    const head = eased * (n + 0.6), tailFade = u > 0.84 ? (1 - u) / 0.16 : 1;
+    const eased = u < 0.78 ? (1 - Math.pow(1 - u / 0.78, 1.8)) * 0.92 : 0.92 + 0.08 * ((u - 0.78) / 0.22);
+    const head = eased * (n + 0.6), tailFade = u > 0.86 ? (1 - u) / 0.14 : 1;
     for (let j = 0; j < n; j++) {
-      const a = Math.max(0, 1 - Math.abs(head - j - 0.5) / 2.1) * tailFade; if (a <= 0.02) continue;
-      const [cx, cy] = R.cellCenter(w.cells[j], R.TILE_LIFT), sz = cell * 1.24;
-      c.save(); c.globalAlpha = 0.82 * a; c.drawImage(st.glint, cx - sz / 2, cy - sz / 2, sz, sz); c.restore();
+      const a = Math.max(0, 1 - Math.abs(head - j - 0.5) / 2.2) * tailFade; if (a <= 0.02) continue;
+      const q = R.cellQuad(w.cells[j], 0.02, R.TILE_LIFT), qi = R.cellQuad(w.cells[j], 0.09, R.TILE_LIFT);
+      const starSz = cell * (0.34 + 0.16 * a);
+      c.save(); c.lineJoin = 'round';
+      c.strokeStyle = `rgba(255,224,110,${(0.95 * a).toFixed(3)})`; c.lineWidth = Math.max(2.6, cell * 0.13); strokeQuad(c, q);
+      c.strokeStyle = `rgba(255,244,180,${(0.68 * a).toFixed(3)})`; c.lineWidth = Math.max(1.2, cell * 0.055); strokeQuad(c, qi);
+      c.globalAlpha = 0.92 * a;
+      c.drawImage(st.star, q[0][0] - starSz / 2, q[0][1] - starSz / 2, starSz, starSz);
+      c.drawImage(st.star, q[2][0] - starSz / 2, q[2][1] - starSz / 2, starSz, starSz);
+      c.restore();
     }
   }
   compactInPlace(steam.arcs, (a) => now - a.t0 < ARC_MS);
@@ -2157,6 +2173,7 @@ function updateDragTarget(d, e) {
   if (waitSeat()) { d.hover = -1; d.target = null; d.blocked = null; return; }   // the computer's turn: a tile can only be moved about the rack
   const r = boxes(d).board;
   const x = e.clientX - r.left, y = e.clientY - d.lift - r.top;   // the tile's centre on the board canvas
+  d.bx = x; d.by = y;
   // where the tile is decides, not the finger: on a short phone the bottom rows sit right above the rack, so the finger
   // is over the rack while the tile is over the board. Over the rack, only a tile inside the grid counts (no edge snap).
   let i = squareNear(x, y, inRackbar(e, d) ? 0 : 0.5);
