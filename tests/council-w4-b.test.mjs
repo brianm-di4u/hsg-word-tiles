@@ -211,8 +211,10 @@ export const tests = [
         apply(s, action, c);
       }
       t.expect(varied >= 3, 'in at least three of ' + positions + ' positions the answer depends on the stream (' + varied + ')');
-      // the Daily par is deterministic; W1-S2-07 fixed solo par math and W1-S2-08 scaled Medium bonus foresight to 50%
-      const PAR = { '2026-01-15': { m: 352, h: 443 }, '2026-03-02': { m: 387, h: 433 }, '2026-07-04': { m: 287, h: 313 }, '2026-11-16': { m: 340, h: 435 }, '2026-12-25': { m: 367, h: 478 } };
+      // the Daily par is deterministic for newly computed dates (OQ-WF1-03 / Ruling 17; saved historical d.days[date].par stays immutable);
+      // reflects W1-S2-07 solo par math, W1-S4-01/W1-S2-11 Featured/Row mechanics, W1-S5-02 Hollis/Julian styles, and Ruling 12 Medium leave 0.65
+      // (previous W2-B02 pins: 01-15 352/443, 03-02 387/433, 07-04 287/313, 11-16 340/435, 12-25 367/478)
+      const PAR = { '2026-01-15': { m: 323, h: 443 }, '2026-03-02': { m: 321, h: 358 }, '2026-07-04': { m: 287, h: 358 }, '2026-11-16': { m: 325, h: 405 }, '2026-12-25': { m: 466, h: 478 } };
       for (const [date, want] of Object.entries(PAR)) t.equal(JSON.stringify(await dailyPar(c, date)), JSON.stringify(want), 'par for ' + date);
     },
   },
