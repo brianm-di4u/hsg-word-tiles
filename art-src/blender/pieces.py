@@ -69,12 +69,28 @@ def tile():
 def square_lathe(profile, mats_idx, name, mats):
     """A mitred square frame: each profile point (half-size, z) becomes a square ring; mats_idx gives each band's material."""
     bm = bmesh.new(); rings = []
+    uv_layer = bm.loops.layers.uv.new('UVMap')
+    arc = [0.0]
+    for (s0, z0), (s1, z1) in zip(profile, profile[1:]):
+        arc.append(arc[-1] + math.hypot(s1 - s0, z1 - z0))
+    total_arc = arc[-1] or 1.0
+    max_s = max(s for s, _ in profile) or 1.0
     for s, z in profile:
         rings.append([bm.verts.new((sx * s, sy * s, z)) for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
     for k, (a, b) in enumerate(zip(rings, rings[1:])):
+        v0 = arc[k] / total_arc
+        v1 = arc[k + 1] / total_arc
         for i in range(4):
             f = bm.faces.new((a[i], a[(i + 1) % 4], b[(i + 1) % 4], b[i]))
             f.material_index = mats_idx[k]
+            # W3-S2-02: mitred along-rail UVs (U runs along rail length: X on south/north, Y on east/west;
+            # V follows cumulative profile arc length so vertical inner/outer walls never collapse).
+            for lp in f.loops:
+                co = lp.vert.co
+                along = co.x if i in (0, 2) else co.y
+                u = max(0.0, min(1.0, (along + max_s) / (2.0 * max_s)))
+                v = v0 if lp.vert in (a[i], a[(i + 1) % 4]) else v1
+                lp[uv_layer].uv = (u, v)
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     return mesh_from(bm, name, mats)
 
@@ -137,17 +153,24 @@ def export_piece():
         mw = o.matrix_world; nm = mw.to_3x3().inverted().transposed()
         mats = [ms.material for ms in o.material_slots]
         corner_n = [cn.vector.copy() for cn in me.corner_normals]
+        uv_layer = me.uv_layers.active.data if me.uv_layers.active else None
         for tri in me.loop_triangles:
             m = mats[tri.material_index] if tri.material_index < len(mats) else None
             key = m.name if m else 'none'
-            g = groups.setdefault(key, {'mat': material_params(m), 'v': {}, 'pos': [], 'nor': [], 'idx': []})
+            g = groups.setdefault(key, {'mat': material_params(m), 'v': {}, 'pos': [], 'nor': [], 'uv': [], 'idx': []})
             for li in tri.loops:
                 vi = me.loops[li].vertex_index
                 co = mw @ me.vertices[vi].co
                 n = (nm @ corner_n[li]).normalized()
-                k = (round(co.x, 4), round(co.y, 4), round(co.z, 4), round(n.x, 2), round(n.y, 2), round(n.z, 2))
+                if uv_layer is not None:
+                    uv = uv_layer[li].uv
+                    ux = max(0.0, min(1.0, uv.x)); uy = max(0.0, min(1.0, uv.y))
+                    k = (round(co.x, 4), round(co.y, 4), round(co.z, 4), round(n.x, 2), round(n.y, 2), round(n.z, 2), round(ux, 4), round(uy, 4))
+                else:
+                    k = (round(co.x, 4), round(co.y, 4), round(co.z, 4), round(n.x, 2), round(n.y, 2), round(n.z, 2))
                 if k not in g['v']:
                     g['v'][k] = len(g['pos']) // 3; g['pos'] += [co.x, co.y, co.z]; g['nor'] += [n.x, n.y, n.z]
+                    if uv_layer is not None: g['uv'] += [ux, uy]
                 g['idx'].append(g['v'][k])
         ev.to_mesh_clear()
     allp = [x for g in groups.values() for x in g['pos']]
@@ -163,7 +186,11 @@ def export_piece():
         pb = struct.pack('<%dh' % len(q), *q)
         nb = struct.pack('<%db' % len(g['nor']), *[max(-127, min(127, int(round(v * 127)))) for v in g['nor']])
         ib = struct.pack('<%dH' % len(g['idx']), *g['idx'])
-        out['g'].append({'mat': g['mat'], 'p': base64.b64encode(pb).decode(), 'n': base64.b64encode(nb).decode(), 'i': base64.b64encode(ib).decode()})
+        rec = {'mat': g['mat'], 'p': base64.b64encode(pb).decode(), 'n': base64.b64encode(nb).decode(), 'i': base64.b64encode(ib).decode()}
+        if g['uv']:
+            ub = struct.pack('<%dH' % len(g['uv']), *[max(0, min(65535, int(round(v * 65535)))) for v in g['uv']])
+            rec['u'] = base64.b64encode(ub).decode()
+        out['g'].append(rec)
     return out
 
 PIECES = (('tile', tile), ('frame', frame), ('towels', towels), ('bell', bell))

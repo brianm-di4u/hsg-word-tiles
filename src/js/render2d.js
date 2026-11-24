@@ -372,6 +372,60 @@ export function paintBoard(size, theme = 'light') {
   return cv;
 }
 
+// Matching 512x512 linear roughnessMap for 3D B3.top (W3-S2-02):
+// matte 0.85 grout, honed 0.62 travertine marble, 0.58 terrazzo border, glossy 0.22 stained-glass pools, medallions & brass rails.
+export function paintBoardRoughness(size = 512) {
+  const cv = mk(size, size), ctx = cv.getContext('2d');
+  const cell = size / U, f = FRAME * cell, band = f * 0.78, rnd = prng(147);
+  const gray = (r) => { const v = Math.max(0, Math.min(255, Math.round(r * 255))); return `rgb(${v},${v},${v})`; };
+  // outer walnut edge & terrazzo border
+  ctx.fillStyle = gray(0.46); ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = gray(0.58); ctx.fillRect(band * 0.18, band * 0.18, size - band * 0.36, size - band * 0.36);
+  // glossy brass rails (0.22)
+  ctx.strokeStyle = gray(0.22);
+  ctx.lineWidth = Math.max(1.5, cell * 0.06);
+  ctx.strokeRect(band * 0.18, band * 0.18, size - band * 0.36, size - band * 0.36);
+  ctx.lineWidth = Math.max(1.5, cell * 0.08);
+  ctx.strokeRect(f - cell * 0.06, f - cell * 0.06, size - (f - cell * 0.06) * 2, size - (f - cell * 0.06) * 2);
+  // glossy deco corner fans (0.22)
+  ctx.fillStyle = gray(0.22);
+  for (const [sx, sy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    ctx.beginPath(); ctx.arc(sx ? size - f * 0.5 : f * 0.5, sy ? size - f * 0.5 : f * 0.5, f * 0.36, 0, Math.PI * 2); ctx.fill();
+  }
+  // matte grout bed under all 15x15 cells (0.85)
+  ctx.fillStyle = gray(0.85); ctx.fillRect(f, f, cell * N, cell * N);
+  const gap = Math.max(1.2, cell * 0.045);
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const i = r * N + c, k = SQUARE[i];
+    const x = f + c * cell + gap / 2, y = f + r * cell + gap / 2, w = cell - gap;
+    // honed travertine neutral cell (0.62 +/- 0.02 subtle stone variation)
+    ctx.fillStyle = gray(0.62 + (rnd() - 0.5) * 0.04);
+    ctx.fillRect(x, y, w, w);
+    const cx = x + w / 2, cy = y + w / 2;
+    if (PREMIUM[k]) {
+      // glossy stained-glass pool & brass rim (0.22)
+      ctx.fillStyle = gray(0.22);
+      ctx.fillRect(x + w * 0.035, y + w * 0.035, w * 0.93, w * 0.93);
+    } else if (k === '*') {
+      // glossy Display Spring pool & brass rim (0.22)
+      ctx.fillStyle = gray(0.22);
+      ctx.beginPath(); ctx.arc(cx, cy, w * 0.47, 0, Math.PI * 2); ctx.fill();
+    } else if (k === 'B') {
+      // glossy glazed Bathhouse Row medallion & brass bezel (0.22)
+      ctx.fillStyle = gray(0.22);
+      octagonPath(ctx, x + w * 0.04, y + w * 0.04, w * 0.92, 0.28);
+      ctx.fill();
+    }
+  }
+  return cv;
+}
+
+let boardRoughTex = null;
+export function boardRoughnessTexture() {
+  if (!boardRoughTex) boardRoughTex = paintBoardRoughness(512);
+  return boardRoughTex;
+}
+
 // Draw a tile's corner point value with tight tracking on two-digit numerals (e.g. Q's '10') so they stay compact and clear of Q's tail (W3-S1-01).
 function drawTileValue(ctx, val, x, y, px, twoDigit) {
   ctx.font = `700 ${px}px ${FONT_UI}`;

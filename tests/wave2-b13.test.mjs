@@ -189,4 +189,105 @@ export const tests = [
       t.equal(backDay.envSwaps, 3, `PMREM envMap swapped back cleanly (swaps=${backDay.envSwaps})`);
     },
   },
+  // ---------- W3-S2-02 ----------
+  {
+    name: 'W3-S2-02 pieces.py exports mitred along-rail UVs on frame (zero vertical-wall collapse, east/west rails run along grain)',
+    node: true,
+    async run(t) {
+      const { MESHES } = await import(new URL('../src/js/pieces-mesh.js', import.meta.url).href);
+      const frame = MESHES.frame;
+      t.expect(!!frame && Array.isArray(frame.g) && frame.g.length >= 2, 'MESHES.frame present with walnut and brass groups');
+      const b64 = (s, T) => { const b = Buffer.from(s, 'base64'); return new T(b.buffer, b.byteOffset, b.byteLength / T.BYTES_PER_ELEMENT); };
+      const walnut = frame.g.find((g) => g.mat && g.mat.name === 'walnut');
+      t.expect(!!walnut && typeof walnut.u === 'string' && walnut.u.length > 0, 'frame walnut group exports quantized along-rail UVs (u)');
+      const q = b64(walnut.p, Int16Array), n = b64(walnut.n, Int8Array), uq = b64(walnut.u, Uint16Array), idx = b64(walnut.i, Uint16Array);
+      t.equal(uq.length, (q.length / 3) * 2, 'UV buffer length matches 2 floats per vertex');
+      let ewAlongOk = 0, nsAlongOk = 0, vertWallNonZeroV = 0, vertWallTotal = 0;
+      const posAt = (vi) => [
+        frame.lo[0] + (q[vi * 3] + 32768) / 65535 * (frame.hi[0] - frame.lo[0]),
+        frame.lo[1] + (q[vi * 3 + 1] + 32768) / 65535 * (frame.hi[1] - frame.lo[1]),
+        frame.lo[2] + (q[vi * 3 + 2] + 32768) / 65535 * (frame.hi[2] - frame.lo[2]),
+      ];
+      for (let k = 0; k < idx.length; k += 3) {
+        const tri = [idx[k], idx[k + 1], idx[k + 2]];
+        const ps = tri.map(posAt);
+        const us = tri.map((v) => uq[v * 2] / 65535);
+        const vs = tri.map((v) => uq[v * 2 + 1] / 65535);
+        const nx = (n[tri[0] * 3] + n[tri[1] * 3] + n[tri[2] * 3]) / (3 * 127);
+        const ny = (n[tri[0] * 3 + 1] + n[tri[1] * 3 + 1] + n[tri[2] * 3 + 1]) / (3 * 127);
+        const nz = (n[tri[0] * 3 + 2] + n[tri[1] * 3 + 2] + n[tri[2] * 3 + 2]) / (3 * 127);
+        const du = Math.max(...us) - Math.min(...us);
+        const dv = Math.max(...vs) - Math.min(...vs);
+        const dx = Math.max(...ps.map((p) => p[0])) - Math.min(...ps.map((p) => p[0]));
+        const dy = Math.max(...ps.map((p) => p[1])) - Math.min(...ps.map((p) => p[1]));
+        if (Math.abs(nz) < 0.2) {
+          vertWallTotal++;
+          if (dv > 0.01 && du > 0.05) vertWallNonZeroV++;
+        }
+        if (Math.abs(nx) > 0.5 && dy > 2 && du > 0.5) ewAlongOk++;
+        if (Math.abs(ny) > 0.5 && dx > 2 && du > 0.5) nsAlongOk++;
+      }
+      t.expect(vertWallTotal >= 8 && vertWallNonZeroV === vertWallTotal, `all ${vertWallTotal} vertical frame wall triangles have non-collapsed UV spans (ok=${vertWallNonZeroV})`);
+      t.expect(ewAlongOk >= 4, `east/west frame rails run U along Y length (ewAlongOk=${ewAlongOk})`);
+      t.expect(nsAlongOk >= 4, `north/south frame rails run U along X length (nsAlongOk=${nsAlongOk})`);
+    },
+  },
+  {
+    name: 'W3-S2-02 board 512x512 roughnessMap (grout 0.85, travertine 0.62, glass/brass 0.22) binds to B3.top (roughness=1) and walnut diffuse+roughness textures bind to B3.frame',
+    viewports: ['desktop'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 41, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'julian' }] });
+      await t.waitIdle(8000);
+      await t.game('act', 'autoplay', 8);
+      await t.waitIdle(10000);
+      await t.game('act', 'freezeFx', 0);
+      await t.waitFrames(3);
+
+      // 1) Inspect procedural 512x512 board roughnessMap values directly
+      const roughAudit = await t.page.evaluate(async () => {
+        const R = await import(new URL('src/js/render2d.js', location.href).href);
+        const { SQUARE, N, CENTER } = await import(new URL('src/js/score.js', location.href).href);
+        const cv = R.boardRoughnessTexture();
+        const ctx = cv.getContext('2d');
+        const cell = cv.width / R.U, f = R.FRAME * cell;
+        const sampleAt = (x, y) => ctx.getImageData(Math.round(x), Math.round(y), 1, 1).data[1] / 255;
+        // Sample grout line right on boundary between row 3 and row 4
+        const grout = sampleAt(f + 2.5 * cell, f + 4 * cell);
+        // Sample neutral travertine cell
+        const neutralIdx = SQUARE.findIndex((k, i) => k === '.' && i > 30 && i < 120);
+        const nr = Math.floor(neutralIdx / N), nc = neutralIdx % N;
+        const travertine = sampleAt(f + (nc + 0.5) * cell, f + (nr + 0.5) * cell);
+        // Sample glossy stained-glass square
+        const glassIdx = SQUARE.findIndex((k) => k === 'h');
+        const gr = Math.floor(glassIdx / N), gc = glassIdx % N;
+        const glass = sampleAt(f + (gc + 0.5) * cell, f + (gr + 0.5) * cell);
+        // Sample Display Spring center pool
+        const cr = Math.floor(CENTER / N), cc = CENTER % N;
+        const centerPool = sampleAt(f + (cc + 0.5) * cell, f + (cr + 0.5) * cell);
+        // Sample brass inner rail
+        const brassRail = sampleAt(f - cell * 0.06, cv.height * 0.5);
+        return { w: cv.width, h: cv.height, grout, travertine, glass, centerPool, brassRail };
+      });
+      t.equal(roughAudit.w, 512, 'board roughnessMap is 512 px wide');
+      t.equal(roughAudit.h, 512, 'board roughnessMap is 512 px tall');
+      t.expect(roughAudit.grout >= 0.80 && roughAudit.grout <= 0.90, `matte grout roughness ~0.85 (got ${roughAudit.grout.toFixed(2)})`);
+      t.expect(roughAudit.travertine >= 0.56 && roughAudit.travertine <= 0.68, `honed travertine roughness ~0.62 (got ${roughAudit.travertine.toFixed(2)})`);
+      t.expect(roughAudit.glass >= 0.18 && roughAudit.glass <= 0.28, `glossy stained-glass roughness ~0.22 (got ${roughAudit.glass.toFixed(2)})`);
+      t.expect(roughAudit.centerPool >= 0.18 && roughAudit.centerPool <= 0.28, `glossy Display Spring roughness ~0.22 (got ${roughAudit.centerPool.toFixed(2)})`);
+      t.expect(roughAudit.brassRail >= 0.18 && roughAudit.brassRail <= 0.28, `glossy brass rail roughness ~0.22 (got ${roughAudit.brassRail.toFixed(2)})`);
+
+      // 2) Verify 3D B3.top and B3.frame material bindings on GPU
+      const b3 = await t.game('act', 'b3');
+      if (!t.gpu || !b3 || !b3.on) return;
+      t.equal(b3.topMat, 'MeshStandardMaterial', 'B3.top uses MeshStandardMaterial');
+      t.equal(b3.topRoughness, 1, `B3.top roughness=1.0 so roughnessMap drives exact values (got ${b3.topRoughness})`);
+      t.equal(b3.topRoughnessMap, true, 'B3.top binds 512x512 procedural roughnessMap');
+      t.equal(b3.frameWalnutMap, true, 'B3.frame walnut binds diffuse woodgrain texture');
+      t.equal(b3.frameWalnutRoughnessMap, true, 'B3.frame walnut binds wood-pore roughnessMap');
+      t.equal(b3.frameWalnutFromCounter, true, 'B3.frame walnut diffuse refreshes from counter.webp inside setTheme()');
+      await t.shot('w2-b13-day-materials-3d', { timeout: 15000 });
+    },
+  },
 ];

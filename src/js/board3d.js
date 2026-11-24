@@ -38,6 +38,7 @@ function geometries(name) {
   const d = MESHES[name];
   return d.g.map((g) => {
     const q = b64(g.p, Int16Array), n = b64(g.n, Int8Array), idx = b64(g.i, Uint16Array);
+    const uq = g.u ? b64(g.u, Uint16Array) : null;
     const pos = new Float32Array(q.length), nor = new Float32Array(q.length), uv = new Float32Array(q.length / 3 * 2);
     const isTileTop = name === 'tile' && g.mat && g.mat.name === 'tiletop';
     for (let i = 0, j = 0; i < q.length; i += 3, j += 2) {
@@ -46,9 +47,12 @@ function geometries(name) {
       const bz = d.lo[2] + (q[i + 2] + 32768) / 65535 * (d.hi[2] - d.lo[2]);
       pos[i] = bx; pos[i + 1] = bz; pos[i + 2] = -by;
       nor[i] = n[i] / 127; nor[i + 1] = n[i + 2] / 127; nor[i + 2] = -n[i + 1] / 127;
-      // W3-S1-01: map tiletop UVs cleanly to the flat ceramic crown [-0.38..+0.38] → [0..1]
-      // so 100% of face texels sit inside the flat crown and bevel-ring verts clamp to the clean glaze edge.
-      if (isTileTop) {
+      // W3-S2-02: use exported Blender UVs (mitred along-rail UVs on frame) when present;
+      // W3-S1-01: map tiletop UVs cleanly to the flat ceramic crown [-0.38..+0.38] → [0..1].
+      if (uq) {
+        uv[j] = uq[j] / 65535;
+        uv[j + 1] = uq[j + 1] / 65535;
+      } else if (isTileTop) {
         uv[j] = clamp01((bx + TILE_CROWN_HALF) / (2 * TILE_CROWN_HALF));
         uv[j + 1] = clamp01((by + TILE_CROWN_HALF) / (2 * TILE_CROWN_HALF));
       } else {
@@ -69,12 +73,14 @@ function stdMaterial(m) {
 }
 function piece(name) {
   const grp = new THREE.Group();
-  for (const g of geometries(name)) { const mm = new THREE.Mesh(g.geo, stdMaterial(g.mat)); mm.castShadow = true; mm.receiveShadow = true; grp.add(mm); }
+  for (const g of geometries(name)) { const mm = new THREE.Mesh(g.geo, stdMaterial(g.mat)); mm.name = g.mat.name || ''; mm.castShadow = true; mm.receiveShadow = true; grp.add(mm); }
   return grp;
 }
 function canvasTex(c, srgb = true) {
-  const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = Math.min(8, B3.renderer.capabilities.getMaxAnisotropy()); return t;
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = Math.min(8, B3.renderer.capabilities.getMaxAnisotropy());
+  return t;
 }
 
 // The tile's top face: glaze, letter and value, drawn once per letter, theme & art.version (W3-P-N01).
@@ -100,6 +106,65 @@ function faceMaterial(l, blank, dark = false) {
   const m = new THREE.MeshPhysicalMaterial({ map: tex, emissiveMap: tex, emissive: prof.tile.emissive, emissiveIntensity: prof.tile.emissiveIntensity, roughness: 0.55, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.4 });
   faceCache.set(key, m);
   return m;
+}
+
+// Seeded horizontal walnut diffuse & roughness textures mapped along B3.frame's mitred along-rail UVs (W3-S2-02).
+function walnutGrainPrng(seed) {
+  let s = seed >>> 0 || 1;
+  return () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function frameWalnutRoughness() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const g = c.getContext('2d'), rnd = walnutGrainPrng(9021);
+  // Satin varnished walnut base (~0.42 roughness) with horizontal grain pores (0.50..0.64)
+  g.fillStyle = 'rgb(107,107,107)'; g.fillRect(0, 0, 256, 128);
+  for (let y = 0; y < 128; y++) {
+    const wave = Math.sin(y * 0.31) * 10 + Math.sin(y * 0.77 + 1.2) * 6;
+    const v = Math.max(84, Math.min(164, Math.round(112 + wave + (rnd() - 0.5) * 14)));
+    g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, 256, 1);
+  }
+  for (let k = 0; k < 420; k++) {
+    const x = rnd() * 256, y = rnd() * 128, w = 14 + rnd() * 44;
+    const v = Math.round(132 + rnd() * 34);
+    g.fillStyle = `rgba(${v},${v},${v},0.45)`;
+    g.fillRect(x, y, w, 1);
+    if (x + w > 256) g.fillRect(x - 256, y, w, 1);
+  }
+  const t = canvasTex(c, false);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 1);
+  return t;
+}
+function frameWalnutDiffuse(dark) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+  const g = c.getContext('2d'), rnd = walnutGrainPrng(4719);
+  const fromCounter = art.ready('counter');
+  B3.frameWalnutFromCounter = fromCounter;
+  if (fromCounter) {
+    const img = art.img('counter');
+    g.drawImage(img, 0, Math.round(img.height * 0.18), img.width, Math.round(img.height * 0.52), 0, 0, 512, 256);
+    // Warm satin walnut glaze so the frame harmonizes cleanly with the counter without flat plastic look
+    g.fillStyle = 'rgba(72,42,20,0.18)'; g.fillRect(0, 0, 512, 256);
+  } else {
+    const gr = g.createLinearGradient(0, 0, 0, 256);
+    gr.addColorStop(0, '#6F4729'); gr.addColorStop(0.5, '#5C391F'); gr.addColorStop(1, '#684226');
+    g.fillStyle = gr; g.fillRect(0, 0, 512, 256);
+  }
+  // Seamless horizontal along-rail woodgrain streaks & pores (wraps across U=0/1)
+  for (let y = 0; y < 256; y += 2) {
+    const band = Math.sin(y * 0.19) * 0.5 + Math.sin(y * 0.53 + 0.8) * 0.5;
+    g.fillStyle = band > 0 ? `rgba(138,94,54,${(0.06 + band * 0.08).toFixed(3)})` : `rgba(38,20,9,${(0.08 - band * 0.10).toFixed(3)})`;
+    g.fillRect(0, y, 512, 2);
+  }
+  for (let k = 0; k < 520; k++) {
+    const x = rnd() * 512, y = rnd() * 256, w = 28 + rnd() * 90;
+    g.fillStyle = rnd() < 0.65 ? `rgba(34,18,8,${(0.14 + rnd() * 0.16).toFixed(3)})` : `rgba(154,106,62,${(0.08 + rnd() * 0.09).toFixed(3)})`;
+    g.fillRect(x, y, w, 1 + (rnd() < 0.25 ? 1 : 0));
+    if (x + w > 512) g.fillRect(x - 512, y, w, 1);
+  }
+  if (dark) { g.fillStyle = 'rgba(12,10,24,0.46)'; g.fillRect(0, 0, 512, 256); }
+  const t = canvasTex(c, true);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 1);
+  return t;
 }
 
 // woven terry for the towels: muted linen base tinted per theme in setTheme() (#B5A892 day taupe / #524B61 night twilight)
@@ -157,7 +222,7 @@ export const LIGHTING_PROFILES = {
     },
     tile: { emissive: 0xffe4be, emissiveIntensity: 0.08, bodyColor: 0xd8cdb6 },
     towel: { cloth: 0x524b61, stripe: 0x26444a },
-    top: { emissive: 0x302c44, emissiveIntensity: 0.45 },
+    top: { emissive: 0x302c44, emissiveIntensity: 0.52 },
     preDimColor: 0x14121f,
   },
 };
@@ -232,7 +297,8 @@ export function init(canvas, theme, hooks = {}) {
   B3.table = new THREE.Mesh(new THREE.PlaneGeometry(64, 42), new THREE.MeshStandardMaterial({ roughness: 0.48, metalness: 0 }));
   B3.table.rotation.x = -Math.PI / 2; B3.table.receiveShadow = true; scene.add(B3.table);
   B3.boardCanvas = null;
-  B3.top = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0 });
+  const boardRough = canvasTex(R.boardRoughnessTexture(), false);
+  B3.top = new THREE.MeshStandardMaterial({ roughness: 1.0, roughnessMap: boardRough, metalness: 0 });
   const side = new THREE.MeshStandardMaterial({ color: 0x3a2414, roughness: 0.6 });
   B3.board = new THREE.Mesh(new THREE.BoxGeometry(U, TOP, U), [side, side, B3.top, side, side, side]);
   B3.board.position.y = TOP / 2; B3.board.receiveShadow = true; B3.board.castShadow = true; scene.add(B3.board);
@@ -268,6 +334,18 @@ export function init(canvas, theme, hooks = {}) {
   B3.preDim.visible = false;
   scene.add(B3.preDim);
   B3.frame = piece('frame'); B3.frame.scale.set(U / 16, 1, U / 16); scene.add(B3.frame);
+  // W3-S2-02: bind walnut wood-pore roughnessMap onto mitred frame rails (diffuse walnut grain refreshes in setTheme())
+  const frameRough = frameWalnutRoughness();
+  B3.frameWalnut = []; B3.frameWalnutFromCounter = false;
+  B3.frame.traverse((o) => {
+    if (o.isMesh && o.name === 'walnut' && o.material) {
+      o.material.color.set(0xffffff);
+      o.material.roughness = 1.0;
+      o.material.roughnessMap = frameRough;
+      o.material.needsUpdate = true;
+      B3.frameWalnut.push(o.material);
+    }
+  });
   // set dressing on the counter, outside the board
   // beside the board's far corners, where perspective leaves the most counter in view: towels and the desk bell
   B3.towels = piece('towels'); clothTexture(B3.towels); B3.towels.scale.setScalar(0.8); B3.towels.position.set(-HALF - 2.15, 0, -HALF + 1.7); B3.towels.rotation.y = Math.PI / 2 - 0.08; scene.add(B3.towels);
@@ -331,7 +409,7 @@ export function destroy(opts = {}) {
   B3.on = false; B3.renderer = null; B3.canvas = null; B3.scene = null; B3.camera = null;
   B3.hemi = null; B3.key = null; B3.fill = null;
   B3.table = null; B3.top = null; B3.board = null; B3.preDim = null; B3.dimIdx = null;
-  B3.frame = null; B3.towels = null; B3.bell = null; B3.towelCloth = null; B3.towelStripe = null;
+  B3.frame = null; B3.frameWalnut = null; B3.frameWalnutFromCounter = false; B3.towels = null; B3.bell = null; B3.towelCloth = null; B3.towelStripe = null;
   B3.tileGeo = null; B3.bodyMat = null; B3.stagedMat = null; B3.lastMat = null; B3.envRT = null; B3.envTheme = ''; B3.envSwaps = 0;
   B3.boardCanvas = null; B3.tiles = []; B3.frames.length = 0; B3.intervals.length = 0; B3.texKey = '';
   R.proj.fn = null;
@@ -353,6 +431,11 @@ export function setTheme(theme) {
   
   B3.table.material.map.wrapS = B3.table.material.map.wrapT = THREE.MirroredRepeatWrapping; B3.table.material.map.repeat.set(2, 2);
   B3.table.material.needsUpdate = true;
+  // W3-S2-02: refresh walnut woodgrain diffuse map on B3.frame's mitred along-rail UVs (counter-derived or procedural fallback)
+  if (B3.frameWalnut && B3.frameWalnut.length) {
+    const fTex = frameWalnutDiffuse(dark);
+    for (const m of B3.frameWalnut) { m.map?.dispose(); m.map = fTex; m.needsUpdate = true; }
+  }
   // W3-S2-01 / W2-S1-04 / W2-S2-06: apply unified LIGHTING_PROFILES (including theme-matched PMREM envMap swap)
   const profileName = dark ? 'night' : 'day';
   const prof = LIGHTING_PROFILES[profileName];
@@ -386,7 +469,6 @@ export function resize(w, h) {
   TILT = tall ? PORTRAIT_TILT : 0.3; MARGIN = tall ? 0.008 : 0.025;
   // on phones the board fills the width and the props would only show as slivers
   B3.tall = tall; B3.towels.visible = B3.bell.visible = !tall;
-  B3.top.roughness = tall ? 0.6 : 0.55;
   B3.fit = fitDistance();
 }
 function applyPose(tx, tz, dist) {
@@ -561,6 +643,11 @@ export function debug() {
     envIntensity: B3.scene ? B3.scene.environmentIntensity : 0,
     tileCoatRoughness: B3.bodyMat && B3.bodyMat.clearcoatRoughness != null ? B3.bodyMat.clearcoatRoughness : null,
     topMat: B3.top ? B3.top.type : null, tableMat: B3.table && B3.table.material ? B3.table.material.type : null,
+    topRoughness: B3.top ? B3.top.roughness : null,
+    topRoughnessMap: !!(B3.top && B3.top.roughnessMap),
+    frameWalnutMap: !!(B3.frameWalnut && B3.frameWalnut[0] && B3.frameWalnut[0].map),
+    frameWalnutRoughnessMap: !!(B3.frameWalnut && B3.frameWalnut[0] && B3.frameWalnut[0].roughnessMap),
+    frameWalnutFromCounter: !!B3.frameWalnutFromCounter,
     keyType: B3.key ? B3.key.type : null,
     frames: B3.frames.length, intervals: B3.intervals.slice(),
   };
