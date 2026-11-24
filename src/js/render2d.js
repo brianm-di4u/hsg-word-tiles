@@ -25,7 +25,7 @@ function marble(ctx, x, y, w, h, rnd, theme = 'light') {
   const dark = theme === 'dark';
   const g = ctx.createLinearGradient(x, y, x + w, y + h);
   if (dark) { g.addColorStop(0, '#3B384D'); g.addColorStop(0.55, '#353244'); g.addColorStop(1, '#2D2A3B'); }
-  else { g.addColorStop(0, '#DDD3C1'); g.addColorStop(0.55, '#D8CEBC'); g.addColorStop(1, '#CFC4B0'); }
+  else { g.addColorStop(0, '#D4C9B4'); g.addColorStop(0.55, '#CEC3AD'); g.addColorStop(1, '#C6B9A2'); }
   ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
   // veins: a few soft wandering strokes
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
@@ -277,7 +277,7 @@ export function paintBoard(size, theme = 'light', mode3d = false) {
       const m = art.img('marble'), sw = m.width * (0.14 + rnd() * 0.16);
       const base = ctx.createLinearGradient(x, y, x + w, y + w);
       if (dark) { base.addColorStop(0, '#383548'); base.addColorStop(1, '#312E40'); }
-      else { base.addColorStop(0, '#D6CCB8'); base.addColorStop(1, '#CEC3AD'); }
+      else { base.addColorStop(0, '#D0C5AF'); base.addColorStop(1, '#C8BCA5'); }
       ctx.fillStyle = base; ctx.fillRect(x, y, w, w);
       ctx.save(); ctx.translate(x + w / 2, y + w / 2); ctx.rotate(Math.floor(rnd() * 4) * Math.PI / 2); if (rnd() < 0.5) ctx.scale(-1, 1);
       const sx = rnd() * (m.width - sw), sy = rnd() * (m.height - sw);
@@ -473,7 +473,7 @@ export function paintFace(ctx, l, blank, w, theme = 'light') {
   ctx.font = `800 ${w * (isQ ? 0.56 : 0.62)}px ${FONT_TILE}`;
   ctx.fillStyle = blank ? '#1F6F6B' : '#0F1713';
   const m = ctx.measureText(l), asc = m.actualBoundingBoxAscent || w * 0.38;
-  ctx.fillText(l, w * (isQ ? 0.42 : 0.44), w * 0.47 + asc / 2 - (isQ ? w * 0.05 : w * 0.01));
+  ctx.fillText(l, w * (isQ ? 0.42 : 0.47), w * (isQ ? 0.47 : 0.50) + asc / 2 - (isQ ? w * 0.05 : w * 0.02));
   if (!blank) {
     drawTileValue(ctx, val, w * 0.86, w * 0.86, w * (twoDigit ? 0.22 : 0.27), twoDigit);
   }
@@ -521,7 +521,7 @@ export function tileSprite(l, blank, w, kind = 'board', theme = 'light') {
     ctx.fillStyle = blank ? '#1F6F6B' : '#0F1713';
     const m = ctx.measureText(l);
     const asc = m.actualBoundingBoxAscent || w * 0.40;
-    ctx.fillText(l, w * (isQ ? 0.42 : 0.44), w * 0.47 + asc / 2 - (isQ ? w * 0.05 : w * 0.01));
+    ctx.fillText(l, w * (isQ ? 0.42 : 0.47), w * (isQ ? 0.47 : 0.50) + asc / 2 - (isQ ? w * 0.05 : w * 0.02));
     if (!blank) {
       const valPx = twoDigit ? Math.max(w * 0.22, Math.min(w * 0.25, 12.5)) : Math.max(w * 0.26, Math.min(w * 0.32, 14.5));
       drawTileValue(ctx, val, w * 0.86, w * 0.86, valPx, twoDigit);
