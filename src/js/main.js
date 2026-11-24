@@ -47,7 +47,7 @@ const G = {
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
   errFlash: false, scoreHi: null, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, springsOpen: false,
-  returnFocus: null, parCache: {}, boardTap: null,
+  returnFocus: null, parCache: {}, boardTap: null, houseOpen: false,
 };
 window.__G = G;
 
@@ -329,7 +329,7 @@ function screenHtml(name) {
       const rec = stats();
       return UI.titleHtml({ records: rec.games ? `${UI.plural(rec.games, 'game')} · ${UI.plural(rec.wins, 'win')}` : 'Your wins and bests', noSave: G.noSave, newerSave: G.newerSave, canContinue: !!sv, continueLine: sv ? (sv.mode === 'daily' ? 'Daily Soak in progress' : `${sv.players.map((p) => p.name).join(' vs ')} · move ${sv.move + 1}${sv.challenge ? ' · Challenge' : ''}`) : '', dailyLine: UI.dailyLine(di), found, total: lex.data.words.length, loading: !G.ready });
     }
-    case 'setup': return UI.setupHtml(G.setup);
+    case 'setup': return UI.setupHtml(G.setup, { houseOpen: !!G.houseOpen });
     case 'help': {
       const challengeOn = !!(G.s && G.s.challenge && !G.s.over);
       return UI.helpHtml(G.helpTab, lex, challengeOn ? [] : twoLetterWords(), { challengeOn });
@@ -353,7 +353,9 @@ function screenHtml(name) {
 
 function defaultSetup() {
   const last = G.settings.lastSetup;
-  return last ? JSON.parse(JSON.stringify(last)) : { seats: [{ kind: 'human', name: '' }, { kind: 'ai', persona: 'hollis' }], hints: true };
+  if (last) return JSON.parse(JSON.stringify(last));
+  const newcomer = stats().games === 0;
+  return { seats: [{ kind: 'human', name: '' }, { kind: 'ai', persona: newcomer ? 'opal' : 'hollis' }], hints: true };
 }
 
 function wireScreen(name) {
@@ -378,13 +380,24 @@ function wireScreen(name) {
       e.preventDefault();
       cards[(cards.indexOf(b) + step + cards.length) % cards.length].click();
     }));
-    scr.querySelectorAll('[data-level]').forEach((sel) => sel.addEventListener('change', () => { st.seats[+sel.dataset.level].level = sel.value; showScene('setup'); scr.querySelector(`[data-level="${sel.dataset.level}"]`).focus(); }));
+    scr.querySelectorAll('[data-level]').forEach((sel) => sel.addEventListener('change', () => { st.seats[+sel.dataset.level].level = sel.value; G.houseOpen = true; showScene('setup'); scr.querySelector(`[data-level="${sel.dataset.level}"]`).focus(); }));
     scr.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => { st.seats.splice(+b.dataset.remove, 1); showScene('setup'); }));
     const add = scr.querySelector('[data-add]');
     if (add) add.addEventListener('click', () => { const used = new Set(st.seats.map((x) => x.persona)); st.seats.push({ kind: 'ai', persona: (PERSONAS.find((p) => !used.has(p.id)) || PERSONAS[0]).id }); showScene('setup'); });
+    const hr = scr.querySelector('.house-rules');
+    const syncHouseSummary = () => {
+      const sum = scr.querySelector('.house-rules summary small');
+      if (!sum) return;
+      const bits = [];
+      if (st.challenge) bits.push('Challenge on');
+      if (st.hintsUnl && !st.challenge) bits.push('Unlimited hints');
+      if (st.seats.some((x) => x.kind === 'ai' && x.level && x.level !== persona(x.persona).level)) bits.push('Custom difficulty');
+      sum.textContent = bits.length ? bits.join(' · ') : 'Difficulty, hints & Challenge';
+    };
+    if (hr) hr.addEventListener('toggle', () => { G.houseOpen = hr.open; });
     let savedHints = null;
     scr.querySelector('[data-hints]').addEventListener('change', (e) => { st.hints = e.target.checked; scr.querySelector('[data-hints-unl]').disabled = !e.target.checked; });
-    scr.querySelector('[data-hints-unl]').addEventListener('change', (e) => { st.hintsUnl = e.target.value === 'unl'; });
+    scr.querySelector('[data-hints-unl]').addEventListener('change', (e) => { st.hintsUnl = e.target.value === 'unl'; syncHouseSummary(); });
     scr.querySelector('[data-challenge]').addEventListener('change', (e) => {
       st.challenge = e.target.checked;
       const hi = scr.querySelector('[data-hints]'), unl = scr.querySelector('[data-hints-unl]');
@@ -398,8 +411,7 @@ function wireScreen(name) {
       }
       const note = scr.querySelector('[data-hints-note]');
       if (note) note.textContent = st.challenge ? 'Spring Guide hints are off while Challenge mode is on.' : 'Personal bests are for unaided games: taking any hint, or turning Unlimited hints on, sets no personal best.';
-      const sum = scr.querySelector('.house-rules summary small');
-      if (sum) sum.textContent = st.challenge ? 'Challenge on' : 'Pass-and-play & veteran options';
+      syncHouseSummary();
     });
     scr.querySelector('[data-start]').addEventListener('click', () => {
       G.settings.lastSetup = st; saveSettings();
@@ -456,7 +468,7 @@ function wireScreen(name) {
 function go(where) {
   unlock();
   if (where === 'continue') { const record = gameSaves.read(); if (record.game) resumeGame(record); return; }
-  if (where === 'setup') { G.setup = defaultSetup(); showScene('setup'); return; }
+  if (where === 'setup') { G.setup = defaultSetup(); G.houseOpen = false; showScene('setup'); return; }
   if (where === 'daily') {
     const launch = () => {
       const di = dailyInfo();

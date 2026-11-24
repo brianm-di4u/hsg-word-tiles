@@ -465,7 +465,7 @@ export const tests = [
       t.equal(await t.page.locator('select[data-persona]').count(), 0, 'no drop-down for the opponent');
       const cards = await t.page.$$eval('.opp[role="radio"]', (els) => els.map((e) => ({ val: e.dataset.val, on: e.getAttribute('aria-checked'), text: e.textContent, face: !!e.querySelector('img'), h: e.getBoundingClientRect().height })));
       t.equal(cards.length, 4, 'four characters');
-      t.equal(cards.filter((c) => c.on === 'true').map((c) => c.val).join(), 'hollis', 'Hollis is chosen to start');
+      t.equal(cards.filter((c) => c.on === 'true').map((c) => c.val).join(), 'opal', 'Opal is chosen to start for a newcomer (W2-S4-01)');
       t.expect(cards.every((c) => c.face && /Usually (Easy|Medium|Hard)/.test(c.text) && c.h >= 44), 'each card has a portrait, a usual level and a touch-sized body');
       t.expect(/Opal Vance/.test(cards.find((c) => c.val === 'opal').text) && /Bath attendant/.test(cards.find((c) => c.val === 'opal').text), 'a card names the character and the role');
       await t.page.focus('[data-persona="1"][data-val="julian"]');

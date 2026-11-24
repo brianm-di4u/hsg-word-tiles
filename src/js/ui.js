@@ -83,44 +83,53 @@ export function titleHtml(o) {
 }
 
 // ---------- setup ----------
-export function setupHtml(setup) {
+export function setupHtml(setup, opts = {}) {
+  const aiSeats = setup.seats.map((st, k) => ({ st, k })).filter((x) => x.st.kind === 'ai');
   const seat = (st, k) => {
     const human = st.kind === 'human';
     return `<li class="seat" data-k="${k}">
-      ${badge(human ? { name: st.name || `Player ${k + 1}` } : { name: persona(st.persona).name, persona: st.persona }, k, 44)}
-      <div class="seat-main">
+      ${badge(human ? { name: st.name || `Player ${k + 1}` } : { name: persona(st.persona).name, persona: st.persona }, k, 40)}
+      <div class="seat-main${human ? ' seat-human' : ''}">
         <div class="seg" role="radiogroup" aria-label="Seat ${k + 1} player">
           <button role="radio" aria-checked="${human}" data-kind="human" data-k="${k}">Person</button>
           <button role="radio" aria-checked="${!human}" data-kind="ai" data-k="${k}">Computer</button>
         </div>
         ${human
           ? `<label class="field"><span>Name</span><input data-name="${k}" value="${esc(st.name || '')}" maxlength="16" placeholder="Player ${k + 1}" autocomplete="off"></label>`
-          : `<div class="field"><span id="opp-${k}">Opponent <em>(fictional character)</em></span><div class="opps" role="radiogroup" aria-labelledby="opp-${k}">${PERSONAS.map((p) => `<button type="button" class="opp" role="radio" aria-checked="${p.id === st.persona}" tabindex="${p.id === st.persona ? 0 : -1}" data-persona="${k}" data-val="${p.id}">${portrait(p, 44)}<b>${esc(p.name)}</b><small>${esc(p.role)}</small><em>Usually ${LEVEL_NAME[p.level]}</em></button>`).join('')}</div></div>
-             <p class="seat-note">${esc(persona(st.persona).role)}. ${esc(persona(st.persona).line)}</p>
-             <label class="field"><span>Difficulty</span><select data-level="${k}">${Object.keys(LEVEL_NAME).map((l) => `<option value="${l}" ${l === seatLevel(st) ? 'selected' : ''}>${LEVEL_NAME[l]}</option>`).join('')}</select></label>
-             <p class="seat-note" data-level-note="${k}">${esc(LEVEL_BLURB[seatLevel(st)])}</p>`}
+          : `<div class="field"><span id="opp-${k}">Opponent <em>(fictional character)</em></span><div class="opps" role="radiogroup" aria-labelledby="opp-${k}">${PERSONAS.map((p) => `<button type="button" class="opp" role="radio" aria-checked="${p.id === st.persona}" tabindex="${p.id === st.persona ? 0 : -1}" data-persona="${k}" data-val="${p.id}">${portrait(p, 40)}<b>${esc(p.name)}</b><small>${esc(p.role)}</small><em>Usually ${LEVEL_NAME[p.level]}</em></button>`).join('')}</div></div>
+             <p class="seat-note">${esc(persona(st.persona).role)}. ${esc(persona(st.persona).line)}</p>`}
       </div>
       ${setup.seats.length > 2 ? `<button class="iconbtn small" data-remove="${k}" aria-label="Remove seat ${k + 1}">${ICON.close}</button>` : ''}
     </li>`;
   };
   const humans = setup.seats.filter((s) => s.kind === 'human').length;
+  const customLevel = aiSeats.some(({ st }) => st.level && st.level !== persona(st.persona).level);
+  const houseOpen = !!(opts.houseOpen || setup.challenge || setup.hintsUnl || customLevel);
+  const houseTags = [];
+  if (setup.challenge) houseTags.push('Challenge on');
+  if (setup.hintsUnl && !setup.challenge) houseTags.push('Unlimited hints');
+  if (customLevel) houseTags.push('Custom difficulty');
+  const houseSummary = houseTags.length ? houseTags.join(' · ') : 'Difficulty, hints &amp; Challenge';
+  const diffControls = aiSeats.map(({ st, k }) => `<label class="field"><span>${aiSeats.length > 1 ? `Seat ${k + 1} (${esc(persona(st.persona).name)}) difficulty` : 'Opponent difficulty'}</span><select data-level="${k}">${Object.keys(LEVEL_NAME).map((l) => `<option value="${l}" ${l === seatLevel(st) ? 'selected' : ''}>${LEVEL_NAME[l]}</option>`).join('')}</select></label><p class="seat-note" data-level-note="${k}">${esc(LEVEL_BLURB[seatLevel(st)])}</p>`).join('');
   return `<div class="sheet setup">
     ${band()}
     <header class="sheet-head"><h1 tabindex="-1">New game</h1><button class="iconbtn" data-go="title" aria-label="Back to the title screen">${ICON.close}</button></header>
     <ol class="seats">${setup.seats.map(seat).join('')}</ol>
-    ${setup.seats.length < 4 ? '<button class="btn quiet add" data-add>Add a player</button>' : ''}
-    <label class="check"><input type="checkbox" data-hints ${setup.hints && !setup.challenge ? 'checked' : ''} ${setup.challenge ? 'disabled' : ''}> Spring Guide hints</label>
-    <label class="field hint-allow"><span>Hints for each player</span><select data-hints-unl ${setup.hints && !setup.challenge ? '' : 'disabled'}><option value="3" ${setup.hintsUnl ? '' : 'selected'}>Three</option><option value="unl" ${setup.hintsUnl ? 'selected' : ''}>Unlimited</option></select></label>
+    <div class="setup-bar">
+      <label class="check"><input type="checkbox" data-hints ${setup.hints && !setup.challenge ? 'checked' : ''} ${setup.challenge ? 'disabled' : ''}> Spring Guide hints</label>
+      ${setup.seats.length < 4 ? '<button class="btn quiet add" data-add>Add a player</button>' : ''}
+    </div>
     <p class="seat-note" data-hints-note>${setup.challenge ? 'Spring Guide hints are off while Challenge mode is on.' : 'Personal bests are for unaided games: taking any hint, or turning Unlimited hints on, sets no personal best.'}</p>
-    <details class="house-rules"${setup.challenge ? ' open' : ''}>
-      <summary>House rules <small>${setup.challenge ? 'Challenge on' : 'Pass-and-play &amp; veteran options'}</small></summary>
+    <details class="house-rules"${houseOpen ? ' open' : ''}>
+      <summary>House rules &amp; more options <small>${houseSummary}</small></summary>
       <div class="house-body">
+        ${diffControls}
+        <label class="field hint-allow"><span>Hints for each player</span><select data-hints-unl ${setup.hints && !setup.challenge ? '' : 'disabled'}><option value="3" ${setup.hintsUnl ? '' : 'selected'}>Three</option><option value="unl" ${setup.hintsUnl ? 'selected' : ''}>Unlimited</option></select></label>
         <label class="check"><input type="checkbox" data-challenge ${setup.challenge ? 'checked' : ''}> Challenge mode: invalid words cost your turn</label>
         <p class="seat-note">A Pass-and-Play and veteran strict-dictionary rule (off by default). The board hides word validity, Check a word and the two-letter list are locked, and Spring Guide hints are turned off; an invalid word costs your turn. Computer opponents play from the dictionary, so this rule hits human seats only.</p>
       </div>
     </details>
-    <p class="goal"><b>The goal:</b> score more than the others by building words.</p>
-    <p class="note">${humans >= 2 ? 'Pass and play: each person\'s tiles stay hidden until they tap to take their turn.' : humans === 1 ? 'You against the computer.' : 'Computers only: sit back and watch.'}</p>
+    <p class="goal"><b>The goal:</b> score more than the others by building words. <span class="goal-mode">${humans >= 2 ? 'Pass and play: each person\'s tiles stay hidden until they tap to take their turn.' : humans === 1 ? 'You against the computer.' : 'Computers only: sit back and watch.'}</span></p>
     <div class="sheet-foot">
       <button class="btn primary big" data-start>Start</button>
       <button class="btn link" data-go="help">How to play</button>

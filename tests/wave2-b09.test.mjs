@@ -118,4 +118,75 @@ export const tests = [
       t.equal((await t.state()).staged.length, 6, 'dismissing keep-chip leaves staged tiles intact');
     },
   },
+  {
+    name: 'W2-S4-01 newcomer Setup defaults to Easy Opal, tucks Difficulty/Unlimited/Challenge inside collapsed House rules, and keeps Start above fold',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      // 1) First-time player (stats.games === 0, no lastSetup) defaults to Easy Opal Vance with collapsed House rules
+      await t.page.click('#screen [data-go="setup"]');
+      await t.waitFrames(2);
+      const setupInfo = await t.page.evaluate(() => {
+        const checked = document.querySelector('[data-persona="1"][aria-checked="true"]');
+        const hr = document.querySelector('.house-rules');
+        const level = document.querySelector('[data-level="1"]');
+        const unl = document.querySelector('[data-hints-unl]');
+        const chal = document.querySelector('[data-challenge]');
+        const start = document.querySelector('.setup [data-start]');
+        const foot = document.querySelector('.setup .sheet-foot');
+        const scr = document.querySelector('#screen');
+        const sr = start ? start.getBoundingClientRect() : null;
+        return {
+          W: innerWidth, H: innerHeight,
+          persona: checked ? checked.dataset.val : null,
+          houseOpen: !!(hr && hr.open),
+          levelInHouse: !!(hr && level && hr.contains(level)),
+          unlInHouse: !!(hr && unl && hr.contains(unl)),
+          chalInHouse: !!(hr && chal && hr.contains(chal)),
+          startTop: sr ? sr.top : -1,
+          startBottom: sr ? sr.bottom : 9999,
+          startH: sr ? sr.height : 0,
+          footPos: foot ? getComputedStyle(foot).position : '',
+          scrollH: scr.scrollHeight,
+          clientH: scr.clientHeight,
+          overflowX: scr.scrollWidth - scr.clientWidth,
+        };
+      });
+      t.equal(setupInfo.persona, 'opal', 'first-time player defaults to Easy Opal Vance');
+      t.equal(setupInfo.houseOpen, false, 'House rules & more options starts collapsed');
+      t.equal(setupInfo.levelInHouse, true, 'Difficulty override is inside collapsed House rules disclosure');
+      t.equal(setupInfo.unlInHouse, true, 'Unlimited hints select is inside collapsed House rules disclosure');
+      t.equal(setupInfo.chalInHouse, true, 'Challenge toggle is inside collapsed House rules disclosure');
+      t.expect(setupInfo.startTop >= 0 && setupInfo.startBottom <= setupInfo.H + 0.5, `Start CTA sits cleanly above fold (${setupInfo.startTop.toFixed(1)}..${setupInfo.startBottom.toFixed(1)} <= ${setupInfo.H})`);
+      t.expect(setupInfo.startH >= 44, `Start CTA >= 44 px (${setupInfo.startH.toFixed(1)} px)`);
+      t.equal(setupInfo.footPos, 'sticky', 'Setup footer is sticky on mobile and desktop');
+      if (t.viewport === 'desktop') {
+        t.expect(setupInfo.scrollH <= setupInfo.clientH + 8, `1280x800 compact Setup fits cleanly above fold without scrolling (${setupInfo.scrollH} <= ${setupInfo.clientH})`);
+      }
+      t.expect(setupInfo.overflowX <= 0, `zero horizontal overflow (${setupInfo.overflowX})`);
+      await t.shot('w2-b09-setup-newcomer');
+
+      // Starting directly launches a welcoming Easy Opal Vance match
+      await t.page.click('#screen [data-start]');
+      await t.waitIdle(8000);
+      const st = (await t.state()).game;
+      t.equal(st.players[1].persona, 'opal', 'started match plays against Opal Vance');
+      t.equal(st.players[1].level, 'easy', 'started match plays at Easy difficulty');
+
+      // 2) Returning player (stats.games > 0, no lastSetup) still defaults to Hollis Crane (medium)
+      await t.page.evaluate(() => {
+        localStorage.removeItem('hs-letters-save-v1');
+        const set = JSON.parse(localStorage.getItem('hs-letters-settings-v1') || '{}');
+        delete set.lastSetup;
+        localStorage.setItem('hs-letters-settings-v1', JSON.stringify(set));
+        localStorage.setItem('hs-letters-stats-v1', JSON.stringify({ v: 1, games: 2, wins: 1 }));
+      });
+      await t.reload();
+      await ready(t);
+      await t.page.click('#screen [data-go="setup"]');
+      const retPersona = await t.page.getAttribute('[data-persona="1"][aria-checked="true"]', 'data-val');
+      t.equal(retPersona, 'hollis', 'returning player with stats.games > 0 and no lastSetup defaults to Hollis Crane');
+    },
+  },
 ];

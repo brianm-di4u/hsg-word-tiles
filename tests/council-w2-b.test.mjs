@@ -81,11 +81,13 @@ export const tests = [
     async run(t) {
       await ready(t);
       await t.page.click('#screen [data-go="setup"]');
-      t.equal(await opponent(t), 'hollis', 'the default opponent is Hollis');
-      t.equal(await t.page.inputValue('[data-level="1"]'), 'medium', 'his usual level is Medium');
+      t.equal(await opponent(t), 'opal', 'the default newcomer opponent is Opal (W2-S4-01)');
+      await t.page.click('.house-rules summary');
+      t.equal(await t.page.inputValue('[data-level="1"]'), 'easy', 'her usual level is Easy');
+      t.expect(/everyday words/.test(await t.page.textContent('[data-level-note="1"]')), 'a sentence says what Easy means');
+      await t.page.click('[data-persona="1"][data-val="hollis"]');
+      t.equal(await t.page.inputValue('[data-level="1"]'), 'medium', 'Hollis starts at Medium');
       t.expect(/common words and all the short ones/.test(await t.page.textContent('[data-level-note="1"]')), 'a sentence says what Medium means');
-      await t.page.click('[data-persona="1"][data-val="opal"]');
-      t.equal(await t.page.inputValue('[data-level="1"]'), 'easy', 'Opal starts at Easy');
       await t.page.selectOption('[data-level="1"]', 'hard');
       t.expect(/every word in the book/.test(await t.page.textContent('[data-level-note="1"]')), 'the sentence follows the level');
       await t.page.click('[data-persona="1"][data-val="lucky"]');
@@ -114,8 +116,8 @@ export const tests = [
       await t.page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ lastSetup: { hints: true, seats: [{ kind: 'human', name: '' }, { kind: 'ai', persona: 'opal', level: 'godlike' }] } })), settingsKey);
       await t.reload();
       await t.page.click('#screen [data-go="setup"]');
-      t.equal(await opponent(t), 'hollis', 'the damaged setup is dropped');
-      t.equal(await t.page.inputValue('[data-level="1"]'), 'medium', 'with the default level');
+      t.equal(await opponent(t), 'opal', 'the damaged setup is dropped to newcomer default Opal');
+      t.equal(await t.page.inputValue('[data-level="1"]'), 'easy', 'with the default level');
     },
   },
   {
