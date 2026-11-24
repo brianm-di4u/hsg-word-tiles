@@ -559,6 +559,7 @@ const project = (bx, by, lift = 0) => (proj.fn ? proj.fn(bx, by, lift) : toScree
 export const cellCenter = (i, lift = 0) => project(FRAME + (i % N) + 0.5, FRAME + Math.floor(i / N) + 0.5, lift);
 // the four corners of square i, inset by k cells, in screen px (lifted in 3D when wrapping a raised tile face)
 const quad = (i, k = 0.04, lift = 0) => { const bx = FRAME + (i % N), by = FRAME + Math.floor(i / N); return [[k, k], [1 - k, k], [1 - k, 1 - k], [k, 1 - k]].map(([u, v]) => project(bx + u, by + v, lift)); };
+export const cellQuad = (i, k = 0.04, lift = 0) => quad(i, k, lift);
 const poly = (ctx, pts) => { ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); };
 
 // W2-S5-01: compact curved lower-rim brass START ribbon exposing the luminous turquoise Display Spring pool.

@@ -163,4 +163,95 @@ export const tests = [
       await t.game('act', 'freezeFx', null);
     },
   },
+  // ---------- W4-S3-01 ----------
+  {
+    name: 'W4-S3-01 #fx uses pre-baked stamps (zero per-frame createRadialGradient), typed 3-Read flashes/sparks, MAX_PARTICLES<=48, and halts idle RAF',
+    viewports: ['desktop'],
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-settings-v1')) {
+        localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false, motion: 'full' }));
+      }
+      window.__fxGradCalls = 0;
+      const orig = CanvasRenderingContext2D.prototype.createRadialGradient;
+      CanvasRenderingContext2D.prototype.createRadialGradient = function (...args) {
+        if (this.canvas && this.canvas.id === 'fx') window.__fxGradCalls++;
+        return orig.apply(this, args);
+      };
+    },
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 3, seats: [{ kind: 'human', name: 'A' }, { kind: 'human', name: 'B' }] });
+      await t.waitIdle(5000);
+      await t.game('act', 'reveal');
+
+      // 1) Play a non-themed big play (<7 tiles, score >= SCORE_BIG=45) -> Primary 'star' flash + capped 12..18 velocity-damped sparks
+      const s0 = await t.state();
+      // Place anchor tile at row 5 col 5 (80) so JAZZY across row 4 cols 5..9 hits Steam 2W (row 4 col 8 = 68) -> >= 60 pts, 5 tiles
+      s0.game.board[CENTER] = { l: 'A', blank: false, p: 1, t: 0 };
+      s0.game.board[80] = { l: 'A', blank: false, p: 1, t: 0 };
+      s0.game.move = 1; s0.game.cur = 0;
+      s0.game.players[0].rack = 'JAZZYAA'.split('');
+      await t.game('setState', { game: s0.game });
+      await t.waitIdle(5000);
+      await t.page.evaluate(() => { window.__fxGradCalls = 0; });
+      // Find any valid non-themed, non-Full-Soak play scoring >= 45 from a Steam 2W square
+      const bigMove = await t.page.evaluate(async () => {
+        const ms = await window.__game.act('moves', 60);
+        return ms.find((m) => m.tiles.length < 7 && m.score >= 45 && !m.words.some((w) => w.themed));
+      });
+      t.expect(!!bigMove, 'found non-themed <7-tile big play >= 45 pts');
+      await t.game('act', 'stage', bigMove.tiles);
+      const rBig = await t.game('act', 'play');
+      t.expect(rBig.ok, `big everyday play (${bigMove.score} pts, ${bigMove.tiles.length} tiles) succeeded`);
+      const immBig = await t.page.evaluate(() => {
+        const g = window.__game.getState();
+        return { fx: g.fx || null, sparks: g.sparks };
+      });
+      await t.waitFrames(6);
+      const afterBig = await t.page.evaluate(() => ({
+        gradCalls: window.__fxGradCalls,
+        stamps: !!(window.__game.getState().fx && window.__game.getState().fx.stamps),
+      }));
+      t.equal(afterBig.gradCalls, 0, 'zero per-frame createRadialGradient calls on #fx during sparks & flashes');
+      t.equal(afterBig.stamps, true, 'pre-baked 64x64 FX stamps initialized');
+      t.expect(!!immBig.fx && immBig.fx.maxParts === 48, 'MAX_PARTICLES is 48');
+      t.expect(!!immBig.fx && immBig.fx.parts <= 48, `active particles <= 48 (${immBig.fx && immBig.fx.parts})`);
+      t.expect(!!immBig.fx && immBig.fx.flashShapes.includes('star'), `Primary Read star flash emitted (${immBig.fx && immBig.fx.flashShapes.join(',')})`);
+      t.expect(immBig.sparks >= 12 && immBig.sparks <= 18, `regular big play caps sparks at 12..18 (${immBig.sparks})`);
+
+      // 2) Play a Hot Springs themed word -> Primary 'ribbon' flash + curled steam + goldSweep, zero per-frame gradients on #fx
+      await t.game('newGame', { seed: 3, seats: [{ kind: 'human', name: 'A' }, { kind: 'human', name: 'B' }] });
+      await t.waitIdle(5000);
+      await t.game('act', 'reveal');
+      const s1 = await t.state();
+      s1.game.players[0].rack = 'SPRINGE'.split('');
+      await t.game('setState', { game: s1.game });
+      await t.waitIdle(5000);
+      await t.page.evaluate(() => { window.__fxGradCalls = 0; });
+      await t.game('act', 'stage', across('SPRING'));
+      t.expect((await t.game('act', 'play')).ok, 'SPRING played');
+      const themeFx = await t.page.evaluate(() => window.__game.getState().fx);
+      t.expect(themeFx.flashShapes.includes('ribbon'), `Primary Read thermal ribbon flash emitted (${themeFx.flashShapes.join(',')})`);
+      t.expect(themeFx.steamKinds > 0 && themeFx.parts <= 48, `curled steam ribbons emitted within <=48 cap (${themeFx.steamKinds}/${themeFx.parts})`);
+      await t.waitFrames(6);
+      t.equal(await t.page.evaluate(() => window.__fxGradCalls), 0, 'zero per-frame createRadialGradient calls on #fx during steam & sweep');
+
+      // 3) Cover Display Spring and all 8 Bathhouse Row squares -> idle steamLoop halts RAF once active effects finish
+      await t.game('newGame', { seed: 3, seats: [{ kind: 'human', name: 'A' }, { kind: 'human', name: 'B' }] });
+      await t.waitIdle(5000);
+      const s2 = await t.state();
+      for (const idx of [112, 8, 9, 10, 11, 213, 214, 215, 216, 120, 135, 150, 165, 134, 149, 164, 179]) {
+        if (idx < 225) s2.game.board[idx] = { l: 'A', blank: false, p: 0, t: 0 };
+      }
+      // Cover every B cell dynamically from layout
+      await t.game('setState', { game: s2.game });
+      await t.page.evaluate(() => {
+        const st = window.__G.s;
+        for (let i = 0; i < 225; i++) if (!st.board[i]) st.board[i] = { l: 'A', blank: false, p: 0, t: 0 };
+      });
+      await t.page.waitForFunction(() => !window.__game.getState().fx.on && window.__game.getState().fx.parts === 0, null, { timeout: 6000 });
+      t.equal((await t.state()).fx.on, false, 'steamLoop RAF halts cleanly when all wisp cells are covered and no effects run');
+    },
+  },
 ];
