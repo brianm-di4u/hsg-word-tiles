@@ -368,14 +368,15 @@ export function paintBoard(size, theme = 'light') {
     const gsh = ctx.createLinearGradient(x0, y0, x1, y1); gsh.addColorStop(0, 'rgba(50,30,12,0.28)'); gsh.addColorStop(1, 'rgba(50,30,12,0)');
     ctx.fillStyle = gsh; ctx.fillRect(Math.min(x0, x0 + w0), Math.min(y0, y0 + h0), Math.abs(w0), Math.abs(h0));
   }
-  if (theme === 'dark') { ctx.fillStyle = 'rgba(20,18,31,0.1)'; ctx.fillRect(0, 0, size, size); }
+  if (dark) { ctx.fillStyle = 'rgba(20,18,31,0.22)'; ctx.fillRect(0, 0, size, size); }
   return cv;
 }
 
 // The flat top of a 3D tile: the face texture spans the tile's footprint; the flat top is about 0.08-0.92 of it.
-function paintFace(ctx, l, blank, w) {
+function paintFace(ctx, l, blank, w, theme = 'light') {
   const g = ctx.createLinearGradient(0, 0, w, w);
-  g.addColorStop(0, '#FFFDF5'); g.addColorStop(0.6, '#FAF3E3'); g.addColorStop(1, '#F0E6CE');
+  if (theme === 'dark') { g.addColorStop(0, '#F2EADB'); g.addColorStop(0.6, '#EDE5D4'); g.addColorStop(1, '#DFD5BE'); }
+  else { g.addColorStop(0, '#FFFDF5'); g.addColorStop(0.6, '#FAF3E3'); g.addColorStop(1, '#F0E6CE'); }
   ctx.fillStyle = g; ctx.fillRect(0, 0, w, w);
   if (!l) return;
   ctx.save();
@@ -389,24 +390,25 @@ function paintFace(ctx, l, blank, w) {
 
 // A tile, w px square, cached. kind: 'board' | 'staged' | 'ghost' | 'rack' | 'face' (3D top).
 const tileCache = new Map();
-export function tileSprite(l, blank, w, kind = 'board') {
+export function tileSprite(l, blank, w, kind = 'board', theme = 'light') {
   w = Math.round(w);
-  const key = `${l}|${blank ? 1 : 0}|${w}|${kind}`;
+  const key = `${l}|${blank ? 1 : 0}|${w}|${kind}|${theme}`;
   let cv = tileCache.get(key);
   if (cv) return cv;
   if (tileCache.size > 600) tileCache.clear();
   cv = mk(w, w);
   const ctx = cv.getContext('2d');
-  if (kind === 'face') { paintFace(ctx, l, blank, w); tileCache.set(key, cv); return cv; }
+  if (kind === 'face') { paintFace(ctx, l, blank, w, theme); tileCache.set(key, cv); return cv; }
   const inset = w * 0.05, s = w - inset * 2, r = s * 0.14;
   // body
   const g = ctx.createLinearGradient(inset, inset, inset + s, inset + s);
-  g.addColorStop(0, '#FFFDF5'); g.addColorStop(0.6, '#F8F0DE'); g.addColorStop(1, '#EAE0C7');
+  if (theme === 'dark') { g.addColorStop(0, '#F2EADB'); g.addColorStop(0.6, '#EDE5D4'); g.addColorStop(1, '#DDD2B9'); }
+  else { g.addColorStop(0, '#FFFDF5'); g.addColorStop(0.6, '#F8F0DE'); g.addColorStop(1, '#EAE0C7'); }
   roundRect(ctx, inset, inset, s, s, r); ctx.fillStyle = g; ctx.fill();
   // edge: dark lower bevel, bright upper rim
   ctx.lineWidth = Math.max(1, w * 0.038);
-  ctx.strokeStyle = 'rgba(92,70,38,0.62)'; roundRect(ctx, inset, inset, s, s, r); ctx.stroke();
-  ctx.lineWidth = Math.max(0.8, w * 0.025); ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.strokeStyle = theme === 'dark' ? 'rgba(42,32,20,0.72)' : 'rgba(92,70,38,0.62)'; roundRect(ctx, inset, inset, s, s, r); ctx.stroke();
+  ctx.lineWidth = Math.max(0.8, w * 0.025); ctx.strokeStyle = theme === 'dark' ? 'rgba(255,248,232,0.55)' : 'rgba(255,255,255,0.85)';
   ctx.beginPath(); ctx.moveTo(inset + r, inset + w * 0.02); ctx.lineTo(inset + s - r, inset + w * 0.02); ctx.stroke();
   // glaze highlight
   const hg = ctx.createRadialGradient(inset + s * 0.28, inset + s * 0.2, 0, inset + s * 0.28, inset + s * 0.2, s * 0.55);
@@ -544,7 +546,7 @@ export function drawFrame(ctx, d) {
   const at = (i) => toScreen(FRAME + (i % N), FRAME + Math.floor(i / N));
   const drawTile = (i, t, kind, alpha = 1, lift = 0, sc = 1) => {
     const [x, y] = at(i);
-    const spr = tileSprite(t.l, t.blank, tilePx * sc, kind);
+    const spr = tileSprite(t.l, t.blank, tilePx * sc, kind, d.theme || 'light');
     ctx.globalAlpha = alpha;
     if (kind !== 'ghost') {
       ctx.fillStyle = 'rgba(22,13,5,0.24)'; roundRect(ctx, x + cellPx * 0.07, y + cellPx * 0.14 + lift * 0.5, cellPx * 0.91, cellPx * 0.91, cellPx * 0.15); ctx.fill();
@@ -624,7 +626,7 @@ export function drawFrame(ctx, d) {
     const x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(...xs) - x0, h = Math.max(...ys) - y0;
     ctx.save();
     ctx.fillStyle = 'rgba(217,162,58,0.24)'; poly(ctx, q); ctx.fill();
-    if (d.dragTile) { ctx.globalAlpha = 0.92; ctx.drawImage(tileSprite(d.dragTile.l, d.dragTile.blank, Math.round(Math.max(w, h) * view.dpr), 'staged'), x0, y0, w, h); ctx.globalAlpha = 1; }
+    if (d.dragTile) { ctx.globalAlpha = 0.92; ctx.drawImage(tileSprite(d.dragTile.l, d.dragTile.blank, Math.round(Math.max(w, h) * view.dpr), 'staged', d.theme || 'light'), x0, y0, w, h); ctx.globalAlpha = 1; }
     ctx.lineJoin = 'round';
     ctx.strokeStyle = 'rgba(26,17,8,0.85)'; ctx.lineWidth = lw(0.14); poly(ctx, q); ctx.stroke();
     ctx.strokeStyle = '#F3DD8B'; ctx.lineWidth = lw(0.08); poly(ctx, q); ctx.stroke();

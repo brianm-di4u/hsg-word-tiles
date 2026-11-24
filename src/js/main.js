@@ -1082,9 +1082,10 @@ function renderRack() {
   // (hidden) until the drag ends: iOS WebKit sends the rest of a touch to the node it began on, and a removed node
   // never passes the pointerup on, which left tiles stuck in the air.
   const d = G.drag, lifted = (show || wait) && d && d.active && d.from === 'rack' && !order.includes(d.k) ? d.k : null;
+  const th = dark() ? 'dark' : 'light';
   const old = new Map([...el.querySelectorAll('.rtile')].map((b) => [b.dataset.key, b]));
   const button = (k) => {
-    const l = rack[k], key = `${k}|${l}|${px}|${dim ? (wait ? 2 : 1) : 0}`;
+    const l = rack[k], key = `${k}|${l}|${px}|${dim ? (wait ? 2 : 1) : 0}|${th}`;
     let b = old.get(key);
     if (b) { old.delete(key); return b; }
     b = document.createElement('button');
@@ -1093,7 +1094,7 @@ function renderRack() {
     b.setAttribute('aria-label', l === '?' ? 'Blank tile' : `${l}, ${E.tileValue(l)} points`);
     if (dim) { b.tabIndex = -1; b.disabled = !wait; }
     const c = document.createElement('canvas'); c.width = c.height = px;
-    c.getContext('2d').drawImage(R.tileSprite(l === '?' ? '' : l, l === '?', px, 'rack'), 0, 0);
+    c.getContext('2d').drawImage(R.tileSprite(l === '?' ? '' : l, l === '?', px, 'rack', th), 0, 0);
     b.append(c);
     if (!dim || wait) b.addEventListener('pointerdown', (e) => rackDown(e, k));
     b.addEventListener('click', (e) => { if (e.detail === 0 && !dim) { G.selected = G.selected === k ? null : k; renderRack(); } }); // keyboard activation
@@ -2060,7 +2061,7 @@ function onMove(e) {
     gh.classList.remove('over-target', 'over-blocked');
     gh.width = gh.height = Math.round(d.size * dpr());
     gh.style.width = gh.style.height = d.size + 'px';
-    gh.getContext('2d').drawImage(R.tileSprite(d.tile.l, d.tile.blank, gh.width, 'staged'), 0, 0);
+    gh.getContext('2d').drawImage(R.tileSprite(d.tile.l, d.tile.blank, gh.width, 'staged', dark() ? 'dark' : 'light'), 0, 0);
     // it grows from the size it was picked up at (a rack tile or a board square) to its drag size
     const from = d.from === 'rack' ? rackTileSize() : pxPerCell();
     gh.style.transition = 'none'; gh.style.scale = String(from / d.size);

@@ -67,16 +67,16 @@ function canvasTex(c, srgb = true) {
   t.anisotropy = Math.min(8, B3.renderer.capabilities.getMaxAnisotropy()); return t;
 }
 
-// The tile's top face: glaze, letter and value, drawn once per letter.
+// The tile's top face: glaze, letter and value, drawn once per letter & theme.
 const faceCache = new Map();
-function faceMaterial(l, blank) {
-  const key = (blank ? '?' : '') + l;
+function faceMaterial(l, blank, dark = false) {
+  const key = (dark ? 'D:' : 'L:') + (blank ? '?' : '') + l;
   if (faceCache.has(key)) return faceCache.get(key);
   const c = document.createElement('canvas'); c.width = c.height = 512;
-  c.getContext('2d').drawImage(R.tileSprite(l, blank, 512, 'face'), 0, 0);
-  // a touch of self-light keeps the glazed faces ivory under the warm lamp (they read as pieces above the marble)
+  c.getContext('2d').drawImage(R.tileSprite(l, blank, 512, 'face', dark ? 'dark' : 'light'), 0, 0);
+  // a touch of self-light keeps the glazed faces crisp ivory in Day and warm #EDE5D4 ivory in Night
   const tex = canvasTex(c);
-  const m = new THREE.MeshPhysicalMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.16, roughness: 0.55, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.4 });
+  const m = new THREE.MeshPhysicalMaterial({ map: tex, emissiveMap: tex, emissive: dark ? 0xffe4be : 0xffffff, emissiveIntensity: dark ? 0.08 : 0.14, roughness: 0.55, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.4 });
   faceCache.set(key, m);
   return m;
 }
@@ -214,9 +214,12 @@ export function setTheme(theme) {
   const stripeHex = dark ? 0x26444a : 0x3b7870;
   for (const m of B3.towelCloth || []) { m.color.set(towelHex); m.needsUpdate = true; }
   for (const m of B3.towelStripe || []) { m.color.set(stripeHex); m.needsUpdate = true; }
-  B3.key.intensity = dark ? 700 : 900; B3.key.color.set(dark ? 0xe0e8ff : 0xfff0d8);
-  B3.hemi.intensity = dark ? 0.25 : 0.6; B3.fill.intensity = dark ? 0.8 : 0.5; B3.fill.color.set(dark ? 0x7fb4ff : 0xcfe0ff);
-  B3.scene.environmentIntensity = dark ? 0.3 : 0.5;
+  // W2-S1-04: Night lighting uses a warm brass-lamp key (0xffe1b0, ~500) over cool twilight fill (0x5c72b8)
+  B3.key.intensity = dark ? 500 : 900; B3.key.color.set(dark ? 0xffe1b0 : 0xfff0d8);
+  B3.hemi.color.set(dark ? 0x8697c8 : 0xfff1dc); B3.hemi.groundColor.set(dark ? 0x1d182c : 0x6a4a2c); B3.hemi.intensity = dark ? 0.28 : 0.6;
+  B3.fill.intensity = dark ? 0.4 : 0.5; B3.fill.color.set(dark ? 0x5c72b8 : 0xcfe0ff);
+  B3.scene.environmentIntensity = dark ? 0.28 : 0.5;
+  if (B3.bodyMat) { B3.bodyMat.color.set(dark ? 0xd8cdb6 : 0xeadfc4); B3.bodyMat.needsUpdate = true; }
   B3.texKey = '';
 }
 
@@ -308,7 +311,7 @@ export function render(d) {
     const t0 = w.kind === 'staged' && d.settle ? d.settle.get(w.i) : null;
     if (t0 != null) sc = 1 + 0.12 * Math.pow(1 - Math.min(1, Math.max(0, (d.now - t0) / 120)), 3);   // a tile just placed settles into its square
     g.position.set(x, TOP + lift, z); g.scale.setScalar(sc);
-    g.userData.face.material = faceMaterial(w.t.l, w.t.blank);
+    g.userData.face.material = faceMaterial(w.t.l, w.t.blank, B3.dark);
     g.userData.body.material = w.kind === 'staged' ? B3.stagedMat : w.kind === 'last' ? B3.lastMat : B3.bodyMat;
   });
   const p = pose();

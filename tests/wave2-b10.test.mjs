@@ -250,4 +250,100 @@ export const tests = [
       t.expect(!/globalCompositeOperation\s*=\s*['"]multiply['"]/.test(src), 'render2d.js removed marble double-multiply pass');
     },
   },
+  // ---------- W2-S1-04 ----------
+  {
+    name: 'W2-S1-04 Night theme calibrates twilight slate-limestone marble, warm brass-lamp 3D lighting, darkened twilight towels, warm-ivory tiles, and #3E3A54 fog boxes',
+    viewports: ['desktop', 'mobile'],
+    colorScheme: 'dark',
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 41, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'julian' }] });
+      await t.waitIdle(8000);
+      await t.game('act', 'autoplay', 10);
+      await t.waitIdle(12000);
+      await t.game('act', 'freezeFx', 0);
+      await t.waitFrames(3);
+
+      // 1) Layer 3: Night fogged plaque boxes recede to #3E3A54 (rgb(62, 58, 84)), never glaring #FFFFFF
+      if (t.viewport === 'mobile') {
+        const toggle = t.page.locator('#springs [data-springs-toggle]');
+        if (await toggle.isVisible()) await toggle.click();
+      }
+      const plaqueInfo = await t.page.evaluate(() => {
+        const fog = document.querySelector('#springs .pword b.fog');
+        const rev = document.querySelector('#springs .pword b:not(.fog)');
+        const fcs = fog ? getComputedStyle(fog) : null;
+        const rcs = rev ? getComputedStyle(rev) : null;
+        return {
+          darkBody: document.body.classList.contains('theme-dark'),
+          fogBg: fcs ? fcs.backgroundColor : null,
+          fogBgImg: fcs ? fcs.backgroundImage : null,
+          revBg: rcs ? rcs.backgroundColor : null,
+          revColor: rcs ? rcs.color : null,
+        };
+      });
+      t.equal(plaqueInfo.darkBody, true, 'Night theme sets body.theme-dark');
+      t.equal(plaqueInfo.fogBg, 'rgb(62, 58, 84)', `Night .pword b.fog uses #3E3A54 (got ${plaqueInfo.fogBg})`);
+      t.equal(plaqueInfo.fogBgImg, 'none', `Night .pword b.fog removes Day white radial-gradient (got ${plaqueInfo.fogBgImg})`);
+      t.equal(plaqueInfo.revBg, 'rgb(237, 229, 212)', `Night revealed .pword b uses warm ivory #EDE5D4 (got ${plaqueInfo.revBg})`);
+      if (t.viewport === 'mobile') {
+        const toggle = t.page.locator('#springs [data-springs-toggle]');
+        if (await toggle.isVisible()) await toggle.click();
+      }
+
+      // 2) Layer 2: 3D Night lighting calibration & darkened twilight linen towels
+      const b3 = await t.game('act', 'b3');
+      if (b3 && b3.on) {
+        t.equal(b3.dark, true, '3D board is in dark theme');
+        t.equal(b3.keyColor, 'ffe1b0', `Night 3D key uses warm brass-lamp 0xffe1b0 (got ${b3.keyColor})`);
+        t.expect(b3.keyIntensity >= 480 && b3.keyIntensity <= 520, `Night 3D key intensity calibrated to 480..520 (got ${b3.keyIntensity})`);
+        t.equal(b3.fillColor, '5c72b8', `Night 3D fill uses cool twilight 0x5c72b8 (got ${b3.fillColor})`);
+        t.equal(b3.towelColor, '524b61', `Night 3D towels use darkened twilight linen #524b61 (got ${b3.towelColor})`);
+      }
+
+      // 3) Layer 1: Rendered Night frame luminance check — twilight slate-limestone marble stays calm below bright glare,
+      //    warm-ivory tiles pop cleanly above it, and desktop towels recede in twilight
+      const shotBuf = await t.page.locator('#boardwrap').screenshot();
+      const png = decodePng(shotBuf);
+      const pts = await t.page.evaluate(async () => {
+        const st = window.__game.getState();
+        const bw = document.getElementById('boardwrap').getBoundingClientRect();
+        const { SQUARE: SQ } = await import(new URL('src/js/score.js', location.href).href);
+        const empties = [], tiles = [];
+        for (let i = 0; i < 225; i++) {
+          const r = Math.floor(i / 15), c = i % 15;
+          if (r < 2 || r > 12 || c < 2 || c > 12) continue;
+          if (SQ[i] === '.' && !st.game.board[i] && empties.length < 8) empties.push(await window.__game.act('cell', i));
+          else if (st.game.board[i] && !st.game.board[i].blank && tiles.length < 6) tiles.push(await window.__game.act('cell', i));
+        }
+        const [c0] = await window.__game.act('cell', 112);
+        const [c1] = await window.__game.act('cell', 113);
+        return { w: bw.width, h: bw.height, cell: Math.abs(c1 - c0), empties, tiles };
+      });
+      const sx = png.width / pts.w, sy = png.height / pts.h;
+      let mSum = 0, tSum = 0;
+      for (const [cx, cy] of pts.empties) {
+        const p = samplePngBox(png, (cx - pts.cell * 0.22) * sx, (cy - pts.cell * 0.22) * sy, (cx + pts.cell * 0.22) * sx, (cy + pts.cell * 0.22) * sy);
+        mSum += p.lum;
+      }
+      for (const [cx, cy] of pts.tiles) {
+        // Upper-left warm-ivory tile face corner away from dark glyph
+        const p = samplePngBox(png, (cx - pts.cell * 0.32) * sx, (cy - pts.cell * 0.32) * sy, (cx - pts.cell * 0.14) * sx, (cy - pts.cell * 0.14) * sy);
+        tSum += p.lum;
+      }
+      const nightMarbleLum = mSum / pts.empties.length;
+      const nightTileLum = tSum / pts.tiles.length;
+      t.log(`W2-S1-04 Night rendered (${t.viewport}): marbleLum=${nightMarbleLum.toFixed(1)}, tileLum=${nightTileLum.toFixed(1)}, delta=${(nightTileLum - nightMarbleLum).toFixed(1)}`);
+      t.expect(nightMarbleLum >= 42 && nightMarbleLum <= 118, `Night marble stays calm twilight slate-limestone, not glaring slab (lum=${nightMarbleLum.toFixed(1)}, target 42..118)`);
+      t.expect(nightTileLum >= 165, `Night warm-ivory tiles stay clearly readable (lum=${nightTileLum.toFixed(1)} >= 165)`);
+      t.expect(nightTileLum - nightMarbleLum >= 75, `Night tiles separate sharply from twilight marble (delta=${(nightTileLum - nightMarbleLum).toFixed(1)} >= 75)`);
+      if (t.viewport === 'desktop' && b3 && b3.on) {
+        const towel = samplePngBox(png, png.width * 0.045, png.height * 0.13, png.width * 0.085, png.height * 0.21);
+        t.log(`Night 3D towel rendered sample: rgb(${towel.r.toFixed(0)},${towel.g.toFixed(0)},${towel.b.toFixed(0)}) lum=${towel.lum.toFixed(1)}`);
+        t.expect(towel.lum < 105, `Night 3D towels stay darkened twilight linen (lum=${towel.lum.toFixed(1)} < 105)`);
+      }
+      await t.shot('w2-b10-night-midgame', { timeout: 15000 });
+    },
+  },
 ];
