@@ -28,11 +28,11 @@ async function pairing(a, b, n) {
 
 export const tests = [
   {
-    name: 'S3-02 Medium beats Easy between 70 and 90 percent of 100 games, not every game', node: true,
+    name: 'S3-02 Medium decisively beats Easy (W1-S3-01 approachable ~230-260 pt beginner tier)', node: true,
     async run(t) {
       const r = await pairing('medium', 'easy', 100);
       t.log(`medium over easy ${r.rate}`);
-      t.expect(r.rate >= 0.7 && r.rate <= 0.9, `Medium beats Easy ${r.rate} of 100 games (target 0.70 to 0.90)`);
+      t.expect(r.rate >= 0.85, `Medium beats Easy ${r.rate} of 100 games (W1-S3-01 target >= 0.85; PRD >= 0.75)`);
     },
   },
   {

@@ -6,18 +6,21 @@ import { rand } from './rng.js';
 import { N, SQUARE, VALUE, LETTER_MULT, WORD_MULT, RACK } from './score.js';
 import { LEAVE } from './leave-table.js';
 
-// Easy knows common words plus every word of 2 or 3 letters; Medium the same up to 4 letters (freeLen is
-// the first length that must be common). Easy plays its best word except about one turn in four (slip),
-// when it takes an ordinary one from the middle of its list, and ignores the rack it keeps. Medium always
-// plays its best and weighs its leave. Hard knows the whole dictionary, weighs the rack it keeps, the
-// Boiling Springs it opens and the endgame. Medium and Hard play the best play by their own measure (equity); plays within
-// TIE_WINDOW equity points of it count as tied and the choice among them is drawn from state.rng.ai (before wave 4 a tie went to
-// the play whose key sorts first, so a position had one answer and every opponent of a level played the same way).
-// Before wave 2 Easy was { commonOnly, maxLen: 6, pick: [0.2, 0.5], budget: 400000 }: no short non-common
-// words and no slip (it picked from the middle of its list every turn), which Medium beat 100 games out
-// of 100.
+// Everyday two-letter words Easy is allowed to play (no obscure tournament two-letter tools like XU, ZA, QI, KI, OY, UT).
+export const EASY_TWO = new Set([
+  'AM', 'AN', 'AS', 'AT', 'BE', 'BY', 'DO', 'GO', 'HE', 'IF', 'IN', 'IS', 'IT',
+  'ME', 'MY', 'NO', 'OF', 'OK', 'ON', 'OR', 'SO', 'TO', 'UP', 'US', 'WE',
+]);
+
+// Easy plays everyday SCOWL common words (3–6 letters) plus the 25 everyday two-letter words in EASY_TWO,
+// ignores the rack it keeps, and slips ~65% of turns into the 35th–75th percentile of its 30 best plays
+// (W1-S3-01: recalibrated to an approachable ~230–270 pt beginner tier). Medium knows common words plus every
+// word of 2–4 letters (`freeLen` 5), always plays its best, and weighs its leave. Hard knows the whole
+// dictionary, weighs the rack it keeps, the Boiling Springs it opens and the endgame. Medium and Hard play the
+// best play by their own measure (equity); plays within TIE_WINDOW equity points of it count as tied and the
+// choice among them is drawn from state.rng.ai.
 export const LEVELS = {
-  easy: { commonOnly: true, freeLen: 4, leave: 0, pick: [0.2, 0.5], slip: 0.25, budget: 900000 },
+  easy: { commonOnly: true, freeLen: 0, allowTwo: EASY_TWO, maxLen: 6, leave: 0, pick: [0.35, 0.75], slip: 0.65, budget: 900000 },
   medium: { commonOnly: true, freeLen: 5, leave: 0.5, budget: 900000 },  // freeLen was 4 before wave 2
   hard: { leave: 1, defense: true, endgame: true, budget: 1500000 },
 };
@@ -94,7 +97,7 @@ export function chooseAction(dict, lex, s, opts = {}) {
   const p = s.players[s.cur];
   const L = LEVELS[opts.level || p.level || 'medium'];
   const style = STYLES[opts.persona || p.persona] || null;
-  const { moves, nodes } = generateMoves(dict, s.board, p.rack, { lex, featured: s.featured, commonOnly: L.commonOnly, freeLen: L.freeLen, maxLen: L.maxLen, budget: L.budget });
+  const { moves, nodes } = generateMoves(dict, s.board, p.rack, { lex, featured: s.featured, commonOnly: L.commonOnly, freeLen: L.freeLen, allowTwo: L.allowTwo, maxLen: L.maxLen, budget: L.budget });
   const bag = s.bag.length;
   if (!moves.length) return { action: fallback(p.rack, bag), nodes };
 

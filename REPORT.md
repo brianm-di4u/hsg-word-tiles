@@ -32,7 +32,7 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 | 13–16 Turns and ending | met | 02, 11, 12, 19 |
 | 17–20 Modes, privacy, Daily, Continue | met | 06 (golden hashes, 3 time zones), 12, 17 |
 | 21 AI legality | met | 05: 7,576 AI actions in 300 games, all legal; 04 |
-| 22 AI strength | met | Hard beats Medium 71 %, Medium beats Easy 84 % (`tools/balance.mjs`, 150 games each) |
+| 22 AI strength | met | Hard beats Medium 71 %, Medium beats Easy 100 % (Easy ~221–236 pts vs Medium/Hard, ~279 pts mirror; `tools/balance.mjs`, 150 games each) |
 | 23 AI off the main thread | met | Worker; fallback tested (`?worker=0`) |
 | 24 Hints | met | 11-play |
 | 25–28 Hot Springs content | met | 07 (lexicon, facts), 14 (cards open; toast, Register, Featured); first built with 96 entries, 107 now (96/96 facts and all 96 cards were the count then) |
@@ -67,12 +67,11 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 | Pairing | Win rate | Average scores | Hot Springs share | Full Soaks / game |
 |---|---|---|---|---|
 | Hard vs Medium | 71 % | 437 – 390 | 10.8 % | 2.0 |
-| Medium vs Easy | 84 % | 435 – 371 | 12.0 % | 1.1 |
-| Hard vs Easy | 91 % | 460 – 350 | 9.4 % | 2.0 |
-Hot Springs bonuses come to 9.4–12.0 % of all points (measured with the tiers of 10 / 18 / 30; the 5–10 % band this
+| Medium vs Easy | 100 % | 475 – 236 | 11.5 % | 0.7 |
+| Hard vs Easy | 100 % | 499 – 221 | 9.9 % | 1.4 |
+Hot Springs bonuses come to 9.9–11.5 % of all points (measured with the tiers of 10 / 18 / 30; the 5–10 % band this
 report first gave was set against the old +10 / +15 / +25 and no longer describes the game). The computer plays them only when they
-score well, so a person hunting them will see more. Computers claim 0.11 to 0.19 Featured Springs a game (about 1 game
-in 5 to 9). Table: `node tools/balance.mjs --games 150`, seeds 1000 to 1149 (wave 4); the first version of this table was measured
+score well, so a person hunting them will see more. Computers claim 0.09 to 0.19 Featured Springs a game. Table: `node tools/balance.mjs --games 150`, seeds 1000 to 1149 (W1-S3-01 recalibration of Easy to ~220–260 pts everyday words); the first version of this table was measured
 before waves 1 to 4 changed the computer and the tiers.
 
 ## Visual results
@@ -114,7 +113,7 @@ VISUAL-REPORT.md refer to the previous art.
   likeliest next step is a fully painted board face, as Barons has.
 - Nobody has listened to the sound or used a screen reader; both are tested only by machine (offline renders, the
   live region text).
-- The Easy opponent is soft for adults (about 200 points a game); it is meant for beginners and children.
+- The Easy opponent is calibrated for beginners and casual play (~220–240 points against Medium/Hard, ~279 points in Easy mirror, using everyday common words plus 25 everyday two-letter words and no 7-letter Full Soaks).
 - The Daily Soak resets at each player's local midnight, so two players in different time zones can be on different
   deals at the same moment.
 - ENABLE lacks some newer short words (QI, ZA); the help says which list is used.

@@ -2,7 +2,7 @@
 // two or three letters; Medium only common words or words of up to four letters; the leave table is sane.
 import { ctx } from './lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
-import { chooseAction, leaveValue, LEVELS } from '../src/js/ai.js';
+import { chooseAction, leaveValue, LEVELS, EASY_TWO } from '../src/js/ai.js';
 import { isCommon } from '../src/js/dict.js';
 
 async function games(levels, n, from, onPlay) {
@@ -42,7 +42,7 @@ export const tests = [
       let easy = 0, medium = 0;
       await games(['easy', 'medium'], 60, 500, (level, e, c) => {
         for (const w of e.words) {
-          if (level === 'easy') { easy++; if (!(w.w.length < LEVELS.easy.freeLen || isCommon(c.dict, w.w))) t.fail(`Easy played ${w.w}`); }
+          if (level === 'easy') { easy++; if (!(w.w.length === 2 ? EASY_TWO.has(w.w) : (w.w.length < LEVELS.easy.freeLen || isCommon(c.dict, w.w)))) t.fail(`Easy played ${w.w}`); }
           if (level === 'medium') { medium++; if (!(w.w.length < LEVELS.medium.freeLen || isCommon(c.dict, w.w))) t.fail(`Medium played ${w.w}`); }
         }
       });

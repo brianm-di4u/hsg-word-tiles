@@ -40,14 +40,15 @@ function edgeFor(E, node, letter) {
   }
 }
 
-// rack: array of letters ('?' = blank). opts: { featured, lex, budget, commonOnly, freeLen, maxLen }
+// rack: array of letters ('?' = blank). opts: { featured, lex, budget, commonOnly, freeLen, allowTwo, maxLen }
 export function generateMoves(d, board, rack, opts = {}) {
   const E = d.edges, root = d.root;
   const lex = opts.lex || null;
   const featured = (opts.featured || []).filter((f) => f.by == null).map((f) => f.word);
   const budget = opts.budget || 2e6;
   // commonOnly: every word formed must be common, except words shorter than freeLen (Medium knows the short ones)
-  const commonOnly = !!opts.commonOnly, freeLen = opts.freeLen || 0, maxLen = opts.maxLen || N;
+  // or two-letter words in allowTwo (Easy uses an explicit everyday two-letter allowlist).
+  const commonOnly = !!opts.commonOnly, freeLen = opts.freeLen || 0, maxLen = opts.maxLen || N, allowTwo = opts.allowTwo || null;
   const counts = new Int8Array(27);
   for (const l of rack) counts[l === '?' ? 26 : l.charCodeAt(0) - 65]++;
   const rackSize = rack.length;
@@ -132,7 +133,7 @@ export function generateMoves(d, board, rack, opts = {}) {
       words.unshift(word);
       if (lex) { const en = lex.byForm.get(word); if (en) bonus += lex.bonusOf(en) + (anyBath ? ROW_BONUS : 0); }
       if (words.some((w) => BLOCKED.has(w))) return;
-      if (commonOnly && !words.every((w) => w.length < freeLen || isCommonWord(w))) return;
+      if (commonOnly && !words.every((w) => w.length < freeLen || (allowTwo && w.length === 2 ? allowTwo.has(w) : isCommonWord(w)))) return;
       for (const f of featured) if (words.includes(f)) { feat = FEATURED_BONUS; break; }
       const full = placed === RACK ? FULL_SOAK : 0;
       moves.push({ tiles, score: sum * mult + cross + full + bonus + feat, words, bonus, full, featured: feat });
