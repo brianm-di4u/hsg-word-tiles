@@ -181,6 +181,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
     level(v) { mLevel = v; if (!held) musicBus.gain.setTargetAtTime(v, ctx.currentTime, 0.05); },
     duck(db = 6, ms = 400) { if (held) return; const t = ctx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.setTargetAtTime(mLevel * 10 ** (-db / 20), t, 0.02); musicBus.gain.setTargetAtTime(mLevel, t + ms / 1000, 0.25); },
     intensity(x) { inten = Math.max(0, Math.min(1, x)); },
+    get inten() { return inten; },
     get score() { return cur && cur.score; },
     // For tests: how much the lead has really varied so far.
     info() { return cur ? { bars: cur.bar, formBars: cur.bars.length, distinctBars: cur.sigs.size, notes: cur.notes, pitches: cur.pitches.size } : null; },

@@ -1,9 +1,12 @@
-// Wave 2, batch W2-B01: W1-S3-01, W1-S3-02.
+// Wave 2, batch W2-B01: W1-S3-01, W1-S3-02, W1-S3-03.
 import { ctx } from './lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
 import { chooseAction, hintChoices, LEVELS, EASY_TWO } from '../src/js/ai.js';
 import { reviewSteps } from '../src/js/review.js';
 import { isCommon } from '../src/js/dict.js';
+
+const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
+const quiet = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: true })); };
 
 export const tests = [
   {
@@ -127,6 +130,86 @@ export const tests = [
       t.expect(res.ok && res.entry.words.some((w) => w.w === 'CASINOS'), 'Hard AI organically played 7-tile CASINOS on word merit');
       t.equal(res.entry.featured, 'CASINOS', 'Engine still awards organic Featured Spring claim');
       t.equal(org.featured[0].by, 0, 'Featured plaque marked claimed by seat 0');
+    },
+  },
+  {
+    name: 'W1-S3-03 Daily Soak shows un-truncated Turn X / 10, precomputed live par pips during play, and ramps music intensity on turns 8-10',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      // Click Daily Soak from title (also unlocks WebAudio so audioState().intensity is live)
+      await t.page.click('[data-go="daily"]');
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'game', null, { timeout: 10000 });
+      await t.waitIdle(8000);
+      // Wait for off-thread dailyPar to populate live par pips during Turn 1
+      await t.page.waitForFunction(() => document.querySelectorAll('#turnline .par-pip').length === 2, null, { timeout: 15000 });
+
+      const hud = await t.page.evaluate(() => {
+        const badge = document.querySelector('#turnline .daily-turn');
+        const bar = document.querySelector('#topbar').getBoundingClientRect();
+        const br = badge.getBoundingClientRect();
+        const pips = [...document.querySelectorAll('#turnline .par-pip')].map((el) => ({
+          text: el.textContent.trim(),
+          met: el.classList.contains('met'),
+          clipped: el.scrollWidth > el.clientWidth + 1,
+        }));
+        return {
+          text: badge.textContent.trim(),
+          clipped: badge.scrollWidth > badge.clientWidth + 1,
+          insideBar: br.left >= bar.left - 1 && br.right <= bar.right + 1 && br.width >= 50,
+          pips,
+          cached: !!window.__G.parCache[window.__G.s.daily.date],
+        };
+      });
+      t.equal(hud.text, 'Turn 1 / 10', 'Daily topbar leads with Turn 1 / 10');
+      t.equal(hud.clipped, false, 'Turn badge is never truncated');
+      t.expect(hud.insideBar, 'Turn badge fits cleanly inside #topbar');
+      t.equal(hud.pips.length, 2, 'Both live star-threshold par pips are visible on Turn 1');
+      t.expect(hud.pips.every((p) => !p.clipped && /★+\s*\d+/.test(p.text)), 'Par pips show star thresholds cleanly: ' + JSON.stringify(hud.pips));
+      t.expect(hud.cached, 'Par is cached in G.parCache');
+
+      const contrast = await t.contrastReport({ selector: '#turnline', min: 4.5, largeMin: 3 });
+      t.equal(contrast.fails.length, 0, 'Daily topbar passes WCAG contrast (' + JSON.stringify(contrast.fails) + ')');
+      await t.checkLayout({ allowScrollY: true });
+      await t.shot('W1-S3-03-daily-hud');
+
+      // Verify music intensity ramp across turns 1..7 (0), turns 8-9 (0.5), turn 10 (0.85), plus .par-pip.met when score beats par
+      const checkTurn = async (turnsLeft, score) => {
+        const st = (await t.state()).game;
+        st.daily.turns = turnsLeft;
+        st.players[0].score = score;
+        await t.game('setState', { game: st });
+        await t.page.evaluate(() => { /* trigger moodUpdate via scene/state refresh */ });
+        return t.page.evaluate(() => ({
+          turn: document.querySelector('#turnline .daily-turn')?.textContent.trim(),
+          met: document.querySelectorAll('#turnline .par-pip.met').length,
+          intensity: window.__game.audioState().intensity,
+        }));
+      };
+      // Trigger moodUpdate on setState? Let's verify turns via passing/playing or check moodUpdate in setState!
+      const t1 = await t.page.evaluate(() => window.__game.audioState().intensity);
+      t.equal(t1, 0, 'Turn 1 music intensity is 0');
+
+      // Advance to Turn 8 (turns === 3) via actual game passes so afterAction -> moodUpdate runs genuinely
+      for (let k = 0; k < 7; k++) await t.game('act', 'pass');
+      await t.waitIdle(5000);
+      t.equal((await t.page.textContent('#turnline .daily-turn')).trim(), 'Turn 8 / 10', 'Turn 8 badge updated');
+      t.equal((await t.page.evaluate(() => window.__game.audioState().intensity)), 0.5, 'Turn 8 (3 turns left) ramps music intensity to 0.5');
+
+      await t.game('act', 'pass');
+      await t.waitIdle(5000);
+      t.equal((await t.page.textContent('#turnline .daily-turn')).trim(), 'Turn 9 / 10', 'Turn 9 badge updated');
+      t.equal((await t.page.evaluate(() => window.__game.audioState().intensity)), 0.5, 'Turn 9 (2 turns left) holds music intensity at 0.5');
+
+      await t.game('act', 'pass');
+      await t.waitIdle(5000);
+      t.equal((await t.page.textContent('#turnline .daily-turn')).trim(), 'Turn 10 / 10', 'Turn 10 badge updated');
+      t.equal((await t.page.evaluate(() => window.__game.audioState().intensity)), 0.85, 'Turn 10 (1 turn left) ramps music intensity to 0.85');
+
+      // Verify .par-pip.met lights up when score exceeds par threshold
+      const stHigh = await checkTurn(1, 999);
+      t.equal(stHigh.met, 2, 'Both par pips highlight when score exceeds both thresholds');
     },
   },
 ];

@@ -8,14 +8,13 @@ import * as R from './render2d.js';
 import { audio, unlock, sfx, pauseAudio, resumeAudio, setTune, holdAudio, releaseAudio, syncAudio, audioList, audioRender, renderCue, tuneName } from './audio.js';
 import { art, loadArt } from './art.js';
 import { store, KEYS, createGameSaves, validRegister, validDaily, pruneDays } from './storage.js';
-import { startAi, aiMove, aiHint, aiClient } from './aiclient.js';
+import { startAi, aiMove, aiHint, aiDailyPar, aiClient } from './aiclient.js';
 import { PERSONAS, persona, LEVEL_NAME, seatLevel } from './personas.js';
 import { barkFor, endBark, SHORT } from './voices.js';
 import { cleanStats, applyGame, applyDaily, nextStreak } from './stats.js';
 import * as B3 from './board3d.js';
 import * as UI from './ui.js';
 import { generateMoves } from './movegen.js';
-import { dailyPar } from './par.js';
 import { reviewSeat, reviewSteps, summarize } from './review.js';
 
 const { qs: $, esc } = UI;
@@ -48,7 +47,7 @@ const G = {
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
   errFlash: false, scoreHi: null, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, springsOpen: false,
-  returnFocus: null,
+  returnFocus: null, parCache: {},
 };
 window.__G = G;
 
@@ -162,18 +161,39 @@ function dailyInfo() {
   // today's day is read afresh every time: a tab left open past midnight shows the new day, not the one last played
   return { ...d, today: d.days[today()] || null };
 }
-// Works out par for a Daily date once (a few turns of each computer player, with a pause between turns so the screen stays
-// alive), keeps it with the day's record and refreshes the results sheet if it is showing.
+// Works out par for a Daily date once (off-thread in the AI worker with main-thread fallback), caches it in memory
+// (so blocked-storage and newer-save sessions still see live par pips), persists it on the day's record when stored,
+// and patches the active HUD or results box in place without rebuilding the scene.
 const parBusy = new Set();
+function cachedPar(date) {
+  if (!date) return null;
+  if (G.parCache[date]) return G.parCache[date];
+  const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
+  if (d.days[date] && d.days[date].par) { G.parCache[date] = d.days[date].par; return d.days[date].par; }
+  return null;
+}
+function patchOverPar(par) {
+  const box = $('#screen .daily-box');
+  if (!box) return;
+  const text = `${persona('hollis').name} scored ${par.m} and ${persona('julian').name} ${par.h} on these tiles.`;
+  let el = box.querySelector('[data-par-line]');
+  if (el) { el.textContent = text; return; }
+  el = document.createElement('p');
+  el.className = 'par'; el.dataset.parLine = '1'; el.textContent = text;
+  const anchor = box.querySelector('.note');
+  if (anchor) anchor.after(el); else box.append(el);
+}
 async function findPar(date, s) {
-  const d0 = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
-  if ((d0.days[date] && d0.days[date].par) || parBusy.has(date) || !G.dict) return;
+  if (!date || cachedPar(date) || parBusy.has(date) || !G.dict) return;
   parBusy.add(date);
   try {
-    const par = await dailyPar({ dict: G.dict, lex: G.lex }, date, () => new Promise((r) => setTimeout(r, 0)));
+    const par = await aiDailyPar(date);
+    if (!par || typeof par.m !== 'number' || typeof par.h !== 'number') return;
+    G.parCache[date] = par;
     const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
-    if (d.days[date]) { d.days[date].par = par; store.put(KEYS.daily, d); }
-    if (G.scene === 'over' && G.s === s) showScene('over');
+    if (d.days[date] && !d.days[date].par) { d.days[date].par = par; store.put(KEYS.daily, d); }
+    if (G.scene === 'game' && G.s && G.s.daily && G.s.daily.date === date) renderTurnline();
+    if (G.scene === 'over' && (!s || G.s === s) && G.s && G.s.daily && G.s.daily.date === date) patchOverPar(par);
   } catch (e) { /* par is a comparison, never needed to play */ } finally { parBusy.delete(date); }
 }
 function recordRegister(entry) {
@@ -201,6 +221,7 @@ function recordDaily(s = G.s) {
   d.days[date] = { score: prev ? Math.max(prev.score, score) : score, plays: (prev ? prev.plays : 0) + 1 };
   if (prev && prev.first != null) d.days[date].first = prev.first; else if (!prev) d.days[date].first = score;
   if (prev && prev.par) d.days[date].par = prev.par;
+  else if (G.parCache[date]) d.days[date].par = G.parCache[date];
   if (d.last !== date) {
     const n = nextStreak(d, date);
     d.streak = n.streak; d.rest = n.rest; d.last = date;
@@ -239,7 +260,16 @@ function moodUpdate() {
   const k = audio.kit, s = G.s;
   if (!k) return;
   const live = s && !s.over && G.scene === 'game';
-  k.music.intensity(live && s.bag.length === 0 ? 0.7 : 0);
+  let inten = 0;
+  if (live) {
+    if (s.daily) {
+      if (s.daily.turns <= 1) inten = 0.85;
+      else if (s.daily.turns <= 3) inten = 0.5;
+    } else if (s.bag.length === 0) {
+      inten = 0.7;
+    }
+  }
+  k.music.intensity(inten);
   k.amb.set('steam', live ? Math.min(1, s.board.filter(Boolean).length / 90) : 0.3, 2);
 }
 const colPan = (i) => ((i % N) - 7) / 7 * 0.7;
@@ -287,7 +317,7 @@ function screenHtml(name) {
       if (G.s.mode !== 'daily') return UI.overHtml(G.s, lex, null, { pb: pbLines(), review: reviewSeat(G.s) != null, barks: G.s.players.map((p, k) => (p.kind === 'ai' ? endBark(G.s, k) : null)) });
       const d = store.json(KEYS.daily, { days: {}, streak: 0 }, validDaily), date = G.s.daily.date, day = d.days[date];
       const label = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      return UI.overHtml(G.s, lex, { label, best: day ? day.score : G.s.players[0].score, streak: d.streak || 1, rested: d.rest === date, first: day ? day.first : null, plays: day ? day.plays : 1, par: day ? day.par || null : null }, { review: reviewSeat(G.s) != null });
+      return UI.overHtml(G.s, lex, { label, best: day ? day.score : G.s.players[0].score, streak: d.streak || 1, rested: d.rest === date, first: day ? day.first : null, plays: day ? day.plays : 1, par: (day && day.par) || cachedPar(date) || null }, { review: reviewSeat(G.s) != null });
     }
   }
   return '';
@@ -429,6 +459,7 @@ function beginGame(s, intent) {
   R.view.zoom = 1; R.view.cx = R.U / 2; R.view.cy = R.U / 2;
   showScene('game');
   saveNotice(s, gameSaves.status(handle));
+  if (s.mode === 'daily') findPar(s.daily.date, s);
   startTurn();
 }
 // A hint taken this turn comes back after a reload, put on the board as it was (only if it still fits: the rack, the board and the turn).
@@ -844,10 +875,7 @@ function renderGame() {
   });
   $('#log').innerHTML = UI.logHtml(s, G.lex) || '<li class="empty">Every play is written here: the words, the points, and any Hot Springs bonus.</li>';
   requestAnimationFrame(trimLedger);
-  const bagLine = `${UI.plural(s.bag.length, 'tile')} in the bag${s.daily ? ` · turn ${E.DAILY_TURNS - s.daily.turns + 1} of ${E.DAILY_TURNS}` : ''}`;
-  $('#turnline').innerHTML = mobile
-    ? `<span class="chips">${UI.scoresHtml(s, true)}</span><span class="bag">${s.over ? 'Game over' : `${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'} · ${bagLine}`}</span>`
-    : s.over ? 'Game over' : `<span class="who">${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'}</span><span class="bag">${bagLine}</span>`;
+  renderTurnline();
   if (G.scoreHi != null) {
     const sel = G.scoreHi === 'all' ? '[data-score]' : `[data-score="${G.scoreHi}"]`;
     document.querySelectorAll(sel).forEach((el) => el.classList.add('score-updated'));
@@ -856,6 +884,37 @@ function renderGame() {
   coachRender();
   draw();
   startSteam();
+}
+function renderTurnline() {
+  const tl = $('#turnline');
+  if (!tl || !G.s) return;
+  const s = G.s, mobile = isNarrow();
+  if (s.daily) {
+    const turn = Math.min(E.DAILY_TURNS, E.DAILY_TURNS - s.daily.turns + 1);
+    const par = cachedPar(s.daily.date);
+    const score = s.players[0].score;
+    const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
+    const prev = d.days[s.daily.date];
+    const prior = prev ? (prev.first != null ? prev.first : prev.score) : null;
+    let parsHtml = '';
+    if (par) {
+      const lo = Math.min(par.m, par.h), hi = Math.max(par.m, par.h);
+      const stars = UI.dailyStars(score, par);
+      parsHtml = `<span class="daily-pars" aria-label="Star targets: 1 star over ${lo}, 2 stars over ${hi}${stars ? `, ${UI.plural(stars, 'star')} reached` : ''}"><span class="par-pip${score > lo ? ' met' : ''}" title="1 star: beat ${lo}">★ ${lo}</span><span class="par-pip${score > hi ? ' met' : ''}" title="2 stars: beat ${hi}">★★ ${hi}</span></span>`;
+    }
+    const turnBadge = s.over ? '<span class="daily-turn">Daily complete</span>' : `<span class="daily-turn">Turn ${turn} / ${E.DAILY_TURNS}</span>`;
+    const priorHtml = prior != null ? `<span class="daily-prior" title="Your earlier score today">Today ${prior}</span>` : '';
+    if (mobile) {
+      tl.innerHTML = `<span class="chips daily-row">${UI.scoresHtml(s, true)}${turnBadge}</span><span class="daily-sub">${parsHtml || `<span class="daily-bag">${UI.plural(s.bag.length, 'tile')} left</span>`}${priorHtml}</span>`;
+    } else {
+      tl.innerHTML = `<span class="who daily-head">${turnBadge}${priorHtml}</span><span class="bag daily-sub">${parsHtml}${parsHtml ? ' · ' : ''}${UI.plural(s.bag.length, 'tile')} in the bag</span>`;
+    }
+    return;
+  }
+  const bagLine = `${UI.plural(s.bag.length, 'tile')} in the bag`;
+  tl.innerHTML = mobile
+    ? `<span class="chips">${UI.scoresHtml(s, true)}</span><span class="bag">${s.over ? 'Game over' : `${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'} · ${bagLine}`}</span>`
+    : s.over ? 'Game over' : `<span class="who">${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'}</span><span class="bag">${bagLine}</span>`;
 }
 
 // The ledger shows whole entries only; the full ledger is in the menu.
@@ -1919,7 +1978,7 @@ window.__game = {
   audioRender(name, seconds = 30, wantWav = false) { return audioRender(name, seconds, !!wantWav); },
   audioState() {
     const k = audio.kit, i = k && k.music.info();
-    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, ticking: k ? k.ticking : false, holds: [...audio.holds], tune: tuneName(), bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), total: audio.total, cues: audio.cues.slice(), fxGain: audio.bus ? audio.bus.sfx.gain.value : null, musGain: audio.bus ? audio.bus.mus.gain.value : null };
+    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, ticking: k ? k.ticking : false, holds: [...audio.holds], tune: tuneName(), intensity: k ? k.music.inten : 0, bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), total: audio.total, cues: audio.cues.slice(), fxGain: audio.bus ? audio.bus.sfx.gain.value : null, musGain: audio.bus ? audio.bus.mus.gain.value : null };
   },
   async act(name, ...a) {
     switch (name) {

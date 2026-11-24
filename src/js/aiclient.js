@@ -2,6 +2,7 @@
 // same code on the main thread as a fallback (no Worker, a failed start, or ?worker=0).
 import { WORKER_SRC } from './worker-src.js';
 import { chooseAction, hintChoices } from './ai.js';
+import { dailyPar } from './par.js';
 
 export const aiClient = { mode: 'none', worker: null, pending: new Map(), seq: 0, ready: null, dict: null, lex: null };
 
@@ -72,4 +73,14 @@ export async function aiHint(s) {
     if (r.type !== 'retry') return r.moves;
   }
   return hintChoices(aiClient.dict, aiClient.lex, slim(s));
+}
+
+// Resolves { m, h } par scores for a Daily Soak date, off the main thread when the Worker is running.
+export async function aiDailyPar(date) {
+  await aiClient.ready;
+  if (aiClient.mode === 'worker') {
+    const r = await call({ type: 'dailyPar', date });
+    if (r.type !== 'retry') return r.par;
+  }
+  return dailyPar({ dict: aiClient.dict, lex: aiClient.lex }, date, () => new Promise((res) => setTimeout(res, 0)));
 }
