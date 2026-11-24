@@ -612,6 +612,7 @@ function beginGame(s, intent) {
   const handle = gameSaves.open(s, intent);
   gameHandles.set(s, handle);
   G.s = s;
+  G.bagLen = s.bag.length;
   G.staged = []; G.selected = null; G.hint = null; G.hintAlts = null; G.preview = null; G.anim.clear(); G.last = new Set(lastTiles(s));
   G.revealed = -1; G.lastHuman = -1; G.privacy = false;
   resetOrder();
@@ -779,6 +780,9 @@ function afterAction(entry, fromAi) {
   G.pendingVfx = null;
   cancelTurnTimers();
   const prevPlaqueSnap = G.plaqueSnap && G.plaqueSnap.s === s ? G.plaqueSnap.list : null;
+  const fogRevealed = !!(prevPlaqueSnap && s.featured.some((f, k) => f.by == null && prevPlaqueSnap[k] && f.shown.length > prevPlaqueSnap[k].shown));
+  const bagJustEmptied = s.mode !== 'daily' && !s.over && G.bagLen > 0 && s.bag.length === 0;
+  G.bagLen = s.bag.length;
   cancelDrag();
   G.flash = null; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer);
   const said = s.players[entry.p].kind === 'ai' ? barkFor(s, entry) : null;
@@ -806,11 +810,12 @@ function afterAction(entry, fromAi) {
     } else if (aiInstant) {
       G.anim.clear(); G.animUntil = 0;
       sfx('place', { pan: avgPan });
-    } else sfx('play', { pan: avgPan });
-    celebrate(entry, G.bark, landed, prevPlaqueSnap);
+    } else sfx('play', { pan: avgPan, tiles: entry.tiles.length });
+    celebrate(entry, G.bark, landed, prevPlaqueSnap, { fogRevealed, bagJustEmptied });
     try { recordRegister(entry); } catch (e) { /* the register is a keepsake: a failed write never stops the game */ }
   } else {
-    sfx(entry.kind === 'swap' ? 'swap' : 'turn');
+    if (!entry.challenge) sfx(entry.kind === 'swap' ? 'swap' : 'turn');
+    if (fogRevealed) later(s, 80, () => sfx('reveal'));
   }
   if (fromAi && !s.over && cur().kind === 'human') later(s, landed * 1000 + (aiInstant ? 120 : 300), () => { if (!s.over && cur().kind === 'human') sfx('yourturn'); });   // the hand-over, once the computer's move has landed
   announce(entry);
@@ -843,8 +848,8 @@ function finishGame() {
   save(s);
   if (G.scene !== 'game') return;
   if (s.mode === 'daily') findPar(s.daily.date, s);
-  const humanWon = s.result.winners.some((k) => s.players[k].kind === 'human');
-  sfx(humanWon || s.mode === 'daily' ? 'fanfare' : 'turn');
+  const oc = UI.outcome(s);
+  sfx(s.mode === 'daily' || oc === 'win' || oc === 'tie' ? 'fanfare' : oc === 'loss' ? 'defeat' : 'turn');
   clearTimeout(G.overTimer);
   G.overTimer = setTimeout(() => { G.overTimer = 0; if (G.s === s && G.scene === 'game') showScene('over'); }, G.fast ? 0 : 900);
 }
@@ -880,7 +885,7 @@ function scoredWordCells(board, tiles, words) {
 }
 // Toasts and effects for a play: Full Soak, Hot Springs words, a Featured Spring.
 // `wait` is the seconds the computer's tiles take to land: both audio cues and board VFX hold back until touchdown (W4-S5-13).
-function celebrate(e, bark, wait = 0, prevPlaqueSnap = null) {
+function celebrate(e, bark, wait = 0, prevPlaqueSnap = null, extra = {}) {
   const s = G.s, cue = (name, opts) => later(s, wait * 1000, () => sfx(name, opts));
   const p = G.s.players[e.p];
   const themed = e.words.filter((w) => w.themed);
@@ -948,6 +953,8 @@ function celebrate(e, bark, wait = 0, prevPlaqueSnap = null) {
     fireVfx();
   }
   if (themed.length && !e.featured) cue('steam');
+  if (extra.fogRevealed) cue('reveal', { delay: 0.14 });
+  if (extra.bagJustEmptied) cue('bagempty', { delay: 0.22 });
   if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); cue('chime', { delay: STING_LAG }); }   // the chime follows the play (and a Featured Spring's bell) by a beat, so they do not stack at full volume
   // one sting a play: a Featured Spring or a Full Soak has its own, then a word new to the Register, then the size of the score
   const done = p.kind === 'human' ? UI.categoriesCompleted(G.lex, register(), e.words) : [];
@@ -987,7 +994,8 @@ function stage(k, i, letter) {
   forgetHint(s);
   clearToasts();
   if (animOn()) { const now = performance.now(); G.settle.set(i, now); G.settleUntil = now + 130; }
-  sfx('place', { pan: colPan(i) }); buzz('stage');
+  const sq = SQUARES[i];
+  sfx('place', { pan: colPan(i), ...(sq && sq !== '.' && sq !== '*' ? { sq } : {}) }); buzz('stage');
   updatePreview(); renderStaging();
   return true;
 }
@@ -2535,7 +2543,7 @@ function onKey(e) {
       const arm = G.blankArm;
       if (!arm || arm.L !== L || performance.now() - arm.t > BLANK_ARM_MS) {
         G.blankArm = { L, t: performance.now() };
-        flash(`No ${L} on your rack. Press ${L} again to use your blank.`, BLANK_ARM_MS); oops(); return;
+        flash(`No ${L} on your rack. Press ${L} again to use your blank.`, BLANK_ARM_MS); sfx('prompt'); return;
       }
       blankLetter = L;
     }
@@ -2639,7 +2647,7 @@ window.__game = {
     if (o.game) {
       const before = G.s, replacement = JSON.parse(JSON.stringify(o.game)), handle = gameHandles.get(before);
       if (handle && gameSaves.replaceFixture(handle, before, replacement)) gameHandles.set(replacement, handle);
-      G.s = replacement; G.last = new Set(lastTiles(G.s)); resetOrder(); G.revealed = G.s.cur; G.privacy = false;
+      G.s = replacement; G.bagLen = G.s.bag.length; G.last = new Set(lastTiles(G.s)); resetOrder(); G.revealed = G.s.cur; G.privacy = false;
     }
     if (o.scene) showScene(o.scene); else { moodUpdate(); renderGame(); }
     if (o.staged) { for (const t of o.staged) { const k = cur().rack.findIndex((l, j) => (t.blank ? l === '?' : l === t.l) && !G.staged.some((x) => x.k === j)); if (k >= 0) { G.staged.push({ k, i: t.i, l: t.l, blank: !!t.blank }); G.order = G.order.filter((x) => x !== k); } } updatePreview(); renderGame(); }

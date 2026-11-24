@@ -11,7 +11,7 @@ const DEFAULT_VOL = 0.35;
 const CUE_GAIN = 6;
 // bells and steam are the loudest cues: a little less so they do not outrun the tile sounds (featured was 0.6: a play
 // that finds a Featured Spring peaked at up to 0.98 with the volume at full, so the bell is 3 dB quieter)
-const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 0.9, hint: 0.6, yourturn: 2, good: 1.8, big: 0.57, discover: 0.6 };
+const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 0.9, hint: 0.6, yourturn: 2, good: 1.8, big: 0.57, discover: 0.6, defeat: 0.9, prompt: 1.2, reveal: 0.85, bagempty: 0.75 };
 const musicGain = (vol = audio.vol, level = audio.musicVol) => Math.min(1.5, vol / DEFAULT_VOL) * level;   // the Volume slider moves the music with the cues
 // Above the shipped volume the cues rise more gently than the slider: to about twice the shipped level at full, not
 // 2.9 times. With the slider at full the loudest repeats of steam and place overshot the limiter and clipped (peaks
@@ -137,7 +137,14 @@ const DUCK = { chime: [6, 900], featured: [6, 1400], fanfare: [6, 1800] };
 // opts: pan (-1..1, kept within +-0.7: the board column of a tile), step (0.. : semitones up along a word), delay
 // (seconds from now: a sting that waits for the tiles it belongs to) and gain (a factor on the cue's level, 1 when left out)
 export function sfx(name, opts = {}) {
-  audio.played.push(name); audio.cues.push({ name, delay: opts.delay || 0, gain: opts.gain ?? 1 }); audio.total++; if (audio.played.length > 30) { audio.played.shift(); audio.cues.shift(); }
+  if (!opts._offline) {
+    const entry = { name, delay: opts.delay || 0, gain: opts.gain ?? 1 };
+    if (opts.tiles != null) entry.tiles = opts.tiles;
+    if (opts.sq) entry.sq = opts.sq;
+    if (opts.step) entry.step = opts.step;
+    audio.played.push(name); audio.cues.push(entry); audio.total++;
+    if (audio.played.length > 30) { audio.played.shift(); audio.cues.shift(); }
+  }
   if (!audio.on || !audio.fx || !audio.ctx) return;
   const c = audio.ctx, t = c.currentTime + (opts.delay || 0), step = opts.step || 0;
   try {
@@ -146,10 +153,29 @@ export function sfx(name, opts = {}) {
     CJ = jit(25, 1.5); CJ.g *= (TRIM[name] || 1) * (opts.gain ?? 1);
     switch (name) {
       case 'pick': noise(t, 0.03, 0.12, 4600, 3); tone(1500, t, 0.025, 'triangle', 0.07); break;
-      case 'place': clack(t, 1, step); break;
+      case 'place':
+        clack(t, 1, step);
+        if (opts.sq === 'w') tone(1047, t + 0.012, 0.115, 'sine', 0.032);
+        else if (opts.sq === 'h') { tone(1319, t + 0.012, 0.11, 'sine', 0.034); tone(1976, t + 0.024, 0.08, 'sine', 0.018); }
+        else if (opts.sq === 's') { tone(440, t + 0.01, 0.11, 'triangle', 0.045, -35); tone(880, t + 0.016, 0.08, 'sine', 0.024); }
+        else if (opts.sq === 'b') { tone(392, t + 0.01, 0.13, 'triangle', 0.05, -45); tone(784, t + 0.018, 0.1, 'sine', 0.03); }
+        else if (opts.sq === 'B') bell(t + 0.012, 587, 0.028);
+        break;
       case 'recall': noise(t, 0.04, 0.16, 3000, 2); tone(420, t, 0.05, 'triangle', 0.06, 80); break;
       case 'shuffle': for (let k = 0; k < 5; k++) clack(t + k * (0.045 + Math.random() * 0.012), 0.45); break;
-      case 'play': for (let k = 0; k < 3; k++) clack(t + k * (0.06 + Math.random() * 0.012), 0.8, step + k); tone(523, t + 0.18, 0.18, 'sine', 0.06); break;
+      case 'play': {
+        const n = Math.max(1, Math.min(7, opts.tiles || 3));
+        const clacks = Math.min(3, n), gap = 0.052;
+        for (let k = 0; k < clacks; k++) clack(t + k * (gap + Math.random() * 0.008), 0.8, step + k);
+        const tc = t + (clacks - 1) * gap + 0.045;
+        if (n === 1) tone(523, tc, 0.12, 'sine', 0.052);
+        else if (n <= 3) { tone(523, tc, 0.14, 'sine', 0.05); tone(784, tc + 0.024, 0.14, 'sine', 0.036); }
+        else {
+          [523, 659, 784].forEach((f, k) => tone(f, tc + k * 0.022, 0.15, 'sine', k ? 0.038 : 0.048));
+          if (n >= 6) tone(1047, tc + 0.066, 0.13, 'sine', 0.028);
+        }
+        break;
+      }
       case 'swap': for (let k = 0; k < 7; k++) noise(t + k * (0.05 + Math.random() * 0.01), 0.05, 0.15, 2000 + k * 200, 1.5); break;
       case 'steam': noise(t, 0.9, 0.16, 5200, 0.6, 'highpass', 0.25); break;
       case 'chime': [784, 988, 1175].forEach((f, k) => bell(t + k * 0.11, f, 0.08)); break;
@@ -161,6 +187,10 @@ export function sfx(name, opts = {}) {
       case 'hint': bell(t, 880, 0.05); tone(1320, t + 0.12, 0.2, 'sine', 0.03); break;
       case 'turn': tone(660, t, 0.12, 'sine', 0.05); break;
       case 'error': tone(196, t, 0.16, 'triangle', 0.1, -40); break;
+      case 'prompt': tone(523, t, 0.11, 'sine', 0.048); tone(659, t + 0.08, 0.16, 'sine', 0.052, 18); break;
+      case 'reveal': tone(740, t, 0.18, 'sine', 0.036, 40); tone(1109, t + 0.07, 0.26, 'sine', 0.032); noise(t, 0.22, 0.035, 3600, 1.4, 'bandpass', 0.05); break;
+      case 'bagempty': bell(t, 294, 0.09); tone(147, t, 0.26, 'triangle', 0.06, -12); break;
+      case 'defeat': [440, 392, 349, 294].forEach((f, k) => tone(f, t + k * 0.16, 0.34 + (k === 3 ? 0.32 : 0), 'sine', 0.068)); bell(t + 0.48, 294, 0.055); break;
       // a play worth 25 or more earns a rising pair of notes over its clacks; 45 or more, a short run up and a low thump
       case 'good': tone(659, t, 0.22, 'sine', 0.06); tone(988, t + 0.09, 0.3, 'sine', 0.055); break;
       case 'big': [523, 659, 784, 1047].forEach((f, k) => tone(f, t + k * 0.065, 0.28, 'triangle', 0.05)); tone(98, t, 0.3, 'sine', 0.16, -30); break;
@@ -205,7 +235,7 @@ export async function renderCue(name, vol, opts) {
   await stopped;
   const prev = { ctx: audio.ctx, on: audio.on, vol: audio.vol, fx: audio.fx, sfxOut: audio.sfxOut };
   audio.ctx = off; audio.on = true; audio.fx = true; audio.sfxOut = g.sfx; audio.vol = vol;
-  try { for (const n of name.split('+')) { const [cue, d] = n.split('@'); sfx(cue, { ...opts, delay: d ? +d : 0 }); } } finally { Object.assign(audio, prev); }
+  try { for (const n of name.split('+')) { const [cue, d] = n.split('@'); sfx(cue, { ...opts, delay: d ? +d : 0, _offline: true }); } } finally { Object.assign(audio, prev); }
   off.resume();
   const d = (await done).getChannelData(0);
   let peak = 0, sum = 0, last = 0, zc = 0;

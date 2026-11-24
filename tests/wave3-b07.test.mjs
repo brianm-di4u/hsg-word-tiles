@@ -162,4 +162,127 @@ export const tests = [
       t.expect(Math.abs(duckTiming.dur - 0.9) < 0.02, 'duck duration is 900 ms (' + duckTiming.dur + ' s)');
     },
   },
+  {
+    name: 'W4-S4-02 variable-length human play, square-tinted landings, reveal/bagempty/defeat/prompt cues, Challenge no-double-cue, and renderCue isolation',
+    viewports: ['desktop'],
+    initScript: new Function(`
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false }));
+      let a = 19 >>> 0;
+      Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    `),
+    async run(t) {
+      await ready(t);
+
+      // 1. renderCue() isolation: rendering offline cues must NOT mutate live played/cues/total
+      const beforeRender = await t.game('audioState');
+      const p1 = await t.game('act', 'renderSfx', 'play', 0.35, { tiles: 1 });
+      const p3 = await t.game('act', 'renderSfx', 'play', 0.35, { tiles: 3 });
+      const p7 = await t.game('act', 'renderSfx', 'play', 0.35, { tiles: 7 });
+      const afterRender = await t.game('audioState');
+      t.equal(afterRender.total, beforeRender.total, 'renderCue() does not increment audio.total');
+      t.equal(JSON.stringify(afterRender.played), JSON.stringify(beforeRender.played), 'renderCue() does not mutate audio.played');
+      t.equal(JSON.stringify(afterRender.cues), JSON.stringify(beforeRender.cues), 'renderCue() does not mutate audio.cues');
+
+      // 2. Variable-length human 'play' lock-in scales cleanly & finishes before STING_LAG
+      t.expect(p1.peak > 0.1 && p3.peak > 0.1 && p7.peak > 0.1, 'play 1/3/7 tiles all audible (' + [p1.peak, p3.peak, p7.peak].join('/') + ')');
+      t.expect(p1.ms < p3.ms && p7.zc > p1.zc * 1.4, 'play duration & confirm energy scale with tile count (' + p1.ms + 'ms/' + p1.zc + 'zc -> ' + p3.ms + 'ms/' + p3.zc + 'zc -> ' + p7.ms + 'ms/' + p7.zc + 'zc)');
+      for (const n of [1, 3, 7]) {
+        const pf = await t.game('act', 'renderSfx', 'play', 1, { tiles: n });
+        t.expect(pf.peak < 0.88, 'play(' + n + ') stays < 0.88 at full volume (' + pf.peak + ')');
+      }
+
+      // 3. New cues ('defeat', 'prompt', 'reveal', 'bagempty') and square-tinted 'place' accents are audible & unclipped
+      for (const cue of ['defeat', 'prompt', 'reveal', 'bagempty']) {
+        const def = await t.game('act', 'renderSfx', cue, 0.35);
+        const full = await t.game('act', 'renderSfx', cue, 1);
+        t.expect(def.peak > 0.04 && def.peak < 0.48, cue + ' audible & balanced at default vol (' + def.peak + ')');
+        t.expect(full.peak < 0.88, cue + ' stays < 0.88 at full volume (' + full.peak + ')');
+      }
+      const basePlace = await t.game('act', 'renderSfx', 'place', 0.35);
+      for (const sq of ['w', 'h', 's', 'b', 'B']) {
+        const r = await t.game('act', 'renderSfx', 'place', 0.35, { sq });
+        const rf = await t.game('act', 'renderSfx', 'place', 1, { sq });
+        t.expect(r.ms > basePlace.ms + 20, 'place on ' + sq + ' has harmonic/brass tail (' + r.ms + ' ms vs plain ' + basePlace.ms + ' ms)');
+        t.expect(rf.peak < 0.88, 'place on ' + sq + ' stays < 0.88 at full vol (' + rf.peak + ')');
+      }
+
+      // 4. Live gameplay hooks: square-tinted stage(), variable tiles on play, keyboard blank-arm 'prompt', reveal & bagempty
+      await t.game('newGame', { seed: 5, seats: [{ kind: 'human', name: 'You' }, { kind: 'human', name: 'Pat' }] });
+      await t.waitIdle(5000);
+      await t.game('act', 'reveal');
+      let st = await t.state();
+      // Put 'A' on H8 (112) so we can stage onto Warm spring D8 (108), Bathhouse Row B (8 -> Superior), and test blank-arm
+      const g = st.game;
+      g.board = Array(225).fill(null);
+      g.board[112] = { l: 'A', blank: false };
+      g.board[23] = { l: 'A', blank: false }; // right below Superior Bathhouse at index 8 (row 0, col 8)
+      g.move = 2; g.cur = 0;
+      g.players[0].rack = ['?', 'T', 'S', 'E', 'R', 'N', 'O'];
+      g.bag = ['I']; // 1 tile in bag -> playing 1+ tile empties the bag -> triggers 'bagempty'
+      g.featured = [{ id: 'quartz', word: 'QUARTZ', cat: 'springs', shown: [0], by: null, at: null }];
+      await t.game('setState', { game: g });
+      await t.waitIdle(5000);
+
+      // A) Keyboard blank-arming fires 'prompt', NOT 'error'
+      let startTot = (await t.game('audioState')).total;
+      await t.page.focus('#board');
+      await t.page.keyboard.press('q');
+      let a = await t.game('audioState');
+      let delta = a.played.slice(a.played.length - (a.total - startTot));
+      t.expect(delta.includes('prompt') && !delta.includes('error'), 'keyboard blank-arm plays prompt, not error (' + delta.join(',') + ')');
+
+      // B) Staging onto Bathhouse Row (index 8) passes sq: 'B'; playing AT down (8,23) clears 1 fog letter ('reveal') AND empties bag ('bagempty')
+      startTot = (await t.game('audioState')).total;
+      t.expect((await t.game('act', 'stage', [{ i: 8, l: 'T' }])).ok, 'staged T on Bathhouse Row square 8');
+      a = await t.game('audioState');
+      const placeCue = a.cues[a.cues.length - 1];
+      t.equal(placeCue.name, 'place', 'stage emits place');
+      t.equal(placeCue.sq, 'B', 'stage on Bathhouse Row passes sq="B"');
+
+      startTot = (await t.game('audioState')).total;
+      t.expect((await t.game('act', 'play')).ok, 'played TA on Bathhouse Row draining bag to 0');
+      a = await t.game('audioState');
+      const playCues = a.cues.slice(a.cues.length - (a.total - startTot));
+      const playNames = playCues.map((c) => c.name);
+      t.equal(playCues.find((c) => c.name === 'play')?.tiles, 1, '1-tile human play passes tiles=1');
+      t.expect(playNames.includes('reveal'), 'fog-letter clear triggers reveal shimmer (' + playNames.join(',') + ')');
+      t.expect(playNames.includes('bagempty'), 'draining bag to 0 triggers bagempty low brass tap (' + playNames.join(',') + ')');
+
+      // 5. Challenge loseTurn() emits 'error' and skips 'turn'
+      await t.game('newGame', { seed: 5, challenge: true, seats: [{ kind: 'human', name: 'You' }, { kind: 'human', name: 'Pat' }] });
+      await t.waitIdle(5000);
+      await t.game('act', 'reveal');
+      st = await t.state();
+      st.game.players[0].rack = ['Q', 'X', 'Z', 'B', 'C', 'D', 'F'];
+      await t.game('setState', { game: st.game });
+      await t.waitIdle(5000);
+      t.expect((await t.game('act', 'stage', [{ i: 111, l: 'Q' }, { i: 112, l: 'X' }, { i: 113, l: 'Z' }])).ok, 'non-word QXZ staged in Challenge');
+      startTot = (await t.game('audioState')).total;
+      await t.game('act', 'play');
+      a = await t.game('audioState');
+      delta = a.played.slice(a.played.length - (a.total - startTot));
+      t.expect(delta.includes('error') && !delta.includes('turn'), 'Challenge loseTurn fires error without duplicate turn (' + delta.join(',') + ')');
+
+      // 6. Loss triggers 'defeat' cadence instead of neutral 'turn'
+      await t.game('newGame', { seed: 5, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(5000);
+      st = await t.state();
+      const lg = st.game;
+      lg.board = Array(225).fill(null);
+      lg.board[111] = { l: 'C', blank: false }; lg.board[112] = { l: 'A', blank: false }; lg.board[113] = { l: 'T', blank: false };
+      lg.bag = []; lg.move = 10; lg.cur = 0;
+      lg.players[0].rack = ['S']; lg.players[0].score = 40;
+      lg.players[1].rack = ['E']; lg.players[1].score = 240;
+      await t.game('setState', { game: lg });
+      await t.waitIdle(5000);
+      startTot = (await t.game('audioState')).total;
+      t.expect((await t.game('act', 'stage', [{ i: 114, l: 'S' }])).ok, 'final S staged for loss test');
+      t.expect((await t.game('act', 'play')).ok, 'final play applied (human loses 40+ to 240)');
+      await t.page.waitForFunction(() => window.__game.audioState().played.includes('defeat'), null, { timeout: 6000 });
+      a = await t.game('audioState');
+      delta = a.played.slice(a.played.length - (a.total - startTot));
+      t.expect(delta.includes('defeat') && !delta.includes('fanfare') && !delta.includes('turn'), 'losing match fires defeat cadence, not turn/fanfare (' + delta.join(',') + ')');
+    },
+  },
 ];
