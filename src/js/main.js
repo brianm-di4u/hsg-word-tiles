@@ -995,7 +995,7 @@ function stage(k, i, letter) {
   clearToasts();
   if (animOn()) { const now = performance.now(); G.settle.set(i, now); G.settleUntil = now + 130; }
   const sq = SQUARES[i];
-  sfx('place', { pan: colPan(i), ...(sq && sq !== '.' && sq !== '*' ? { sq } : {}) }); buzz('stage');
+  sfx('place', { pan: colPan(i), step: G.staged.length - 1, ...(sq && sq !== '.' && sq !== '*' ? { sq } : {}) }); buzz('stage');
   updatePreview(); renderStaging();
   return true;
 }

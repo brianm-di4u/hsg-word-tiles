@@ -72,11 +72,29 @@ let CJ = { f: 1, g: 1 };   // this cue's own nudge: pitch and level
 const rr = (a, b) => a + (b - a) * Math.random();
 const jit = (cents = 25, db = 1.5) => ({ f: 2 ** (rr(-cents, cents) / 1200), g: 10 ** (rr(-db, 0) / 20) });
 
-function tone(f, t0, dur, type = 'sine', g = 0.3, slide = 0) {
+function tone(f, t0, dur, type = 'sine', g = 0.3, slide = 0, env = null) {
   const c = audio.ctx, o = c.createOscillator(), a = c.createGain(), fq = f * CJ.f;
-  a.gain.value = 0.0001; o.type = type; o.frequency.setValueAtTime(fq, t0); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, fq + slide), t0 + dur);
-  a.gain.setValueAtTime(0.0001, t0); a.gain.exponentialRampToValueAtTime(g * CJ.g * CUE_GAIN * cueVol(), t0 + 0.006); a.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(a).connect(OUT); o.start(t0); o.stop(t0 + dur + 0.02);
+  const peak = Math.max(0.0002, g * CJ.g * CUE_GAIN * cueVol());
+  const att = (env && env.a) || 0.006;
+  a.gain.value = 0.0001; o.type = type; o.frequency.setValueAtTime(fq, t0);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, fq + slide), t0 + dur);
+  a.gain.setValueAtTime(0.0001, t0);
+  a.gain.exponentialRampToValueAtTime(peak, t0 + att);
+  if (env && env.d && env.s) {
+    const sus = Math.max(0.0002, peak * env.s);
+    const dEnd = Math.min(t0 + dur * 0.85, t0 + att + env.d);
+    a.gain.exponentialRampToValueAtTime(sus, dEnd);
+    if (env.r) a.gain.setValueAtTime(sus, Math.max(dEnd, t0 + dur - env.r));
+  }
+  a.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  let dst = OUT;
+  if (env && env.lp) {
+    const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.Q.value = env.q ?? 0.7;
+    fl.frequency.setValueAtTime(env.lp, t0);
+    if (env.lpTo) fl.frequency.exponentialRampToValueAtTime(Math.max(40, env.lpTo), t0 + dur);
+    fl.connect(dst); dst = fl;
+  }
+  o.connect(a).connect(dst); o.start(t0); o.stop(t0 + dur + 0.02);
 }
 // The noise every cue is cut from: three buffers made once for an audio context and reused, each cue starting at a random
 // point in one of them, so a cue no longer allocates and fills a buffer of its own (a shuffle made five, a swap seven).
@@ -95,10 +113,12 @@ function noiseBank(c) {
   }
   return bank;
 }
-function noise(t0, dur, g = 0.2, freq = 2400, q = 1.2, type = 'bandpass', attack = 0.004) {
+function noise(t0, dur, g = 0.2, freq = 2400, q = 1.2, type = 'bandpass', attack = 0.004, freqTo = 0) {
   const c = audio.ctx, bank = noiseBank(c);
   const src = c.createBufferSource(), f = c.createBiquadFilter(), a = c.createGain();
-  a.gain.value = 0.0001; src.buffer = bank[Math.floor(Math.random() * bank.length)]; f.type = type; f.frequency.value = freq * CJ.f; f.Q.value = q;
+  a.gain.value = 0.0001; src.buffer = bank[Math.floor(Math.random() * bank.length)]; f.type = type; f.frequency.setValueAtTime(freq * CJ.f, t0);
+  if (freqTo) f.frequency.exponentialRampToValueAtTime(Math.max(40, freqTo * CJ.f), t0 + dur);
+  f.Q.value = q;
   a.gain.setValueAtTime(0.0001, t0); a.gain.exponentialRampToValueAtTime(g * CJ.g * CUE_GAIN * cueVol(), t0 + attack); a.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   src.connect(f).connect(a).connect(OUT); src.start(t0, Math.random() * (NOISE_SECONDS - dur - 0.05)); src.stop(t0 + dur + 0.02);
 }
@@ -177,16 +197,30 @@ export function sfx(name, opts = {}) {
         break;
       }
       case 'swap': for (let k = 0; k < 7; k++) noise(t + k * (0.05 + Math.random() * 0.01), 0.05, 0.15, 2000 + k * 200, 1.5); break;
-      case 'steam': noise(t, 0.9, 0.16, 5200, 0.6, 'highpass', 0.25); break;
+      case 'steam':
+        noise(t, 0.9, 0.105, 5200, 0.6, 'highpass', 0.25);
+        noise(t, 0.85, 0.34, 700, 1.2, 'bandpass', 0.22, 1800);
+        break;
       case 'chime': [784, 988, 1175].forEach((f, k) => bell(t + k * 0.11, f, 0.08)); break;
       case 'featured': bell(t, 659, 0.14); bell(t + 0.28, 988, 0.12); noise(t + 0.1, 0.9, 0.12, 5200, 0.6, 'highpass', 0.25); break;
-      // control comes back to a person after the computer has played: two soft notes, the second a fifth above, unlike the single 'turn'
-      case 'yourturn': tone(587, t, 0.16, 'sine', 0.05); tone(880, t + 0.11, 0.28, 'sine', 0.045); break;
+      // control comes back to a person after the computer has played: warm low-passed marimba/wood interval (G4 -> B4), distinct from bright rising-fifth 'good'
+      case 'yourturn':
+        tone(392, t, 0.17, 'triangle', 0.076, 0, { a: 0.004, d: 0.05, s: 0.36, lp: 1150, lpTo: 420 });
+        tone(1560, t, 0.032, 'sine', 0.014, 0, { a: 0.002 });
+        tone(494, t + 0.105, 0.26, 'triangle', 0.072, 0, { a: 0.004, d: 0.06, s: 0.32, lp: 1300, lpTo: 480 });
+        tone(1965, t + 0.105, 0.035, 'sine', 0.012, 0, { a: 0.002 });
+        break;
       // soft furniture sounds, well under the play cues: a paper tick for a card or sheet opening, a small bell for the Spring Guide
       case 'open': noise(t, 0.05, 0.1, 2800, 1.2, 'bandpass', 0.006); tone(740, t, 0.04, 'triangle', 0.03); break;
       case 'hint': bell(t, 880, 0.05); tone(1320, t + 0.12, 0.2, 'sine', 0.03); break;
       case 'turn': tone(660, t, 0.12, 'sine', 0.05); break;
-      case 'error': tone(196, t, 0.16, 'triangle', 0.1, -40); break;
+      // damped double marble/walnut knock replacing the bare arcade pitch-glide buzz
+      case 'error':
+        noise(t, 0.03, 0.11, 900, 2.2, 'bandpass', 0.003);
+        tone(215, t, 0.055, 'triangle', 0.095, -32, { a: 0.003, lp: 660, lpTo: 230 });
+        noise(t + 0.068, 0.032, 0.09, 760, 2.4, 'bandpass', 0.003);
+        tone(168, t + 0.068, 0.068, 'triangle', 0.082, -26, { a: 0.003, lp: 560, lpTo: 195 });
+        break;
       case 'prompt': tone(523, t, 0.11, 'sine', 0.048); tone(659, t + 0.08, 0.16, 'sine', 0.052, 18); break;
       case 'reveal': tone(740, t, 0.18, 'sine', 0.036, 40); tone(1109, t + 0.07, 0.26, 'sine', 0.032); noise(t, 0.22, 0.035, 3600, 1.4, 'bandpass', 0.05); break;
       case 'bagempty': bell(t, 294, 0.09); tone(147, t, 0.26, 'triangle', 0.06, -12); break;

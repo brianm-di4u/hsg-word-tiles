@@ -285,4 +285,90 @@ export const tests = [
       t.expect(delta.includes('defeat') && !delta.includes('fanfare') && !delta.includes('turn'), 'losing match fires defeat cadence, not turn/fanfare (' + delta.join(',') + ')');
     },
   },
+  {
+    name: 'W4-S4-03 ambient SPOT.bell uses 420-540 Hz register, lowpass <= 1400 Hz, 45-90 s cadence, and hall wet delay (Node)',
+    node: true,
+    async run(t) {
+      const bellSpot = SCENES.bathhouse.spots.find((s) => s.make === 'bell');
+      t.expect(!!bellSpot, 'bathhouse scene has ambient bell spot');
+      t.expect(bellSpot.every[0] >= 45 && bellSpot.every[1] >= 90, 'ambient bell cadence is 45-90 s (' + JSON.stringify(bellSpot.every) + ')');
+
+      const oscs = [], filters = [], delays = [];
+      const param = (init = 0) => ({ value: init, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {} });
+      const ctx = {
+        sampleRate: 22050, state: 'running', currentTime: 0,
+        createGain: () => ({ gain: param(1), connect(d) { return d; }, disconnect() {} }),
+        createBiquadFilter: () => { const f = { type: 'lowpass', frequency: param(0), Q: param(0.7), connect(d) { return d; }, disconnect() {} }; filters.push(f); return f; },
+        createOscillator: () => { const o = { type: 'sine', frequency: param(0), detune: param(0), connect(d) { return d; }, disconnect() {}, start() {}, stop() {} }; oscs.push(o); return o; },
+        createDelay: () => { const d = { delayTime: param(0), connect(x) { return x; }, disconnect() {} }; delays.push(d); return d; },
+        createStereoPanner: () => ({ pan: param(0), connect(d) { return d; }, disconnect() {} }),
+        createBuffer: (_, len) => ({ getChannelData: () => new Float32Array(len) }),
+        createBufferSource: () => ({ buffer: null, loop: false, connect(d) { return d; }, disconnect() {}, start() {}, stop() {} }),
+      };
+      const kit = makeAudioKit(ctx, { connect() {} }, { seed: 7, music: 1, ambience: 1 });
+      // Schedule a bell-only scene so we inspect SPOT.bell's exact DSP graph
+      kit.amb.play({ beds: [], spots: [{ make: 'bell', every: [1, 2], gain: 0.03 }] }, { at: 0, fade: 0.05 });
+      kit.scheduleUntil(4);
+      const bellLp = filters.find((f) => f.type === 'lowpass' && f.frequency.value > 0 && f.frequency.value <= 1400);
+      t.expect(!!bellLp, 'SPOT.bell routes through lowpass <= 1400 Hz (filters: ' + filters.map((f) => f.type + '@' + f.frequency.value).join(', ') + ')');
+      t.expect(delays.length >= 1 && delays.some((d) => d.delayTime.value > 0.02), 'SPOT.bell includes subtle hall wet delay tap');
+      const fundamentals = oscs.map((o) => o.frequency.value).filter((f) => f < 650);
+      t.expect(fundamentals.length >= 1 && fundamentals.every((f) => f >= 420 && f <= 540), 'SPOT.bell fundamentals sit in 420-540 Hz (' + fundamentals.map((f) => Math.round(f)).join(',') + ')');
+      kit.stop();
+    },
+  },
+  {
+    name: 'W4-S4-03 yourturn vs good spectral separation, damped double-knock error, warm steam body, and human stage() step climb',
+    viewports: ['desktop'],
+    initScript: new Function(`
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false }));
+      let a = 31 >>> 0;
+      Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    `),
+    async run(t) {
+      await ready(t);
+      const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+      const yt = [], gd = [], er = [], stFull = [], stLo = [];
+      for (let k = 0; k < 10; k++) {
+        yt.push(await t.game('act', 'renderSfx', 'yourturn', 0.35));
+        gd.push(await t.game('act', 'renderSfx', 'good', 0.35));
+        er.push(await t.game('act', 'renderSfx', 'error', 0.35));
+        stFull.push(await t.game('act', 'renderSfx', 'steam', 0.35));
+        stLo.push(await t.game('act', 'renderSfx', 'steam', 0.35, { hp: 3500 }));
+      }
+      // 1. yourturn (warm low-passed marimba G4->B4) has far lower zero-crossing rate than bright rising-fifth 'good'
+      const ytZc = mean(yt.map((r) => r.zc)), gdZc = mean(gd.map((r) => r.zc));
+      t.log(`yourturn zc=${ytZc.toFixed(0)} peak=${mean(yt.map((r) => r.peak)).toFixed(3)}, good zc=${gdZc.toFixed(0)}, error zc=${mean(er.map((r) => r.zc)).toFixed(0)} peak=${mean(er.map((r) => r.peak)).toFixed(3)}`);
+      t.expect(ytZc < gdZc * 0.72, 'yourturn is much warmer/lower than bright rising-fifth good (' + ytZc.toFixed(0) + ' vs ' + gdZc.toFixed(0) + ' zc)');
+      t.expect(mean(yt.map((r) => r.peak)) >= 0.21 && mean(yt.map((r) => r.peak)) <= 0.42, 'yourturn sits cleanly inside [0.21, 0.42] default peak');
+
+      // 2. error is a crisp damped double knock (distinct from old bare 196 Hz glide, audible, unclipped)
+      const erPeak = mean(er.map((r) => r.peak));
+      const erFull = (await t.game('act', 'renderSfx', 'error', 1)).peak;
+      t.expect(erPeak >= 0.15 && erPeak <= 0.42, 'damped double-knock error peak in [0.15, 0.42] (' + erPeak.toFixed(3) + ')');
+      t.expect(erFull < 0.88, 'error stays < 0.88 at full vol (' + erFull + ')');
+      t.expect(new Set(er.map((r) => r.sig)).size >= 9, 'error varies naturally across repeats');
+
+      // 3. steam carries measurable low-mid pressurized-valve body (< 3 kHz energy vs > 3 kHz highpass alone)
+      const stRms = mean(stFull.map((r) => r.rms)), stHiRms = mean(stLo.map((r) => r.rms));
+      t.log(`steam total rms=${stRms.toFixed(4)}, >3kHz rms=${stHiRms.toFixed(4)}, ratio=${(stHiRms / stRms).toFixed(2)}`);
+      t.expect(stHiRms < stRms * 0.94, 'steam has warm sub-3kHz valve body energy (' + stHiRms.toFixed(4) + ' < 0.94 * ' + stRms.toFixed(4) + ')');
+
+      // 4. Human stage() passes ascending step = G.staged.length - 1 along a word
+      await t.game('newGame', { seed: 5, seats: [{ kind: 'human', name: 'You' }, { kind: 'human', name: 'Pat' }] });
+      await t.waitIdle(5000);
+      await t.game('act', 'reveal');
+      const st = await t.state();
+      st.game.players[0].rack = ['S', 'T', 'E', 'A', 'M', 'R', 'N'];
+      await t.game('setState', { game: st.game });
+      await t.waitIdle(5000);
+      const startTot = (await t.game('audioState')).total;
+      t.expect((await t.game('act', 'stage', [{ i: 112, l: 'S' }, { i: 113, l: 'T' }, { i: 114, l: 'E' }, { i: 115, l: 'A' }])).ok, 'staged 4 human tiles');
+      const a = await t.game('audioState');
+      const places = a.cues.slice(a.cues.length - (a.total - startTot)).filter((c) => c.name === 'place');
+      t.equal(places.length, 4, '4 place cues recorded');
+      t.equal(places.map((c) => c.step || 0).join(','), '0,1,2,3', 'human stage() climbs step 0,1,2,3 along the word');
+    },
+  },
 ];

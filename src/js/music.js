@@ -207,7 +207,16 @@ export function makeAudioKit(ctx, out, opt = {}) {
     drip: (dst, t, v) => { const f = rr(1100, 2300), o = ctx.createOscillator(), e = gain(0.0001, dst); o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.55, t + 0.03); o.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.09); e.gain.setValueAtTime(v, t); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.12); o.connect(e); o.start(t); o.stop(t + 0.14); },
     bird: (dst, t, v) => { const n = 2 + ((rnd() * 3) | 0), base = rr(2600, 4200); for (let i = 0; i < n; i++) { const s = t + i * rr(0.09, 0.16), o = ctx.createOscillator(), e = gain(0.0001, dst); o.frequency.setValueAtTime(base * rr(0.9, 1.1), s); o.frequency.exponentialRampToValueAtTime(base * rr(1.15, 1.5), s + 0.06); e.gain.setValueAtTime(0.0001, s); e.gain.linearRampToValueAtTime(v * 0.7, s + 0.015); e.gain.exponentialRampToValueAtTime(0.0001, s + 0.08); o.connect(e); o.start(s); o.stop(s + 0.1); } },
     hiss: (dst, t, v) => { const d = rr(0.7, 1.8), e = gain(0.0001, lowpass(rr(3500, 6000), dst, 'highpass')); e.gain.setValueAtTime(0.0001, t); e.gain.linearRampToValueAtTime(v * 0.6, t + d * 0.3); e.gain.exponentialRampToValueAtTime(0.0001, t + d); noise(t, d + 0.05).connect(e); },
-    bell: (dst, t, v) => { const f = rr(700, 1100); for (const [mult, pg, dec] of [[1, 1, 2.2], [2.76, 0.4, 1.3], [5.4, 0.18, 0.7]]) { const o = ctx.createOscillator(), e = gain(0.0001, dst); o.frequency.value = f * mult; e.gain.setValueAtTime(v * pg * 0.6, t); e.gain.exponentialRampToValueAtTime(0.0001, t + dec); o.connect(e); o.start(t); o.stop(t + dec + 0.05); } },
+    bell: (dst, t, v) => {
+      const f = rr(420, 540), lp = lowpass(1300, dst), dry = gain(1, lp);
+      const dly = ctx.createDelay(0.25); dly.delayTime.value = 0.075;
+      const wet = gain(0.22, lp); dry.connect(dly); dly.connect(wet);
+      for (const [mult, pg, dec] of [[1, 1, 2.1], [2.76, 0.28, 1.1], [5.4, 0.08, 0.45]]) {
+        const o = ctx.createOscillator(), e = gain(0.0001, dry);
+        o.frequency.value = f * mult; e.gain.setValueAtTime(v * pg * 0.55, t); e.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+        o.connect(e); o.start(t); o.stop(t + dec + 0.05);
+      }
+    },
     cricket: (dst, t, v) => { const f = rr(4200, 5200), n = 3 + ((rnd() * 4) | 0); for (let i = 0; i < n; i++) { const s = t + i * 0.055, o = ctx.createOscillator(), e = gain(0.0001, dst); o.frequency.value = f; e.gain.setValueAtTime(v * 0.35, s); e.gain.exponentialRampToValueAtTime(0.0001, s + 0.03); o.connect(e); o.start(s); o.stop(s + 0.04); } },
     swell: (dst, t, v) => { const d = rr(2.5, 5), e = gain(0.0001, lowpass(rr(500, 900), dst, 'bandpass', 0.6)); e.gain.setValueAtTime(0.0001, t); e.gain.linearRampToValueAtTime(v, t + d * 0.45); e.gain.linearRampToValueAtTime(0.0001, t + d); noise(t, d + 0.05).connect(e); },
   };
@@ -364,6 +373,6 @@ export const SCENES = {
       { type: 'bandpass', freq: 2400, q: 0.6, gain: 0.011, pan: 0.3, lfo: { rate: 0.11, depth: 0.8 }, param: 'steam', range: [0.5, 1.6] },
       { type: 'lowpass', freq: 190, gain: 0.025, pan: -0.2, lfo: { rate: 0.04, depth: 0.4 } },
     ],
-    spots: [{ make: 'drip', every: [1.8, 6], gain: 0.04 }, { make: 'hiss', every: [9, 20], gain: 0.03 }, { make: 'bell', every: [25, 50], gain: 0.03, pan: [-0.3, 0.3] }],
+    spots: [{ make: 'drip', every: [1.8, 6], gain: 0.04 }, { make: 'hiss', every: [9, 20], gain: 0.03 }, { make: 'bell', every: [45, 90], gain: 0.028, pan: [-0.3, 0.3] }],
   },
 };
