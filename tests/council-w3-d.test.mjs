@@ -246,11 +246,15 @@ export const tests = [
     async run(t) {
       await start(t);
       const cat = await t.page.evaluate(() => { const f = window.__G.s.featured[0]; return { cat: window.__G.lex.categories[f.cat].name, len: f.word.length }; });
+      if (await t.page.locator('#springs [data-springs-toggle]').count()) {
+        await t.page.click('#springs [data-springs-toggle]');
+      }
       await t.page.click('[data-plaque="0"]');
       const txt = (await t.page.textContent('#preview')).trim();
       t.expect(txt.includes(cat.cat) && txt.includes(cat.len + ' letters') && /\+30/.test(txt), 'the strip says the category, the length and +30 (' + txt + ')');
       const vis = await t.page.evaluate(() => { const b = document.querySelector('.plaque'); return { label: b.getAttribute('aria-label'), cat: getComputedStyle(b.querySelector('.pcat')).display, h: Math.round(b.getBoundingClientRect().height) }; });
       t.expect(/Featured Spring 1/.test(vis.label) && vis.label.includes(cat.cat), 'a screen reader hears it too');
+      t.expect(vis.h >= 44, `plaque touch target >= 44 px (${vis.h} px)`);
       await t.shot('S2-09-plaques');
     },
   },

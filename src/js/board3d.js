@@ -182,10 +182,10 @@ export function setTheme(theme) {
 
 // ---------- camera ----------
 let TILT = 0.5, MARGIN = 0.02;
-// Portrait (phone) camera. The board is fitted at the old, nearly top-down tilt (PORTRAIT_FIT_TILT, 0.06 rad) so the squares keep the size and
-// the camera distance they had, then the camera leans back to PORTRAIT_TILT and looks a little past the middle (PORTRAIT_SHIFT, in board
-// units, negative = the board sits lower), which gives the far edge a strip of the walnut counter above it and costs the bottom of the frame.
-const PORTRAIT_FIT_TILT = 0.06, PORTRAIT_TILT = 0.15, PORTRAIT_SHIFT = -0.3;
+// Portrait (phone) camera: solved directly at the rendered tilt (0.09 rad, within 0.08-0.10 rad) including the
+// full walnut frame bezel (FRAME_EXTENT), so Row 1-15 and all four walnut rails stay unobstructed inside #boardwrap.
+const PORTRAIT_TILT = 0.09, PORTRAIT_SHIFT = 0;
+const FRAME_EXTENT = 8.92 * (U / 16);
 export function resize(w, h) {
   if (!B3.renderer) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -193,12 +193,11 @@ export function resize(w, h) {
   B3.renderer.setPixelRatio(dpr); B3.renderer.setSize(w, h, false);
   B3.camera.aspect = w / h; B3.camera.updateProjectionMatrix();
   const tall = h > w * 0.98;
-  TILT = tall ? PORTRAIT_FIT_TILT : 0.3; MARGIN = tall ? 0.004 : 0.025;
-  // on phones the board fills the width and the frame runs off the edges; the props would only show as slivers
+  TILT = tall ? PORTRAIT_TILT : 0.3; MARGIN = tall ? 0.008 : 0.025;
+  // on phones the board fills the width and the props would only show as slivers
   B3.tall = tall; B3.towels.visible = B3.bell.visible = !tall;
   B3.top.clearcoat = tall ? 0.08 : 0.18;
   B3.fit = fitDistance();
-  if (tall) TILT = PORTRAIT_TILT;
 }
 function applyPose(tx, tz, dist) {
   const c = B3.camera;
@@ -207,15 +206,34 @@ function applyPose(tx, tz, dist) {
 }
 // the distance at which the board (with its frame) just fits the view
 function fitDistance() {
-  const v = new THREE.Vector3(), E = B3.tall ? HALF : HALF * 16 / U * 1.12;
+  const v = new THREE.Vector3();
+  const E = B3.tall ? FRAME_EXTENT : HALF * 16 / U * 1.12;
+  const tz = B3.tall ? PORTRAIT_SHIFT : 0.2;
+  const pts = B3.tall
+    ? [[-E, 0.56, -E], [E, 0.56, -E], [-E, 0, -E], [E, 0, -E], [-E, 0.56, E], [E, 0.56, E], [-E, 0, E], [E, 0, E]]
+    : [[-E, 0.6, -E], [E, 0.6, -E], [-E, 0, E], [E, 0, E]];
   const fits = (dist) => {
-    applyPose(0, 0.2, dist);
-    for (const [x, y, z] of [[-E, 0.6, -E], [E, 0.6, -E], [-E, 0, E], [E, 0, E]]) { v.set(x, y, z).project(B3.camera); if (Math.abs(v.x) > 1 - MARGIN || Math.abs(v.y) > 1 - MARGIN) return false; }
+    applyPose(0, tz, dist);
+    for (const [x, y, z] of pts) { v.set(x, y, z).project(B3.camera); if (Math.abs(v.x) > 1 - MARGIN || Math.abs(v.y) > 1 - MARGIN) return false; }
     return true;
   };
   let lo = 5, hi = 200;
   for (let k = 0; k < 32; k++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
   return hi;
+}
+function bezelBounds() {
+  if (!B3.on || !B3.camera) return null;
+  const p = pose();
+  applyPose(p.tx, p.tz, p.dist);
+  const v = new THREE.Vector3(), E = FRAME_EXTENT;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const [x, y, z] of [[-E, 0.56, -E], [E, 0.56, -E], [-E, 0, -E], [E, 0, -E], [-E, 0.56, E], [E, 0.56, E], [-E, 0, E], [E, 0, E]]) {
+    v.set(x, y, z).project(B3.camera);
+    const sx = (v.x + 1) / 2 * B3.W, sy = (1 - v.y) / 2 * B3.H;
+    if (sx < minX) minX = sx; if (sx > maxX) maxX = sx;
+    if (sy < minY) minY = sy; if (sy > maxY) maxY = sy;
+  }
+  return { minX, maxX, minY, maxY, W: B3.W, H: B3.H };
 }
 function pose() {
   const v = R.view;
@@ -289,4 +307,4 @@ export function cellAt(x, y) {
 }
 // approximate on-screen size of one square near the centre (for line widths)
 export function cellPx() { const [x0, y0] = screenOf(HALF - 0.5, HALF); const [x1, y1] = screenOf(HALF + 0.5, HALF); return Math.hypot(x1 - x0, y1 - y0); }
-export function debug() { return { on: B3.on, reason: B3.reason, tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, frames: B3.frames.length, intervals: B3.intervals.slice() }; }
+export function debug() { return { on: B3.on, reason: B3.reason, tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, tilt: TILT, tall: !!B3.tall, bezel: B3.on ? bezelBounds() : null, frames: B3.frames.length, intervals: B3.intervals.slice() }; }

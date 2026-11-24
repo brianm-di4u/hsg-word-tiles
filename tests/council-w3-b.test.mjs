@@ -26,16 +26,26 @@ export const tests = [
       await t.seed(5);
       await t.game('newGame', { seats: SEATS });
       await t.waitIdle(8000);
-      t.expect(await t.page.locator('[data-act="shuffle"]').count() === 1 && await t.page.locator('[data-act="recall"]').count() === 0, 'with nothing placed: Shuffle, no Recall');
+      if (t.viewport === 'desktop') {
+        t.expect(await t.page.locator('[data-act="shuffle"]').count() === 1 && await t.page.locator('[data-act="recall"]').count() === 1, 'desktop keeps constant 6-slot bar with Shuffle and Recall');
+        t.expect(await t.page.locator('[data-act="recall"]').isDisabled(), 'desktop Recall is disabled with nothing placed');
+      } else {
+        t.expect(await t.page.locator('[data-act="shuffle"]').count() === 1 && await t.page.locator('[data-act="recall"]').count() === 0, 'mobile Slot 1 starts as Shuffle with nothing placed');
+      }
       const [m] = await t.game('act', 'moves', 1);
       await t.game('act', 'stage', m.tiles.slice(0, 1));
       const before = await t.state();
       t.equal(before.staged.length, 1, 'one tile is placed');
-      t.expect(await t.page.locator('[data-act="shuffle"]').isVisible() && await t.page.locator('[data-act="recall"]').isVisible(), 'both Shuffle and Recall show');
+      if (t.viewport === 'desktop') {
+        t.expect(await t.page.locator('[data-act="shuffle"]').isVisible() && await t.page.locator('[data-act="recall"]').isVisible() && await t.page.locator('[data-act="recall"]').isEnabled(), 'desktop shows Shuffle beside enabled Recall');
+      } else {
+        t.expect(await t.page.locator('[data-act="shuffle"]').count() === 0 && await t.page.locator('[data-act="recall"]').isVisible(), 'mobile Slot 1 toggles in-place from Shuffle to Recall (CD-WF5-05)');
+      }
       await t.shot('S2-21-shuffle-and-recall');
       // the shuffle's dice: a fixed one, so the result is the same every run
       await t.page.evaluate(() => { window.__rand = Math.random; Math.random = () => 0; });
-      await t.page.click('[data-act="shuffle"]');
+      if (t.viewport === 'desktop') await t.page.click('[data-act="shuffle"]');
+      else await t.page.keyboard.press('Shift+R');
       await t.page.evaluate(() => { Math.random = window.__rand; });
       const after = await t.state();
       t.expect(JSON.stringify(after.order) !== JSON.stringify(before.order), 'the rack order changed');

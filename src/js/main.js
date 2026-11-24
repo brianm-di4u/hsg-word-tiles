@@ -47,7 +47,7 @@ const G = {
   preview: null, hint: null, last: new Set(), lastPulse: null, anim: new Map(), animUntil: 0,
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
-  errFlash: false, scoreHi: null, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0,
+  errFlash: false, scoreHi: null, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, springsOpen: false,
 };
 window.__G = G;
 
@@ -252,7 +252,7 @@ function showScene(name, arg) {
   moodUpdate();
   cancelDrag(); G.pinch = null; G.pointers.clear();
   closeDialog(true);
-  if (name !== 'game') { clearTimeout(G.overTimer); G.overTimer = 0; G.toastQ = []; hideToastNow(); }
+  if (name !== 'game') { clearTimeout(G.overTimer); G.overTimer = 0; G.toastQ = []; hideToastNow(); G.springsOpen = false; }
   const app = $('#app'), scr = $('#screen');
   const game = name === 'game';
   app.hidden = !game; scr.hidden = game;
@@ -413,7 +413,7 @@ function beginGame(s, intent) {
   clearTimeout(G.overTimer); G.overTimer = 0;
   clearTimeout(errFlashTimer); G.errFlash = false;
   clearTimeout(scoreHiTimer); G.scoreHi = null;
-  clearTimeout(G.plaqueTimer); G.plaqueHi.clear(); G.plaqueSnap = null;
+  clearTimeout(G.plaqueTimer); G.plaqueHi.clear(); G.plaqueSnap = null; G.springsOpen = false;
   if (G.turnWait) { clearTimeout(G.turnWait.id); G.turnWait = null; }
   if (!G.settings.tipsSeen) store.put(KEYS.settings, G.settings); // the newcomer flag is written before the first save, so a tab closed mid-tips still counts as a newcomer
   G.bark = null;
@@ -796,19 +796,45 @@ function syncPlaqueSnap(s) {
     document.querySelectorAll('.plaque-updated').forEach((el) => el.classList.remove('plaque-updated'));
   }, 750);
 }
+function syncSpringsDrawer(open) {
+  G.springsOpen = !!open;
+  const host = $('#springs');
+  if (!host) return;
+  const btn = host.querySelector('[data-springs-toggle]');
+  const tray = host.querySelector('#springs-tray');
+  host.classList.toggle('open', G.springsOpen && !!tray);
+  if (btn) {
+    btn.setAttribute('aria-expanded', String(G.springsOpen));
+    const claimed = G.s ? G.s.featured.filter((f) => f.by != null).length : 0;
+    const total = G.s ? G.s.featured.length : 0;
+    btn.setAttribute('aria-label', `Featured Springs, ${claimed} of ${total} found, +${FEATURED_BONUS} each. ${G.springsOpen ? 'Hide plaques.' : 'Show all three plaques.'}`);
+  }
+  if (tray) tray.hidden = !G.springsOpen;
+}
 function renderGame() {
   if (G.scene !== 'game' || !G.s) return;
   const s = G.s;
   const mobile = isNarrow();
+  if (!mobile) G.springsOpen = false;
   syncPlaqueSnap(s);
   $('#scores').innerHTML = mobile ? '' : UI.scoresHtml(s, false);
-  $('#springs').innerHTML = UI.springsHtml(s, G.lex, mobile);
-  $('#springs').querySelectorAll('[data-plaque]').forEach((b) => {
+  const springs = $('#springs');
+  springs.innerHTML = UI.springsHtml(s, G.lex, mobile, G.springsOpen);
+  springs.classList.toggle('open', mobile && G.springsOpen);
+  const toggle = springs.querySelector('[data-springs-toggle]');
+  if (toggle) {
+    if (G.plaqueHi.size) toggle.classList.add('plaque-updated');
+    toggle.addEventListener('click', () => {
+      if (G.coach && G.coach.phase === 'plaques') coachDismiss('plaques');
+      syncSpringsDrawer(!G.springsOpen);
+    });
+  }
+  springs.querySelectorAll('[data-plaque]').forEach((b) => {
     if (G.plaqueHi.has(+b.dataset.plaque)) b.classList.add('plaque-updated');
     b.addEventListener('click', () => {
       const f = s.featured[+b.dataset.plaque];
       if (G.coach && G.coach.phase === 'plaques') coachDismiss('plaques');
-      if (f.by != null) openFact(G.lex.entry(f.word).id, f.word);
+      if (f.by != null) { syncSpringsDrawer(false); openFact(G.lex.entry(f.word).id, f.word); }
       else flash(`Featured Spring: ${f.word.length} letters, ${G.lex.categories[f.cat].name}. Form it to claim +${FEATURED_BONUS}.`);
     });
   });
@@ -841,7 +867,7 @@ function trimLedger() {
 function renderActions() {
   const s = G.s, p = cur(), human = p.kind === 'human' && !G.privacy;
   const el = $('#actions');
-  el.innerHTML = UI.actionsHtml({ staged: G.staged.length > 0, canSwap: s.bag.length >= RACK, canPlay: G.staged.length > 0 && G.preview && G.preview.ok, hints: p.hints != null && p.kind === 'human' ? p.hints : null, unlimited: !!p.unl });
+  el.innerHTML = UI.actionsHtml({ mobile: isNarrow(), staged: G.staged.length > 0, canSwap: s.bag.length >= RACK, canPlay: G.staged.length > 0 && G.preview && G.preview.ok, hints: p.hints != null && p.kind === 'human' ? p.hints : null, unlimited: !!p.unl });
   el.classList.toggle('waiting', !human || s.over);
   el.querySelectorAll('[data-act]').forEach((b) => {
     if ((!human || s.over) && !(b.dataset.act === 'shuffle' && waitSeat())) b.disabled = true;
@@ -1129,6 +1155,7 @@ function trackerSeat() {
 function openDialog(name, arg) {
   const m = $('#modal');
   cancelDrag();
+  if (G.springsOpen) syncSpringsDrawer(false);
   G.dialog = name;
   let html = '';
   if (name === 'swap') html = UI.swapHtml(cur().rack);
@@ -1216,7 +1243,7 @@ const isNarrow = () => matchMedia('(max-width: 860px), (max-aspect-ratio: 1/1), 
 // From the width of the grid column the rack sits in, not the rackbar's own width: the rackbar is as wide as the
 // tiles, so measuring it fed the size back into itself and phones crept down to the minimum.
 function rackTileSize() {
-  const app = $('#app'), bar = $('#rackbar');
+  const app = $('#app'), bar = $('#rackbar'), rk = $('#rack');
   let w = 360;
   if (app && bar && app.clientWidth) {
     const cs = getComputedStyle(app), tracks = cs.gridTemplateColumns.split(' ').map(parseFloat).filter((v) => v > 0);
@@ -1224,7 +1251,8 @@ function rackTileSize() {
     if (tracks.length) w = tracks.length > 1 && x >= tracks[0] ? tracks[1] : tracks[0];
   }
   const bs = bar ? getComputedStyle(bar) : null, pad = bs ? parseFloat(bs.paddingLeft) + parseFloat(bs.paddingRight) : 16;
-  return Math.max(36, Math.min(isNarrow() ? 52 : 60, Math.floor((w - pad - 6 * 6) / 7)));
+  const rs = rk ? getComputedStyle(rk) : null, gap = rs ? (parseFloat(rs.columnGap) || parseFloat(rs.gap) || 6) : 6;
+  return Math.max(36, Math.min(isNarrow() ? 52 : 60, Math.floor((w - pad - 6 * gap) / 7)));
 }
 function layout() {
   if (G.scene !== 'game') return;
@@ -1600,6 +1628,7 @@ function onMove(e) {
     // the tile may have moved since the press (typed onto the board, recalled): then there is nothing to lift
     if (d.from === 'board' ? !G.staged.some((t) => t.i === d.i && t.k === d.k) : !G.order.includes(d.k)) { G.drag = null; return; }
     d.active = true;
+    if (G.springsOpen) syncSpringsDrawer(false);
     if (d.from === 'board') G.staged = G.staged.filter((t) => t.i !== d.i);
     else { d.pos0 = G.order.indexOf(d.k); G.order = G.order.filter((x) => x !== d.k); }
     endReturn();
@@ -1720,6 +1749,7 @@ function onKey(e) {
     ({ R: shuffleRack, S: doSwap, P: doPass, H: doHint, B: toggleBreakdown })[k.toUpperCase()]?.();
     return;
   }
+  if (G.springsOpen && k === 'Escape') { e.preventDefault(); syncSpringsDrawer(false); $('#springs [data-springs-toggle]')?.focus(); return; }
   if (!humanCanAct()) { if (k === 'Escape') { e.preventDefault(); openDialog('pause'); } return; }
   const c = G.cursor;
   const move = (dr, dc) => { const r = Math.floor(c.i / N) + dr, col = (c.i % N) + dc; if (r >= 0 && r < N && col >= 0 && col < N) c.i = r * N + col; c.on = true; ensureVisible(c.i); draw(); sayCursor(c.i); };
@@ -1805,7 +1835,7 @@ function wireStatic() {
   b.addEventListener('focus', () => { if (humanCanAct()) { G.cursor.on = true; draw(); } });
   b.addEventListener('blur', () => { G.cursor.on = false; draw(); });
   document.addEventListener('keydown', onKey);
-  window.addEventListener('pointerdown', (e) => { G.input = e.pointerType === 'touch' ? 'touch' : 'mouse'; }, true);
+  window.addEventListener('pointerdown', (e) => { G.input = e.pointerType === 'touch' ? 'touch' : 'mouse'; if (G.springsOpen && (!e.target || !e.target.closest || !e.target.closest('#springs'))) syncSpringsDrawer(false); }, true);
   let boardTap = null;
   window.addEventListener('pointerdown', (e) => { boardTap = e.isPrimary && e.target.closest && e.target.closest('#boardwrap') ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null; }, true);
   window.addEventListener('pointerup', (e) => { const t = boardTap; boardTap = null; if (t && t.id === e.pointerId && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 10) skipComputerWait(); }, true);

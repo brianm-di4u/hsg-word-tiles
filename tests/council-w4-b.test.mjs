@@ -270,14 +270,16 @@ export const tests = [
       });
       t.equal(m.wrong, 0, 'every square is still found at its own centre');
       if (t.viewport === 'mobile') {
-        // measured on the build before this item (CSS px, 390x844): across 23.1 / 23.4 / 23.7 on the top, middle and bottom rows,
-        // 23.2 between row centres in the middle, 22.8 at the tightest, centres from y = 23 to y = 349 of a 378 px square
-        t.expect(m.hpitch[1] >= 23.4 * 0.98, 'a square is as wide in the middle (' + m.hpitch[1].toFixed(1) + ' px, was 23.4)');
-        t.expect(Math.min(...m.hpitch) >= 23.1 * 0.96, 'and at its narrowest (' + Math.min(...m.hpitch).toFixed(1) + ' px, was 23.1)');
-        t.expect(m.vpitchCentre >= 23.2 * 0.98, 'and as tall in the middle (' + m.vpitchCentre.toFixed(1) + ' px, was 23.2)');
-        t.expect(m.vpitchMin >= 22.8 * 0.94, 'and at its flattest (' + m.vpitchMin.toFixed(1) + ' px, was 22.8)');
-        t.expect(m.ys[0] >= 33, 'the top row sits lower, with a strip of counter above it (centre at y = ' + m.ys[0].toFixed(0) + ', was 23)');
+        // W5-S3-02: portrait 3D solves fitDistance() at rendered 0.09 rad tilt including all 4 walnut bezel rails (~20.4-21.1 px squares on 378x378)
+        t.expect(m.hpitch[1] >= 20.0, 'a square is comfortably wide in the middle (' + m.hpitch[1].toFixed(1) + ' px)');
+        t.expect(Math.min(...m.hpitch) >= 19.5, 'and at its narrowest (' + Math.min(...m.hpitch).toFixed(1) + ' px)');
+        t.expect(m.vpitchCentre >= 20.0, 'and tall in the middle (' + m.vpitchCentre.toFixed(1) + ' px)');
+        t.expect(m.vpitchMin >= 19.2, 'and at its flattest (' + m.vpitchMin.toFixed(1) + ' px)');
+        t.expect(m.ys[0] >= 33, 'the top row sits lower, with the top walnut rail and counter above it (centre at y = ' + m.ys[0].toFixed(0) + ')');
         t.expect(m.ys[1] + 0.5 * m.vpitchMin <= m.h - 3 && m.xs[0] - 0.5 * m.hpitch[0] >= 0 && m.xs[1] + 0.5 * m.hpitch[2] <= m.w, 'and every square is still fully inside the board area');
+        const b3 = await t.game('act', 'b3');
+        t.expect(b3.tilt >= 0.08 && b3.tilt <= 0.10, 'portrait tilt in [0.08, 0.10] rad (' + b3.tilt + ')');
+        t.expect(b3.bezel && b3.bezel.minX >= 0 && b3.bezel.maxX <= b3.bezel.W && b3.bezel.minY >= 0 && b3.bezel.maxY <= b3.bezel.H, 'all four walnut rails fit cleanly inside #boardwrap');
       } else {
         t.expect(Math.abs(m.hpitch[1] - 37.3) < 0.3 && Math.abs(m.hpitch[0] - 35.3) < 0.3 && Math.abs(m.hpitch[2] - 39.5) < 0.3, 'the desktop squares are the size they were (' + m.hpitch.map((x) => x.toFixed(1)).join(' / ') + ', was 35.3 / 37.3 / 39.5)');
         t.expect(Math.abs(m.ys[0] - 96) < 1.5 && Math.abs(m.ys[1] - 595) < 1.5, 'and where they were');

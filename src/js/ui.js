@@ -146,22 +146,51 @@ export function scoresHtml(s, compact) {
   }).join('');
 }
 
-export function springsHtml(s, lex, compact) {
-  return `<h2 class="springs-title"><span>Featured Springs</span> <small>+${FEATURED_BONUS} each · a letter clears every round</small></h2><div class="plaques">${s.featured.map((f, k) => {
+const CAT_SHORT = { baths: 'Row', springs: 'Springs', park: 'Park', track: 'Track', club: 'Club', town: 'Town' };
+const ownerShort = (p) => (p && p.persona && SHORT[p.persona]) || (p ? p.name.split(' ')[0] : '');
+
+export function springsHtml(s, lex, compact, open = false) {
+  const renderPlaque = (f, k) => {
     const cat = lex.categories[f.cat];
+    const shortCat = CAT_SHORT[f.cat] || cat.name;
     const claimed = f.by != null;
     const letters = [...f.word].map((ch, j) => (claimed || f.shown.includes(j) ? `<b>${ch}</b>` : '<b class="fog" aria-hidden="true"></b>')).join('');
     const label = claimed ? `${f.word}, found by ${s.players[f.by].name}` : `${f.word.length} letters, ${cat.name}: ${[...f.word].map((ch, j) => (f.shown.includes(j) ? ch : 'blank')).join(' ')}`;
-    return `<button class="plaque ${claimed ? 'claimed' : ''}" data-plaque="${k}" aria-label="Featured Spring ${k + 1}: ${esc(label)}" title="${esc(cat.name)}">
-      <span class="pcat">${ICON.cat[cat.icon]}</span><span class="pword">${letters}</span>${claimed ? `<span class="pby">${esc(s.players[f.by].name.split(' ')[0])}</span>` : ''}</button>`;
-  }).join('')}</div>`;
+    return `<button type="button" class="plaque ${claimed ? 'claimed' : ''}" data-plaque="${k}" aria-label="Featured Spring ${k + 1}: ${esc(label)}" title="${esc(cat.name)}">
+      <span class="pcat">${ICON.cat[cat.icon]}<span class="pcat-name">${esc(shortCat)}</span></span><span class="pword">${letters}</span>${claimed ? `<span class="pby">${esc(ownerShort(s.players[f.by]))}</span>` : ''}</button>`;
+  };
+  const list = s.featured.map(renderPlaque).join('');
+  if (!compact) {
+    return `<h2 class="springs-title"><span>Featured Springs</span> <small>+${FEATURED_BONUS} each · a letter clears every round</small></h2><div class="plaques">${list}</div>`;
+  }
+  const claimedCount = s.featured.filter((f) => f.by != null).length;
+  const active = s.featured.filter((f) => f.by == null);
+  const lead = (active.length ? active.slice().sort((a, b) => (b.shown.length / b.word.length) - (a.shown.length / a.word.length))[0] : s.featured[0]) || null;
+  let preview = '';
+  if (lead) {
+    const cat = lex.categories[lead.cat];
+    const shortCat = CAT_SHORT[lead.cat] || cat.name;
+    const claimed = lead.by != null;
+    const letters = [...lead.word].map((ch, j) => (claimed || lead.shown.includes(j) ? `<b>${ch}</b>` : '<b class="fog" aria-hidden="true"></b>')).join('');
+    preview = active.length
+      ? `<span class="sbar-preview" aria-hidden="true"><span class="pcat">${ICON.cat[cat.icon]}<span class="pcat-name">${esc(shortCat)}</span></span><span class="pword">${letters}</span></span>`
+      : '<span class="sbar-preview sbar-done" aria-hidden="true">All 3 found</span>';
+  }
+  const summary = `Featured Springs, ${claimedCount} of ${s.featured.length} found, +${FEATURED_BONUS} each. ${open ? 'Hide plaques.' : 'Show all three plaques.'}`;
+  return `<button type="button" class="springs-bar" data-springs-toggle aria-expanded="${!!open}" aria-controls="springs-tray" aria-label="${esc(summary)}">
+    <span class="sbar-meta"><b>Featured</b><small>${claimedCount}/${s.featured.length} · +${FEATURED_BONUS}</small></span>${preview}<span class="sbar-chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+  </button><div id="springs-tray" class="plaques springs-drawer"${open ? '' : ' hidden'}><p class="springs-title"><span>Featured Springs</span> <small>+${FEATURED_BONUS} each · a letter clears every round</small></p>${list}</div>`;
 }
 
 export function actionsHtml(o) {
   const b = (id, icon, text, key, extra = '') => `<button class="abtn ${id}" data-act="${id}" ${extra}>${icon}<span>${text}</span>${key ? `<kbd>${key}</kbd>` : ''}</button>`;
+  const slot1 = o.mobile
+    ? (o.staged ? b('recall', ICON.recall, 'Recall', 'Esc') : b('shuffle', ICON.shuffle, 'Shuffle', '⇧R'))
+    : b('shuffle', ICON.shuffle, 'Shuffle', '⇧R');
+  const slot2 = o.mobile ? '' : b('recall', ICON.recall, 'Recall', 'Esc', o.staged ? '' : 'disabled');
   return [
-    b('shuffle', ICON.shuffle, 'Shuffle', '⇧R'),
-    o.staged ? b('recall', ICON.recall, 'Recall', 'Esc') : '',
+    slot1,
+    slot2,
     b('swap', ICON.swap, 'Swap', '⇧S', o.canSwap ? '' : 'disabled'),
     b('pass', ICON.pass, 'Pass', '⇧P'),
     o.hints != null ? b('hint', ICON.hint, `Hint <em>${o.unlimited ? '∞' : o.hints}</em>`, '⇧H', o.hints > 0 || o.unlimited ? '' : 'disabled') : '',
