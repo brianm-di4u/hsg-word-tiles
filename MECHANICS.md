@@ -125,9 +125,9 @@ word shows.
   completes words; down moves use the same code on the transposed board.
 - Every move is scored with the engine's own `score` function (bonuses included).
 - Levels:
-  - **Easy:** everyday SCOWL common words of 3–6 letters (`freeLen` 0, `maxLen` 6) plus 25 everyday two-letter words (`EASY_TWO` in `ai.js`); ignores the rack it keeps. It plays its best-scoring play except
-    about two turns in three (`slip` 0.65), when it picks at random from the 35th–75th percentile of its 30 best plays
-    (`pick: [0.35, 0.75]` in `ai.js`).
+  - **Easy:** everyday SCOWL common words of 3–6 letters (`freeLen` 0, `maxLen` 6) plus 25 everyday two-letter words (`EASY_TWO` in `ai.js`); ignores the rack it keeps and Hot Springs bonus foresight (`bonusWeight` 0). It plays its best-scoring play except
+    about three turns in five (`slip` 0.60), when it picks at random from the 5th–35th percentile of its 30 best plays
+    (`pick: [0.05, 0.35]` in `ai.js`).
   - **Medium:** common words plus every word of 2–4 letters (`freeLen` 5); maximises score + 0.65 × leave value.
   - **Hard:** the whole dictionary; maximises score + leave value − 4 per empty Boiling Spring (and 1.5 per empty Steam square) its
     play leaves within reach (`DEFENSE` in `ai.js`); with the bag empty in a 2-player game it looks one reply ahead (the

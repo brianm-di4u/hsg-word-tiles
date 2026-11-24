@@ -14,14 +14,14 @@ export const EASY_TWO = new Set([
 ]);
 
 // Easy plays everyday SCOWL common words (3–6 letters) plus the 25 everyday two-letter words in EASY_TWO,
-// ignores the rack it keeps, and slips ~65% of turns into the 35th–75th percentile of its 30 best plays
-// (W1-S3-01: recalibrated to an approachable ~230–270 pt beginner tier). Medium knows common words plus every
+// ignores the rack it keeps, and slips ~60% of turns into the 5th–35th percentile of its 30 best plays
+// (W1-S3-01, OQ-WF7-W2-01 Option B: recalibrated to an approachable ~250 pt beginner tier). Medium knows common words plus every
 // word of 2–4 letters (`freeLen` 5), always plays its best, and weighs its leave. Hard knows the whole
 // dictionary, weighs the rack it keeps, the Boiling Springs it opens and the endgame. Medium and Hard play the
 // best play by their own measure (equity); plays within TIE_WINDOW equity points of it count as tied and the
 // choice among them is drawn from state.rng.ai.
 export const LEVELS = {
-  easy: { commonOnly: true, freeLen: 0, allowTwo: EASY_TWO, maxLen: 6, leave: 0, bonusWeight: 0, pick: [0.35, 0.75], slip: 0.65, budget: 900000 },
+  easy: { commonOnly: true, freeLen: 0, allowTwo: EASY_TWO, maxLen: 6, leave: 0, bonusWeight: 0, pick: [0.05, 0.35], slip: 0.60, budget: 900000 },
   medium: { commonOnly: true, freeLen: 5, leave: 0.65, bonusWeight: 0.5, budget: 900000 },  // freeLen was 4 before wave 2; leave tuned 0.5->0.65 for S3-02 (Ruling 12)
   hard: { leave: 1, defense: true, endgame: true, bonusWeight: 1, budget: 1500000 },
 };
