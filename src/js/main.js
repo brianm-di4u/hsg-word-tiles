@@ -48,6 +48,7 @@ const G = {
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
   errFlash: false, scoreHi: null, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, springsOpen: false,
+  returnFocus: null,
 };
 window.__G = G;
 
@@ -252,7 +253,8 @@ function showScene(name, arg) {
   moodUpdate();
   cancelDrag(); G.pinch = null; G.pointers.clear();
   closeDialog(true);
-  if (name !== 'game') { clearTimeout(G.overTimer); G.overTimer = 0; G.toastQ = []; hideToastNow(); G.springsOpen = false; }
+  if (name !== 'game') { clearTimeout(G.overTimer); G.overTimer = 0; G.toastQ = []; hideToastNow(); G.springsOpen = false; G.privacy = false; const priv = $('#privacy'); if (priv) { priv.hidden = true; priv.innerHTML = ''; } }
+  syncInert();
   const app = $('#app'), scr = $('#screen');
   const game = name === 'game';
   app.hidden = !game; scr.hidden = game;
@@ -968,12 +970,38 @@ function renderPreview() {
   if (refocus) el.querySelector(refocus)?.focus({ preventScroll: true });
 }
 
+function syncInert() {
+  const modalOpen = !$('#modal').hidden;
+  const privOpen = !$('#privacy').hidden;
+  $('#app').inert = modalOpen || privOpen;
+  $('#screen').inert = modalOpen || privOpen;
+  $('#privacy').inert = modalOpen;
+}
+function focusablesIn(el) {
+  if (!el || el.hidden) return [];
+  return [...el.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter((n) => n.getClientRects().length > 0 && !n.closest('[hidden]'));
+}
+function trapTab(e, container) {
+  const list = focusablesIn(container);
+  e.preventDefault();
+  if (!list.length) return;
+  const ix = list.indexOf(document.activeElement);
+  const next = e.shiftKey ? (ix <= 0 ? list.length - 1 : ix - 1) : (ix < 0 || ix >= list.length - 1 ? 0 : ix + 1);
+  list[next].focus({ preventScroll: true });
+}
 function renderPrivacy() {
   const el = $('#privacy');
+  const wasHidden = el.hidden;
   el.hidden = !G.privacy;
-  if (!G.privacy) return;
+  if (!G.privacy) { el.innerHTML = ''; syncInert(); return; }
   el.innerHTML = UI.privacyHtml(cur(), G.s.cur);
-  el.querySelector('[data-reveal]').addEventListener('click', () => { unlock(); G.revealed = G.s.cur; G.privacy = false; restoreHint(G.s); updatePreview(); sfx('turn'); renderGame(); });
+  syncInert();
+  el.querySelector('[data-reveal]').addEventListener('click', () => {
+    unlock(); G.revealed = G.s.cur; G.privacy = false; restoreHint(G.s); updatePreview(); sfx('turn'); renderGame();
+    const b = $('#board'); if (b) b.focus({ preventScroll: true });
+  });
+  if ((wasHidden || !el.contains(document.activeElement)) && !G.dialog) el.querySelector('[data-reveal]')?.focus({ preventScroll: true });
 }
 
 let flashTimer = 0, errFlashTimer = 0, scoreHiTimer = 0;
@@ -1154,6 +1182,11 @@ function trackerSeat() {
 }
 function openDialog(name, arg) {
   const m = $('#modal');
+  const prev = G.dialog;
+  if (!prev) {
+    const ae = document.activeElement;
+    G.returnFocus = ae instanceof HTMLElement && !m.contains(ae) ? ae : null;
+  }
   cancelDrag();
   if (G.springsOpen) syncSpringsDrawer(false);
   G.dialog = name;
@@ -1165,13 +1198,15 @@ function openDialog(name, arg) {
   else if (name === 'boardtext') html = UI.boardTextHtml(G.s, G.staged);
   else if (name === 'ledger') html = UI.ledgerHtml(G.s, G.lex);
   else if (name === 'fact') html = `<div class="dialog-wrap" role="dialog" aria-modal="true" aria-label="Hot Springs word card">${UI.factHtml(arg.entry, G.lex, arg.form, '<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div>')}</div>`;
+  else if (name === 'review') html = UI.reviewHtml(arg ? arg.review : null);
   else if (name === 'confirm') html = `<div class="card dialog" role="dialog" aria-modal="true" aria-labelledby="cf-h"><h2 id="cf-h">${esc(arg.title)}</h2><p>${esc(arg.text)}</p><div class="dlg-btns"><button class="btn quiet" data-close>Cancel</button><button class="btn primary" data-ok>${esc(arg.ok)}</button></div></div>`;
-  if (G.dialog === 'pause' && name !== 'pause') releaseAudio('pause');
+  if (prev === 'pause' && name !== 'pause') releaseAudio('pause');
   if (name === 'pause') holdAudio('pause');
   m.innerHTML = html; m.hidden = false; m.dataset.name = name; G.dialogAt = performance.now();
-  if (name !== 'blank') sfx('open');
+  syncInert();
+  if (name !== 'blank' && !(name === 'review' && prev === 'review')) sfx('open');
   m.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => closeDialog()));
-  m.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { closeDialog(); go(b.dataset.go); }));
+  m.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { closeDialog(true); go(b.dataset.go); }));
   m.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => openDialog(b.dataset.open)));
   if (name === 'swap') {
     const picked = new Set();
@@ -1189,15 +1224,21 @@ function openDialog(name, arg) {
   }
   if (name === 'blank') m.querySelectorAll('[data-letter]').forEach((b) => b.addEventListener('click', () => { const f = G.blankCb; closeDialog(); if (f) f(b.dataset.letter); }));
   if (name === 'confirm') m.querySelector('[data-ok]').addEventListener('click', () => { closeDialog(); arg.onOk(); });
-  const f = m.querySelector('.primary, [data-letter], button'); if (f) f.focus();
-  renderPreview();
+  const f = m.querySelector('.primary, [data-letter], button'); if (f) f.focus({ preventScroll: true });
+  if (G.scene === 'game') renderPreview();
 }
 function closeDialog(silent) {
   const m = $('#modal');
   if (!G.dialog && m.hidden) return;
   if (G.dialog === 'pause') releaseAudio('pause');
   G.dialog = null; G.blankCb = null; m.hidden = true; m.innerHTML = '';
-  if (!silent) { const b = $('#board'); if (G.scene === 'game' && b) b.focus({ preventScroll: true }); }
+  syncInert();
+  const ret = G.returnFocus; G.returnFocus = null;
+  if (!silent) {
+    if (G.scene === 'game' && G.privacy) $('#privacy [data-reveal]')?.focus({ preventScroll: true });
+    else if (ret && ret.isConnected && !ret.disabled && ret.getClientRects().length > 0 && !ret.closest('[hidden]')) ret.focus({ preventScroll: true });
+    else if (G.scene === 'game') $('#board')?.focus({ preventScroll: true });
+  }
   // a reply held while the dialog was open lands a moment after it closes (and not at all if another dialog opens at once)
   if (G.aiHeld) setTimeout(releaseAi, 300);
 }
@@ -1206,14 +1247,7 @@ function confirmDialog(title, text, ok, onOk) { openDialog('confirm', { title, t
 function openFact(id, form) {
   const entry = G.lex.byId.get(id);
   if (!entry) return;
-  if (G.scene === 'game') openDialog('fact', { entry, form });
-  else {
-    const m = $('#modal'); G.dialog = 'fact';
-    m.innerHTML = `<div class="dialog-wrap" role="dialog" aria-modal="true" aria-label="Hot Springs word card">${UI.factHtml(entry, G.lex, form, '<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div>')}</div>`;
-    m.hidden = false; m.dataset.name = 'fact'; G.dialogAt = performance.now(); sfx('open');
-    m.querySelector('[data-close]').addEventListener('click', () => closeDialog());
-    m.querySelector('[data-close]').focus();
-  }
+  openDialog('fact', { entry, form });
 }
 
 // What you missed: the finished game looked back over, one turn at a time so the page stays awake while it works.
@@ -1221,20 +1255,15 @@ let reviewing = 0;
 async function openReview() {
   const s = G.s, seat = s && reviewSeat(s);
   if (seat == null) return;
-  const m = $('#modal'), mine = ++reviewing;
-  const show = (r) => {
-    G.dialog = 'review'; m.innerHTML = UI.reviewHtml(r); m.hidden = false; m.dataset.name = 'review'; G.dialogAt = performance.now();
-    m.querySelector('[data-close]').addEventListener('click', () => closeDialog());
-    m.querySelector('[data-close]').focus();
-  };
-  show(null);
+  const mine = ++reviewing;
+  openDialog('review', { review: null });
   const steps = [];
   for (const step of reviewSteps(s, seat, G.dict, G.lex)) {
     steps.push(step);
     await new Promise((res) => setTimeout(res, 0));
     if (mine !== reviewing || G.dialog !== 'review' || G.s !== s) return;   // closed, or another game, meanwhile
   }
-  show(summarize(steps));
+  openDialog('review', { review: summarize(steps) });
 }
 
 // ---------- layout and drawing ----------
@@ -1324,11 +1353,13 @@ function frame(now) {
 }
 function drawData(now) {
   const p = G.preview;
+  const badWordCells = p && !p.ok && p.words && p.badWord ? p.words.filter((w) => w.w === p.badWord).flatMap((w) => w.cells) : [];
+  const badCells = p && !p.ok ? (badWordCells.length ? [...new Set(badWordCells)] : G.staged.map((t) => t.i)) : null;
   return {
     board: G.s.board, staged: G.staged, last: G.last, lastPulse: G.lastPulse, hint: G.hint, theme: dark() ? 'dark' : 'light',
     cursor: G.cursor.on && humanCanAct() ? G.cursor : null,
     goodCells: p && p.ok && !G.s.challenge ? [...new Set(p.words.flatMap((w) => w.cells))] : null,
-    badCells: p && !p.ok && p.words ? p.words.filter((w) => w.w === p.badWord).flatMap((w) => w.cells) : null,
+    badCells,
     target: G.drag && G.drag.active ? G.drag.target : null, dragFrom: G.drag && G.drag.from === 'board' && G.drag.active ? G.drag.i : null,
     dragTile: G.drag && G.drag.active ? G.drag.tile : null, blocked: G.drag && G.drag.active ? G.drag.blocked : null,
     anim: G.anim, settle: G.settle, now,
@@ -1712,11 +1743,13 @@ function rackPosAt(x, y) {
 const BLANK_ARM_MS = 3500;   // how long a second press of the same letter still means "yes, use my blank"
 function onKey(e) {
   if (G.dialog) {
+    if (e.key === 'Tab') { trapTab(e, $('#modal')); return; }
     if (e.key === 'Escape') { e.preventDefault(); closeDialog(); }
     if (G.dialog === 'blank' && /^[a-z]$/i.test(e.key)) { e.preventDefault(); const f = G.blankCb; closeDialog(); f && f(e.key.toUpperCase()); }
     return;
   }
   if (G.scene !== 'game') { if (e.key === 'Escape' && G.scene !== 'title') { e.preventDefault(); back(); } return; }
+  if (G.privacy && e.key === 'Tab') { trapTab(e, $('#privacy')); return; }
   if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
   const tileBtn = e.target && e.target.closest && e.target.closest('#rack .rtile');
   if (tileBtn && e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {

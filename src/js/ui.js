@@ -39,8 +39,9 @@ export function badge(p, k, size = 40) {
   const per = p.persona ? persona(p.persona) : null;
   const color = per ? per.color : HUMAN_COLORS[k % HUMAN_COLORS.length];
   const face = per && art.has('face-' + per.id) ? `<img src="${art.src('face-' + per.id)}" alt="" width="${size}" height="${size}">` : '';
-  const initials = (p.name.replace(/["“”]/g, '').match(/\b[A-Z]/g) || ['?']).slice(0, 2).join('');
-  return `<span class="badge" style="--c:${color};--s:${size}px" aria-hidden="true">${face || `<b>${esc(initials)}</b>`}<i>${k + 1}</i></span>`;
+  const pm = !per && /^Player\s+(\d+)$/i.exec((p.name || '').trim());
+  const initials = pm ? `P${pm[1]}` : (p.name.replace(/["“”]/g, '').match(/\b[A-Z]/g) || ['?']).slice(0, 2).join('');
+  return `<span class="badge${face ? ' has-face' : ''}" style="--c:${color};--s:${size}px" aria-hidden="true">${face || `<b>${esc(initials)}</b>`}<i>${k + 1}</i></span>`;
 }
 
 // shown where progress would be kept, when the browser will not store anything (a private window, blocked site data)
@@ -105,7 +106,7 @@ export function setupHtml(setup) {
   const humans = setup.seats.filter((s) => s.kind === 'human').length;
   return `<div class="sheet setup">
     ${band()}
-    <header class="sheet-head"><h1>New game</h1><button class="iconbtn" data-go="title" aria-label="Back to the title screen">${ICON.close}</button></header>
+    <header class="sheet-head"><h1 tabindex="-1">New game</h1><button class="iconbtn" data-go="title" aria-label="Back to the title screen">${ICON.close}</button></header>
     <ol class="seats">${setup.seats.map(seat).join('')}</ol>
     ${setup.seats.length < 4 ? '<button class="btn quiet add" data-add>Add a player</button>' : ''}
     <label class="check"><input type="checkbox" data-hints ${setup.hints ? 'checked' : ''}> Spring Guide hints</label>
@@ -141,7 +142,7 @@ export function scoresHtml(s, compact) {
     const active = !s.over && k === s.cur;
     const sub = per ? `${LEVEL_NAME[p.level || per.level]} · fictional` : (p.kind === 'human' ? 'Person' : '');
     return compact
-      ? `<div class="chip ${active ? 'on' : ''}" aria-current="${active}">${badge(p, k, 26)}<b class="score" data-score="${k}">${p.score}</b></div>`
+      ? `<div class="chip ${active ? 'on' : ''}" aria-current="${active}" aria-label="${esc(p.name)}: ${p.score} points${active ? ', current turn' : ''}">${badge(p, k, 26)}<span class="sr-only">${esc(p.name)} </span><b class="score" data-score="${k}">${p.score}</b></div>`
       : `<div class="pcard ${active ? 'on' : ''}" aria-current="${active}">${badge(p, k, 44)}<div class="pmeta"><b>${esc(p.name)}</b><small>${esc(sub)}</small></div><b class="score" data-score="${k}">${p.score}</b></div>`;
   }).join('');
 }
@@ -308,7 +309,7 @@ export function trackerHtml(s, seat) {
 }
 
 export function privacyHtml(p, k) {
-  return `<div class="privacy-card">${badge(p, k, 64)}<h2>${esc(p.name)}'s turn</h2><p>Pass the device to ${esc(p.name)}. Tiles stay hidden until you tap.</p><button class="btn primary big" data-reveal>Show my tiles</button></div>`;
+  return `<div class="privacy-card">${badge(p, k, 64)}<h2 id="priv-h">${esc(p.name)}'s turn</h2><p>Pass the device to ${esc(p.name)}. Tiles stay hidden until you tap.</p><button class="btn primary big" data-reveal>Show my tiles</button></div>`;
 }
 
 // ---------- help ----------
@@ -382,7 +383,7 @@ export function helpHtml(tab, lex, twos = []) {
   }[tab];
   return `<div class="sheet help">
     ${band()}
-    <header class="sheet-head"><h1>How to play</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    <header class="sheet-head"><h1 tabindex="-1">How to play</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     <div class="tabs" role="tablist">${tabs.map(([k, t]) => `<button role="tab" aria-selected="${k === tab}" data-tab="${k}">${t}</button>`).join('')}</div>
     <div class="help-body" role="tabpanel">${body}</div>
   </div>`;
@@ -393,7 +394,7 @@ export function settingsHtml(st, canVibrate = false) {
   const seg = (key, opts, label) => `<div class="setrow"><span>${label}</span><div class="seg" role="radiogroup" aria-label="${label}">${opts.map(([v, t]) => `<button role="radio" aria-checked="${st[key] === v}" data-set="${key}" data-val="${v}">${t}</button>`).join('')}</div></div>`;
   return `<div class="sheet settings">
     ${band()}
-    <header class="sheet-head"><h1>Settings</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    <header class="sheet-head"><h1 tabindex="-1">Settings</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     ${seg('sound', [[true, 'On'], [false, 'Off']], 'Sound')}
     ${seg('fx', [[true, 'On'], [false, 'Off']], 'Sound effects')}
     ${seg('music', [[true, 'On'], [false, 'Off']], 'Music')}
@@ -425,7 +426,7 @@ export function registerHtml(lex, reg, noSave, newerSave) {
   }).join('');
   return `<div class="sheet register">
     ${band()}
-    <header class="sheet-head"><h1>Bathhouse Register</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    <header class="sheet-head"><h1 tabindex="-1">Bathhouse Register</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     ${noSave ? `<p class="note warn" role="status">${NO_SAVE}</p>` : newerSave ? `<p class="note warn" role="status">${NEWER_SAVE}</p>` : ''}
     <p class="note">Every Hot Springs word you play is signed in here. Tap a word to read its card.</p>
     ${groups}
@@ -442,7 +443,7 @@ export function recordsHtml(st, o) {
   const rows = Object.entries(st.opp).filter(([k]) => persona(k.split(':')[0]) && LEVEL_NAME[k.split(':')[1]]).sort((a, b) => order(a[0]) - order(b[0]));
   return `<div class="sheet records">
     ${band()}
-    <header class="sheet-head"><h1>Records</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    <header class="sheet-head"><h1 tabindex="-1">Records</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     ${st.games ? '' : '<p class="note">No games on the record yet. Finish a game against the computer and your score, wins and best plays are written here.</p>'}
     <h2>Games against the town</h2>
     <div class="stats">${stat(st.games, 'games')}${stat(st.wins, 'wins')}${stat(rate, 'win rate')}${stat(st.bestScore || '-', 'best score')}${stat(avg, 'average score')}${stat(`${st.streak} / ${st.bestStreak}`, 'win streak / best')}</div>
@@ -472,7 +473,7 @@ export function recordsHtml(st, o) {
 export function aboutHtml(meta) {
   return `<div class="sheet about">
     ${band()}
-    <header class="sheet-head"><h1>About</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    <header class="sheet-head"><h1 tabindex="-1">About</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     <p><b>Bathhouse Letters</b> is part of Hot Springs Games, an open-source (MIT) collection of browser games set in Hot Springs, Arkansas. It's an original crossword word-tile game: the board, tiles, bonuses and rules were made for it, and nothing here is endorsed by any park, business or bathhouse.</p>
     <h2>Words</h2>
     <p>The dictionary is the ENABLE word list (public domain), ${meta.words.toLocaleString('en-US')} words of 2–15 letters, minus slurs and crude words${meta.added ? `, plus ${meta.added} added by the game: the two-letter words QI, ZA, OK, EW, KI, FE, GI and OI, and everyday words such as EMAIL, ONLINE, APP, BLOG and EMOJI` : ''}. Common words for the computer opponents are marked using SCOWL by Kevin Atkinson (© 2000–2018, used under its permissive licence).</p>
@@ -563,7 +564,7 @@ export function overHtml(s, lex, dinfo, extra = {}) {
   const oc = outcome(s), why2 = daily ? '' : decisiveLine(s);
   return `<div class="sheet over over-${oc}">
     ${art.has('title') ? `<div class="over-art" style="background-image:url(${art.src('title')})" aria-hidden="true"></div>` : ''}
-    <header class="masthead"><p class="mast-kicker">${daily ? 'The Steam Ledger' : KICKER[oc]}</p><h1>${daily ? 'Daily Soak' : 'Final Soak'}</h1><p class="mast-sub">${esc(why)}</p>${why2 ? `<p class="decisive">${why2}</p>` : ''}</header>
+    <header class="masthead"><p class="mast-kicker">${daily ? 'The Steam Ledger' : KICKER[oc]}</p><h1 tabindex="-1">${daily ? 'Daily Soak' : 'Final Soak'}</h1><p class="mast-sub">${esc(why)}</p>${why2 ? `<p class="decisive">${why2}</p>` : ''}</header>
     ${dinfo ? `<div class="daily-box"><p class="daily-date">${esc(dinfo.label)}</p><div class="daily-stats"><div><b>${s.players[0].score}</b><small>this soak</small></div><div><b>${dinfo.best}</b><small>best today</small></div><div><b>${dinfo.streak}</b><small>day streak</small></div></div><p class="note">Everyone gets the same tiles today. Come back tomorrow for a new soak.</p>${dinfo.par ? `<p class="par">${esc(persona('hollis').name)} scored ${dinfo.par.m} and ${esc(persona('julian').name)} ${dinfo.par.h} on these tiles.</p>` : ''}${dinfo.plays > 1 && dinfo.first != null ? `<p class="par">Your first try today: ${dinfo.first}.</p>` : ''}${dinfo.rested ? '<p class="note rest-note">You missed a day, and a rest day kept your streak going. You get one in any seven days.</p>' : ''}</div>` : ''}
     ${daily ? '' : `<div class="winner">${badge(top.p, top.k, 92)}<div class="wmeta"><span class="ribbon">${win.length > 1 ? 'Tied for first' : 'Winner'}</span><b>${win.map((k) => esc(s.players[k].name)).join(' &amp; ')}</b><small class="wlines">${line(top.p, top.k)}</small>${say(top.k)}</div><b class="wscore">${top.p.score}</b></div>`}
     ${pbs}

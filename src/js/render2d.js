@@ -449,14 +449,34 @@ export function drawFrame(ctx, d) {
     ctx.lineJoin = 'miter';
   }
   if (d.hint) for (const t of d.hint) drawTile(t.i, t, 'ghost', 0.6);
-  // word outlines for the live preview (projected quads, so they also sit on the 3D board)
-  const lw = (k) => Math.max(1.5, (d.cellPx || cellPx) * k);
-  const outline = (cells, color, width) => { for (const i of cells) { ctx.strokeStyle = color; ctx.lineWidth = width; poly(ctx, quad(i, 0.03)); ctx.stroke(); } };
-  if (d.goodCells) outline(d.goodCells, 'rgba(42,157,143,0.95)', lw(0.06));
-  if (d.badCells) outline(d.badCells, 'rgba(178,40,28,0.95)', lw(0.07));
   // a tile just placed settles into its square: a little larger, easing down to its size in 120 ms
   const settle = (i) => { const t0 = d.settle && d.settle.get(i); return t0 == null ? 1 : 1 + 0.12 * Math.pow(1 - Math.min(1, Math.max(0, (now - t0) / 120)), 3); };
   if (!d.mode3d) for (const t of d.staged || []) drawTile(t.i, t, 'staged', d.dragFrom === t.i ? 0.35 : 1, cellPx * 0.04, settle(t.i));
+  // word outlines for the live preview (projected quads drawn above staged tiles in both 2D and 3D)
+  const lw = (k) => Math.max(1.5, (d.cellPx || cellPx) * k);
+  const outline = (cells, color, width) => { for (const i of cells) { ctx.strokeStyle = color; ctx.lineWidth = width; poly(ctx, quad(i, 0.03)); ctx.stroke(); } };
+  if (d.goodCells) outline(d.goodCells, 'rgba(42,157,143,0.95)', lw(0.06));
+  if (d.badCells && d.badCells.length) {
+    const bw = lw(0.075), dash = [lw(0.18), lw(0.1)];
+    const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    ctx.save();
+    ctx.strokeStyle = 'rgba(178,40,28,0.98)';
+    ctx.lineWidth = bw;
+    ctx.lineCap = 'round';
+    for (const i of d.badCells) {
+      const q = quad(i, 0.03);
+      ctx.setLineDash(dash);
+      poly(ctx, q); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      const tl1 = lerp(q[0], q[1], 0.28), tl2 = lerp(q[0], q[3], 0.28);
+      const br1 = lerp(q[2], q[3], 0.28), br2 = lerp(q[2], q[1], 0.28);
+      ctx.moveTo(tl1[0], tl1[1]); ctx.lineTo(tl2[0], tl2[1]);
+      ctx.moveTo(br1[0], br1[1]); ctx.lineTo(br2[0], br2[1]);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   // while dragging: the tile seated, translucent, in the square it will land on (projected, so it also sits on the
   // 3D board), or a red dashed outline when that square is taken
   if (d.target != null && d.target >= 0) {

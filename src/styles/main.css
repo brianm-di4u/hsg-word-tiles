@@ -273,7 +273,9 @@ body.theme-dark .pcard .score.score-updated { background: rgba(212, 175, 55, 0.2
 .chip { display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border-radius: 99px; background: rgba(255, 248, 230, 0.12); border: 1.5px solid transparent; color: #F6EFDF; }
 .chip.on { border-color: #F0D57A; background: rgba(240, 213, 122, 0.2); }
 .chip .score { font: 600 1.05em var(--f-serif); font-variant-numeric: tabular-nums; }
-.chip .badge i { display: none; }
+.badge.has-face i { display: none; }
+.chip .badge:not(.has-face) b { transform: translate(-2px, -1.5px); font-size: 9px; }
+.chip .badge i { width: 13px; height: 13px; font-size: 8.5px; line-height: 13px; right: -4px; bottom: -4px; }
 
 /* featured springs plaques */
 .springs-title { display: flex; align-items: baseline; gap: 8px; margin: 0 0 6px; font: 600 1rem var(--f-serif); color: #F3DD8B; }
