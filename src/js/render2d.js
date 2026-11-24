@@ -242,16 +242,28 @@ export function paintBoard(size, theme = 'light') {
         ctx.fillStyle = '#9A968C'; ctx.beginPath(); ctx.arc(cx, cy, w * 0.43, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, w * 0.38, 0, Math.PI * 2); ctx.fill();
       }
-      // START on an ink banner across the pool, like the scoring discs
-      // (S2-24: the banner is a little larger than it was, 0.84 of the square by 0.3, with larger letters, so the first square to play reads from across the table)
-      const bw = w * START_BANNER[0], bh = w * START_BANNER[1];
-      ctx.fillStyle = 'rgba(22,19,15,0.92)'; roundRect(ctx, cx - bw / 2, cy - bh / 2, bw, bh, bh * 0.3); ctx.fill();
-      ctx.strokeStyle = '#E9C766'; ctx.lineWidth = Math.max(1, w * 0.02); ctx.stroke();
+      // Compact curved lower-rim brass START ribbon exposing the luminous turquoise Display Spring pool (W2-S5-01).
+      const rw = w * START_RIBBON.w, rh = w * START_RIBBON.h;
+      const ry = cy + w * START_RIBBON.y, bow = w * START_RIBBON.bow;
+      const x0 = cx - rw / 2, x1 = cx + rw / 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x0, ry - rh / 2);
+      ctx.quadraticCurveTo(cx, ry - rh / 2 + bow, x1, ry - rh / 2);
+      ctx.lineTo(x1, ry + rh / 2);
+      ctx.quadraticCurveTo(cx, ry + rh / 2 + bow, x0, ry + rh / 2);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(22,19,15,0.94)';
+      ctx.fill();
+      ctx.strokeStyle = '#E9C766';
+      ctx.lineWidth = Math.max(1, w * 0.022);
+      ctx.stroke();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#F3DD8B';
       ctx.font = `800 ${cell * START_TEXT}px ${FONT_TILE}`;
-      const fit = Math.min(1, (bw * 0.86) / ctx.measureText('START').width);
+      const fit = Math.min(1, (rw * 0.84) / ctx.measureText('START').width);
       if (fit < 1) ctx.font = `800 ${cell * START_TEXT * fit}px ${FONT_TILE}`;
-      ctx.fillText('START', cx, cy + w * 0.012);
+      ctx.fillText('START', cx, ry + bow * 0.45);
+      ctx.restore();
     } else if (k === 'B') {
       const name = BATHHOUSES[i];
       ctx.fillStyle = 'rgba(232,222,198,0.97)'; ctx.fillRect(x + w * 0.03, y + w * 0.03, w * 0.94, w * 0.94);
@@ -367,11 +379,15 @@ export const cellCenter = (i) => project(FRAME + (i % N) + 0.5, FRAME + Math.flo
 const quad = (i, k = 0.04) => { const bx = FRAME + (i % N), by = FRAME + Math.floor(i / N); return [[k, k], [1 - k, k], [1 - k, 1 - k], [k, 1 - k]].map(([u, v]) => project(bx + u, by + v)); };
 const poly = (ctx, pts) => { ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); };
 
-const START_BANNER = [0.94, 0.38], START_TEXT = 0.225;   // the START banner as a share of its square (was 0.84 by 0.3) and its letters as a share of a cell (was 0.19)
+// W2-S5-01: compact curved lower-rim brass START ribbon exposing the luminous turquoise Display Spring pool.
+const START_RIBBON = { w: 0.74, h: 0.24, y: 0.30, bow: 0.065 }, START_TEXT = 0.165;
 // S2-24: as tiles cover the board the glass discs and Bathhouse Row medallions of the squares still open step back: a wash of
-// DIM_STEP more per tile on the board, up to DIM_MAX, so the tiles are the loudest thing on it
+// DIM_STEP more per tile on the board, up to DIM_MAX, so the tiles are the loudest thing on it.
+// W2-S5-01: before Move 1 (while CENTER is empty and unstaged), apply a gentle PRE_DIM wash on outer-ring DIMMABLE squares
+// (beneath 3D tiles in board3d.js, and beneath tiles on the flat 2D board) so H8 commands Turn-1 focus.
+export const PRE_DIM = 0.12;
 const DIM_STEP = 0.012, DIM_MAX = 0.16;
-const DIMMABLE = SQUARE.map((k, i) => (PREMIUM[k] || k === 'B' ? i : -1)).filter((i) => i >= 0);
+export const DIMMABLE = SQUARE.map((k, i) => (PREMIUM[k] || k === 'B' ? i : -1)).filter((i) => i >= 0);
 
 let boardTex = null, boardKey = '';
 export function boardTexture(theme) {
@@ -397,13 +413,52 @@ export function drawFrame(ctx, d) {
     ctx.drawImage(boardTexture(d.theme), ox, oy, U * s, U * s);
   }
   // the squares nobody has covered, dimmed a little more with every tile down (the same wash on the flat and the 3D board)
+  const openCenter = !d.board[CENTER] && !(d.staged && d.staged.some((t) => t.i === CENTER));
   const down = d.board.reduce((n, t) => n + (t ? 1 : 0), 0), dim = Math.min(DIM_MAX, DIM_STEP * down);
-  if (dim > 0) {
-    ctx.fillStyle = 'rgba(30,20,10,' + dim.toFixed(3) + ')';
+  const flatPreDim = !d.flatOnly && openCenter && down === 0 ? PRE_DIM : 0;
+  const effDim = Math.max(dim, flatPreDim);
+  if (effDim > 0) {
+    ctx.fillStyle = 'rgba(30,20,10,' + effDim.toFixed(3) + ')';
     for (const i of DIMMABLE) {
       if (d.board[i] || (d.staged && d.staged.some((t) => t.i === i))) continue;
       poly(ctx, quad(i, 0.035)); ctx.fill();
     }
+  }
+  // W2-S5-01: focused, reduced-motion-safe concentric brass/aqua spotlight halo directly on H8 (CENTER) on Turn 1.
+  // Confined strictly around H8 — zero interior marble pinwheel lines (CD-WF2-03).
+  if (openCenter) {
+    const [hx, hy] = cellCenter(CENTER);
+    const cp = d.cellPx || s;
+    ctx.save();
+    const glow = ctx.createRadialGradient(hx, hy, cp * 0.47, hx, hy, cp * 1.08);
+    glow.addColorStop(0, 'rgba(127, 211, 196, 0)');
+    glow.addColorStop(0.18, 'rgba(127, 211, 196, 0.38)');
+    glow.addColorStop(0.55, 'rgba(243, 221, 139, 0.24)');
+    glow.addColorStop(1, 'rgba(243, 221, 139, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(hx, hy, cp * 1.08, 0, Math.PI * 2); ctx.fill();
+    // Concentric dark-espresso + bright-brass + luminous aqua rings framing the Display Spring
+    ctx.strokeStyle = 'rgba(26, 17, 8, 0.72)';
+    ctx.lineWidth = Math.max(2, cp * 0.11);
+    ctx.beginPath(); ctx.arc(hx, hy, cp * 0.64, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(243, 221, 139, 0.94)';
+    ctx.lineWidth = Math.max(1.5, cp * 0.065);
+    ctx.beginPath(); ctx.arc(hx, hy, cp * 0.64, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(127, 211, 196, 0.92)';
+    ctx.lineWidth = Math.max(1.2, cp * 0.045);
+    ctx.beginPath(); ctx.arc(hx, hy, cp * 0.54, 0, Math.PI * 2); ctx.stroke();
+    // Four compact cardinal brass compass ticks right outside the halo
+    ctx.strokeStyle = 'rgba(243, 221, 139, 0.92)';
+    ctx.lineWidth = Math.max(1.5, cp * 0.055);
+    ctx.lineCap = 'round';
+    for (let k = 0; k < 4; k++) {
+      const a = (k * Math.PI) / 2;
+      ctx.beginPath();
+      ctx.moveTo(hx + Math.cos(a) * cp * 0.71, hy + Math.sin(a) * cp * 0.71);
+      ctx.lineTo(hx + Math.cos(a) * cp * 0.85, hy + Math.sin(a) * cp * 0.85);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
   const cellPx = s, tilePx = cellPx * dpr;
   const at = (i) => toScreen(FRAME + (i % N), FRAME + Math.floor(i / N));

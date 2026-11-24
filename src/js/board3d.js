@@ -8,7 +8,7 @@ import { THREE } from './three-lib.js';
 import { MESHES } from './pieces-mesh.js';
 import * as R from './render2d.js';
 import { art } from './art.js';
-import { N } from './score.js';
+import { N, CENTER } from './score.js';
 
 const U = R.U, HALF = U / 2, TOP = 0.3;   // board face height in world units (1 unit = 1 square)
 export const B3 = { on: false, mode: 'auto', tried: false, reason: '', renderer: null, frames: [], intervals: [], tiles: [], W: 0, H: 0, dpr: 1, dark: false, texKey: '' };
@@ -128,6 +128,32 @@ export function init(canvas, theme) {
   const side = new THREE.MeshStandardMaterial({ color: 0x3a2414, roughness: 0.6 });
   B3.board = new THREE.Mesh(new THREE.BoxGeometry(U, TOP, U), [side, side, B3.top, side, side, side]);
   B3.board.position.y = TOP / 2; B3.board.receiveShadow = true; B3.board.castShadow = true; scene.add(B3.board);
+  // W2-S5-01: Turn-1 gentle pre-dim quads on outer-ring DIMMABLE squares seated beneath 3D tiles (y = TOP + 0.002).
+  // Built as one merged BufferGeometry (1 draw call, zero extra Three.js exports).
+  const preCount = R.DIMMABLE.length;
+  const prePos = new Float32Array(preCount * 4 * 3);
+  const preIdx = new Uint16Array(preCount * 6);
+  const preHalf = 0.465, preY = TOP + 0.002;
+  R.DIMMABLE.forEach((cellIdx, k) => {
+    const cx = R.FRAME + (cellIdx % N) + 0.5 - HALF;
+    const cz = R.FRAME + Math.floor(cellIdx / N) + 0.5 - HALF;
+    const v = k * 4, o = v * 3;
+    prePos[o] = cx - preHalf; prePos[o + 1] = preY; prePos[o + 2] = cz - preHalf;
+    prePos[o + 3] = cx + preHalf; prePos[o + 4] = preY; prePos[o + 5] = cz - preHalf;
+    prePos[o + 6] = cx + preHalf; prePos[o + 7] = preY; prePos[o + 8] = cz + preHalf;
+    prePos[o + 9] = cx - preHalf; prePos[o + 10] = preY; prePos[o + 11] = cz + preHalf;
+    const io = k * 6;
+    preIdx[io] = v; preIdx[io + 1] = v + 3; preIdx[io + 2] = v + 2;
+    preIdx[io + 3] = v; preIdx[io + 4] = v + 2; preIdx[io + 5] = v + 1;
+  });
+  const preGeo = new THREE.BufferGeometry();
+  preGeo.setAttribute('position', new THREE.BufferAttribute(prePos, 3));
+  preGeo.setIndex(new THREE.BufferAttribute(preIdx, 1));
+  const preMat = new THREE.MeshBasicMaterial({ color: 0x1e140a, transparent: true, opacity: R.PRE_DIM, depthWrite: false });
+  B3.preDim = new THREE.Mesh(preGeo, preMat);
+  B3.preDim.renderOrder = 1;
+  B3.preDim.visible = false;
+  scene.add(B3.preDim);
   B3.frame = piece('frame'); B3.frame.scale.set(U / 16, 1, U / 16); scene.add(B3.frame);
   // set dressing on the counter, outside the board
   // beside the board's far corners, where perspective leaves the most counter in view: towels and the desk bell
@@ -247,6 +273,7 @@ export function render(d) {
   // board face: the same texture the 2D board uses
   const tex = R.boardTexture(d.theme);
   if (tex !== B3.boardCanvas) { B3.top.map?.dispose(); B3.top.map = canvasTex(tex); B3.top.map.minFilter = THREE.LinearMipmapLinearFilter; B3.top.needsUpdate = true; B3.boardCanvas = tex; }
+  if (B3.preDim) B3.preDim.visible = !d.board[CENTER] && !(d.staged && d.staged.some((t) => t.i === CENTER));
   // tiles: placed, then staged; the dragged staged tile is hidden
   const want = [];
   for (let i = 0; i < N * N; i++) if (d.board[i]) want.push({ i, t: d.board[i], kind: d.last && d.last.has(i) ? 'last' : 'board' });
@@ -307,4 +334,4 @@ export function cellAt(x, y) {
 }
 // approximate on-screen size of one square near the centre (for line widths)
 export function cellPx() { const [x0, y0] = screenOf(HALF - 0.5, HALF); const [x1, y1] = screenOf(HALF + 0.5, HALF); return Math.hypot(x1 - x0, y1 - y0); }
-export function debug() { return { on: B3.on, reason: B3.reason, tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, tilt: TILT, tall: !!B3.tall, bezel: B3.on ? bezelBounds() : null, frames: B3.frames.length, intervals: B3.intervals.slice() }; }
+export function debug() { return { on: B3.on, reason: B3.reason, tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, tilt: TILT, tall: !!B3.tall, preDim: !!(B3.preDim && B3.preDim.visible), bezel: B3.on ? bezelBounds() : null, frames: B3.frames.length, intervals: B3.intervals.slice() }; }

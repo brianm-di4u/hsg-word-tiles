@@ -321,7 +321,17 @@ export const tests = [
         return { alpha: a / n, lum: l / n };
       }, i);
       t.expect(squares.glass > 0 && squares.glass < 105 && squares.row > 0 && squares.row < 105, 'the squares measured are open ones (' + squares.glass + ', ' + squares.row + ')');
+      const mode3d = (await t.state()).view.mode3d;
+      // W2-S5-01 applies a gentle 0.12 Turn-1 pre-dim on outer DIMMABLE squares while CENTER is open and unstaged
+      // (under 3D tiles on #gl in 3D mode, and on #board in flat mode). On the flat board, stage one tile on CENTER
+      // (down still 0) so `empty` measures the un-dimmed open square baseline before progressive 24-tile dimming.
+      if (!mode3d) {
+        const rack0 = (await t.state()).game.players[0].rack.find((l) => l !== '?') || 'E';
+        await t.game('act', 'stage', [{ i: 112, l: rack0 }]);
+        await t.waitFrames(2);
+      }
       const empty = { glass: await patch(squares.glass), row: await patch(squares.row) };
+      if (!mode3d) await t.game('act', 'recall');
       // tiles along the middle row and the one below: about 24, so the wash is at its most
       const g = (await t.state()).game;
       for (let k = 0; k < 24; k++) g.board[105 + k] = { l: 'ETAOINSHR'[k % 9], blank: false };
@@ -329,7 +339,6 @@ export const tests = [
       await t.waitIdle(5000);
       await t.waitForStable(300);
       const full = { glass: await patch(squares.glass), row: await patch(squares.row) };
-      const mode3d = (await t.state()).view.mode3d;
       for (const key of ['glass', 'row']) {
         t.log(key + ' square (' + (mode3d ? '3D overlay' : 'flat') + '): alpha ' + empty[key].alpha.toFixed(1) + ' to ' + full[key].alpha.toFixed(1) + ', luminance ' + empty[key].lum.toFixed(1) + ' to ' + full[key].lum.toFixed(1));
         if (mode3d) t.expect(empty[key].alpha < 1 && full[key].alpha > 25 && full[key].alpha < 55, key + ' square: no wash on the empty board, then a light one (alpha ' + full[key].alpha.toFixed(1) + ')');
@@ -339,7 +348,7 @@ export const tests = [
     },
   },
   {
-    name: 'S2-24 the START banner on the flat board is wider than the old 0.84 of the square and still holds its word',
+    name: 'S2-24 / W2-S5-01 the Display Spring exposes its turquoise pool above a compact curved lower-rim START ribbon',
     viewports: ['desktop', 'mobile'],
     url: 'index.html?gl=0',
     initScript: seeded(2),
@@ -349,19 +358,37 @@ export const tests = [
       await t.waitIdle(5000);
       t.expect(!(await t.state()).view.mode3d, 'the flat board is showing');
       const r = await t.page.evaluate(async () => {
-        const cv = document.getElementById('board'), k = cv.width / cv.clientWidth, [x, y] = await window.__game.act('cell', 112), [x2] = await window.__game.act('cell', 113), c = Math.abs(x2 - x);
-        const row = cv.getContext('2d').getImageData(Math.round((x - 0.6 * c) * k), Math.round(y * k), Math.round(1.2 * c * k), 1).data;   // the line across the middle of the banner: its dark ends lie outside the letters
-        let lo = -1, hi = -1;
-        for (let j = 0; j < row.length; j += 4) if (row[j] < 70 && row[j + 1] < 65 && row[j + 2] < 60) { if (lo < 0) lo = j / 4; hi = j / 4; }
-        const mid = row;
-        let gold = 0;
-        for (let j = 0; j < mid.length; j += 4) if (mid[j] > 200 && mid[j + 1] > 170 && mid[j + 2] < 150) gold++;
-        return { wide: (hi - lo + 1) / (k * c), gold, cell: c };
+        const cv = document.getElementById('board'), ctx = cv.getContext('2d'), k = cv.width / cv.clientWidth;
+        const [x, y] = await window.__game.act('cell', 112), [x2] = await window.__game.act('cell', 113), c = Math.abs(x2 - x);
+        // Upper/center pool band: luminous turquoise Display Spring is exposed (not hidden under a dark bar)
+        const pool = ctx.getImageData(Math.round((x - 0.18 * c) * k), Math.round((y - 0.16 * c) * k), Math.max(4, Math.round(0.36 * c * k)), Math.max(4, Math.round(0.24 * c * k))).data;
+        let teal = 0, darkCenter = 0, poolN = 0;
+        for (let j = 0; j < pool.length; j += 4) {
+          poolN++;
+          if (pool[j + 1] > pool[j] + 15 && pool[j + 2] > pool[j] + 10) teal++;
+          if (pool[j] < 45 && pool[j + 1] < 40 && pool[j + 2] < 35) darkCenter++;
+        }
+        // Lower-rim ribbon band around y + 0.30*c inside the cell [-0.45..+0.45]: compact dark espresso ribbon with gold START lettering
+        const ribY = Math.round((y + 0.22 * c) * k), ribH = Math.max(4, Math.round(0.20 * c * k));
+        const W = Math.max(4, Math.round(0.90 * c * k));
+        const rib = ctx.getImageData(Math.round((x - 0.45 * c) * k), ribY, W, ribH).data;
+        let lo = W, hi = -1, gold = 0;
+        for (let py = 0; py < ribH; py++) {
+          for (let px = 0; px < W; px++) {
+            const j = (py * W + px) * 4;
+            const isDark = rib[j] < 95 && rib[j + 1] < 85 && rib[j + 2] < 75;
+            const isGold = rib[j] > 195 && rib[j + 1] > 165 && rib[j + 2] < 155;
+            if (isDark) { if (px < lo) lo = px; if (px > hi) hi = px; }
+            if (isGold) gold++;
+          }
+        }
+        return { wide: hi >= lo ? (hi - lo + 1) / (k * c) : 0, gold, tealRatio: teal / poolN, darkCenterRatio: darkCenter / poolN, cell: c };
       });
-      t.log('START banner ' + r.wide.toFixed(2) + ' of a cell wide, ' + r.gold + ' gold pixels on its middle line');
-      t.expect(r.wide >= 0.84, 'the banner is at least 0.84 of a cell wide inside its rim (it was 0.77; now ' + r.wide.toFixed(2) + ')');
-      t.expect(r.wide <= 0.98, 'and stays inside its square');
-      t.expect(r.gold > 8, 'the letters are drawn on it (' + r.gold + ' gold pixels)');
+      t.log(`Display Spring: pool teal ${(r.tealRatio * 100).toFixed(0)}%, darkCenter ${(r.darkCenterRatio * 100).toFixed(0)}%, lower ribbon ${r.wide.toFixed(2)} cell wide, ${r.gold} gold px`);
+      t.expect(r.darkCenterRatio < 0.1, 'center Display Spring pool is no longer covered by an opaque dark bar (' + (r.darkCenterRatio * 100).toFixed(1) + '%)');
+      t.expect(r.tealRatio > 0.4, 'luminous turquoise pool shines through above the ribbon (' + (r.tealRatio * 100).toFixed(1) + '%)');
+      t.expect(r.wide >= 0.62 && r.wide <= 0.88, 'compact lower-rim START ribbon spans 0.62-0.88 cell (' + r.wide.toFixed(2) + ')');
+      t.expect(r.gold > 10, 'gold START lettering & brass rim are drawn on the lower ribbon (' + r.gold + ' gold px)');
       await t.shot('S2-24-start-banner');
     },
   },

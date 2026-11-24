@@ -367,9 +367,21 @@ export const tests = [
       await ready(t);
       await t.game('newGame', {});
       await t.waitForStable();
-      const anim = await t.page.evaluate(() => { const b = document.querySelector('#boardwrap'); return [getComputedStyle(b, '::after').animationName, getComputedStyle(b, '::after').boxShadow]; });
-      t.equal(anim[0], 'none', 'no animation on the board marker');
-      t.expect(anim[1] !== 'none', `the marker is still drawn (${anim[1]})`);
+      // W2-S5-01 replaced the coarse #boardwrap.coach-target::after full-frame inset border with the static
+      // H8 spotlight halo; verify #boardwrap does not pulse, and staging a tile leaves a static .coach-target
+      // outline on #actions .play with animationName === 'none'.
+      const boardAnim = await t.page.evaluate(() => getComputedStyle(document.querySelector('#boardwrap')).animationName);
+      t.equal(boardAnim, 'none', 'no animation on the board target');
+      const mv = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', mv[0].tiles);
+      await t.waitForStable();
+      const playMark = await t.page.evaluate(() => {
+        const b = document.querySelector('#actions .play.coach-target');
+        const cs = b && getComputedStyle(b);
+        return cs ? [cs.animationName, cs.outlineStyle] : ['missing', 'none'];
+      });
+      t.equal(playMark[0], 'none', 'no animation on the Play coach marker');
+      t.expect(playMark[1] !== 'none', `the static marker is still drawn (${playMark[1]})`);
     },
   },
   {
