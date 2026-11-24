@@ -229,7 +229,8 @@ export const tests = [
     name: 'S3-13 the review finds the best play for every turn the person took, as the board and rack stood then', node: true,
     async run(t) {
       const c = await ctx();
-      const s = createGame({ mode: 'play', seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', name: 'Opal' }], seed: 31 }, c.lex);
+      // W1-S3-06: Easy/Medium games prefer teachable common/Hot Springs misses; full-dictionary parity holds on Hard games.
+      const s = createGame({ mode: 'play', seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', name: 'Julian', level: 'hard' }], seed: 31 }, c.lex);
       const want = [];   // what the game itself says is best on each of the person's turns, asked at the time
       for (let turn = 0; !s.over && turn < 40; turn++) {
         const { moves } = generateMoves(c.dict, s.board, s.players[s.cur].rack, { lex: c.lex, featured: s.featured });

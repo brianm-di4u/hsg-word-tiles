@@ -3,6 +3,7 @@
 // skipped turn by turn. The count is of points only: it knows nothing of what a play leaves on the rack.
 import { generateMoves } from './movegen.js';
 import { N } from './score.js';
+import { casualAudience, isTeachableWord } from './ai.js';
 
 export const MIN_MISS = 5;     // a shortfall smaller than this is not listed
 export const MAX_LISTED = 3;   // how many of the biggest misses the results sheet lists
@@ -18,6 +19,7 @@ export function reviewSeat(s) {
 // one result per turn of that seat, computed one at a time so the page can breathe between them
 export function* reviewSteps(s, seat, dict, lex) {
   const board = new Array(N * N).fill(null);
+  const casual = casualAudience(s);
   let turn = 0;
   for (const e of s.log) {
     if (e.kind === 'end') continue;
@@ -25,7 +27,9 @@ export function* reviewSteps(s, seat, dict, lex) {
       turn++;
       if (typeof e.rack === 'string' && /^[A-Z?]{1,7}$/.test(e.rack)) {
         // W1-S3-02 / CD-WF1-06: post-game review never peeks at hidden Featured Spring words for +30 equity.
-        const best = generateMoves(dict, board, [...e.rack], { lex, featured: [] }).moves[0] || null;
+        // W1-S3-06 / CD-WF1-05: Easy/Medium games prefer teachable everyday and Hot Springs misses over obscure ENABLE words.
+        const { moves } = generateMoves(dict, board, [...e.rack], { lex, featured: [] });
+        const best = (casual && moves.find((m) => m.words.every((w) => isTeachableWord(dict, lex, w)))) || moves[0] || null;
         yield { turn, kind: e.kind, word: e.kind === 'play' ? e.words[0].w : null, score: e.score, best: best ? { word: best.words[0], score: best.score } : null };
       } else yield { turn, skipped: true };
     }

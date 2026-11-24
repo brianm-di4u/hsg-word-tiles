@@ -2,6 +2,7 @@
 // worker (and in Node for the tools). Randomness (Easy only) comes from state.rng.ai, and the caller
 // keeps the advanced stream, so games stay reproducible.
 import { generateMoves } from './movegen.js';
+import { isCommon } from './dict.js';
 import { rand } from './rng.js';
 import { N, SQUARE, VALUE, LETTER_MULT, WORD_MULT, RACK } from './score.js';
 import { LEAVE } from './leave-table.js';
@@ -166,16 +167,61 @@ function fallback(rack, bag) {
   return letters.length ? { type: 'swap', letters } : { type: 'pass' };
 }
 
+// Equity points within which Spring Guide hints in Easy/Medium games prefer everyday/Hot Springs words over obscure ENABLE words (W1-S3-06).
+export const HINT_COMMON_GAP = 6;
+
+// Everyday SCOWL common words, the 25 everyday two-letter words (including OK), and all Hot Springs bonus forms.
+export function isTeachableWord(dict, lex, word) {
+  return !!(lex && lex.byForm && lex.byForm.has(word)) || isCommon(dict, word) || (word.length === 2 && EASY_TWO.has(word));
+}
+
+// Easy/Medium games, Pass-and-Play, and Daily Soak coach with everyday and Hot Springs vocabulary (W1-S3-06 / CD-WF1-05);
+// games against a Hard AI opponent coach with the full dictionary.
+export function casualAudience(s) {
+  if (!s || !Array.isArray(s.players)) return true;
+  return !s.players.some((p) => p && p.kind !== 'human' && p.level === 'hard');
+}
+
 // The hint: up to three different plays for a human seat, best Medium-strength play first (score plus half the value of the tiles kept),
-// each with the tiles it keeps. Two plays that make the same words count as one. Empty when nothing fits.
+// each with the tiles it keeps. In Easy/Medium games, prefers SCOWL common words and Hot Springs bonus words whenever one sits within
+// HINT_COMMON_GAP equity points of the raw best (W1-S3-06). Two plays that make the same words count as one. Empty when nothing fits.
 export function hintChoices(dict, lex, s, n = 3) {
   const p = s.players[s.cur];
   // W1-S3-02 / CD-WF1-06: Spring Guide hints never peek at hidden Featured Spring words.
   const { moves } = generateMoves(dict, s.board, p.rack, { lex, featured: [], budget: 900000 });
-  const bag = s.bag.length;
-  const ranked = moves.slice(0, 60).map((m) => { const keep = rackMinus(p.rack, m.tiles); return { m, keep, e: m.score + 0.5 * leaveValue(keep) * Math.min(1, bag / RACK) }; }).sort((a, b) => b.e - a.e);
+  if (!moves.length) return [];
+  const bag = s.bag.length, bagScale = 0.5 * Math.min(1, bag / RACK);
+  const casual = casualAudience(s);
+  const teachable = (m) => m.words.every((w) => isTeachableWord(dict, lex, w));
+  const pool = moves.slice(0, 60);
+  if (casual) {
+    const seenKey = new Set(pool.map((m) => m.key));
+    let added = 0;
+    for (const m of moves) {
+      if (!teachable(m)) continue;
+      if (!seenKey.has(m.key)) { seenKey.add(m.key); pool.push(m); }
+      if (++added >= 60) break;
+    }
+  }
+  const ranked = pool
+    .map((m) => { const keep = rackMinus(p.rack, m.tiles); return { m, keep, common: casual ? teachable(m) : true, e: m.score + leaveValue(keep) * bagScale }; })
+    .sort((a, b) => b.e - a.e || (a.m.key < b.m.key ? -1 : 1));
+  const ordered = [];
+  if (casual) {
+    const bestAll = ranked[0];
+    const commons = ranked.filter((r) => r.common);
+    const rares = ranked.filter((r) => !r.common);
+    if (commons.length && bestAll.e - commons[0].e <= HINT_COMMON_GAP) {
+      ordered.push(...commons, ...rares);
+    } else {
+      if (bestAll && !bestAll.common) ordered.push(bestAll);
+      ordered.push(...commons, ...rares);
+    }
+  } else {
+    ordered.push(...ranked);
+  }
   const out = [], seen = new Set();
-  for (const { m, keep } of ranked) {
+  for (const { m, keep } of ordered) {
     const k = m.words.join(',');
     if (seen.has(k)) continue;
     seen.add(k);
