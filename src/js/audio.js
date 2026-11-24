@@ -29,7 +29,7 @@ function graph(ctx, dest, seed) {
 }
 
 export function unlock() {
-  if (audio.ctx) { if (audio.ctx.state === 'suspended' && !audio.holds.has('hidden')) audio.ctx.resume(); return; }
+  if (audio.ctx) { if (audio.ctx.state !== 'running' && audio.ctx.state !== 'closed' && !audio.holds.has('hidden')) audio.ctx.resume().catch(() => {}); return; }
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -50,6 +50,9 @@ export function syncAudio() {
   const k = audio.kit;
   if (!k) return;
   const sound = audio.on;
+  const audible = musicGain() > 0 ? 1 : 0;
+  k.music.level(audible);
+  k.amb.level(audible);
   k.music.play(sound && audio.music && audio.want ? SCORES[audio.want] : null, { fade: 2.5 });
   k.amb.play(sound && audio.amb ? SCENES.bathhouse : null, { fade: 3 });
   audio.bus.mus.gain.setTargetAtTime(musicGain(), audio.ctx.currentTime, 0.05);
@@ -61,7 +64,7 @@ export function holdAudio(why) { audio.holds.add(why); if (audio.kit) audio.kit.
 export function releaseAudio(why) { audio.holds.delete(why); if (audio.kit && !audio.holds.size) audio.kit.release(); }
 
 export function pauseAudio() { holdAudio('hidden'); if (audio.ctx && audio.ctx.state === 'running') audio.ctx.suspend().catch(() => {}); }
-export function resumeAudio() { if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume().catch(() => {}); releaseAudio('hidden'); }
+export function resumeAudio() { if (audio.ctx && audio.ctx.state !== 'running' && audio.ctx.state !== 'closed') audio.ctx.resume().catch(() => {}); releaseAudio('hidden'); }
 
 // ---------- cues ----------
 let OUT = null;     // where the cue being built goes (a panner when it is placed on the board)
@@ -165,7 +168,7 @@ export function sfx(name, opts = {}) {
       case 'discover': bell(t, 784, 0.08); bell(t + 0.16, 1175, 0.08); break;
       case 'fanfare': [523, 659, 784, 1047].forEach((f, k) => bell(t + k * 0.14, f, 0.08)); break;
     }
-    if (DUCK[name] && audio.kit && c === audio.live) audio.kit.music.duck(...DUCK[name]);
+    if (DUCK[name] && audio.kit && c === audio.live) audio.kit.music.duck(DUCK[name][0], DUCK[name][1], opts.delay || 0);
   } catch (e) { /* audio is optional */ }
   CJ = { f: 1, g: 1 };
 }

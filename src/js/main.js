@@ -497,8 +497,8 @@ function wireScreen(name) {
     // Volume is the master; the effects and music levels sit under it (the music level moves the bed with the tunes)
     for (const [attr, key] of [['data-vol', 'vol'], ['data-fxvol', 'fxVol'], ['data-musicvol', 'musicVol']]) {
       const r = scr.querySelector(`[${attr}]`);
-      r.addEventListener('input', (e) => { G.settings[key] = +e.target.value; saveSettings(); });
-      if (key !== 'musicVol') r.addEventListener('change', () => sfx('place'));
+      r.addEventListener('input', (e) => { unlock(); G.settings[key] = +e.target.value; saveSettings(); });
+      if (key !== 'musicVol') r.addEventListener('change', () => { unlock(); sfx('place'); });
     }
   }
   if (name === 'register') {
@@ -2590,6 +2590,12 @@ function wireStatic() {
   window.addEventListener('blur', away);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { away(); pauseAudio(); clearTimeout(steam.wakeTimer); steam.wakeTimer = 0; return; }
+    resumeAudio();
+    releaseAi();
+    if (G.scene === 'game' && G.s) startSteam();
+  });
+  window.addEventListener('pageshow', () => {
+    if (document.hidden) return;
     resumeAudio();
     releaseAi();
     if (G.scene === 'game' && G.s) startSteam();

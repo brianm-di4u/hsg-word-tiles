@@ -16,7 +16,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
   { const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1; }
   const noise = (t, dur) => { const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true; s.start(t, rr(0, 1.9)); if (dur) s.stop(t + dur); return s; };
 
-  let mLevel = opt.music ?? 0.5, aLevel = opt.ambience ?? 0.5, inten = 0, held = false, running = false, timer = 0, cleanTimer = 0;
+  let mLevel = opt.music ?? 0.5, aLevel = opt.ambience ?? 0.5, inten = 0, held = false, running = false, timer = 0, cleanTimer = 0, duckUntil = 0;
   const musicBus = gain(mLevel, out), ambBus = gain(aLevel, out);
   const dead = [];   // { at, nodes }: sub-buses to disconnect once their fade-out has finished
   const retire = (bus, nodes, at, fade) => {
@@ -178,8 +178,16 @@ export function makeAudioKit(ctx, out, opt = {}) {
       syncTimer();
     },
     stop(fade = 1) { music.play(null, { fade }); },
-    level(v) { mLevel = v; if (!held) musicBus.gain.setTargetAtTime(v, ctx.currentTime, 0.05); },
-    duck(db = 6, ms = 400) { if (held) return; const t = ctx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.setTargetAtTime(mLevel * 10 ** (-db / 20), t, 0.02); musicBus.gain.setTargetAtTime(mLevel, t + ms / 1000, 0.25); },
+    level(v) { mLevel = v; if (!held) musicBus.gain.setTargetAtTime(v, ctx.currentTime, 0.05); syncTimer(); },
+    duck(db = 6, ms = 400, delay = 0) {
+      if (held) return;
+      const t = ctx.currentTime + Math.max(0, delay || 0);
+      const end = Math.max(duckUntil, t + ms / 1000);
+      duckUntil = end;
+      musicBus.gain.cancelScheduledValues(t);
+      musicBus.gain.setTargetAtTime(mLevel * 10 ** (-db / 20), t, 0.02);
+      musicBus.gain.setTargetAtTime(mLevel, end, 0.25);
+    },
     intensity(x) { inten = Math.max(0, Math.min(1, x)); },
     get inten() { return inten; },
     get score() { return cur && cur.score; },
@@ -229,7 +237,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
       syncTimer();
     },
     stop(fade = 1.5) { amb.play(null, { fade }); },
-    level(v) { aLevel = v; if (!held) ambBus.gain.setTargetAtTime(v, ctx.currentTime, 0.05); },
+    level(v) { aLevel = v; if (!held) ambBus.gain.setTargetAtTime(v, ctx.currentTime, 0.05); syncTimer(); },
     set(name, v, tc = 0.5) { params[name] = v; if (scene) applyParam(scene, name, v, ctx.currentTime, tc); },
     get scene() { return scene && scene.def; },
   };
@@ -249,7 +257,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
     cleanTimer = setTimeout(() => { cleanTimer = 0; flushDead(); if (dead.length && running && !held && !timer) scheduleClean(); }, wait);
   }
   function syncTimer() {
-    if (running && !held && (cur || scene)) {
+    if (running && !held && ((cur && mLevel > 0) || (scene && aLevel > 0))) {
       clearTimeout(cleanTimer); cleanTimer = 0;
       if (!timer) timer = setInterval(() => { if (ctx.state === 'running') scheduleUntil(ctx.currentTime + 0.25); }, 25);
     } else {
@@ -282,8 +290,8 @@ export function makeAudioKit(ctx, out, opt = {}) {
     start() { running = true; syncTimer(); },
     stop() { running = false; if (timer) { clearInterval(timer); timer = 0; } clearTimeout(cleanTimer); cleanTimer = 0; },
     // Pause card or hidden tab: fade both buses out and schedule nothing until release().
-    hold(tc = 0.08) { held = true; syncTimer(); const t = ctx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.setTargetAtTime(0, t, tc); ambBus.gain.setTargetAtTime(0, t, tc); },
-    release(tc = 0.3) { held = false; const t = ctx.currentTime; musicBus.gain.setTargetAtTime(mLevel, t, tc); ambBus.gain.setTargetAtTime(aLevel, t, tc); syncTimer(); },
+    hold(tc = 0.08) { held = true; duckUntil = 0; syncTimer(); const t = ctx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.setTargetAtTime(0, t, tc); ambBus.gain.setTargetAtTime(0, t, tc); },
+    release(tc = 0.3) { held = false; duckUntil = 0; const t = ctx.currentTime; musicBus.gain.setTargetAtTime(mLevel, t, tc); ambBus.gain.setTargetAtTime(aLevel, t, tc); syncTimer(); },
     get held() { return held; },
     get ticking() { return !!timer; },
   };
