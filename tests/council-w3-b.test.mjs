@@ -233,7 +233,8 @@ export const tests = [
       const s = createGame({ mode: 'play', seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', name: 'Julian', level: 'hard' }], seed: 31 }, c.lex);
       const want = [];   // what the game itself says is best on each of the person's turns, asked at the time
       for (let turn = 0; !s.over && turn < 40; turn++) {
-        const { moves } = generateMoves(c.dict, s.board, s.players[s.cur].rack, { lex: c.lex, featured: s.featured });
+        // W1-S3-02 / CD-WF1-06: review never peeks at hidden Featured Springs (+30), so compare against visible-state moves (featured: [])
+        const { moves } = generateMoves(c.dict, s.board, s.players[s.cur].rack, { lex: c.lex, featured: [] });
         let action;
         if (s.cur === 0) {
           // turn 2: the weakest play; turn 3: a pass; otherwise the best
