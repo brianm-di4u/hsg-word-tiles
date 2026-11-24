@@ -205,8 +205,8 @@ export const tests = [
         apply(s, action, c);
       }
       t.expect(varied >= 3, 'in at least three of ' + positions + ' positions the answer depends on the stream (' + varied + ')');
-      // the Daily par does not move: these were read from the game before this item
-      const PAR = { '2026-01-15': { m: 405, h: 402 }, '2026-03-02': { m: 403, h: 429 }, '2026-07-04': { m: 296, h: 380 }, '2026-11-16': { m: 434, h: 405 }, '2026-12-25': { m: 398, h: 396 } };
+      // the Daily par is deterministic; W1-S3-02 removed Hollis's psychic Featured Spring peeking on 2026-01-15 (405->411) and 2026-03-02 (403->362)
+      const PAR = { '2026-01-15': { m: 411, h: 402 }, '2026-03-02': { m: 362, h: 429 }, '2026-07-04': { m: 296, h: 380 }, '2026-11-16': { m: 434, h: 405 }, '2026-12-25': { m: 398, h: 396 } };
       for (const [date, want] of Object.entries(PAR)) t.equal(JSON.stringify(await dailyPar(c, date)), JSON.stringify(want), 'par for ' + date);
     },
   },

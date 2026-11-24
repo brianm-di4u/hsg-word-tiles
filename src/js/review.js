@@ -24,9 +24,8 @@ export function* reviewSteps(s, seat, dict, lex) {
     if (e.p === seat) {
       turn++;
       if (typeof e.rack === 'string' && /^[A-Z?]{1,7}$/.test(e.rack)) {
-        // the Featured Springs that were still hidden when this turn was played
-        const featured = s.featured.map((f) => ({ ...f, by: f.by != null && f.at < e.n ? f.by : null }));
-        const best = generateMoves(dict, board, [...e.rack], { lex, featured }).moves[0] || null;
+        // W1-S3-02 / CD-WF1-06: post-game review never peeks at hidden Featured Spring words for +30 equity.
+        const best = generateMoves(dict, board, [...e.rack], { lex, featured: [] }).moves[0] || null;
         yield { turn, kind: e.kind, word: e.kind === 'play' ? e.words[0].w : null, score: e.score, best: best ? { word: best.words[0], score: best.score } : null };
       } else yield { turn, skipped: true };
     }

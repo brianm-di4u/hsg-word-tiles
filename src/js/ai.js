@@ -97,7 +97,8 @@ export function chooseAction(dict, lex, s, opts = {}) {
   const p = s.players[s.cur];
   const L = LEVELS[opts.level || p.level || 'medium'];
   const style = STYLES[opts.persona || p.persona] || null;
-  const { moves, nodes } = generateMoves(dict, s.board, p.rack, { lex, featured: s.featured, commonOnly: L.commonOnly, freeLen: L.freeLen, allowTwo: L.allowTwo, maxLen: L.maxLen, budget: L.budget });
+  // W1-S3-02 / CD-WF1-06: never score hidden Featured Springs (+30) during AI move search; AI earns them organically on word merit.
+  const { moves, nodes } = generateMoves(dict, s.board, p.rack, { lex, featured: [], commonOnly: L.commonOnly, freeLen: L.freeLen, allowTwo: L.allowTwo, maxLen: L.maxLen, budget: L.budget });
   const bag = s.bag.length;
   if (!moves.length) return { action: fallback(p.rack, bag), nodes };
 
@@ -132,7 +133,7 @@ export function chooseAction(dict, lex, s, opts = {}) {
       let val;
       if (!left.length) val = m.score + 2 * rackScore(opp.rack);
       else {
-        const reply = generateMoves(dict, board, opp.rack, { lex, featured: s.featured, budget: 300000 }).moves[0];
+        const reply = generateMoves(dict, board, opp.rack, { lex, featured: [], budget: 300000 }).moves[0];
         const oppOut = reply && rackMinus(opp.rack, reply.tiles).length === 0;
         val = m.score - (reply ? reply.score : 0) - (oppOut ? 2 * rackScore(left) : 0);
       }
@@ -163,7 +164,8 @@ function fallback(rack, bag) {
 // each with the tiles it keeps. Two plays that make the same words count as one. Empty when nothing fits.
 export function hintChoices(dict, lex, s, n = 3) {
   const p = s.players[s.cur];
-  const { moves } = generateMoves(dict, s.board, p.rack, { lex, featured: s.featured, budget: 900000 });
+  // W1-S3-02 / CD-WF1-06: Spring Guide hints never peek at hidden Featured Spring words.
+  const { moves } = generateMoves(dict, s.board, p.rack, { lex, featured: [], budget: 900000 });
   const bag = s.bag.length;
   const ranked = moves.slice(0, 60).map((m) => { const keep = rackMinus(p.rack, m.tiles); return { m, keep, e: m.score + 0.5 * leaveValue(keep) * Math.min(1, bag / RACK) }; }).sort((a, b) => b.e - a.e);
   const out = [], seen = new Set();
