@@ -473,12 +473,20 @@ export function drawFrame(ctx, d) {
     poly(ctx, quad(d.blocked, 0.05)); ctx.stroke(); ctx.restore();
   }
   if (d.cursor) {
-    ctx.strokeStyle = '#2B4C9B'; ctx.lineWidth = lw(0.09);
-    poly(ctx, quad(d.cursor.i, 0.05)); ctx.stroke();
-    // direction arrow
+    const q = quad(d.cursor.i, 0.04);
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1A1108'; ctx.lineWidth = lw(0.16);
+    poly(ctx, q); ctx.stroke();
+    ctx.strokeStyle = '#F6DF86'; ctx.lineWidth = lw(0.075);
+    poly(ctx, q); ctx.stroke();
+    // direction arrow with matching dark-espresso halo and bright-gold fill
     const bx = FRAME + (d.cursor.i % N), by = FRAME + Math.floor(d.cursor.i / N);
-    const pts = d.cursor.dir === 1 ? [[0.98, 0.5], [0.8, 0.36], [0.8, 0.64]] : [[0.5, 0.98], [0.36, 0.8], [0.64, 0.8]];
-    ctx.fillStyle = '#2B4C9B'; poly(ctx, pts.map(([u, v]) => project(bx + u, by + v))); ctx.fill();
+    const pts = (d.cursor.dir === 1 ? [[0.98, 0.5], [0.8, 0.36], [0.8, 0.64]] : [[0.5, 0.98], [0.36, 0.8], [0.64, 0.8]]).map(([u, v]) => project(bx + u, by + v));
+    ctx.strokeStyle = '#1A1108'; ctx.lineWidth = lw(0.08);
+    poly(ctx, pts); ctx.stroke();
+    ctx.fillStyle = '#F6DF86'; ctx.fill();
+    ctx.restore();
   }
 }
 
