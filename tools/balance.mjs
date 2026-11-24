@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import { ctx } from '../tests/lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
 import { chooseAction, premiumPoints } from '../src/js/ai.js';
+import { SQUARE } from '../src/js/score.js';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const GAMES = +arg('--games', 100);
@@ -35,6 +36,17 @@ export async function playMatch(levels, seed, stats) {
       stats.prem[who] = (stats.prem[who] || 0) + premiumPoints({ tiles: e.tiles, score: e.score });
       stats.pts = stats.pts || {};
       stats.pts[who] = (stats.pts[who] || 0) + e.score;
+      stats.byWho = stats.byWho || {};
+      const bw = stats.byWho[who] || (stats.byWho[who] = { plays: 0, rowSq: 0, bathSprings: 0, park: 0, crossPlays: 0, longPlays: 0 });
+      bw.plays++;
+      bw.rowSq += e.tiles.filter((t) => SQUARE[t.i] === 'B').length;
+      for (const w of e.words) {
+        const en = c.lex.entry(w.w);
+        if (en && (en.cat === 'baths' || en.cat === 'springs')) bw.bathSprings++;
+        if (en && en.cat === 'park') bw.park++;
+      }
+      if (e.words.length > 1) bw.crossPlays++;
+      if (e.words[0] && e.words[0].w.length >= 5) bw.longPlays++;
       stats.plays++;
       stats.points += e.score;
       stats.themed += e.themed;

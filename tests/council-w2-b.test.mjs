@@ -60,7 +60,7 @@ export const tests = [
     name: 'S3-02 the style is read from the persona, applies at every level and keeps moves legal', node: true,
     async run(t) {
       const c = await ctx();
-      t.expect(STYLES.lucky && !STYLES.hollis, 'only Lucky has a style of his own');
+      for (const id of ['opal', 'hollis', 'lucky', 'julian']) t.expect(!!STYLES[id], `${id} has an orthogonal trade style (W1-S5-02)`);
       for (const level of ['easy', 'medium', 'hard']) {
         const s = createGame({ mode: 'play', seats: [{ kind: 'ai', level, persona: 'lucky' }, { kind: 'ai', level: 'medium', persona: 'hollis' }], seed: 77 }, c.lex);
         let n = 0;

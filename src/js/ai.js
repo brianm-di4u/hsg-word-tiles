@@ -26,12 +26,40 @@ export const LEVELS = {
   hard: { leave: 1, defense: true, endgame: true, bonusWeight: 1, budget: 1500000 },
 };
 
-// A character's own habit, laid over the level they play at. Lucky bets on the big squares: he counts
-// the points a play earns from premium squares again (premium) and cares little about the rack he keeps
-// (leaveScale), so he will take a risky play on a Boiling Spring over a tidy one.
+// Each character's own trade habit, laid orthogonally over whatever difficulty level they play at (W1-S5-02):
+//   - Opal Vance (bath attendant): favours baths/springs bonus words and Bathhouse Row squares.
+//   - Hollis Crane (park ranger): favours compact connected cross-plays, park words, and guarding open springs.
+//   - "Lucky" Delmar (racetrack tout): bets on the big multiplier squares and cares little about rack leave.
+//   - Maestro Julian Fitch (1920s hotel bandleader): reaches for 5+ letter crescendo plays / Full Soaks and keeps a tidy rack.
 export const STYLES = {
+  opal: { premium: 0, leaveScale: 1, cats: ['baths', 'springs'], catBonus: 6, rowSquare: 3.5 },
+  hollis: { premium: 0, leaveScale: 1, cats: ['park'], catBonus: 6, crossWord: 2.8, defenseExtra: 0.55 },
   lucky: { premium: 0.5, leaveScale: 0.2 },
+  julian: { premium: 0, leaveScale: 1.35, tidyLeave: 0.45, longLen: 5, longBonus: 3.2, fullBonus: 4.5 },
 };
+
+// Trade-grounded style adjustment for a candidate move, independent of difficulty tier.
+export function styleBonus(style, move, left, s, lex, opts = {}) {
+  if (!style) return 0;
+  const bag = s.bag.length;
+  let delta = 0;
+  if (style.premium && bag > 0) delta += style.premium * premiumPoints(move);
+  if (style.cats && style.catBonus && lex) {
+    for (const w of move.words) {
+      const e = lex.byForm.get(w);
+      if (e && style.cats.includes(e.cat)) delta += style.catBonus;
+    }
+  }
+  if (style.rowSquare) {
+    for (const t of move.tiles) if (SQUARE[t.i] === 'B') delta += style.rowSquare;
+  }
+  if (style.crossWord && move.words.length > 1) delta += Math.min(move.words.length - 1, 3) * style.crossWord;
+  if (style.defenseExtra && bag > 0 && s.players.length > 1) delta -= style.defenseExtra * openedPremium(s.board, move.tiles);
+  if (style.longBonus && move.words[0] && move.words[0].length >= style.longLen) delta += style.longBonus;
+  if (style.fullBonus && move.full) delta += style.fullBonus;
+  if (opts.easy && style.tidyLeave && bag > 0) delta += style.tidyLeave * leaveValue(left) * Math.min(1, bag / RACK);
+  return delta;
+}
 
 // Points a play earns from the premium squares it covers (letter multipliers, then the word multiplier).
 export function premiumPoints(move) {
@@ -107,7 +135,10 @@ export function chooseAction(dict, lex, s, opts = {}) {
 
   if (L.pick) {
     const top = moves.slice(0, 30);
-    if (style) top.sort((a, b) => (b.evalScore ?? b.score) + style.premium * premiumPoints(b) - (a.evalScore ?? a.score) - style.premium * premiumPoints(a));
+    if (style) {
+      const scoreOf = new Map(top.map((m) => [m, (m.evalScore ?? m.score) + styleBonus(style, m, rackMinus(p.rack, m.tiles), s, lex, { easy: true })]));
+      top.sort((a, b) => scoreOf.get(b) - scoreOf.get(a) || (a.key < b.key ? -1 : 1));
+    }
     if (L.slip < 1 && rand(s, 'ai') >= L.slip) return { action: { type: 'play', tiles: top[0].tiles }, nodes, move: top[0] };
     const lo = Math.floor(top.length * L.pick[0]), hi = Math.max(lo + 1, Math.ceil(top.length * L.pick[1]));
     const m = top[lo + Math.floor(rand(s, 'ai') * (hi - lo))];
@@ -122,8 +153,8 @@ export function chooseAction(dict, lex, s, opts = {}) {
     const left = rackMinus(p.rack, m.tiles);
     let e = m.evalScore ?? m.score;
     if (bag === 0) e -= 2 * rackScore(left);                       // going out matters, leave doesn't
-    else e += L.leave * (style ? style.leaveScale : 1) * leaveValue(left) * leaveScale;
-    if (style && bag > 0) e += style.premium * premiumPoints(m);
+    else e += L.leave * (style ? (style.leaveScale ?? 1) : 1) * leaveValue(left) * leaveScale;
+    if (style) e += styleBonus(style, m, left, s, lex);
     if (L.defense && bag > 0 && s.players.length > 1) e -= openedPremium(s.board, m.tiles);
     return e;
   };

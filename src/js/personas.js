@@ -1,9 +1,9 @@
 // Computer opponents: fictional town archetypes (research/town-content.md §4), labelled fictional on screen.
 export const PERSONAS = [
-  { id: 'opal', name: 'Opal Vance', role: 'Bath attendant on the Row', level: 'easy', color: '#2A9D8F', line: 'Plays the plain, everyday words.' },
-  { id: 'hollis', name: 'Hollis Crane', role: 'Park ranger', level: 'medium', color: '#4E7D5B', line: 'Knows the common words and every short one.' },
-  { id: 'lucky', name: '"Lucky" Delmar', role: 'Racetrack tout', level: 'medium', color: '#A9432C', line: 'Bets on the big squares.' },
-  { id: 'julian', name: 'Maestro Julian Fitch', role: '1920s hotel bandleader', level: 'hard', color: '#2B4C9B', line: 'Knows every word in the book and keeps a tidy rack.' },
+  { id: 'opal', name: 'Opal Vance', role: 'Bath attendant on the Row', level: 'easy', color: '#2A9D8F', line: 'Has a soft spot for bathhouse and spring words, and likes to land on Bathhouse Row.' },
+  { id: 'hollis', name: 'Hollis Crane', role: 'Park ranger', level: 'medium', color: '#4E7D5B', line: 'Builds tight cross-plays along the board, favours park words, and watches the open springs.' },
+  { id: 'lucky', name: '"Lucky" Delmar', role: 'Racetrack tout', level: 'medium', color: '#A9432C', line: 'Bets on the big squares and takes risks with the tiles he keeps.' },
+  { id: 'julian', name: 'Maestro Julian Fitch', role: '1920s hotel bandleader', level: 'hard', color: '#2B4C9B', line: 'Reaches for long, sweeping words and keeps a balanced rack between turns.' },
 ];
 export const persona = (id) => PERSONAS.find((p) => p.id === id) || null;
 export const LEVEL_NAME = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };

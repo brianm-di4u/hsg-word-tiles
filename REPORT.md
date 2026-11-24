@@ -71,7 +71,7 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 | Hard vs Easy | 100 % | 499 – 221 | 9.9 % | 1.4 |
 Hot Springs bonuses come to 9.9–11.5 % of all points (measured with the tiers of 10 / 18 / 30; the 5–10 % band this
 report first gave was set against the old +10 / +15 / +25 and no longer describes the game). The computer plays them only when they
-score well, so a person hunting them will see more. Computers claim 0.09 to 0.19 Featured Springs a game. Table: `node tools/balance.mjs --games 150`, seeds 1000 to 1149 (W1-S3-01 recalibration of Easy to ~220–260 pts everyday words); the first version of this table was measured
+score well, so a person hunting them will see more. Computers claim 0.09 to 0.19 Featured Springs a game. All four town opponents carry orthogonal trade-grounded heuristics in `STYLES` independent of difficulty (Opal favours baths/springs words and Bathhouse Row squares, Hollis favours compact connected cross-plays, park words and open-spring defence, Lucky bets on multiplier squares with low leave caution, and Julian favours 5+ letter plays and balanced racks). Table: `node tools/balance.mjs --games 150`, seeds 1000 to 1149 (W1-S3-01 recalibration of Easy to ~220–260 pts everyday words); the first version of this table was measured
 before waves 1 to 4 changed the computer and the tiers.
 
 ## Visual results

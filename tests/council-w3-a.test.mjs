@@ -473,7 +473,7 @@ export const tests = [
       t.equal(await t.page.getAttribute('[data-persona="1"][aria-checked="true"]', 'data-val'), 'julian', 'Enter on a focused card chooses it');
       t.equal(await t.page.evaluate(() => document.activeElement.dataset.val), 'julian', 'and the focus stays on it');
       t.equal(await t.page.inputValue('[data-level="1"]'), 'hard', 'the level follows the character until the player sets one');
-      t.expect(/Knows every word in the book/.test(await t.page.textContent('#screen .seat-note')), 'the character line shows under the cards');
+      t.expect(/long, sweeping words/i.test(await t.page.textContent('#screen .seat-note')), 'the character line shows under the cards');
       await t.page.click('[data-persona="1"][data-val="opal"]');
       await t.checkLayout({ allowScrollY: true });
       await t.shot('S4-06-setup');
