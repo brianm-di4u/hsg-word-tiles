@@ -67,13 +67,23 @@ function canvasTex(c, srgb = true) {
   t.anisotropy = Math.min(8, B3.renderer.capabilities.getMaxAnisotropy()); return t;
 }
 
-// The tile's top face: glaze, letter and value, drawn once per letter & theme.
+// The tile's top face: glaze, letter and value, drawn once per letter, theme & art.version (W3-P-N01).
 const faceCache = new Map();
+export function invalidateFaceCache() {
+  for (const m of faceCache.values()) {
+    m.map?.dispose();
+    if (m.emissiveMap && m.emissiveMap !== m.map) m.emissiveMap.dispose();
+    m.dispose();
+  }
+  faceCache.clear();
+  if (B3.bodyMat) {
+    for (const g of B3.tiles) if (g.userData && g.userData.face) g.userData.face.material = B3.bodyMat;
+  }
+}
 function faceMaterial(l, blank, dark = false) {
-  const key = (dark ? 'D:' : 'L:') + (blank ? '?' : '') + l;
+  const key = `${dark ? 'D' : 'L'}:${art.version}:${blank ? '?' : ''}${l}`;
   if (faceCache.has(key)) return faceCache.get(key);
-  const c = document.createElement('canvas'); c.width = c.height = 512;
-  c.getContext('2d').drawImage(R.tileSprite(l, blank, 512, 'face', dark ? 'dark' : 'light'), 0, 0);
+  const c = R.tileSprite(l, blank, 512, 'face', dark ? 'dark' : 'light');
   // a touch of self-light keeps the glazed faces crisp ivory in Day and warm #EDE5D4 ivory in Night
   const tex = canvasTex(c);
   const m = new THREE.MeshPhysicalMaterial({ map: tex, emissiveMap: tex, emissive: dark ? 0xffe4be : 0xffffff, emissiveIntensity: dark ? 0.08 : 0.14, roughness: 0.55, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.4 });
@@ -226,6 +236,7 @@ export function setTheme(theme) {
   B3.scene.environmentIntensity = dark ? 0.28 : 0.5;
   if (B3.bodyMat) { B3.bodyMat.color.set(dark ? 0xd8cdb6 : 0xeadfc4); B3.bodyMat.needsUpdate = true; }
   if (B3.preDim) { B3.preDim.material.color.set(dark ? 0x14121f : 0x1e140a); B3.preDim.material.needsUpdate = true; }
+  invalidateFaceCache();
   B3.texKey = '';
 }
 
@@ -394,6 +405,7 @@ export function debug() {
     tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, tilt: TILT, tall: !!B3.tall,
     preDim: !!B3.preDimActive, dimOpacity: B3.dimOpacity || 0, dimOpenCount: B3.dimOpenCount || 0,
     bezel: B3.on ? bezelBounds() : null,
+    faceCache: faceCache.size, tileCache: R.tileCacheSize(),
     frames: B3.frames.length, intervals: B3.intervals.slice(),
   };
 }

@@ -389,16 +389,23 @@ function paintFace(ctx, l, blank, w, theme = 'light') {
 }
 
 // A tile, w px square, cached. kind: 'board' | 'staged' | 'ghost' | 'rack' | 'face' (3D top).
+// kind === 'face' skips tileCache so 512px 3D tile faces are never double-buffered in CPU RAM (W3-P-N01).
 const tileCache = new Map();
+export function invalidateTileCache() { tileCache.clear(); }
+export function tileCacheSize() { return tileCache.size; }
 export function tileSprite(l, blank, w, kind = 'board', theme = 'light') {
   w = Math.round(w);
-  const key = `${l}|${blank ? 1 : 0}|${w}|${kind}|${theme}`;
+  if (kind === 'face') {
+    const cv = mk(w, w);
+    paintFace(cv.getContext('2d'), l, blank, w, theme);
+    return cv;
+  }
+  const key = `${l}|${blank ? 1 : 0}|${w}|${kind}|${theme}|${art.version}`;
   let cv = tileCache.get(key);
   if (cv) return cv;
   if (tileCache.size > 600) tileCache.clear();
   cv = mk(w, w);
   const ctx = cv.getContext('2d');
-  if (kind === 'face') { paintFace(ctx, l, blank, w, theme); tileCache.set(key, cv); return cv; }
   const inset = w * 0.05, s = w - inset * 2, r = s * 0.14;
   // body
   const g = ctx.createLinearGradient(inset, inset, inset + s, inset + s);

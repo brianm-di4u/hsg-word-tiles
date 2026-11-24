@@ -103,7 +103,9 @@ function applySettings() {
   }
   const sb = $('#b-sound'); if (sb) { sb.innerHTML = UI.ICON.sound(st.sound); sb.setAttribute('aria-label', st.sound ? 'Sound on (click to mute)' : 'Sound off (click to unmute)'); }
   R.invalidateBoardTexture();
+  R.invalidateTileCache();
   if (B3.B3.on) B3.setTheme(dark() ? 'dark' : 'light');
+  else B3.invalidateFaceCache();
   layout();
   if (!red && G.scene === 'game' && G.s) startSteam();
 }
@@ -124,6 +126,8 @@ async function boot() {
   if (window.__TEST__) G.settings.ai = G.settings.ai || 'normal';
   loadArt(() => {
     R.invalidateBoardTexture();
+    R.invalidateTileCache();
+    B3.invalidateFaceCache();
     const bw = $('#boardwrap');
     if (bw && art.ready('counter')) bw.style.backgroundImage = `url(${art.src('counter')})`;
     if (B3.B3.on) B3.setTheme(dark() ? 'dark' : 'light');
@@ -1085,7 +1089,7 @@ function renderRack() {
   const th = dark() ? 'dark' : 'light';
   const old = new Map([...el.querySelectorAll('.rtile')].map((b) => [b.dataset.key, b]));
   const button = (k) => {
-    const l = rack[k], key = `${k}|${l}|${px}|${dim ? (wait ? 2 : 1) : 0}|${th}`;
+    const l = rack[k], key = `${k}|${l}|${px}|${dim ? (wait ? 2 : 1) : 0}|${th}|${art.version}`;
     let b = old.get(key);
     if (b) { old.delete(key); return b; }
     b = document.createElement('button');
