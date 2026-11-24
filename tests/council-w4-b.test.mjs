@@ -287,8 +287,9 @@ export const tests = [
         t.expect(b3.tilt >= 0.08 && b3.tilt <= 0.10, 'portrait tilt in [0.08, 0.10] rad (' + b3.tilt + ')');
         t.expect(b3.bezel && b3.bezel.minX >= 0 && b3.bezel.maxX <= b3.bezel.W && b3.bezel.minY >= 0 && b3.bezel.maxY <= b3.bezel.H, 'all four walnut rails fit cleanly inside #boardwrap');
       } else {
-        t.expect(Math.abs(m.hpitch[1] - 37.3) < 0.3 && Math.abs(m.hpitch[0] - 35.3) < 0.3 && Math.abs(m.hpitch[2] - 39.5) < 0.3, 'the desktop squares are the size they were (' + m.hpitch.map((x) => x.toFixed(1)).join(' / ') + ', was 35.3 / 37.3 / 39.5)');
-        t.expect(Math.abs(m.ys[0] - 96) < 1.5 && Math.abs(m.ys[1] - 595) < 1.5, 'and where they were');
+        // W3-S3-01 (7bc5acc) tightened desktop 3D framing per CD-WF2-06 (~5.5% larger squares: 35.3/37.3/39.5 -> 37.2/39.4/41.9 px)
+        t.expect(Math.abs(m.hpitch[1] - 39.4) < 0.3 && Math.abs(m.hpitch[0] - 37.2) < 0.3 && Math.abs(m.hpitch[2] - 41.9) < 0.3, 'the desktop squares match the CD-WF2-06 3D fit (' + m.hpitch.map((x) => x.toFixed(1)).join(' / ') + ', target 37.2 / 39.4 / 41.9)');
+        t.expect(Math.abs(m.ys[0] - 71.9) < 1.5 && Math.abs(m.ys[1] - 598.7) < 1.5, 'and where they sit (' + m.ys.map((x) => x.toFixed(1)).join(' / ') + ', was 96 / 595)');
       }
       await t.shot('S4-10-camera');
       // the same camera with a tile on the board and the view zoomed in: the squares are found where they are drawn
