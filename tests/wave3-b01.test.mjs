@@ -118,4 +118,124 @@ export const tests = [
       await t.page.clock.resume();
     },
   },
+
+  // ---------- W4-P-N01 ----------
+  {
+    name: 'W4-P-N01 Pause -> Save and quit to title during an AI turn halts AI timers, cues, and save overwrites',
+    viewports: ['desktop'],
+    initScript: normalSound,
+    async run(t) {
+      await ready(t);
+      await freezeClock(t);
+      await t.seed(5);
+      // 3-seat game (1 human + 2 AIs) so a leaked AI turn would also chain into a second AI turn
+      await t.game('newGame', { seats: [
+        { kind: 'human', name: 'You' },
+        { kind: 'ai', persona: 'opal', level: 'easy' },
+        { kind: 'ai', persona: 'hollis', level: 'medium' },
+      ] });
+      await t.waitIdle(8000);
+      await stopClock(t);
+
+      // Human plays so seat 1 (Opal) starts thinking
+      const [m] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m.tiles);
+      t.expect((await t.game('act', 'play')).ok, 'human played opening move');
+      await t.page.clock.runFor(400);
+      await t.page.waitForFunction(() => { const g = window.__game.getState(); return g.aiThinking && g.aiWait.reply; }, null, { timeout: 15000, polling: 50 });
+
+      // Open Pause -> advance clock past 700 ms so G.aiTimer fires and parks callback in G.aiHeld
+      await t.page.click('#b-menu');
+      await t.page.clock.runFor(500);
+      t.equal((await t.state()).aiHeld, true, 'AI reply is held in G.aiHeld while Pause is open');
+
+      // Click Save and quit to title inside Pause
+      await t.page.click('#modal [data-go="title"]');
+      t.equal((await t.state()).scene, 'title', 'navigated to title');
+      const snapAfterQuit = await t.page.evaluate(() => ({
+        save: localStorage.getItem('hs-letters-save-v1'),
+        move: window.__G.s.move,
+        sfxTotal: window.__game.audioState().total,
+        aiHeld: !!window.__G.aiHeld,
+        aiFire: !!window.__G.aiFire,
+        turnWait: !!window.__G.turnWait,
+        releaseAiTimer: window.__G.releaseAiTimer,
+      }));
+      t.equal(snapAfterQuit.move, 1, 'saved at move 1 before AI played');
+      t.equal(snapAfterQuit.aiHeld, false, 'G.aiHeld cleared on quit to title');
+      t.equal(snapAfterQuit.aiFire, false, 'G.aiFire cleared on quit to title');
+      t.equal(snapAfterQuit.turnWait, false, 'G.turnWait cleared on quit to title');
+      t.equal(snapAfterQuit.releaseAiTimer, 0, 'releaseAiTimer cleared on quit to title');
+
+      // Advance clock 5 seconds: zero phantom AI moves, zero cues, untouched localStorage save, still on title
+      await t.page.clock.runFor(5000);
+      const afterWait = await t.page.evaluate(() => ({
+        scene: window.__G.scene,
+        save: localStorage.getItem('hs-letters-save-v1'),
+        move: window.__G.s.move,
+        sfxTotal: window.__game.audioState().total,
+      }));
+      t.equal(afterWait.scene, 'title', 'stayed on title');
+      t.equal(afterWait.move, 1, 'zero phantom AI moves executed off-screen');
+      t.equal(afterWait.sfxTotal, snapAfterQuit.sfxTotal, 'zero off-screen audio cues fired on title');
+      t.equal(afterWait.save, snapAfterQuit.save, 'saved game in localStorage was not overwritten');
+      await t.page.clock.resume();
+    },
+  },
+  {
+    name: 'W4-P-N01 Pause -> Settings during an AI turn holds AI cleanly off-screen and resumes only on returning to game',
+    viewports: ['desktop'],
+    initScript: normalSound,
+    async run(t) {
+      await ready(t);
+      await freezeClock(t);
+      await t.seed(5);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      await stopClock(t);
+
+      const [m] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m.tiles);
+      t.expect((await t.game('act', 'play')).ok, 'human played opening move');
+      await t.page.clock.runFor(400);
+      await t.page.waitForFunction(() => { const g = window.__game.getState(); return g.aiThinking && g.aiWait.reply; }, null, { timeout: 15000, polling: 50 });
+
+      // Open Pause -> go to Settings while AI reply is pending
+      await t.page.click('#b-menu');
+      await t.page.click('#modal [data-go="settings"]');
+      t.equal((await t.state()).scene, 'settings', 'entered Settings sheet from Pause');
+      const snap = await t.page.evaluate(() => ({
+        move: window.__G.s.move,
+        sfxTotal: window.__game.audioState().total,
+        save: localStorage.getItem('hs-letters-save-v1'),
+        aiHeld: !!window.__G.aiHeld,
+      }));
+      t.equal(snap.aiHeld, true, 'AI reply held while on Settings');
+
+      // Change a setting (re-renders Settings via showScene('settings')) and advance clock 4 seconds
+      await t.page.click('[data-set="theme"][data-val="dark"]');
+      await t.page.clock.runFor(4000);
+      const stillOnSettings = await t.page.evaluate(() => ({
+        scene: window.__G.scene,
+        move: window.__G.s.move,
+        sfxTotal: window.__game.audioState().total,
+        save: localStorage.getItem('hs-letters-save-v1'),
+        aiHeld: !!window.__G.aiHeld,
+      }));
+      t.equal(stillOnSettings.scene, 'settings', 'still on Settings');
+      t.equal(stillOnSettings.move, snap.move, 'AI did not execute while on Settings');
+      t.equal(stillOnSettings.sfxTotal, snap.sfxTotal, 'zero gameplay audio fired while on Settings');
+      t.equal(stillOnSettings.save, snap.save, 'save was not mutated while on Settings');
+      t.equal(stillOnSettings.aiHeld, true, 'held AI callback survived Settings re-render');
+
+      // Click Back to return to game: held AI resumes cleanly and completes its turn
+      await t.page.click('#screen [data-back]');
+      t.equal((await t.state()).scene, 'game', 'returned to game');
+      await t.page.clock.runFor(2500);
+      const resumed = await t.state();
+      t.equal(resumed.game.move, 2, 'held AI turn resumed and completed after returning to game');
+      t.equal(resumed.game.cur, 0, 'turn handed back to human');
+      await t.page.clock.resume();
+    },
+  },
 ];

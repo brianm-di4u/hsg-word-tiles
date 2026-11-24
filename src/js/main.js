@@ -316,13 +316,26 @@ function showScene(name, arg) {
   moodUpdate();
   cancelDrag(); G.pinch = null; G.pointers.clear();
   closeDialog(true);
-  if (name !== 'game') { releaseAudio('pause'); cancelTurnTimers(); G.toastQ = []; hideToastNow(); G.springsOpen = false; G.privacy = false; const priv = $('#privacy'); if (priv) { priv.hidden = true; priv.innerHTML = ''; } }
+  if (name !== 'game') {
+    releaseAudio('pause');
+    if (SHEETS.includes(name)) {
+      if (G.aiFire) { clearTimeout(G.aiTimer); G.aiTimer = 0; G.aiHeld = G.aiFire; G.aiFire = null; }
+      if (G.turnWait) { const run = G.turnWait.run; clearTimeout(G.turnWait.id); G.turnWait = null; if (!G.aiHeld && run) G.aiHeld = run; G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; }
+      cancelTurnTimers();
+    } else {
+      clearTimeout(G.aiTimer); G.aiTimer = 0;
+      G.aiHeld = null; G.aiFire = null; G.aiBusy = false; G.aiSkip = false; G.aiToken++;
+      G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null;
+      cancelTurnTimers();
+    }
+    G.toastQ = []; hideToastNow(); G.springsOpen = false; G.privacy = false; const priv = $('#privacy'); if (priv) { priv.hidden = true; priv.innerHTML = ''; }
+  }
   syncInert();
   const app = $('#app'), scr = $('#screen');
   const game = name === 'game';
   app.hidden = !game; scr.hidden = game;
   document.body.dataset.scene = name;
-  if (game) { renderGame(); layout(); return; }
+  if (game) { renderGame(); layout(); if (G.aiHeld && !G.dialog && !document.hidden) releaseAi(); return; }
   scr.innerHTML = screenHtml(name, arg);
   scr.scrollTop = 0;
   wireScreen(name);
@@ -553,6 +566,9 @@ function startDaily(date) {
 }
 function resumeGame(record) { whenReady(() => beginGame(record.game, record)); }
 function beginGame(s, intent) {
+  clearTimeout(G.aiTimer); G.aiTimer = 0;
+  G.aiHeld = null; G.aiFire = null; G.aiBusy = false; G.aiSkip = false; G.aiToken++;
+  G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null;
   cancelTurnTimers();
   clearTimeout(errFlashTimer); G.errFlash = false;
   clearTimeout(scoreHiTimer); G.scoreHi = null;
@@ -628,7 +644,7 @@ function scheduleAi() {
   const delay = G.fast ? 0 : ({ normal: 700, fast: 250, instant: 0 })[G.settings.ai] ?? 700;
   const t0 = performance.now();
   const seat = s.cur, move = s.move, token = ++G.aiToken;
-  const live = () => token === G.aiToken && G.s === s && s.move === move && s.cur === seat && !s.over;
+  const live = () => token === G.aiToken && G.s === s && s.move === move && s.cur === seat && !s.over && G.scene === 'game';
   const act = (action) => {
     G.aiBusy = false;
     const res = E.apply(s, action, ctx());
@@ -636,6 +652,7 @@ function scheduleAi() {
     afterAction(res.ok ? res.entry : s.log[s.log.length - 1], true);
   };
   aiMove(s, cur().level, cur().persona).then((r) => {
+    if (token !== G.aiToken || G.s !== s || s.over) return;
     const wait = G.aiSkip ? 0 : Math.max(0, delay - (performance.now() - t0));
     const fire = () => {
       G.aiFire = null;
@@ -643,10 +660,20 @@ function scheduleAi() {
       s.rng.ai = r.rngAi;
       act(r.action);
     };
-    // a hidden tab, or an open menu or ledger, holds the reply (and its cue) until the player is back
+    // a hidden tab, open menu/ledger, or in-session sheet holds the reply (and its cue) until the player is back in 'game'
     G.aiFire = fire;
-    G.aiTimer = setTimeout(() => { if (document.hidden || G.dialog) { G.aiFire = null; G.aiHeld = fire; } else fire(); }, wait);
-  }).catch((err) => { console.warn('AI failed, passing', err); if (live()) act({ type: 'pass' }); });
+    G.aiTimer = setTimeout(() => {
+      G.aiTimer = 0;
+      if (token !== G.aiToken || G.s !== s || s.over) { G.aiFire = null; return; }
+      if (document.hidden || G.dialog || G.scene !== 'game') { G.aiFire = null; G.aiHeld = fire; }
+      else fire();
+    }, wait);
+  }).catch((err) => {
+    console.warn('AI failed, passing', err);
+    const passFire = () => { if (live()) act({ type: 'pass' }); };
+    if (token === G.aiToken && G.s === s && !s.over && G.scene !== 'game') G.aiHeld = passFire;
+    else passFire();
+  });
 }
 
 // A tap on the board, or Space or Enter, while the computer is taking its turn lets its move land at once (the same path as the
@@ -679,9 +706,9 @@ function skipComputerWait() {
   return false;
 }
 
-// lets a held reply land once the tab is back and no dialog is open
+// lets a held reply land once the tab is back, no dialog is open, and the player is in the game scene
 function releaseAi() {
-  if (!G.aiHeld || document.hidden || G.dialog) return;
+  if (!G.aiHeld || document.hidden || G.dialog || G.scene !== 'game') return;
   const f = G.aiHeld; G.aiHeld = null; f();
 }
 
@@ -701,8 +728,8 @@ function cancelTurnTimers() {
   clearTimeout(G.releaseAiTimer); G.releaseAiTimer = 0;
   clearTimeout(G.overTimer); G.overTimer = 0;
 }
-// run `fn` in `ms` milliseconds, as a sound that waits for the tiles to land; it is dropped if another game has begun or the turn is cancelled
-const later = (g, ms, fn) => { if (ms <= 0) { if (G.s === g) fn(); } else addTurnTimer(() => { if (G.s === g) fn(); }, ms); };
+// run `fn` in `ms` milliseconds, as a sound that waits for the tiles to land; it is dropped if another game has begun, scene left, or the turn is cancelled
+const later = (g, ms, fn) => { if (ms <= 0) { if (G.s === g && G.scene === 'game') fn(); } else addTurnTimer(() => { if (G.s === g && G.scene === 'game') fn(); }, ms); };
 
 function afterAction(entry, fromAi) {
   const s = G.s;
@@ -743,7 +770,13 @@ function afterAction(entry, fromAi) {
   save(s);
   const wait = G.fast ? 0 : (fromAi && animOn() ? Math.max(0, G.animUntil - performance.now()) + 250 : 150);
   G.busyUntil = performance.now() + wait;
-  G.turnWait = { fromAi, id: setTimeout(() => { G.turnWait = null; if (G.s === s) startTurn(); }, wait) };
+  const runTurn = () => {
+    G.turnWait = null;
+    if (G.s !== s) return;
+    if (G.scene !== 'game') { G.aiHeld = runTurn; return; }
+    startTurn();
+  };
+  G.turnWait = { fromAi, run: runTurn, id: setTimeout(runTurn, wait) };
   renderGame();
   rollScores(entry);
 }
@@ -1503,8 +1536,10 @@ function closeDialog(silent) {
     else if (G.scene === 'game') $('#board')?.focus({ preventScroll: true });
   }
   clearTimeout(G.releaseAiTimer); G.releaseAiTimer = 0;
-  // a reply held while the dialog was open lands a moment after it closes (and not at all if another dialog opens at once)
-  if (G.aiHeld && !silent) G.releaseAiTimer = setTimeout(() => { G.releaseAiTimer = 0; releaseAi(); }, 300);
+  // a reply held while the dialog was open lands a moment after it closes (only if still in 'game' with no dialog)
+  if (G.aiHeld && !silent && G.scene === 'game' && !G.dialog && !document.hidden) {
+    G.releaseAiTimer = setTimeout(() => { G.releaseAiTimer = 0; releaseAi(); }, 300);
+  }
 }
 function askBlank(cb) { G.blankCb = cb; openDialog('blank'); }
 function confirmDialog(title, text, ok, onOk) { openDialog('confirm', { title, text, ok, onOk }); }
