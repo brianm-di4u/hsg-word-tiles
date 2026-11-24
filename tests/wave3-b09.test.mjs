@@ -1,4 +1,5 @@
-// Wave 3, batch W3-B09: W5-P-N01 (keyboard: modifier guards, Escape in form fields, toolbar arrows, focus follows the board cursor).
+// Wave 3, batch W3-B09: W5-P-N01 (keyboard: modifier guards, Escape in form fields, toolbar arrows, focus follows the board cursor)
+// and W5-S5-04 (no colour-only cues: themed words under the board, picked Swap tiles).
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const instant = () => {
   window.__TEST_TIPS__ = false;
@@ -143,6 +144,66 @@ export const tests = [
       const s = await t.state();
       t.equal(s.dialog, null, 'Enter opened no menu');
       t.expect(s.game.log.some((e) => e.p === 0 && e.kind === 'play' && e.words.some((w) => w.w === 'SPRING')), 'Enter played SPRING');
+    },
+  },
+  {
+    name: 'W5-S5-04 a Hot Springs word under the board carries a steam mark and an outline, an everyday word neither',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await start(t, 'SPRINGE');
+      const look = async (word) => {
+        await t.game('act', 'recall');
+        await t.game('act', 'stage', [...word].map((l, k) => ({ i: CENTER + k, l })));
+        return t.page.evaluate(() => [...document.querySelectorAll('#preview .words b')].map((b) => {
+          const cs = getComputedStyle(b), svg = b.querySelector('svg'), r = svg && svg.getBoundingClientRect();
+          return { w: b.textContent, icon: !!r && r.width >= 10 && r.height >= 10, border: parseFloat(cs.borderTopWidth), style: cs.borderTopStyle };
+        }));
+      };
+      for (const theme of ['light', 'dark']) {
+        await t.page.evaluate((th) => { window.__G.settings.theme = th; document.body.classList.toggle('theme-dark', th === 'dark'); }, theme);
+        const [spring] = await look('SPRING');
+        t.equal(spring.w, 'SPRING', 'the word itself is unchanged');
+        t.expect(spring.icon, `${theme}: SPRING shows the steam mark`);
+        t.expect(spring.border >= 1 && spring.style === 'solid', `${theme}: SPRING is outlined (${spring.border}px ${spring.style})`);
+        await t.checkLayout({ allowScrollY: true });
+        await t.shot(`w3-b09-preview-themed-${theme}`);
+        const [ring] = await look('RING');
+        t.equal(JSON.stringify(ring), JSON.stringify({ w: 'RING', icon: false, border: 0, style: 'none' }), `${theme}: RING is plain`);
+      }
+    },
+  },
+  {
+    name: 'W5-S5-04 a tile picked in Swap has a check mark and a heavier border, by day, by night and with motion reduced',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await start(t, 'SPRINGE');
+      const look = (k) => t.page.evaluate((k) => {
+        const el = document.querySelector(`#modal .stile[data-sw="${k}"]`);
+        const part = (p) => { const c = getComputedStyle(el, p); return { on: c.content !== 'none', w: parseFloat(c.width) || 0, h: parseFloat(c.height) || 0, line: parseFloat(c.borderRightWidth) || 0, color: c.borderRightColor, bg: c.backgroundColor }; };
+        return { border: parseFloat(getComputedStyle(el).borderTopWidth), w: el.offsetWidth, pip: part('::before'), tick: part('::after') };
+      }, k);
+      const lum = (c) => { const [r, g, b] = c.match(/[\d.]+/g).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+      for (const mode of ['light', 'dark', 'reduce']) {
+        await t.page.evaluate((m) => { window.__G.settings.theme = m === 'dark' ? 'dark' : 'light'; document.body.classList.toggle('theme-dark', m === 'dark'); document.body.classList.toggle('reduce', m === 'reduce'); }, mode);
+        await t.game('act', 'open', 'swap');
+        await t.page.click('#modal .stile[data-sw="1"]');
+        await t.page.click('#modal .stile[data-sw="3"]');
+        const off = await look(0), on = await look(1);
+        t.equal(off.pip.on || off.tick.on, false, `${mode}: a tile not picked has no mark`);
+        t.expect(off.border < 2, `${mode}: and a thin border (${off.border})`);
+        t.expect(on.border >= 2 * off.border && on.border >= 2.5, `${mode}: the picked tile's border is heavier (${off.border} -> ${on.border})`);
+        t.equal(on.w, off.w, `${mode}: the tile keeps its size`);
+        t.expect(on.pip.on && on.pip.w >= 16 && on.pip.h >= 16, `${mode}: the pip shows (${on.pip.w} x ${on.pip.h})`);
+        t.expect(on.tick.on && on.tick.line >= 2 && on.tick.h >= 8, `${mode}: with a check drawn in it`);
+        t.expect(ratio(on.tick.color, on.pip.bg) >= 4.5, `${mode}: check on pip contrast ${ratio(on.tick.color, on.pip.bg).toFixed(2)}`);
+        await t.shot(`w3-b09-swap-${mode}`);
+        await t.page.click('#modal .stile[data-sw="1"]');
+        t.equal((await look(1)).pip.on, false, `${mode}: unpicking takes the mark away`);
+        await t.game('act', 'close');
+      }
     },
   },
 ];
