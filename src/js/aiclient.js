@@ -50,7 +50,7 @@ function call(msg) {
 
 // Copy of the state with only what the AI reads (and a fresh rng it may advance).
 // W1-S3-02 / CD-WF1-06: never leak hidden Featured Spring words to AI opponents or hints.
-const slim = (s) => ({ board: s.board, players: s.players.map((p) => ({ rack: p.rack, level: p.level })), cur: s.cur, bag: s.bag, featured: [], rng: { ...s.rng } });
+const slim = (s) => ({ mode: s.mode, daily: s.daily, board: s.board, players: s.players.map((p) => ({ rack: p.rack, level: p.level })), cur: s.cur, bag: s.bag, featured: [], rng: { ...s.rng } });
 
 // Resolves { action, rngAi } for the current seat of s.
 export async function aiMove(s, level, persona) {

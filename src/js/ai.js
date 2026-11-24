@@ -111,13 +111,17 @@ export function chooseAction(dict, lex, s, opts = {}) {
     return { action: { type: 'play', tiles: m.tiles }, nodes, move: m };
   }
 
+  const dailyTurns = s.daily && typeof s.daily.turns === 'number' ? s.daily.turns : null;
+  const leaveScale = dailyTurns != null
+    ? Math.min(1, bag / RACK) * Math.min(1, Math.max(0, dailyTurns - 1) / 3)
+    : Math.min(1, bag / RACK);
   const equity = (m) => {
     const left = rackMinus(p.rack, m.tiles);
     let e = m.score;
     if (bag === 0) e -= 2 * rackScore(left);                       // going out matters, leave doesn't
-    else e += L.leave * (style ? style.leaveScale : 1) * leaveValue(left) * Math.min(1, bag / RACK);
+    else e += L.leave * (style ? style.leaveScale : 1) * leaveValue(left) * leaveScale;
     if (style && bag > 0) e += style.premium * premiumPoints(m);
-    if (L.defense && bag > 0) e -= openedPremium(s.board, m.tiles);
+    if (L.defense && bag > 0 && s.players.length > 1) e -= openedPremium(s.board, m.tiles);
     return e;
   };
   const ranked = moves.slice(0, 60).map((m) => ({ m, e: equity(m) })).sort((a, b) => b.e - a.e || (a.m.key < b.m.key ? -1 : 1));
@@ -145,8 +149,8 @@ export function chooseAction(dict, lex, s, opts = {}) {
   // varied: a seeded draw among the plays tied with the best (the Daily's par passes exact: true, so a date keeps one answer)
   const near = opts.exact ? [] : tiedWithBest(ranked);
   const pick = near.length > 1 ? near[Math.floor(rand(s, 'ai') * near.length)] : ranked[0];
-  // a weak play with a bad rack: swap instead (Medium and Hard)
-  if (bag >= RACK && pick.m.score < 8 && leaveValue(p.rack) < -6) return { action: fallback(p.rack, bag), nodes };
+  // a weak play with a bad rack: swap instead (Medium and Hard; never on the final turn of a Daily Soak)
+  if (bag >= RACK && (dailyTurns == null || dailyTurns > 1) && pick.m.score < 8 && leaveValue(p.rack) < -6) return { action: fallback(p.rack, bag), nodes };
   return { action: { type: 'play', tiles: pick.m.tiles }, nodes, move: pick.m };
 }
 
