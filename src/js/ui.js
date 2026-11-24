@@ -433,18 +433,35 @@ export function registerHtml(lex, reg, noSave, newerSave) {
   const groups = Object.entries(lex.categories).map(([ck, c]) => {
     const entries = lex.data.words.filter((w) => w.cat === ck);
     const found = entries.filter((e) => e.forms.some((f) => reg[f]));
-    return `<section class="reg-cat"><h2>${ICON.cat[c.icon]} ${esc(c.name)} <small>${found.length} / ${entries.length}${found.length === entries.length ? ' · complete' : ''}</small></h2><ul class="reg-list">${entries.map((e) => {
+    const pct = entries.length ? Math.round((100 * found.length) / entries.length) : 0;
+    const banner = art.has('card-' + ck)
+      ? `<div class="reg-banner" style="background-image:url(${art.src('card-' + ck)})" aria-hidden="true"></div>`
+      : `<div class="reg-banner vector cat-${esc(ck)}" aria-hidden="true"></div>`;
+    return `<section class="reg-cat" data-reg-cat="${esc(ck)}">
+      <div class="reg-head">
+        ${banner}
+        <div class="reg-head-bar">
+          <h2>${ICON.cat[c.icon]} ${esc(c.name)} <small>${found.length} / ${entries.length}${found.length === entries.length ? ' · complete' : ''}</small></h2>
+          <div class="reg-progress" role="progressbar" aria-valuenow="${found.length}" aria-valuemin="0" aria-valuemax="${entries.length}" aria-label="${esc(c.name)}: ${found.length} of ${entries.length} words found"><span style="width:${pct}%"></span></div>
+        </div>
+      </div>
+      <ul class="reg-list">${entries.map((e) => {
       const forms = e.forms.filter((f) => reg[f]);
-      if (!forms.length) return `<li class="reg-item locked" aria-label="Not found yet: ${e.forms[0].length} letters"><b aria-hidden="true">${'<i></i>'.repeat(e.forms[0].length)}</b></li>`;
+      const tier = lex.data.tiers[e.tier];
+      if (!forms.length) {
+        const len = e.forms[0].length;
+        return `<li class="reg-item locked"><button type="button" class="reg-lock" data-reg-locked="${esc(e.id)}" data-cat="${esc(ck)}" data-len="${len}" data-tier="${tier}" aria-label="Not found yet: ${len}-letter ${esc(c.name)} word, +${tier} points"><b aria-hidden="true">${'<i></i>'.repeat(len)}</b><span class="reg-meta"><span class="reg-len">${len} letters</span><span class="reg-tier">+${tier}</span></span></button></li>`;
+      }
       const best = Math.max(...forms.map((f) => reg[f].best));
-      return `<li class="reg-item"><button data-reg="${e.id}"><span class="stamp" aria-hidden="true">${ICON.steam}</span><b>${forms.join(' · ')}</b><small>best ${best} · ${esc(reg[forms[0]].first)}</small></button></li>`;
+      return `<li class="reg-item"><button type="button" data-reg="${e.id}"><span class="stamp" aria-hidden="true">${ICON.steam}</span><b>${forms.join(' · ')}</b><small>best ${best} · ${esc(reg[forms[0]].first)}</small></button></li>`;
     }).join('')}</ul></section>`;
   }).join('');
   return `<div class="sheet register">
     ${band()}
     <header class="sheet-head"><h1 tabindex="-1">Bathhouse Register</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     ${noSave ? `<p class="note warn" role="status">${NO_SAVE}</p>` : newerSave ? `<p class="note warn" role="status">${NEWER_SAVE}</p>` : ''}
-    <p class="note">Every Hot Springs word you play is signed in here. Tap a word to read its card.</p>
+    <p class="note">Every Hot Springs word you play is signed in here. Tap a word to read its card, or tap a blank slot to see its category, length and bonus.</p>
+    <p class="reg-nudge" role="status" aria-live="polite" hidden></p>
     ${groups}
   </div>`;
 }

@@ -223,4 +223,123 @@ export const tests = [
       t.equal(cNight.fails.length, 0, 'inline #ledger .themed-link passes Night WCAG contrast (' + JSON.stringify(cNight.fails) + ')');
     },
   },
+  // ---------- W2-S5-03 ----------
+  {
+    name: 'W2-S5-03 Bathhouse Register crowns all 6 categories with bundled card-<cat>.webp banners + progress bars, safe non-spoiler metadata & tap nudge on locked slots',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.page.evaluate(() => localStorage.setItem('hs-letters-register-v1', JSON.stringify({
+        SPRING: { id: 'spring', first: '2026-11-20', count: 1, best: 24 },
+        STEAM: { id: 'steam', first: '2026-11-20', count: 1, best: 28 },
+      })));
+      await t.reload(); await ready(t);
+      await t.game('scene', 'register');
+
+      const reg = await t.page.evaluate(() => {
+        const cats = [...document.querySelectorAll('.reg-cat')].map((sec) => {
+          const banner = sec.querySelector('.reg-banner');
+          const bar = sec.querySelector('.reg-progress[role="progressbar"]');
+          return {
+            cat: sec.dataset.regCat,
+            bg: banner ? getComputedStyle(banner).backgroundImage : '',
+            bannerH: banner ? banner.getBoundingClientRect().height : 0,
+            barNow: bar ? Number(bar.getAttribute('aria-valuenow')) : -1,
+            barMax: bar ? Number(bar.getAttribute('aria-valuemax')) : -1,
+            h2: sec.querySelector('h2')?.textContent.trim() || '',
+          };
+        });
+        const locked = [...document.querySelectorAll('.reg-lock[data-reg-locked]')];
+        const sample = locked.slice(0, 6).map((b) => ({
+          id: b.dataset.regLocked,
+          len: b.dataset.len,
+          tier: b.dataset.tier,
+          h: b.getBoundingClientRect().height,
+          text: b.textContent.trim(),
+        }));
+        return { cats, lockedCount: locked.length, sample };
+      });
+
+      t.equal(reg.cats.length, 6, 'all 6 Register categories rendered');
+      for (const c of reg.cats) {
+        t.expect(c.bg.includes('card-' + c.cat) || c.bg.includes('data:image/webp'), `${c.cat}: uses bundled card-${c.cat}.webp banner (${c.bg.slice(0, 60)})`);
+        t.expect(c.bannerH >= 48, `${c.cat}: banner height >= 48 px (${c.bannerH})`);
+        t.expect(c.barMax > 0 && c.barNow >= 0, `${c.cat}: progress bar present (${c.barNow}/${c.barMax})`);
+      }
+      t.expect(reg.lockedCount === 105, `105 locked slots rendered as interactive .reg-lock buttons (got ${reg.lockedCount})`);
+      for (const s of reg.sample) {
+        t.expect(s.h >= 44, `locked slot ${s.id} touch height >= 44 px (${s.h.toFixed(1)} px)`);
+        t.expect(s.text.includes(`${s.len} letters`) && s.text.includes(`+${s.tier}`), `locked slot ${s.id} shows safe length & tier metadata (${s.text})`);
+      }
+
+      // Tap a locked slot: displays non-spoiler category/length/tier nudge without revealing any historical fact text
+      await t.page.click('.reg-lock[data-reg-locked]');
+      const nudgeText = await t.page.textContent('.reg-nudge');
+      t.expect(/Not found yet: \d+-letter .+ \(\+\d+ Hot Springs bonus\)/.test(nudgeText), `locked slot tap shows clean non-spoiler nudge (${nudgeText})`);
+      t.expect(!/Source:/.test(nudgeText), 'nudge contains zero fact spoilers (CD-WF0-06 / OQ-WF1-02)');
+
+      // Day & Night contrast checks
+      const cDay = await t.contrastReport({ selector: '.register', min: 4.5, largeMin: 3 });
+      t.equal(cDay.fails.length, 0, 'Register passes Day WCAG contrast (' + JSON.stringify(cDay.fails) + ')');
+      await t.checkLayout({ allowScrollY: true });
+      await t.shot('W2-S5-03-register-day');
+
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="theme"][data-val="dark"]');
+      await t.game('scene', 'register');
+      await t.page.click('.reg-lock[data-reg-locked]');
+      const cNight = await t.contrastReport({ selector: '.register', min: 4.5, largeMin: 3 });
+      t.equal(cNight.fails.length, 0, 'Register passes Night WCAG contrast (' + JSON.stringify(cNight.fails) + ')');
+      if (t.viewport === 'desktop') await t.shot('W2-S5-03-register-night');
+    },
+  },
+  {
+    name: 'W2-S5-03 Featured plaques show compact short category labels and #fx emits rising gold/steam wisp arc on themed/Bathhouse Row play (silent under reduced motion)',
+    viewports: ['desktop', 'mobile'],
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-settings-v1')) {
+        localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false, motion: 'full' }));
+      }
+    },
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 3, seats: [{ kind: 'human', name: 'You' }, { kind: 'human', name: 'Player 2' }] });
+      await t.waitIdle(6000);
+      await t.game('act', 'reveal');
+
+      // 1) Featured plaques show short category labels (Row / Springs / Park / Track / Club / Town)
+      const labels = await t.page.evaluate(() => [...document.querySelectorAll('#springs .pcat-name')].map((el) => el.textContent.trim()));
+      const valid = new Set(['Row', 'Springs', 'Park', 'Track', 'Club', 'Town']);
+      t.expect(labels.length >= 1 && labels.every((x) => valid.has(x)), `Featured plaques carry compact short category labels (${labels.join(', ')})`);
+
+      // 2) Play a Hot Springs word matching plaque 0's category -> rising gold/steam wisp arc fires on #fx
+      const s = await t.state();
+      s.game.featured[0] = { id: 'mineral', word: 'MINERAL', cat: 'springs', shown: [0], by: null, at: null };
+      s.game.players[0].rack = 'STEAMXQ'.split('');
+      await t.game('setState', { game: s.game });
+      await t.game('act', 'stage', [...'STEAM'].map((l, k) => ({ i: CENTER - 2 + k, l })));
+      await t.game('act', 'play');
+      const afterThemed = await t.state();
+      t.expect(afterThemed.arcLog.length >= 1 && afterThemed.arcLog.some((a) => a.plaque === 0 && a.reason === 'themed'), `same-category themed play emitted #fx wisp arc toward plaque 0 (${JSON.stringify(afterThemed.arcLog)})`);
+      t.expect(afterThemed.arcs >= 1, `active #fx wisp arc animating (${afterThemed.arcs})`);
+
+      // 3) Under reduced motion, no animated wisp arcs fire
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="motion"][data-val="reduce"]');
+      await t.game('newGame', { seed: 4, seats: [{ kind: 'human', name: 'You' }, { kind: 'human', name: 'Player 2' }] });
+      await t.waitIdle(6000);
+      await t.game('act', 'reveal');
+      const sr = await t.state();
+      sr.game.featured[0] = { id: 'mineral', word: 'MINERAL', cat: 'springs', shown: [0], by: null, at: null };
+      sr.game.players[0].rack = 'STEAMXQ'.split('');
+      await t.game('setState', { game: sr.game });
+      await t.game('act', 'stage', [...'STEAM'].map((l, k) => ({ i: CENTER - 2 + k, l })));
+      await t.game('act', 'play');
+      const afterRed = await t.state();
+      t.equal(afterRed.arcs, 0, 'reduced motion emits zero animated #fx wisp arcs');
+      t.equal(afterRed.arcLog.length, 0, 'reduced motion logs zero animated wisp arcs');
+    },
+  },
 ];

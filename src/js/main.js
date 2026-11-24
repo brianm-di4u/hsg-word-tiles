@@ -96,7 +96,7 @@ function applySettings() {
   document.body.classList.toggle('reduce', red);
   document.body.classList.toggle('motion-full', st.motion === 'full');
   if (red) {
-    steam.parts.length = 0; steam.sweeps.length = 0; steam.on = false;
+    steam.parts.length = 0; steam.sweeps.length = 0; steam.arcs.length = 0; steam.on = false;
     const fx = $('#fx'); if (fx) fx.getContext('2d').clearRect(0, 0, fx.width, fx.height);
     G.anim.clear(); G.animUntil = 0; G.lastPulse = null; G.settle.clear(); G.settleUntil = 0;
     if (G.viewAnim) { R.view.zoom = G.viewAnim.to.zoom; R.view.cx = G.viewAnim.to.cx; R.view.cy = G.viewAnim.to.cy; G.viewAnim = null; R.clampView(); }
@@ -414,7 +414,18 @@ function wireScreen(name) {
       if (key !== 'musicVol') r.addEventListener('change', () => sfx('place'));
     }
   }
-  if (name === 'register') scr.querySelectorAll('[data-reg]').forEach((b) => b.addEventListener('click', () => openFact(b.dataset.reg)));
+  if (name === 'register') {
+    scr.querySelectorAll('[data-reg]').forEach((b) => b.addEventListener('click', () => openFact(b.dataset.reg)));
+    const nudge = scr.querySelector('.reg-nudge');
+    scr.querySelectorAll('[data-reg-locked]').forEach((b) => b.addEventListener('click', () => {
+      const cat = G.lex.categories[b.dataset.cat];
+      const msg = `Not found yet: ${b.dataset.len}-letter ${cat ? cat.name : ''} word (+${b.dataset.tier} Hot Springs bonus). Form it on the board to unlock its history card.`;
+      scr.querySelectorAll('.reg-lock.active').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      if (nudge) { nudge.textContent = msg; nudge.hidden = false; }
+      liveSay(msg);
+    }));
+  }
   if (name === 'over') {
     scr.querySelectorAll('[data-fact]').forEach((b) => b.addEventListener('click', () => openFact(b.dataset.fact, b.dataset.form)));
     scr.querySelector('[data-review]')?.addEventListener('click', openReview);
@@ -488,6 +499,7 @@ function beginGame(s, intent) {
   clearTimeout(errFlashTimer); G.errFlash = false;
   clearTimeout(scoreHiTimer); G.scoreHi = null;
   clearTimeout(G.plaqueTimer); G.plaqueHi.clear(); G.plaqueSnap = null; G.springsOpen = false;
+  steam.arcs.length = 0; steam.arcLog.length = 0;
   if (G.turnWait) { clearTimeout(G.turnWait.id); G.turnWait = null; }
   if (!G.settings.tipsSeen) store.put(KEYS.settings, G.settings); // the newcomer flag is written before the first save, so a tab closed mid-tips still counts as a newcomer
   G.bark = null;
@@ -611,6 +623,7 @@ const later = (g, ms, fn) => { if (ms <= 0) fn(); else setTimeout(() => { if (G.
 
 function afterAction(entry, fromAi) {
   const s = G.s;
+  const prevPlaqueSnap = G.plaqueSnap && G.plaqueSnap.s === s ? G.plaqueSnap.list : null;
   cancelDrag();
   G.flash = null;
   const said = s.players[entry.p].kind === 'ai' ? barkFor(s, entry) : null;
@@ -633,6 +646,7 @@ function afterAction(entry, fromAi) {
       tick();
     } else sfx('play', { pan: colPan(Math.round(entry.tiles.reduce((a, t) => a + (t.i % N), 0) / entry.tiles.length)) });
     celebrate(entry, G.bark, landed);
+    emitPlaqueArcs(s, entry, prevPlaqueSnap);
     try { recordRegister(entry); } catch (e) { /* the register is a keepsake: a failed write never stops the game */ }
   } else {
     sfx(entry.kind === 'swap' ? 'swap' : 'turn');
@@ -1555,10 +1569,65 @@ function stepViewAnim(now) {
 const pxPerCell = () => (B3.B3.on ? B3.cellPx() : R.scale());
 
 // ---------- steam effects (ambient; not part of isIdle) ----------
-const steam = { parts: [], sweeps: [], last: 0, on: false, emit: 0 };
-const SWEEP_MS = 900;   // a Hot Springs word: a band of gold light runs along its tiles in this time
+const steam = { parts: [], sweeps: [], arcs: [], arcLog: [], last: 0, on: false, emit: 0 };
+const SWEEP_MS = 900, ARC_MS = 680;   // Hot Springs gold sweep; rising gold/steam wisp sightline arc toward Featured Springs plaques
 const ambientSteam = () => animOn() && G.scene === 'game' && !!G.s;
 const covered = (i) => !!G.s.board[i] || G.staged.some((t) => t.i === i);
+// W2-S5-03 / W2-S1-16: animate a rising gold/steam wisp arc on #fx from a board square toward a Featured Spring plaque
+// whenever a Bathhouse Row cover, same-category themed word, round reveal, or claim connects board play to a plaque.
+function plaqueArc(fromCell, plaqueIdx, reason = 'clear') {
+  if (!animOn() || fromCell == null || fromCell < 0 || plaqueIdx == null || plaqueIdx < 0) return;
+  steam.arcs.push({ from: fromCell, plaque: plaqueIdx, reason, t0: performance.now() });
+  steam.arcLog.push({ from: fromCell, plaque: plaqueIdx, reason });
+  if (steam.arcLog.length > 12) steam.arcLog.shift();
+  startSteam();
+}
+function emitPlaqueArcs(s, entry, prevSnap) {
+  if (!s || !entry || entry.kind !== 'play' || !entry.tiles.length || !s.featured.length) return;
+  const bathCells = entry.tiles.filter((t) => SQUARES[t.i] === 'B').map((t) => t.i);
+  const themedWords = (entry.words || []).filter((w) => w.themed);
+  const themedCats = new Set(themedWords.map((w) => G.lex.byId.get(w.themed)?.cat).filter(Boolean));
+  const midCell = entry.tiles[Math.floor(entry.tiles.length / 2)].i;
+  const originFor = (preferRow) => (preferRow && bathCells.length ? bathCells[0] : midCell);
+  const fired = new Set();
+  if (prevSnap) {
+    s.featured.forEach((f, k) => {
+      const p = prevSnap[k];
+      if (!p) return;
+      if (f.by != null && p.by == null) {
+        fired.add(k);
+        plaqueArc(originFor(false), k, 'claim');
+      } else if (f.shown.length > p.shown) {
+        fired.add(k);
+        const reason = bathCells.length ? 'row' : themedCats.has(f.cat) ? 'themed' : 'clear';
+        plaqueArc(originFor(bathCells.length > 0), k, reason);
+      }
+    });
+  }
+  if (!fired.size && bathCells.length) {
+    const k = s.featured.findIndex((f) => f.by == null);
+    if (k >= 0) { fired.add(k); plaqueArc(bathCells[0], k, 'row'); }
+  }
+  if (!fired.size && themedCats.size) {
+    s.featured.forEach((f, k) => {
+      if (f.by == null && themedCats.has(f.cat) && !fired.has(k)) {
+        fired.add(k);
+        plaqueArc(midCell, k, 'themed');
+      }
+    });
+  }
+}
+function plaqueTargetPoint(plaqueIdx) {
+  const fx = $('#fx');
+  if (!fx) return [R.view.W - 14, 24];
+  const fr = fx.getBoundingClientRect();
+  const el = $(`#springs [data-plaque="${plaqueIdx}"]`) || $('#springs [data-springs-toggle]') || $('#springs');
+  if (!el || !fr.width || !fr.height) return [R.view.W - 14, 24];
+  const er = el.getBoundingClientRect();
+  const tx = (er.left + er.width / 2) - fr.left;
+  const ty = (er.top + er.height / 2) - fr.top;
+  return [clamp(tx, 12, R.view.W - 12), clamp(ty, 12, R.view.H - 12)];
+}
 // where the next idle wisp rises: the Display Spring while it is uncovered; after the first word, one of the Bathhouse Row squares
 // still showing (S4-04), so the board keeps breathing between plays. Nothing when they are all covered.
 function wispAt() {
@@ -1584,7 +1653,7 @@ function goldSweep(cells) {
   steam.sweeps.push({ cells: [...cells].sort((a, b) => a - b), t0: performance.now() });
   startSteam();
 }
-function startSteam() { if (!steam.on && (steam.parts.length || steam.sweeps.length || ambientSteam())) { steam.on = true; steam.last = 0; requestAnimationFrame(steamLoop); } }
+function startSteam() { if (!steam.on && (steam.parts.length || steam.sweeps.length || steam.arcs.length || ambientSteam())) { steam.on = true; steam.last = 0; requestAnimationFrame(steamLoop); } }
 function steamLoop(now) {
   const fx = $('#fx');
   if (!fx || G.scene !== 'game') { steam.on = false; return; }
@@ -1624,7 +1693,41 @@ function steamLoop(now) {
       c.fillStyle = g; c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.fill();
     });
   }
-  if (steam.parts.length || steam.sweeps.length || ambientSteam()) requestAnimationFrame(steamLoop); else { steam.on = false; c.clearRect(0, 0, R.view.W, R.view.H); }
+  steam.arcs = steam.arcs.filter((a) => now - a.t0 < ARC_MS);
+  for (const a of steam.arcs) {
+    const u = Math.min(1, Math.max(0, (now - a.t0) / ARC_MS));
+    const e = 1 - Math.pow(1 - u, 2.1);
+    const [sx, sy] = R.cellCenter(a.from);
+    const [tx, ty] = plaqueTargetPoint(a.plaque);
+    const mx = (sx + tx) / 2, my = Math.min(sy, ty) - Math.max(26, cell * 1.35);
+    const pt = (t) => {
+      const m = 1 - t;
+      return [m * m * sx + 2 * m * t * mx + t * t * tx, m * m * sy + 2 * m * t * my + t * t * ty];
+    };
+    const tailStart = Math.max(0, e - 0.34);
+    const fade = u < 0.8 ? 1 : (1 - u) / 0.2;
+    c.save();
+    c.lineCap = 'round';
+    for (let seg = 0; seg < 8; seg++) {
+      const t0 = tailStart + ((e - tailStart) * seg) / 8;
+      const t1 = tailStart + ((e - tailStart) * (seg + 1)) / 8;
+      const [x0, y0] = pt(t0), [x1, y1] = pt(t1);
+      const frac = (seg + 1) / 8;
+      c.strokeStyle = frac > 0.55 ? `rgba(243,221,139,${(0.82 * frac * fade).toFixed(3)})` : `rgba(127,211,196,${(0.62 * frac * fade).toFixed(3)})`;
+      c.lineWidth = Math.max(1.5, cell * 0.14 * frac);
+      c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    }
+    const [hx, hy] = pt(e);
+    const hr = Math.max(4, cell * 0.28);
+    const hg = c.createRadialGradient(hx, hy, 0, hx, hy, hr);
+    hg.addColorStop(0, `rgba(255,248,220,${(0.95 * fade).toFixed(3)})`);
+    hg.addColorStop(0.45, `rgba(243,221,139,${(0.65 * fade).toFixed(3)})`);
+    hg.addColorStop(1, 'rgba(127,211,196,0)');
+    c.fillStyle = hg;
+    c.beginPath(); c.arc(hx, hy, hr, 0, Math.PI * 2); c.fill();
+    c.restore();
+  }
+  if (steam.parts.length || steam.sweeps.length || steam.arcs.length || ambientSteam()) requestAnimationFrame(steamLoop); else { steam.on = false; c.clearRect(0, 0, R.view.W, R.view.H); }
 }
 
 // ---------- pointer input ----------
@@ -2065,7 +2168,7 @@ window.__game = {
     return JSON.parse(JSON.stringify({ scene: G.scene, dialog: G.dialog, game: G.s, staged: G.staged, order: G.order, preview: G.preview, settings: G.settings,
       view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, pulse: !!G.lastPulse, aiWait: { reply: !!G.aiFire, turn: !!(G.turnWait && G.turnWait.fromAi) }, ready: G.ready, privacy: G.privacy,
       drag: G.drag && G.drag.active ? { from: G.drag.from, target: G.drag.target, blocked: G.drag.blocked, lift: G.drag.lift, size: G.drag.size } : null,
-      ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, wisps: steam.parts.filter((p) => !p.rgb).map((p) => p.i), sparks: steam.parts.filter((p) => p.rgb).length, sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
+      ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, arcs: steam.arcs.length, arcLog: steam.arcLog.slice(-6), wisps: steam.parts.filter((p) => !p.rgb).map((p) => p.i), sparks: steam.parts.filter((p) => p.rgb).length, sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
   },
   setState(o) {
     if (o.game) {

@@ -509,18 +509,45 @@ body.theme-dark .tier-pts { color: #14121F; }
 .setrow input[type="range"] { width: 200px; accent-color: var(--primary); min-height: 44px; }
 
 /* register */
-.reg-cat h2 { display: flex; align-items: center; gap: 8px; }
-.reg-cat h2 svg { width: 20px; height: 20px; color: var(--accent); }
-.reg-cat h2 small { margin-left: auto; font: 600 0.9rem var(--f-ui); color: var(--muted); }
+.reg-nudge {
+  margin: 8px 0 12px; padding: 10px 12px; border-radius: 10px;
+  background: var(--panel-2); border: 1.5px solid var(--brass); border-left: 4px solid var(--primary);
+  color: var(--ink); font: 600 0.94rem / 1.35 var(--f-ui);
+}
+.reg-cat { margin-top: 16px; }
+.reg-head { border-radius: 12px; overflow: hidden; border: 1.5px solid var(--line); background: var(--panel-2); margin-bottom: 8px; }
+.reg-banner { height: 56px; background: center 45% / cover no-repeat; border-bottom: 1.5px solid var(--brass); }
+.reg-banner.vector { background: linear-gradient(120deg, #1F5F6B, #4E7D5B 55%, #C8963E); }
+.reg-head-bar { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.reg-cat h2 { display: flex; align-items: center; gap: 8px; margin: 0; }
+.reg-cat h2 svg { width: 20px; height: 20px; color: var(--accent); flex: none; }
+.reg-cat h2 small { margin-left: auto; font: 600 0.9rem var(--f-ui); color: var(--muted); white-space: nowrap; }
+.reg-progress { height: 6px; border-radius: 99px; background: rgba(110, 80, 35, 0.22); overflow: hidden; }
+body.theme-dark .reg-progress { background: rgba(255, 255, 255, 0.14); }
+.reg-progress span { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--brass)); }
 .reg-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
-.reg-item button, .reg-item.locked { width: 100%; min-height: 56px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--brass); background: linear-gradient(#FFFBF1, #EFE4CA); color: #1F2A24; text-align: left; position: relative; }
+.reg-item button { width: 100%; min-height: 56px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--brass); background: linear-gradient(#FFFBF1, #EFE4CA); color: #1F2A24; text-align: left; position: relative; box-shadow: 0 2px 6px rgba(110, 75, 30, 0.25); }
 .reg-item b { font: 800 0.95rem var(--f-serif); letter-spacing: 0.05em; word-break: break-word; }
 .reg-item small { color: #574A37; }
 .reg-item .stamp svg { position: absolute; right: 8px; top: 8px; width: 18px; height: 18px; color: #2A7468; }
-.reg-item.locked { min-height: 56px; padding: 8px 10px; border: 1px dashed var(--line); background: transparent; color: var(--muted); justify-content: center; align-items: center; }
-.reg-item.locked i { opacity: 0.45; }
-.reg-item button { border-width: 2px; box-shadow: 0 2px 6px rgba(110, 75, 30, 0.25); }
-.reg-item.locked b { display: flex; gap: 3px; } .reg-item.locked i { width: 9px; height: 11px; border-radius: 2px; background: var(--line); opacity: 0.7; }
+.reg-item.locked { display: flex; }
+.reg-item.locked .reg-lock {
+  min-height: 56px; padding: 8px 10px; gap: 6px;
+  border: 1px dashed var(--line); background: var(--panel-2); color: var(--ink);
+  box-shadow: none; justify-content: center; align-items: flex-start;
+}
+.reg-item.locked .reg-lock:hover { border-color: var(--brass); }
+.reg-item.locked .reg-lock.active { border-style: solid; border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.reg-item.locked b { display: flex; gap: 3px; flex-wrap: wrap; }
+.reg-item.locked i { width: 8px; height: 10px; border-radius: 2px; background: var(--line); opacity: 0.85; }
+.reg-meta { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.reg-len { font: 600 0.76rem var(--f-ui); color: #463A28; }
+body.theme-dark .reg-len { color: #CFC7D8; }
+.reg-tier {
+  padding: 1px 7px; border-radius: 99px; background: #1E6B60; color: #FFF;
+  font: 700 0.74rem / 1.3 var(--f-ui); font-variant-numeric: tabular-nums;
+}
+body.theme-dark .reg-tier { background: #D4AF37; color: #14121F; }
 
 /* game over */
 body[data-scene="over"] #screen { display: grid; place-items: center; }
