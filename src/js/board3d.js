@@ -32,19 +32,29 @@ export function probe(force) {
 // ---------- meshes ----------
 function b64(s, T) { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new T(u.buffer); }
 // Blender (z up, cells) → three (y up): (x, y, z) → (x, z, -y)
+const TILE_CROWN_HALF = 0.38;
+const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 function geometries(name) {
   const d = MESHES[name];
   return d.g.map((g) => {
     const q = b64(g.p, Int16Array), n = b64(g.n, Int8Array), idx = b64(g.i, Uint16Array);
     const pos = new Float32Array(q.length), nor = new Float32Array(q.length), uv = new Float32Array(q.length / 3 * 2);
+    const isTileTop = name === 'tile' && g.mat && g.mat.name === 'tiletop';
     for (let i = 0, j = 0; i < q.length; i += 3, j += 2) {
       const bx = d.lo[0] + (q[i] + 32768) / 65535 * (d.hi[0] - d.lo[0]);
       const by = d.lo[1] + (q[i + 1] + 32768) / 65535 * (d.hi[1] - d.lo[1]);
       const bz = d.lo[2] + (q[i + 2] + 32768) / 65535 * (d.hi[2] - d.lo[2]);
       pos[i] = bx; pos[i + 1] = bz; pos[i + 2] = -by;
       nor[i] = n[i] / 127; nor[i + 1] = n[i + 2] / 127; nor[i + 2] = -n[i + 1] / 127;
-      // planar UVs from the footprint (used by the tile's letter face)
-      uv[j] = (bx - d.lo[0]) / (d.hi[0] - d.lo[0]); uv[j + 1] = (by - d.lo[1]) / (d.hi[1] - d.lo[1]);
+      // W3-S1-01: map tiletop UVs cleanly to the flat ceramic crown [-0.38..+0.38] → [0..1]
+      // so 100% of face texels sit inside the flat crown and bevel-ring verts clamp to the clean glaze edge.
+      if (isTileTop) {
+        uv[j] = clamp01((bx + TILE_CROWN_HALF) / (2 * TILE_CROWN_HALF));
+        uv[j + 1] = clamp01((by + TILE_CROWN_HALF) / (2 * TILE_CROWN_HALF));
+      } else {
+        uv[j] = (bx - d.lo[0]) / (d.hi[0] - d.lo[0]);
+        uv[j + 1] = (by - d.lo[1]) / (d.hi[1] - d.lo[1]);
+      }
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
@@ -469,6 +479,23 @@ export function cellAt(x, y) {
 // approximate on-screen size of one square near the centre (for line widths)
 export function cellPx() { const [x0, y0] = screenOf(HALF - 0.5, HALF); const [x1, y1] = screenOf(HALF + 0.5, HALF); return Math.hypot(x1 - x0, y1 - y0); }
 export function debug() {
+  let tileTopUv = null;
+  const topPart = B3.tileGeo && B3.tileGeo.find((g) => g.mat && g.mat.name === 'tiletop');
+  if (topPart && topPart.geo) {
+    const posAttr = topPart.geo.getAttribute('position'), uvAttr = topPart.geo.getAttribute('uv');
+    let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
+    let crownMinU = Infinity, crownMaxU = -Infinity, crownMinV = Infinity, crownMaxV = -Infinity;
+    for (let i = 0; i < uvAttr.count; i++) {
+      const u = uvAttr.getX(i), v = uvAttr.getY(i);
+      if (u < minU) minU = u; if (u > maxU) maxU = u;
+      if (v < minV) minV = v; if (v > maxV) maxV = v;
+      if (Math.abs(posAttr.getX(i)) <= TILE_CROWN_HALF + 0.002 && Math.abs(posAttr.getZ(i)) <= TILE_CROWN_HALF + 0.002) {
+        if (u < crownMinU) crownMinU = u; if (u > crownMaxU) crownMaxU = u;
+        if (v < crownMinV) crownMinV = v; if (v > crownMaxV) crownMaxV = v;
+      }
+    }
+    tileTopUv = { minU, maxU, minV, maxV, crownMinU, crownMaxU, crownMinV, crownMaxV };
+  }
   return {
     on: B3.on, reason: B3.reason, dark: !!B3.dark, counterArt: !!B3.counterArt,
     towelColor: B3.towelCloth && B3.towelCloth[0] ? B3.towelCloth[0].color.getHexString() : null,
@@ -477,6 +504,7 @@ export function debug() {
     tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, tilt: TILT, tall: !!B3.tall,
     preDim: !!B3.preDimActive, dimOpacity: B3.dimOpacity || 0, dimOpenCount: B3.dimOpenCount || 0,
     bezel: B3.on ? bezelBounds() : null,
+    tileTopUv,
     faceCache: faceCache.size, tileCache: R.tileCacheSize(),
     boardCanvas: !!B3.boardCanvas, tilePool: B3.tiles.length,
     envTempDisposed: B3.envTempDisposed || 0, disposed: B3.lastDispose || null,

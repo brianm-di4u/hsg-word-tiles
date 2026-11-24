@@ -4,7 +4,7 @@
 #   (pass "render <dir>" instead of "export <file>" to render a preview of each piece with Cycles)
 # Units are board cells (one square = 1). Pieces:
 #   tile    a glazed ceramic tile, 0.9 x 0.9 x 0.24 with a soft bevel; its top faces use material 'tiletop', which the
-#           game replaces with the letter texture (UVs are made from positions in board3d.js)
+#           game replaces with the letter texture (flat-crown [-0.38..+0.38] → [0..1] UVs are made in board3d.js)
 #   frame   a mitred walnut moulding with a brass bead that wraps the 16 x 16 board slab
 #   towels  three folded white bath towels with a teal stripe, as stacked on a bathhouse counter
 #   bell    a brass front-desk call bell on a black base

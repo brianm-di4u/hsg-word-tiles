@@ -372,19 +372,39 @@ export function paintBoard(size, theme = 'light') {
   return cv;
 }
 
-// The flat top of a 3D tile: the face texture spans the tile's footprint; the flat top is about 0.08-0.92 of it.
+// Draw a tile's corner point value with tight tracking on two-digit numerals (e.g. Q's '10') so they stay compact and clear of Q's tail (W3-S1-01).
+function drawTileValue(ctx, val, x, y, px, twoDigit) {
+  ctx.font = `700 ${px}px ${FONT_UI}`;
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#14100A';
+  const s = String(val);
+  if (!twoDigit || s.length < 2) { ctx.fillText(s, x, y); return; }
+  let rx = x;
+  const tighten = px * 0.04;
+  for (let k = s.length - 1; k >= 0; k--) {
+    ctx.fillText(s[k], rx, y);
+    rx -= ctx.measureText(s[k]).width - tighten;
+  }
+}
+
+// The flat top of a 3D tile: board3d.js maps the flat ceramic crown [-0.38..+0.38] to [0..1] UVs (W3-S1-01),
+// so 100% of face texels sit cleanly inside the bevel.
 function paintFace(ctx, l, blank, w, theme = 'light') {
   const g = ctx.createLinearGradient(0, 0, w, w);
   if (theme === 'dark') { g.addColorStop(0, '#F2EADB'); g.addColorStop(0.6, '#EDE5D4'); g.addColorStop(1, '#DFD5BE'); }
   else { g.addColorStop(0, '#FFFDF5'); g.addColorStop(0.6, '#FAF3E3'); g.addColorStop(1, '#F0E6CE'); }
   ctx.fillStyle = g; ctx.fillRect(0, 0, w, w);
   if (!l) return;
+  const isQ = l === 'Q', val = VALUE[l], twoDigit = !blank && val >= 10;
   ctx.save();
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.font = `800 ${w * 0.62}px ${FONT_TILE}`; ctx.fillStyle = blank ? '#1F6F6B' : '#0B0F0C';
+  ctx.font = `800 ${w * (isQ ? 0.56 : 0.62)}px ${FONT_TILE}`;
+  ctx.fillStyle = blank ? '#1F6F6B' : '#0F1713';
   const m = ctx.measureText(l), asc = m.actualBoundingBoxAscent || w * 0.38;
-  ctx.fillText(l, w * 0.47, w * 0.5 + asc / 2 - w * 0.02);
-  if (!blank) { ctx.font = `700 ${w * 0.3}px ${FONT_UI}`; ctx.textAlign = 'right'; ctx.fillStyle = '#14100A'; ctx.fillText(String(VALUE[l]), w * 0.89, w * 0.88); }
+  ctx.fillText(l, w * (isQ ? 0.42 : 0.44), w * 0.47 + asc / 2 - (isQ ? w * 0.05 : w * 0.01));
+  if (!blank) {
+    drawTileValue(ctx, val, w * 0.86, w * 0.86, w * (twoDigit ? 0.22 : 0.27), twoDigit);
+  }
   ctx.restore();
 }
 
@@ -421,17 +441,18 @@ export function tileSprite(l, blank, w, kind = 'board', theme = 'light') {
   const hg = ctx.createRadialGradient(inset + s * 0.28, inset + s * 0.2, 0, inset + s * 0.28, inset + s * 0.2, s * 0.55);
   hg.addColorStop(0, 'rgba(255,255,255,0.55)'); hg.addColorStop(1, 'rgba(255,255,255,0)');
   roundRect(ctx, inset, inset, s, s, r); ctx.fillStyle = hg; ctx.fill();
-  // letter and value
+  // letter and value (W3-S1-01: unified upper-left anchor, lifted/scaled Q, compact tight-tracked two-digit '10')
   if (l) {
+    const isQ = l === 'Q', val = VALUE[l], twoDigit = !blank && val >= 10;
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.font = `800 ${w * 0.64}px ${FONT_TILE}`;
-    ctx.fillStyle = blank ? '#1F6F6B' : '#1F2A24';
+    ctx.font = `800 ${w * (isQ ? 0.56 : 0.62)}px ${FONT_TILE}`;
+    ctx.fillStyle = blank ? '#1F6F6B' : '#0F1713';
     const m = ctx.measureText(l);
-    const asc = m.actualBoundingBoxAscent || w * 0.42;
-    ctx.fillText(l, w * 0.47, w * 0.5 + asc / 2 - w * 0.02);
+    const asc = m.actualBoundingBoxAscent || w * 0.40;
+    ctx.fillText(l, w * (isQ ? 0.42 : 0.44), w * 0.47 + asc / 2 - (isQ ? w * 0.05 : w * 0.01));
     if (!blank) {
-      ctx.font = `700 ${Math.max(w * 0.27, Math.min(w * 0.34, 15))}px ${FONT_UI}`; ctx.textAlign = 'right'; ctx.fillStyle = '#1F1A12';   // small squares keep the value readable
-      ctx.fillText(String(VALUE[l]), w - inset - w * 0.08, w - inset - w * 0.07);
+      const valPx = twoDigit ? Math.max(w * 0.22, Math.min(w * 0.25, 12.5)) : Math.max(w * 0.26, Math.min(w * 0.32, 14.5));
+      drawTileValue(ctx, val, w * 0.86, w * 0.86, valPx, twoDigit);
     }
   }
   if (kind === 'staged') {
