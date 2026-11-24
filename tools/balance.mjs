@@ -39,7 +39,7 @@ export async function playMatch(levels, seed, stats) {
       stats.points += e.score;
       stats.themed += e.themed;
       if (e.full) stats.full++;
-      if (e.featured) stats.featured++;
+      if (e.featured) stats.featured += Array.isArray(e.featuredAll) ? e.featuredAll.length : 1;
       if (e.themed) stats.themedPlays++;
     } else stats[e.kind]++;
   }

@@ -45,7 +45,9 @@ export function generateMoves(d, board, rack, opts = {}) {
   const E = d.edges, root = d.root;
   const lex = opts.lex || null;
   const bonusWeight = opts.bonusWeight ?? 1;
-  const featured = (opts.featured || []).filter((f) => f.by == null).map((f) => f.word);
+  const featured = (opts.featured || [])
+    .filter((f) => f.by == null)
+    .map((f) => ({ word: f.word, id: f.id || (lex && lex.entry(f.word)?.id) || null }));
   const budget = opts.budget || 2e6;
   // commonOnly: every word formed must be common, except words shorter than freeLen (Medium knows the short ones)
   // or two-letter words in allowTwo (Easy uses an explicit everyday two-letter allowlist).
@@ -135,7 +137,11 @@ export function generateMoves(d, board, rack, opts = {}) {
       if (lex) { const en = lex.byForm.get(word); if (en) bonus += lex.bonusOf(en) + (anyBath ? ROW_BONUS : 0); }
       if (words.some((w) => BLOCKED.has(w))) return;
       if (commonOnly && !words.every((w) => w.length < freeLen || (allowTwo && w.length === 2 ? allowTwo.has(w) : isCommonWord(w)))) return;
-      for (const f of featured) if (words.includes(f)) { feat = FEATURED_BONUS; break; }
+      if (featured.length) {
+        for (const f of featured) {
+          if (words.some((w) => w === f.word || (f.id != null && lex && lex.byForm.get(w)?.id === f.id))) feat += FEATURED_BONUS;
+        }
+      }
       const full = placed === RACK ? FULL_SOAK : 0;
       const base = sum * mult + cross + full + feat;
       const score = base + bonus;

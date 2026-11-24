@@ -763,7 +763,11 @@ function celebrate(e, bark, wait = 0) {
   let found = false;
   if (p.kind === 'human' && (e.full || e.featured)) buzz('big');
   const who = bark ? { p, k: e.p } : null, quote = (ev) => (bark && bark.event === ev ? `“${bark.text}”` : null);
-  if (e.featured) { toast({ kind: 'featured', who, title: `Featured Spring: ${e.featured}`, sub: `${quote('themed') || `${p.name} found it`} · +${FEATURED_BONUS}`, fact: G.lex.entry(e.featured)?.id, form: e.featured }); cue('featured'); }
+  const claimedFeats = Array.isArray(e.featuredAll) && e.featuredAll.length ? e.featuredAll : (e.featured ? [e.featured] : []);
+  if (claimedFeats.length) {
+    for (const fw of claimedFeats) toast({ kind: 'featured', who, title: `Featured Spring: ${fw}`, sub: `${quote('themed') || `${p.name} found it`} · +${FEATURED_BONUS}`, fact: G.lex.entry(fw)?.id, form: fw });
+    cue('featured');
+  }
   for (const w of themed) {
     const entry = G.lex.byId.get(w.themed);
     const fresh = p.kind === 'human' && !register()[w.w];   // celebrate runs before recordRegister: this is the first time the word is signed in
@@ -985,7 +989,7 @@ function renderGame() {
       const f = s.featured[+b.dataset.plaque];
       if (G.coach && G.coach.phase === 'plaques') coachDismiss('plaques');
       if (f.by != null) { syncSpringsDrawer(false); openFact(G.lex.entry(f.word).id, f.word); }
-      else flash(`Featured Spring: ${f.word.length} letters, ${G.lex.categories[f.cat].name}. Form it to claim +${FEATURED_BONUS}.`);
+      else flash(`Featured Spring: ${f.word.length} letters, ${G.lex.categories[f.cat].name}. Form any form of it to claim +${FEATURED_BONUS}.`);
     });
   });
   $('#log').innerHTML = UI.logHtml(s, G.lex) || '<li class="empty">Every play is written here: the words, the points, and any Hot Springs bonus.</li>';
@@ -1163,7 +1167,7 @@ function renderPreview() {
   else if (G.preview) {
     const p = G.preview;
     if (p.ok) {
-      html = `<span class="words">${p.words.map((w) => `<b class="${w.themed ? 'themed' : ''}">${w.w}</b>`).join(' ')}</span><span class="pts">${p.score}<small> pts</small></span>${p.themed ? `<span class="extra">${UI.ICON.steam} +${p.themed}</span>` : ''}${p.full ? `<span class="extra">Full Soak +${FULL_SOAK}</span>` : ''}${p.featured ? `<span class="extra">Featured +${FEATURED_BONUS}</span>` : ''}${G.s.challenge ? '<span class="extra">words checked when you play</span>' : ''}`;
+      html = `<span class="words">${p.words.map((w) => `<b class="${w.themed ? 'themed' : ''}">${w.w}</b>`).join(' ')}</span><span class="pts">${p.score}<small> pts</small></span>${p.themed ? `<span class="extra">${UI.ICON.steam} +${p.themed}</span>` : ''}${p.full ? `<span class="extra">Full Soak +${FULL_SOAK}</span>` : ''}${p.featured ? `<span class="extra">Featured +${p.featuredBonus || FEATURED_BONUS}</span>` : ''}${G.s.challenge ? '<span class="extra">words checked when you play</span>' : ''}`;
       if (hintLive()) html += `<span class="extra">keeps ${G.hintAlts[G.hintIx].keep.length ? G.hintAlts[G.hintIx].keep.map((l) => (l === '?' ? 'blank' : l)).join('') : 'nothing'}</span><button type="button" class="bdbtn" data-hintnext aria-label="Show another Spring Guide play, ${G.hintIx + 1} of ${G.hintAlts.length} shown">Other plays ${G.hintIx + 1}/${G.hintAlts.length}</button>`;
       html += `<button type="button" class="bdbtn" aria-expanded="${G.breakdown}">${G.breakdown ? 'Hide' : 'How it scores'}</button>`;
       if (G.breakdown) html += UI.breakdownHtml(p, G.s.board, G.staged);

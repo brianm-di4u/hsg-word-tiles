@@ -86,6 +86,9 @@ export function refPlay(board, tiles, words, themed = new Map(), featuredWords =
     list.push(w);
   }
   if (tiles.length === 7) total += 40;
-  for (const f of featuredWords) if (list.includes(f)) { total += 30; break; }
+  for (const f of featuredWords) {
+    const matched = Array.isArray(f) ? f.some((w) => list.includes(w)) : list.includes(f);
+    if (matched) total += 30;
+  }
   return { ok: true, score: total, words: list.sort() };
 }

@@ -145,6 +145,8 @@ export function setupHtml(setup, opts = {}) {
 // ---------- game panels ----------
 // How a staged play adds up, word by word (the preview strip opens it): letters with the multiplier they earned,
 // the word multiplier, then the Hot Springs, Featured and Full Soak extras. `board` is the board without the staged tiles.
+const featuredList = (e) => (Array.isArray(e?.featuredAll) && e.featuredAll.length ? e.featuredAll : (e?.featured ? [e.featured] : []));
+
 export function breakdownHtml(p, board, staged) {
   const add = new Map(staged.map((t) => [t.i, { l: t.l, blank: t.blank }]));
   const rows = p.words.map((w) => {
@@ -153,7 +155,7 @@ export function breakdownHtml(p, board, staged) {
     return `<li><b>${esc(w.w)}</b> <span>${sum} = ${x.sum}${x.wm > 1 ? `, word ×${x.wm} = ${x.total}` : ''}</span></li>`;
   });
   for (const w of p.words) if (w.bonus) rows.push(`<li><b>Hot Springs</b> <span>${esc(w.w)} +${w.bonus}${w.bath ? ` (${w.bonus - ROW_BONUS} for the word, ${ROW_BONUS} for a Bathhouse Row square)` : ''}</span></li>`);
-  if (p.featured) rows.push(`<li><b>Featured Spring</b> <span>${esc(p.featured)} +${FEATURED_BONUS}</span></li>`);
+  for (const fw of featuredList(p)) rows.push(`<li><b>Featured Spring</b> <span>${esc(fw)} +${FEATURED_BONUS}</span></li>`);
   if (p.full) rows.push(`<li><b>Full Soak</b> <span>all seven tiles +${FULL_SOAK}</span></li>`);
   return `<div class="bd" role="region" aria-label="How this play scores"><ul>${rows.join('')}<li class="tot"><b>Total</b> <span>${p.score} points</span></li></ul></div>`;
 }
@@ -233,7 +235,8 @@ export function logHtml(s, lex) {
       const ws = e.words.map((w) => (w.themed
         ? `<button type="button" class="themed-link" data-fact="${esc(w.themed)}" data-form="${esc(w.w)}" aria-label="${esc(w.w)}, Hot Springs word: read its history card">${ICON.steam}<span>${esc(w.w)}</span></button>`
         : `<span>${esc(w.w)}</span>`)).join(', ');
-      const extras = [e.full ? `Full Soak +${FULL_SOAK}` : '', e.themed ? `Hot Springs +${e.themed}` : '', e.featured ? `Featured +${FEATURED_BONUS}` : ''].filter(Boolean).join(' · ');
+      const fCount = featuredList(e).length;
+      const extras = [e.full ? `Full Soak +${FULL_SOAK}` : '', e.themed ? `Hot Springs +${e.themed}` : '', fCount ? `Featured +${fCount * FEATURED_BONUS}` : ''].filter(Boolean).join(' · ');
       return `<li><b class="who">${esc(p.name)}</b> ${ws} <em>${e.score}</em>${extras ? `<small>${extras}</small>` : ''}</li>`;
     }
     return `<li><b class="who">${esc(p.name)}</b> ${e.kind === 'swap' ? `swapped ${plural(e.count, 'tile')}` : 'passed'}${e.challenge ? ` <small>(${esc(e.challenge)} is not a word)</small>` : ''}</li>`;
@@ -405,7 +408,7 @@ export function helpHtml(tab, lex, twos = [], opts = {}) {
       <ul class="legend plain">
         <li><b>Full Soak +${FULL_SOAK}</b>: use all seven tiles in one turn.</li>
         <li><b>Hot Springs word +${tierList}</b>: any word you form that belongs to the town (see the next tab).</li>
-        <li><b>Featured Spring +${FEATURED_BONUS}</b>: three secret words per game, hidden in steam on the plaques. A letter clears every round. The first to form one claims it.</li>
+        <li><b>Featured Spring +${FEATURED_BONUS}</b>: three secret words per game, hidden in steam on the plaques. Letters clear each round and when you play a Hot Springs word in that category; any form of the word claims it.</li>
       </ul>
       <h2>The tiles</h2>
       <p>${TILES ? Object.values(TILES).reduce((a, t) => a + t.count, 0) : 0} lettered tiles and ${BLANKS} blank <b>Steam tiles</b>, which stand for any letter and score nothing. Counts and points were worked out from how often each letter appears in playable words.</p>
@@ -598,7 +601,7 @@ export function decisiveLine(s) {
   if (margin <= 0) return 'The scores finished level.';
   const tally = (k) => {
     const t = { themed: 0, full: 0, feat: 0, best: 0 };
-    for (const e of s.log) if (e.kind === 'play' && e.p === k) { t.themed += e.themed || 0; t.full += e.full ? 1 : 0; t.feat += e.featured ? 1 : 0; t.best = Math.max(t.best, e.score); }
+    for (const e of s.log) if (e.kind === 'play' && e.p === k) { t.themed += e.themed || 0; t.full += e.full ? 1 : 0; t.feat += featuredList(e).length; t.best = Math.max(t.best, e.score); }
     return t;
   };
   const x = tally(a.k), y = tally(b.k), adj = (s.result.adjust[a.k] || 0) - (s.result.adjust[b.k] || 0);

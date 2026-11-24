@@ -132,14 +132,33 @@ export function apply(s, action, ctx) {
     for (const t of action.tiles) s.board[t.i] = { l: t.l, blank: !!t.blank, p: s.cur, t: s.move };
     p.rack = takeFromRack(p.rack, action.tiles.map((t) => (t.blank ? '?' : t.l)));
     p.score += ev.score;
-    if (ev.featured) { const f = s.featured.find((x) => x.word === ev.featured); f.by = s.cur; f.at = s.move; }
+    const claimedFeats = Array.isArray(ev.featuredAll) && ev.featuredAll.length
+      ? ev.featuredAll
+      : (ev.featured ? [ev.featured] : []);
+    for (const fw of claimedFeats) {
+      const f = s.featured.find((x) => x.word === fw && x.by == null);
+      if (f) { f.by = s.cur; f.at = s.move; }
+    }
     const top = ev.words.reduce((a, w) => (w.score + w.bonus > a.score + a.bonus ? w : a), ev.words[0]);
     if (!p.best || top.score + top.bonus > p.best.score) p.best = { word: top.w, score: top.score + top.bonus };
     entry = { p: s.cur, kind: 'play', n: s.move, tiles: action.tiles.map((t) => ({ i: t.i, l: t.l, blank: !!t.blank })),
       words: ev.words.map((w) => ({ w: w.w, score: w.score, bonus: w.bonus, themed: w.themed, bath: w.bath })),
-      score: ev.score, full: ev.full, themed: ev.themed, featured: ev.featured, rack };
+      score: ev.score, full: ev.full, themed: ev.themed, featured: ev.featured,
+      ...(claimedFeats.length > 1 ? { featuredAll: claimedFeats } : {}), rack };
     s.scoreless = ev.score > 0 ? 0 : s.scoreless + 1;
     draw(s, p);
+    // W1-S4-01: playing any Hot Springs word in an unclaimed plaque's category immediately clears +1 fogged letter on that plaque.
+    if (ctx.lex && s.featured.length) {
+      const cats = new Set();
+      for (const w of ev.words) {
+        if (!w.themed) continue;
+        const en = ctx.lex.byId.get(w.themed);
+        if (en && en.cat) cats.add(en.cat);
+      }
+      for (const f of s.featured) {
+        if (f.by == null && cats.has(f.cat)) revealOneLetter(s, f);
+      }
+    }
   } else if (action.type === 'swap') {
     const letters = action.letters || [];
     if (!letters.length) return { ok: false, error: 'Choose tiles to swap.' };
@@ -172,13 +191,24 @@ export function apply(s, action, ctx) {
   return { ok: true, entry };
 }
 
-// One more letter of each unclaimed Featured Spring clears at each new round (never past length − 2).
+// Maximum revealed letters allowed by fog clearing on an unclaimed Featured Spring:
+// length − 2 normally, or length − 1 once bag <= 20 tiles or Daily Turn 6+ (s.daily.turns <= 5).
+export function featuredRevealCap(s, f) {
+  const late = s.bag.length <= 20 || (s.mode === 'daily' && s.daily && s.daily.turns <= DAILY_TURNS - 5);
+  return Math.max(1, f.word.length - (late ? 1 : 2));
+}
+
+function revealOneLetter(s, f) {
+  if (!f || f.by != null || f.shown.length >= featuredRevealCap(s, f)) return false;
+  const hidden = [...f.word].map((_, k) => k).filter((k) => !f.shown.includes(k));
+  if (!hidden.length) return false;
+  f.shown.push(hidden[Math.floor(rand(s, 'bag') * hidden.length)]);
+  return true;
+}
+
+// One more letter of each unclaimed Featured Spring clears at each new round (up to featuredRevealCap).
 function revealRound(s) {
-  for (const f of s.featured) {
-    if (f.by != null || f.shown.length >= f.word.length - 2) continue;
-    const hidden = [...f.word].map((_, k) => k).filter((k) => !f.shown.includes(k));
-    f.shown.push(hidden[Math.floor(rand(s, 'bag') * hidden.length)]);
-  }
+  for (const f of s.featured) revealOneLetter(s, f);
 }
 
 function finish(s, outSeat, why) {
