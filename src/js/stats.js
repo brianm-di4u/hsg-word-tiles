@@ -43,8 +43,9 @@ export function nextStreak(d, date) {
 export const oppKey = (p) => `${p.persona}:${p.level || 'medium'}`;
 
 // Folds one finished game into the record. Returns { stats, pb } where pb says what the game set:
-// { first, score, play, word, held } (booleans), the first four's records true only when beaten in a game that is not the first.
-// A game in which the player took a hint counts as a game and a win but sets no best (`held` says it would have set one).
+// { first, score, play, word, held, heldBy } (first five booleans, heldBy is 'hint' | 'unlimited' | null).
+// Personal bests are unaided-only (OQ-WF6-01): taking any hint or enabling Unlimited hints excludes both career bests
+// and per-opponent bests (leaving any already-saved bests untouched), and reports `held` even on Game 1.
 // Games with no computer opponent or with two or more people are left out: the record is the player's own against the town.
 export function applyGame(prev, s) {
   const humans = s.players.filter((p) => p.kind === 'human');
@@ -53,25 +54,27 @@ export function applyGame(prev, s) {
   if (s.mode !== 'play' || humans.length !== 1 || !bots.length || !s.result) return { stats: st, pb: null };
   const k = s.players.indexOf(humans[0]), me = humans[0];
   const won = s.result.winners.includes(k), tied = won && s.result.winners.length > 1;
-  const pb = { first: st.games === 0, score: false, play: false, word: false, held: false };
-  const aided = hintsUsed(me) > 0 || !!me.unl;   // unlimited hints keep a game out of the bests whether or not one was taken
+  const pb = { first: st.games === 0, score: false, play: false, word: false, held: false, heldBy: null };
+  const usedHints = hintsUsed(me);
+  const aided = usedHints > 0 || !!me.unl;   // unlimited hints keep a game out of the bests whether or not one was taken
+  const hold = () => { pb.held = true; pb.heldBy = me.unl ? 'unlimited' : 'hint'; };
   st.games++; st.totalScore += me.score;
   if (won && !tied) { st.wins++; st.streak++; st.bestStreak = Math.max(st.bestStreak, st.streak); }
   else { if (tied) st.ties++; st.streak = 0; }
-  if (me.score > st.bestScore) { if (aided) pb.held = !pb.first; else { pb.score = !pb.first; st.bestScore = me.score; } }
+  if (me.score > st.bestScore) { if (aided) hold(); else { pb.score = !pb.first; st.bestScore = me.score; } }
   const plays = s.log.filter((e) => e.kind === 'play' && e.p === k);
   const top = plays.reduce((a, e) => (!a || e.score > a.score ? e : a), null);
-  if (top && top.score > (st.bestPlay ? st.bestPlay.score : 0)) { if (aided) pb.held = !pb.first; else { pb.play = !pb.first; st.bestPlay = { word: top.words[0].w, score: top.score }; } }
-  if (me.best && me.best.score > (st.bestWord ? st.bestWord.score : 0)) { if (aided) pb.held = !pb.first; else { pb.word = !pb.first; st.bestWord = { word: String(me.best.word).slice(0, 20), score: me.best.score }; } }
+  if (top && top.score > (st.bestPlay ? st.bestPlay.score : 0)) { if (aided) hold(); else { pb.play = !pb.first; st.bestPlay = { word: top.words[0].w, score: top.score }; } }
+  if (me.best && me.best.score > (st.bestWord ? st.bestWord.score : 0)) { if (aided) hold(); else { pb.word = !pb.first; st.bestWord = { word: String(me.best.word).slice(0, 20), score: me.best.score }; } }
   st.fullSoaks += plays.filter((e) => e.full).length;
   st.themed += plays.reduce((a, e) => a + e.words.filter((w) => w.themed).length, 0);
   st.featured += s.featured.filter((f) => f.by === k).length;
-  st.hints += hintsUsed(me);
+  st.hints += usedHints;
   for (const b of bots) {
     const row = st.opp[oppKey(b)] || oppRow(null);
     row.games++; row.total += me.score;
     if (me.score > b.score) row.wins++;
-    row.best = Math.max(row.best, me.score);
+    if (me.score > row.best) { if (aided) hold(); else row.best = me.score; }
     st.opp[oppKey(b)] = row;
   }
   return { stats: st, pb };

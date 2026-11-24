@@ -110,7 +110,8 @@ export function setupHtml(setup) {
     <ol class="seats">${setup.seats.map(seat).join('')}</ol>
     ${setup.seats.length < 4 ? '<button class="btn quiet add" data-add>Add a player</button>' : ''}
     <label class="check"><input type="checkbox" data-hints ${setup.hints ? 'checked' : ''}> Spring Guide hints</label>
-    <label class="field hint-allow"><span>Hints for each player</span><select data-hints-unl ${setup.hints ? '' : 'disabled'}><option value="3" ${setup.hintsUnl ? '' : 'selected'}>Three</option><option value="unl" ${setup.hintsUnl ? 'selected' : ''}>Unlimited (a game with hints sets no personal best)</option></select></label>
+    <label class="field hint-allow"><span>Hints for each player</span><select data-hints-unl ${setup.hints ? '' : 'disabled'}><option value="3" ${setup.hintsUnl ? '' : 'selected'}>Three</option><option value="unl" ${setup.hintsUnl ? 'selected' : ''}>Unlimited</option></select></label>
+    <p class="seat-note" data-hints-note>Personal bests are for unaided games: taking any hint, or turning Unlimited hints on, sets no personal best.</p>
     <label class="check"><input type="checkbox" data-challenge ${setup.challenge ? 'checked' : ''}> Challenge mode: invalid words cost your turn</label>
     <p class="seat-note">Off by default. When it is on, the board stops saying whether a word is in the dictionary: play one that is not and you lose the turn, like a pass.</p>
     <p class="goal"><b>The goal:</b> score more than the others by building words.</p>
@@ -199,7 +200,7 @@ export function actionsHtml(o) {
     slot2,
     b('swap', ICON.swap, 'Swap', '⇧S', o.canSwap ? '' : 'disabled'),
     b('pass', ICON.pass, 'Pass', '⇧P'),
-    o.hints != null ? b('hint', ICON.hint, `Hint <em>${o.unlimited ? '∞' : o.hints}</em>`, '⇧H', o.hints > 0 || o.unlimited ? '' : 'disabled') : '',
+    o.hints != null ? b('hint', ICON.hint, `Hint <em>${o.unlimited ? '∞' : o.hints}</em>`, '⇧H', `${o.hints > 0 || o.unlimited ? '' : 'disabled '}title="Spring Guide hint (using any hint marks this game aided and sets no personal best)"`) : '',
     b('play', ICON.play, playText, 'Enter', o.canPlay ? '' : 'aria-disabled="true"'),
   ].join('');
 }
@@ -357,7 +358,7 @@ export function helpHtml(tab, lex, twos = []) {
       </ol>
       ${workedExample()}
       <p>Words come from the public-domain ENABLE list (168,000 words; no proper nouns) with a few additions: the two-letter words below and some everyday ones such as EMAIL, APP and BLOG. A play with a word that isn't on the list is handed back and you keep your turn (unless you chose Challenge mode in the setup: then the strip does not say whether a word is valid, and a word that isn't on the list costs you the turn). While you place tiles, the strip under the board shows the words, the score and any bonus.</p>
-      <p>Stuck? The <b>Spring Guide</b> (Hint) sets a strong play on the board for you to keep, move or take back. <b>Other plays</b> under the board shows its next two choices, and the tiles each one keeps, for no extra charge. Three hints per player in a game against the computer or pass-and-play (or unlimited, if you choose that in the setup; such a game sets no personal best), none in the Daily Soak.</p>
+      <p>Stuck? The <b>Spring Guide</b> (Hint) sets a strong play on the board for you to keep, move or take back. <b>Other plays</b> under the board shows its next two choices, and the tiles each one keeps, for no extra charge. Three hints per player in a game against the computer or pass-and-play (or unlimited in the setup), none in the Daily Soak. Personal bests are for unaided games: taking any hint, or turning Unlimited hints on, sets no personal best.</p>
       ${twos.length ? `<h2>Two-letter words</h2>
       <p>All ${twos.length} of these are playable. QI and ZA help when you are holding a lone Q or Z.</p>
       <p class="twos">${twos.join(' ')}</p>` : ''}
@@ -501,7 +502,7 @@ export function recordsHtml(st, o) {
     <h2>By opponent</h2>
     ${rows.length ? `<table class="opp-table"><thead><tr><th scope="col">Opponent</th><th scope="col">Games</th><th scope="col">Won</th><th scope="col">Best</th></tr></thead><tbody>${rows.map(([k, r]) => {
       const [pid, lv] = k.split(':');
-      return `<tr><th scope="row">${esc(persona(pid).name)} <small>${LEVEL_NAME[lv]}</small></th><td>${r.games}</td><td>${r.wins}</td><td>${r.best}</td></tr>`;
+      return `<tr><th scope="row">${esc(persona(pid).name)} <small>${LEVEL_NAME[lv]}</small></th><td>${r.games}</td><td>${r.wins}</td><td>${r.best || '-'}</td></tr>`;
     }).join('')}</tbody></table><p class="note">A win counts when your score beats that opponent's.</p>` : '<p class="note">Each opponent and difficulty you play gets a line here.</p>'}
     <h2>Daily Soak</h2>
     <div class="stats cols4">${stat(days.length, 'days played')}${stat(days.length ? Math.max(...days.map((d) => (d.first != null ? d.first : d.score))) : '-', 'best day')}${stat(day.streak || 0, 'day streak')}${stat(Math.max(day.streak || 0, st.daily.bestStreak), 'best streak')}</div>
