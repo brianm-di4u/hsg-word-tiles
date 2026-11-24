@@ -11,7 +11,7 @@ import { store, KEYS, createGameSaves, validRegister, validDaily, pruneDays } fr
 import { startAi, aiMove, aiHint, aiDailyPar, aiClient } from './aiclient.js';
 import { PERSONAS, persona, LEVEL_NAME, seatLevel } from './personas.js';
 import { barkFor, endBark, SHORT } from './voices.js';
-import { cleanStats, applyGame, applyDaily, nextStreak } from './stats.js';
+import { cleanStats, applyGame, applyDaily, nextStreak, dayNumber } from './stats.js';
 import * as B3 from './board3d.js';
 import * as UI from './ui.js';
 import { generateMoves } from './movegen.js';
@@ -169,8 +169,9 @@ const register = () => store.json(KEYS.register, {}, validRegister);
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 function dailyInfo() {
   const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
+  const td = today();
   // today's day is read afresh every time: a tab left open past midnight shows the new day, not the one last played
-  return { ...d, today: d.days[today()] || null };
+  return { ...d, today: d.days[td] || null, todayDate: td };
 }
 // Works out par for a Daily date once (off-thread in the AI worker with main-thread fallback), caches it in memory
 // (so blocked-storage and newer-save sessions still see live par pips), persists it on the day's record when stored,
@@ -233,7 +234,7 @@ function recordDaily(s = G.s) {
     // W1-P-N02: official Daily score locks strictly to the first completed run (`first` and `score`).
     d.days[date] = { score, first: score, plays: 1 };
     if (G.parCache[date]) d.days[date].par = G.parCache[date];
-    if (d.last !== date) {
+    if (!d.last || dayNumber(date) > dayNumber(d.last)) {
       const n = nextStreak(d, date);
       d.streak = n.streak; d.rest = n.rest; d.last = date;
     }

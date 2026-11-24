@@ -1,4 +1,7 @@
 // Wave 3, batch W3-B05: W6-S2-01, W6-P-N02, W6-S2-05.
+import { activeStreak, streakRestReady, nextStreak } from '../src/js/stats.js';
+import { dailyLine } from '../src/js/ui.js';
+
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => {
   window.__TEST_TIPS__ = false;
@@ -107,6 +110,96 @@ export const tests = [
       await t.game('scene', 'setup');
       const freshTop = await t.page.evaluate(() => document.querySelector('#screen').scrollTop);
       t.equal(freshTop, 0, 'entering a different scene resets #screen.scrollTop to 0');
+    },
+  },
+  {
+    name: 'W6-P-N02 activeStreak, streakRestReady, nextStreak gap<=0 guard, and dailyLine handle live, rest-day, expired, and backward dates (Node)',
+    node: true,
+    async run(t) {
+      t.equal(activeStreak({ streak: 7, last: '2026-11-24', rest: null }, '2026-11-24'), 7, 'gap 0 returns live streak');
+      t.equal(activeStreak({ streak: 7, last: '2026-11-23', rest: null }, '2026-11-24'), 7, 'gap 1 returns live streak');
+      t.equal(activeStreak({ streak: 7, last: '2026-11-22', rest: null }, '2026-11-24'), 7, 'gap 2 with spare rest returns live streak');
+      t.equal(streakRestReady({ streak: 7, last: '2026-11-22', rest: null }, '2026-11-24'), true, 'gap 2 with spare rest sets streakRestReady');
+      t.equal(activeStreak({ streak: 7, last: '2026-11-22', rest: '2026-11-20' }, '2026-11-24'), 0, 'gap 2 without spare rest expires to 0');
+      t.equal(streakRestReady({ streak: 7, last: '2026-11-22', rest: '2026-11-20' }, '2026-11-24'), false, 'gap 2 without spare rest is not rest-ready');
+      t.equal(activeStreak({ streak: 7, last: '2026-11-22', rest: '2026-11-17' }, '2026-11-24'), 7, 'gap 2 exactly 7 days after prior rest is live again');
+      t.equal(activeStreak({ streak: 14, last: '2026-11-01', rest: null }, '2026-11-24'), 0, 'gap > 2 expires streak to 0');
+      t.equal(activeStreak({ streak: 5, last: '2026-11-25', rest: null }, '2026-11-24'), 0, 'gap < 0 returns 0 from activeStreak');
+      t.equal(activeStreak({ streak: 5, last: null }, '2026-11-24'), 0, 'missing last returns 0');
+
+      const back = nextStreak({ streak: 8, last: '2026-11-24', rest: null }, '2026-11-22');
+      t.equal(back.streak, 8, 'nextStreak with gap < 0 preserves active streak');
+      const same = nextStreak({ streak: 8, last: '2026-11-24', rest: null }, '2026-11-24');
+      t.equal(same.streak, 8, 'nextStreak with gap === 0 preserves active streak');
+
+      t.equal(dailyLine({ streak: 14, last: '2026-11-01', today: null, todayDate: '2026-11-24' }), '10 turns, the same tiles for everyone', 'expired streak hidden on Title dailyLine');
+      t.equal(dailyLine({ streak: 6, last: '2026-11-22', rest: null, today: null, todayDate: '2026-11-24' }), '10 turns · streak 6 · rest day ready', 'rest-day window surfaces subtle rest-day cue on Title');
+      t.equal(dailyLine({ streak: 6, last: '2026-11-23', rest: null, today: null, todayDate: '2026-11-24' }), '10 turns · streak 6', 'gap 1 shows live streak without rest-day cue');
+    },
+  },
+  {
+    name: 'W6-P-N02 Title and Records hide expired Daily streaks, show rest-day cue on gap=2+spare, and preserve active streak on backward-date completions',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      const dates = await t.page.evaluate(() => {
+        const d = new Date();
+        const fmt = (off) => {
+          const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + off, 12));
+          return x.toISOString().slice(0, 10);
+        };
+        return { today: fmt(0), d1: fmt(-1), d2: fmt(-2), d3: fmt(-3), d14: fmt(-14) };
+      });
+
+      // 1) Expired streak (14 days ago): Title hides dead streak, Records shows 0 day streak while keeping best streak 14
+      await t.page.evaluate((d14) => {
+        localStorage.setItem('hs-letters-daily-v1', JSON.stringify({ days: { [d14]: { score: 210, first: 210, plays: 1 } }, streak: 14, last: d14 }));
+      }, dates.d14);
+      await t.game('scene', 'title');
+      const expiredTitle = (await t.page.textContent('[data-go="daily"] small')).trim();
+      t.equal(expiredTitle, '10 turns, the same tiles for everyone', `expired streak not advertised on Title (${expiredTitle})`);
+      await t.game('scene', 'records');
+      const expRec = await t.page.evaluate(() => {
+        const stats = [...document.querySelectorAll('.sheet.records .stat')];
+        const get = (re) => stats.find((el) => re.test(el.textContent))?.querySelector('b')?.textContent.trim();
+        return { dayStreak: get(/day streak/i), bestStreak: get(/best streak/i), cue: document.querySelector('.rest-cue')?.textContent || null };
+      });
+      t.equal(expRec.dayStreak, '0', 'Records shows 0 day streak when expired');
+      t.equal(expRec.bestStreak, '14', 'Records preserves historical best streak');
+      t.equal(expRec.cue, null, 'no rest-day cue when expired');
+
+      // 2) Rest-day window (gap === 2 && spare): Title and Records show live streak + subtle rest-day status cue
+      await t.page.evaluate((d2) => {
+        localStorage.setItem('hs-letters-daily-v1', JSON.stringify({ days: { [d2]: { score: 225, first: 225, plays: 1 } }, streak: 6, last: d2, rest: null }));
+      }, dates.d2);
+      await t.game('scene', 'title');
+      const restTitle = (await t.page.textContent('[data-go="daily"] small')).trim();
+      t.expect(/streak 6/.test(restTitle) && /rest day ready/i.test(restTitle), `Title shows live streak + rest-day cue (${restTitle})`);
+      await t.game('scene', 'records');
+      const restRec = await t.page.evaluate(() => {
+        const stats = [...document.querySelectorAll('.sheet.records .stat')];
+        const get = (re) => stats.find((el) => re.test(el.textContent))?.querySelector('b')?.textContent.trim();
+        return { dayStreak: get(/day streak/i), cue: document.querySelector('.rest-cue')?.textContent?.trim() || '' };
+      });
+      t.equal(restRec.dayStreak, '6', 'Records shows active streak 6 during rest-day window');
+      t.expect(/Rest day ready/i.test(restRec.cue) && /6-day streak/.test(restRec.cue), `Records shows rest-day cue (${restRec.cue})`);
+      await t.page.locator('.rest-cue').scrollIntoViewIfNeeded();
+      await t.shot('w3-b05-records-rest-cue');
+
+      // 3) Backward-date completion (completing d2 when d.last is already today with streak 5) must NOT wipe streak or overwrite d.last backward
+      await t.page.evaluate((td) => {
+        localStorage.setItem('hs-letters-daily-v1', JSON.stringify({ days: { [td]: { score: 240, first: 240, plays: 1 } }, streak: 5, last: td, rest: null }));
+      }, dates.today);
+      await t.game('newGame', { mode: 'daily', date: dates.d2 });
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'game', null, { timeout: 10000 });
+      await t.waitIdle(5000);
+      for (let k = 0; k < 10; k++) { await t.game('act', 'pass'); await t.waitIdle(5000); }
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 10000 });
+      const afterBack = await t.page.evaluate(() => JSON.parse(localStorage.getItem('hs-letters-daily-v1')));
+      t.equal(afterBack.streak, 5, 'completing older date preserves active streak 5');
+      t.equal(afterBack.last, dates.today, 'completing older date does not move d.last backward');
+      t.expect(!!afterBack.days[dates.d2], 'older date result is still recorded in d.days');
     },
   },
 ];

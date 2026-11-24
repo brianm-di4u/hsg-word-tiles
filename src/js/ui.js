@@ -5,7 +5,7 @@ import { TILES, BLANKS } from './tiles.js';
 import { N, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, isBath, explainWord } from './score.js';
 import { DAILY_TURNS, unseen } from './engine.js';
 import { art } from './art.js';
-import { hintsUsed } from './stats.js';
+import { hintsUsed, activeStreak, streakRestReady } from './stats.js';
 
 export function qs(s, el = document) { return el.querySelector(s); }
 const ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -530,8 +530,9 @@ export function recordsHtml(st, o) {
       return `<tr><th scope="row">${esc(persona(pid).name)} <small>${LEVEL_NAME[lv]}</small></th><td>${r.games}</td><td>${r.wins}</td><td>${r.best || '-'}</td></tr>`;
     }).join('')}</tbody></table><p class="note">A win counts when your score beats that opponent's.</p>` : '<p class="note">Each opponent and difficulty you play gets a line here.</p>'}
     <h2>Daily Soak</h2>
-    <div class="stats cols4">${stat(days.length, 'days played')}${stat(days.length ? Math.max(...days.map((d) => (d.first != null ? d.first : d.score))) : '-', 'best day')}${stat(day.streak || 0, 'day streak')}${stat(Math.max(day.streak || 0, st.daily.bestStreak), 'best streak')}</div>
+    <div class="stats cols4">${stat(days.length, 'days played')}${stat(days.length ? Math.max(...days.map((d) => (d.first != null ? d.first : d.score))) : '-', 'best day')}${stat(activeStreak(day, o.today), 'day streak')}${stat(Math.max(day.streak || 0, st.daily.bestStreak), 'best streak')}</div>
     ${dailyStrip(day.days || {}, o.today)}
+    ${streakRestReady(day, o.today) ? `<p class="note rest-cue">Rest day ready: play today to keep your ${activeStreak(day, o.today)}-day streak going.</p>` : ''}
     <p class="note">Miss a single day and a rest day keeps your streak going, once in any seven days.</p>
     <h2>Bathhouse Register</h2>
     <p>${o.found} of ${o.total} Hot Springs words found.</p>
@@ -700,10 +701,13 @@ export function dailyStrip(days, today) {
   return `<h3 class="dhead">Last 14 days</h3><ol class="dstrip">${cells.join('')}</ol><p class="note">Your first try each day. ${flipped ? `One star beats the lower of ${esc(persona('hollis').name)}'s and ${esc(persona('julian').name)}'s scores on that day's tiles, two beat both.` : `One star beats ${esc(persona('hollis').name)} on that day's tiles, two beat ${esc(persona('julian').name)}.`}</p>`;
 }
 
-export function dailyLine(d) {
+export function dailyLine(d, todayDate = d && d.todayDate) {
+  const streak = todayDate ? activeStreak(d, todayDate) : (d.streak || 0);
+  const restReady = todayDate ? streakRestReady(d, todayDate) : false;
   if (d.today) {
     const official = d.today.first != null ? d.today.first : d.today.score;
-    return `Today: ${official} pts · streak ${d.streak}`;
+    return streak ? `Today: ${official} pts · streak ${streak}` : `Today: ${official} pts`;
   }
-  return d.streak ? `${DAILY_TURNS} turns · streak ${d.streak}` : `${DAILY_TURNS} turns, the same tiles for everyone`;
+  if (streak && restReady) return `${DAILY_TURNS} turns · streak ${streak} · rest day ready`;
+  return streak ? `${DAILY_TURNS} turns · streak ${streak}` : `${DAILY_TURNS} turns, the same tiles for everyone`;
 }

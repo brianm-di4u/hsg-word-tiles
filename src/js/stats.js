@@ -31,10 +31,27 @@ export const hintsUsed = (p) => (p.unl ? Math.max(0, Math.floor(p.taken) || 0) :
 // be used once in any seven days (`rest` holds the date it was last used, so it is saved with the daily record).
 // Returns { streak, rest, rested } for playing on `date` with `d` = { streak, last, rest }.
 export const REST_EVERY = 7;   // days that must pass before another rest day can be used
-const dayNumber = (date) => { const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(date || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000 : NaN; };
+export const dayNumber = (date) => { const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(date || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000 : NaN; };
+const restSpare = (d, date) => {
+  const rest = d && typeof d.rest === 'string' ? d.rest : null;
+  return rest == null || !(dayNumber(date) - dayNumber(rest) < REST_EVERY);
+};
+// Live Daily Soak streak as of `todayDate`: active only on same day (0), next day (1), or a 1-day miss (2) with a spare rest day.
+export function activeStreak(d, todayDate) {
+  if (!d || !(d.streak > 0) || !d.last || !todayDate) return 0;
+  const gap = dayNumber(todayDate) - dayNumber(d.last);
+  if (gap === 0 || gap === 1) return d.streak;
+  if (gap === 2 && restSpare(d, todayDate)) return d.streak;
+  return 0;
+}
+export function streakRestReady(d, todayDate) {
+  if (!d || !(d.streak > 0) || !d.last || !todayDate) return false;
+  return dayNumber(todayDate) - dayNumber(d.last) === 2 && restSpare(d, todayDate);
+}
 export function nextStreak(d, date) {
   const gap = dayNumber(date) - dayNumber(d.last), rest = typeof d.rest === 'string' ? d.rest : null;
-  const spare = rest == null || !(dayNumber(date) - dayNumber(rest) < REST_EVERY);
+  if (gap <= 0) return { streak: d.streak || 0, rest, rested: false };
+  const spare = restSpare(d, date);
   if (gap === 1) return { streak: (d.streak || 0) + 1, rest, rested: false };
   if (gap === 2 && spare && (d.streak || 0) > 0) return { streak: d.streak + 1, rest: date, rested: true };
   return { streak: 1, rest, rested: false };
