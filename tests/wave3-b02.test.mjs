@@ -300,6 +300,8 @@ export const tests = [
       }, CENTER - 2);
       t.equal(legibility.centerGold, 0, `goldSweep puts 0 opaque gold pixels on center letter crown (maxA=${legibility.centerMaxA})`);
       t.expect(legibility.rimGold >= 40, `goldSweep strokes bright brass rim around bevel (${legibility.rimGold} px)`);
+      await t.game('act', 'reveal');
+      await t.waitFrames(2);
       await t.shot('w3-b02-gold-rim-sweep', { wait: false });
 
       // 2) Verify .pop uses dark-espresso pill badge (>= 7:1 contrast) and consecutive plays never collide into '+2214'
@@ -390,6 +392,95 @@ export const tests = [
         return { before, during };
       });
       t.expect(dragFade.before > 0 && dragFade.during < dragFade.before * 0.72, `steam puffs fade near active drag pointer (${dragFade.before} -> ${dragFade.during})`);
+    },
+  },
+  // ---------- W4-S3-03 ----------
+  {
+    name: 'W4-S3-03 single-tier VFX arbitration: themed Full Soak fires 7-tile star cascade superseding steam, 2L/3L stay quiet, 2W/3W/Row get 160ms oct glint, Featured fires claim arc',
+    viewports: ['desktop'],
+    initScript: normalMode,
+    async run(t) {
+      await ready(t);
+      const twoHumans = { seed: 3, seats: [{ kind: 'human', name: 'A' }, { kind: 'human', name: 'B' }] };
+
+      // 1) Tier 3 Climax: 7-tile Hot Springs Full Soak (THERMAL) -> NEVER suppressed by themed.length, supersedes dense steamBurst, stays <= 48
+      await t.game('newGame', twoHumans);
+      await t.waitIdle(5000);
+      await t.game('act', 'reveal');
+      const s1 = await t.state();
+      s1.game.players[0].rack = 'THERMAL'.split('');
+      await t.game('setState', { game: s1.game });
+      await t.waitIdle(5000);
+      await t.game('act', 'stage', across('THERMAL', CENTER - 3));
+      t.expect((await t.game('act', 'play')).ok, '7-tile themed Full Soak THERMAL played');
+      const fs = await t.page.evaluate(() => window.__game.getState());
+      t.equal(fs.fx.lastTier, 3, 'themed Full Soak arbitrates as Tier 3 Climax');
+      t.expect(fs.sparks >= 35 && fs.fx.parts <= 48, `themed Full Soak fires 7-tile brass-star cascade (${fs.sparks} sparks, ${fs.fx.parts}/${fs.fx.maxParts} parts)`);
+      t.equal(fs.fx.steamKinds, 0, 'Full Soak supersedes dense steamBurst clouds instead of stacking fog');
+      t.equal(fs.sweeps, 1, 'themed Full Soak keeps crisp bevel goldSweep');
+      t.expect(fs.fx.flashShapes.includes('star'), 'Full Soak emits 4-point star perimeter flashes');
+      await t.game('act', 'reveal');
+      await t.waitFrames(2);
+      await t.shot('w3-b02-themed-full-soak', { wait: false });
+
+      // 2) Tier 2 Quiet 2L/3L rule (CD-WF4-03): covering Warm 2L (D8 = 108) with an ordinary word stays visually quiet on #fx
+      await t.game('newGame', twoHumans);
+      await t.waitIdle(5000);
+      await t.game('act', 'reveal');
+      const s2 = await t.state();
+      s2.game.board[109] = { l: 'A', blank: false, p: 1, t: 0 };
+      s2.game.board[110] = { l: 'T', blank: false, p: 1, t: 0 };
+      s2.game.board[111] = { l: 'E', blank: false, p: 1, t: 0 };
+      s2.game.board[CENTER] = { l: 'S', blank: false, p: 1, t: 0 };
+      s2.game.move = 1; s2.game.cur = 0;
+      s2.game.players[0].rack = 'CXXXXXX'.split('');
+      await t.game('setState', { game: s2.game });
+      await t.waitIdle(5000);
+      await t.game('act', 'stage', [{ i: 108, l: 'C' }]); // 108 = Warm 2L ('w'), forms CATES (non-themed)
+      t.expect((await t.game('act', 'play')).ok, 'ordinary play over 2L Warm square succeeded');
+      const q2l = await t.page.evaluate(() => window.__game.getState());
+      t.equal(q2l.fx.lastTier, 1, 'routine 2L letter spring stays Tier 1 quiet on #fx');
+      t.equal(q2l.flashes, 0, 'zero #fx flashes on routine 2L square (CD-WF4-03)');
+      t.equal(q2l.sparks, 0, 'zero sparks on routine 2L square');
+      t.equal(q2l.fx.steamKinds, 0, 'zero steam burst on routine 2L square');
+
+      // 3) Tier 2 Word Spring / Bathhouse Row: covering Bathhouse Row (cell 8 = 'B') gets a single 160ms 'oct' rim glint + quiet row arc
+      await t.game('newGame', twoHumans);
+      await t.waitIdle(5000);
+      await t.game('act', 'reveal');
+      const s3 = await t.state();
+      s3.game.board[9] = { l: 'T', blank: false, p: 1, t: 0 };
+      s3.game.move = 1; s3.game.cur = 0;
+      s3.game.players[0].rack = 'AXXXXXX'.split('');
+      await t.game('setState', { game: s3.game });
+      await t.waitIdle(5000);
+      await t.game('act', 'stage', [{ i: 8, l: 'A' }]); // 8 = Bathhouse Row ('B'), forms AT (plain word)
+      t.expect((await t.game('act', 'play')).ok, 'plain play covering Bathhouse Row square 8 succeeded');
+      const rowFx = await t.page.evaluate(() => window.__game.getState());
+      t.equal(rowFx.fx.lastTier, 2, 'Bathhouse Row play arbitrates as Tier 2');
+      t.expect(rowFx.fx.flashShapes.includes('oct') && rowFx.fx.flashDurs.includes(160), `Bathhouse Row fires crisp 160ms octagonal rim glint (${rowFx.fx.flashShapes.join(',')}/${rowFx.fx.flashDurs.join(',')})`);
+      t.expect(rowFx.arcLog.some((a) => a.from === 8 && a.reason === 'row'), 'Bathhouse Row emits quiet single-wisp fog-clear arc');
+
+      // 4) Tier 3 Climax: Featured Spring (+30) claim -> Tier 3 'featured' + rising 'claim' sightline arc + origin star flash
+      await t.game('newGame', twoHumans);
+      await t.waitIdle(5000);
+      await t.game('act', 'reveal');
+      const s4 = await t.state();
+      s4.game.featured[0] = { id: 'steam', word: 'STEAM', cat: 'springs', shown: [0], by: null, at: null };
+      s4.game.players[0].rack = 'STEAMXQ'.split('');
+      await t.game('setState', { game: s4.game });
+      await t.waitIdle(5000);
+      await t.game('act', 'stage', across('STEAM'));
+      t.expect((await t.game('act', 'play')).ok, 'Featured Spring STEAM claimed');
+      const featFx = await t.page.evaluate(() => window.__game.getState());
+      t.equal(featFx.fx.lastTier, 3, 'Featured Spring claim arbitrates as Tier 3 Climax');
+      t.equal(featFx.fx.lastEvent, 'featured', 'lastEvent is featured');
+      t.expect(featFx.arcLog.some((a) => a.reason === 'claim'), 'Featured Spring claim emits rising sightline claim arc');
+      t.expect(featFx.fx.flashShapes.includes('star'), 'Featured Spring claim emits board origin star flash');
+      t.expect(featFx.fx.parts <= 48, `total active particles <= 48 (${featFx.fx.parts})`);
+      await t.game('act', 'reveal');
+      await t.waitFrames(2);
+      await t.shot('w3-b02-featured-claim-arc', { wait: false });
     },
   },
 ];

@@ -870,11 +870,40 @@ function celebrate(e, bark, wait = 0, prevPlaqueSnap = null) {
   }
   const fireVfx = () => {
     if (G.s !== s || G.scene !== 'game') return;
-    if (themedCells.length) {
+    const tileCells = e.tiles.map((t) => t.i);
+    const wordSprings = e.tiles.filter((t) => SQUARES[t.i] === 's' || SQUARES[t.i] === 'b').map((t) => t.i);
+    const rowCells = e.tiles.filter((t) => SQUARES[t.i] === 'B').map((t) => t.i);
+    const rimCells = [...new Set([...wordSprings, ...rowCells])];
+    const boilBlank = e.tiles.filter((t) => SQUARES[t.i] === 'b' || t.blank).map((t) => t.i);
+    steam.lastTier = 1; steam.lastEvent = 'quiet';
+    if (e.full > 0) {
+      // Tier 3 Climax: Full Soak (+40) 7-tile staggered 4-point brass-star perimeter cascade, never suppressed by themed.length; supersedes dense steamBurst clouds.
+      steam.lastTier = 3; steam.lastEvent = claimedFeats.length ? 'full-soak+featured' : 'full-soak';
+      sparkBurst(tileCells, { full: true });
+      if (themedCells.length) goldSweep(themedCells);
+    } else if (claimedFeats.length) {
+      // Tier 3 Climax: Featured Spring (+30) claim with rising sightline arc + board origin star flash.
+      steam.lastTier = 3; steam.lastEvent = 'featured';
+      if (themedCells.length) { steamBurst(themedCells); goldSweep(themedCells); }
+      fxFlash([tileCells[Math.floor(tileCells.length / 2)]], FX_SHAPES.score, { dur: 220, color: '#FFE06E' });
+    } else if (themedCells.length) {
+      // Tier 2: Hot Springs themed word (bevel goldSweep + restrained <=0.22 perimeter steam + optional 160ms 2W/3W/Row glint).
+      steam.lastTier = 2; steam.lastEvent = rowCells.length ? 'themed+row' : 'themed';
       steamBurst(themedCells);
       goldSweep(themedCells);
+      if (rimCells.length) fxFlash(rimCells, FX_SHAPES.row, { dur: 160, color: '#FFE06E' });
+    } else {
+      // Tier 2 Standard: routine 2L/3L stay quiet on #fx (CD-WF4-03); 2W/3W & Bathhouse Row get a single 160ms octagonal rim glint; Boiling/blank gets a restrained puff.
+      if (e.score >= UI.SCORE_BIG) { steam.lastTier = 2; steam.lastEvent = 'big'; sparkBurst(tileCells, { full: false }); }
+      if (rimCells.length) {
+        if (steam.lastTier < 2) { steam.lastTier = 2; steam.lastEvent = rowCells.length ? 'row' : 'word-spring'; }
+        fxFlash(rimCells, FX_SHAPES.word, { dur: 160, color: '#FFE06E' });
+      }
+      if (boilBlank.length) {
+        if (steam.lastTier < 2) { steam.lastTier = 2; steam.lastEvent = 'boil-blank'; }
+        steamBurst(boilBlank, { localized: true });
+      }
     }
-    if (!themed.length && e.score >= UI.SCORE_BIG) sparkBurst(e.tiles.map((t) => t.i), { full: e.full > 0 });
     emitPlaqueArcs(s, e, prevPlaqueSnap);
     scorePop(e, themed.length > 0);
   };
@@ -1788,7 +1817,7 @@ const pxPerCell = () => (B3.B3.on ? B3.cellPx() : R.scale());
 // ---------- VFX overlay (#fx: 3-Read grammar, pre-baked stamps, swap-remove pool; not part of isIdle) ----------
 const MAX_PARTICLES = 48, MAX_AMBIENT = 6, SWEEP_MS = 650, ARC_MS = 680, FLASH_PEAK_MS = 95;
 const FX_SHAPES = Object.freeze({ steam: 'ribbon', score: 'star', letter: 'ring', word: 'oct', row: 'oct' });
-const steam = { parts: [], sweeps: [], flashes: [], arcs: [], arcLog: [], last: 0, on: false, emit: 0, wakeTimer: 0 };
+const steam = { parts: [], sweeps: [], flashes: [], arcs: [], arcLog: [], last: 0, on: false, emit: 0, wakeTimer: 0, lastTier: 1, lastEvent: 'quiet' };
 const ambientSteam = () => animOn() && G.scene === 'game' && !!G.s;
 const covered = (i) => !!(G.s && G.s.board[i]) || G.staged.some((t) => t.i === i);
 const BATH_CELLS = Object.keys(BATHS).map(Number);
@@ -1889,13 +1918,14 @@ function emitAmbientWisp() {
     startSteam();
   }
 }
-function steamBurst(cells) {
+function steamBurst(cells, opts = {}) {
   if (!animOn() || !cells.length) return;
-  fxFlash(cells, FX_SHAPES.steam, { dur: 190, color: '#7FC8B8' });
-  const perTile = Math.max(2, Math.min(3, Math.floor(21 / Math.max(1, cells.length))));
+  const loc = !!opts.localized;
+  if (!loc) fxFlash(cells, FX_SHAPES.steam, { dur: 190, color: '#7FC8B8' });
+  const perTile = loc ? 2 : Math.max(2, Math.min(3, Math.floor(21 / Math.max(1, cells.length))));
   for (const i of cells) for (let k = 0; k < perTile; k++) {
     const ang = (k / perTile) * Math.PI * 2 + Math.random() * 0.7;
-    pushPart({ kind: 'steam', i, x: Math.cos(ang) * 0.50, y: Math.sin(ang) * 0.50, vx: Math.cos(ang) * 0.28 + (Math.random() - 0.5) * 0.14, vy: 0.45 + Math.random() * 0.42, life: 0, max: 0.95 + Math.random() * 0.45, r: 0.20 + Math.random() * 0.10, a: 0.20, rot: (Math.random() - 0.5) * 0.9, vrot: (Math.random() - 0.5) * 0.65, phase: Math.random() * 6.28 });
+    pushPart({ kind: 'steam', i, x: Math.cos(ang) * 0.50, y: Math.sin(ang) * 0.50, vx: Math.cos(ang) * 0.28 + (Math.random() - 0.5) * 0.14, vy: 0.45 + Math.random() * 0.42, life: 0, max: (loc ? 0.75 : 0.95) + Math.random() * 0.4, r: (loc ? 0.17 : 0.20) + Math.random() * 0.09, a: loc ? 0.17 : 0.20, rot: (Math.random() - 0.5) * 0.9, vrot: (Math.random() - 0.5) * 0.65, phase: Math.random() * 6.28 });
   }
   startSteam();
 }
@@ -2003,15 +2033,17 @@ function steamLoop(now) {
     const [sx, sy] = R.cellCenter(a.from, G.s && G.s.board[a.from] ? R.TILE_LIFT : 0), [tx, ty] = plaqueTargetPoint(a.plaque);
     const mx = (sx + tx) / 2, my = Math.min(sy, ty) - Math.max(26, cell * 1.35);
     const pt = (t) => { const m = 1 - t; return [m * m * sx + 2 * m * t * mx + t * t * tx, m * m * sy + 2 * m * t * my + t * t * ty]; };
-    const tailStart = Math.max(0, e - 0.34), fade = u < 0.8 ? 1 : (1 - u) / 0.2;
+    const tailStart = Math.max(0, e - (a.reason === 'claim' ? 0.44 : 0.28)), fade = u < 0.8 ? 1 : (1 - u) / 0.2, claim = a.reason === 'claim';
     c.save(); c.lineCap = 'round';
     for (let seg = 0; seg < 8; seg++) {
       const [x0, y0] = pt(tailStart + ((e - tailStart) * seg) / 8), [x1, y1] = pt(tailStart + ((e - tailStart) * (seg + 1)) / 8), frac = (seg + 1) / 8;
-      c.strokeStyle = frac > 0.55 ? `rgba(243,221,139,${(0.82 * frac * fade).toFixed(3)})` : `rgba(127,211,196,${(0.62 * frac * fade).toFixed(3)})`;
-      c.lineWidth = Math.max(1.5, cell * 0.14 * frac); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+      c.strokeStyle = claim
+        ? (frac > 0.48 ? `rgba(255,224,110,${(0.92 * frac * fade).toFixed(3)})` : `rgba(127,211,196,${(0.76 * frac * fade).toFixed(3)})`)
+        : `rgba(127,211,196,${(0.58 * frac * fade).toFixed(3)})`;
+      c.lineWidth = Math.max(1.4, cell * (claim ? 0.16 : 0.10) * frac); c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
     }
-    const [hx, hy] = pt(e), hsz = Math.max(10, cell * 0.62);
-    c.globalAlpha = fade; c.drawImage(st.star, hx - hsz / 2, hy - hsz / 2, hsz, hsz); c.restore();
+    const [hx, hy] = pt(e), hsz = Math.max(claim ? 14 : 9, cell * (claim ? 0.72 : 0.42));
+    c.globalAlpha = fade * (claim ? 1 : 0.8); c.drawImage(claim ? st.star : st.wisp, hx - hsz / 2, hy - hsz / 2, hsz, hsz); c.restore();
   }
   const active = steam.parts.length || steam.sweeps.length || steam.flashes.length || steam.arcs.length;
   if (active || G.fxFrozen != null) requestAnimationFrame(steamLoop);
@@ -2532,7 +2564,7 @@ window.__game = {
     return JSON.parse(JSON.stringify({ scene: G.scene, dialog: G.dialog, game: G.s, staged: G.staged, order: G.order, preview: G.preview, settings: G.settings,
       view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, pulse: !!G.lastPulse, aiWait: { reply: !!G.aiFire, turn: !!(G.turnWait && G.turnWait.fromAi) }, ready: G.ready, privacy: G.privacy,
       drag: G.drag && G.drag.active ? { from: G.drag.from, target: G.drag.target, blocked: G.drag.blocked, lift: G.drag.lift, size: G.drag.size } : null,
-      ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, sweepCells: steam.sweeps.length ? steam.sweeps[0].cells.slice() : [], flashes: steam.flashes.length, fx: { on: steam.on, parts: steam.parts.length, maxParts: MAX_PARTICLES, stamps: !!_fxStamps, shapes: FX_SHAPES, flashShapes: steam.flashes.map((f) => f.shape), sparkKinds: steam.parts.filter((p) => p.kind === 'spark').length, steamKinds: steam.parts.filter((p) => p.kind === 'steam').length, wispKinds: steam.parts.filter((p) => p.kind === 'wisp').length }, arcs: steam.arcs.length, arcLog: steam.arcLog.slice(-6), wisps: steam.parts.filter((p) => p.kind !== 'spark').map((p) => p.i), sparks: steam.parts.filter((p) => p.kind === 'spark').length, sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
+      ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, sweepCells: steam.sweeps.length ? steam.sweeps[0].cells.slice() : [], flashes: steam.flashes.length, fx: { on: steam.on, parts: steam.parts.length, maxParts: MAX_PARTICLES, stamps: !!_fxStamps, shapes: FX_SHAPES, flashShapes: steam.flashes.map((f) => f.shape), flashDurs: steam.flashes.map((f) => f.dur), lastTier: steam.lastTier, lastEvent: steam.lastEvent, sparkKinds: steam.parts.filter((p) => p.kind === 'spark').length, steamKinds: steam.parts.filter((p) => p.kind === 'steam').length, wispKinds: steam.parts.filter((p) => p.kind === 'wisp').length }, arcs: steam.arcs.length, arcLog: steam.arcLog.slice(-6), wisps: steam.parts.filter((p) => p.kind !== 'spark').map((p) => p.i), sparks: steam.parts.filter((p) => p.kind === 'spark').length, sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
   },
   setState(o) {
     if (o.game) {
