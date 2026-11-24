@@ -122,7 +122,9 @@ def material_params(m):
     to_s = lambda x: (1.055 * x ** (1 / 2.4) - 0.055) if x > 0.0031308 else x * 12.92
     out = {'name': m.name, 'c': '#' + ''.join('%02X' % max(0, min(255, round(to_s(v) * 255))) for v in c[:3]),
            'm': round(b.inputs['Metallic'].default_value, 2), 'r': round(b.inputs['Roughness'].default_value, 2)}
-    if b.inputs['Coat Weight'].default_value > 0: out['k'] = round(b.inputs['Coat Weight'].default_value, 2)
+    if b.inputs['Coat Weight'].default_value > 0:
+        out['k'] = round(b.inputs['Coat Weight'].default_value, 2)
+        out['kr'] = round(b.inputs['Coat Roughness'].default_value, 2)
     return out
 
 def export_piece():

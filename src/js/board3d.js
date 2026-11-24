@@ -65,7 +65,7 @@ function geometries(name) {
 }
 function stdMaterial(m) {
   const P = { color: new THREE.Color(m.c), metalness: m.m, roughness: Math.max(0.12, m.r) };
-  return m.k ? new THREE.MeshPhysicalMaterial({ ...P, clearcoat: m.k, clearcoatRoughness: 0.12 }) : new THREE.MeshStandardMaterial(P);
+  return m.k ? new THREE.MeshPhysicalMaterial({ ...P, clearcoat: m.k, clearcoatRoughness: m.kr != null ? m.kr : 0.12 }) : new THREE.MeshStandardMaterial(P);
 }
 function piece(name) {
   const grp = new THREE.Group();
@@ -95,8 +95,9 @@ function faceMaterial(l, blank, dark = false) {
   if (faceCache.has(key)) return faceCache.get(key);
   const c = R.tileSprite(l, blank, 512, 'face', dark ? 'dark' : 'light');
   // a touch of self-light keeps the glazed faces crisp ivory in Day and warm #EDE5D4 ivory in Night
+  const prof = LIGHTING_PROFILES[dark ? 'night' : 'day'];
   const tex = canvasTex(c);
-  const m = new THREE.MeshPhysicalMaterial({ map: tex, emissiveMap: tex, emissive: dark ? 0xffe4be : 0xffffff, emissiveIntensity: dark ? 0.08 : 0.14, roughness: 0.55, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.4 });
+  const m = new THREE.MeshPhysicalMaterial({ map: tex, emissiveMap: tex, emissive: prof.tile.emissive, emissiveIntensity: prof.tile.emissiveIntensity, roughness: 0.55, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.4 });
   faceCache.set(key, m);
   return m;
 }
@@ -119,7 +120,50 @@ function clothTexture(grp) {
   });
 }
 
-function envMap() {
+// Unified declarative Day / Night 3D lighting & PMREM environment profiles (W3-S2-01 / CD-WF3-02).
+export const LIGHTING_PROFILES = {
+  day: {
+    key: { color: 0xfff0d8, intensity: 900 },
+    hemi: { sky: 0xfff1dc, ground: 0x6a4a2c, intensity: 0.6 },
+    fill: { color: 0xcfe0ff, intensity: 0.5 },
+    envIntensity: 0.5,
+    env: {
+      sphere: 0x8f7a64,
+      panels: [
+        [0xfff0d0, -4, 7, -3, 6],
+        [0xc8d8ff, 6, 3, 6, 5],
+        [0xffd9a0, 0, 2, 9, 7],
+        [0x3a2414, 0, -8, 0, 16],
+      ],
+    },
+    tile: { emissive: 0xffffff, emissiveIntensity: 0.14, bodyColor: 0xeadfc4 },
+    towel: { cloth: 0xb5a892, stripe: 0x3b7870 },
+    top: { emissive: 0x000000, emissiveIntensity: 0 },
+    preDimColor: 0x1e140a,
+  },
+  night: {
+    key: { color: 0xffe1b0, intensity: 500 },
+    hemi: { sky: 0x8697c8, ground: 0x1d182c, intensity: 0.28 },
+    fill: { color: 0x5c72b8, intensity: 0.35 },
+    envIntensity: 0.32,
+    env: {
+      sphere: 0x24223a,
+      panels: [
+        [0xffe1b0, -4, 7, -3, 5.5],
+        [0x5c72b8, 6, 3, 6, 6],
+        [0x3b4878, 0, 2, 9, 7],
+        [0x141222, 0, -8, 0, 16],
+      ],
+    },
+    tile: { emissive: 0xffe4be, emissiveIntensity: 0.08, bodyColor: 0xd8cdb6 },
+    towel: { cloth: 0x524b61, stripe: 0x26444a },
+    top: { emissive: 0x302c44, emissiveIntensity: 0.45 },
+    preDimColor: 0x14121f,
+  },
+};
+
+function envMap(profileName = 'day') {
+  const prof = LIGHTING_PROFILES[profileName] || LIGHTING_PROFILES.day;
   const pm = new THREE.PMREMGenerator(B3.renderer), sc = new THREE.Scene();
   const temps = [];
   const add = (geo, mat, pos) => {
@@ -127,13 +171,17 @@ function envMap() {
     if (pos) { m.position.set(...pos); m.lookAt(0, 0, 0); }
     sc.add(m); temps.push(m);
   };
-  add(new THREE.SphereGeometry(10, 32, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, color: 0x8f7a64 }));
-  const panel = (c, x, y, z, s) => add(new THREE.PlaneGeometry(s, s), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }), [x, y, z]);
-  panel(0xfff0d0, -4, 7, -3, 6); panel(0xc8d8ff, 6, 3, 6, 5); panel(0xffd9a0, 0, 2, 9, 7); panel(0x3a2414, 0, -8, 0, 16);
+  add(new THREE.SphereGeometry(10, 32, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, color: prof.env.sphere }));
+  for (const [c, x, y, z, s] of prof.env.panels) {
+    add(new THREE.PlaneGeometry(s, s), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }), [x, y, z]);
+  }
   const rt = pm.fromScene(sc, 0.02);
   for (const m of temps) { m.geometry.dispose(); m.material.dispose(); }
   B3.envTempDisposed = temps.length;
+  if (B3.envRT) { B3.envRT.texture?.dispose(); B3.envRT.dispose(); }
   B3.envRT = rt;
+  B3.envTheme = profileName;
+  B3.envSwaps = (B3.envSwaps || 0) + 1;
   pm.dispose();
   return rt.texture;
 }
@@ -171,7 +219,7 @@ export function init(canvas, theme, hooks = {}) {
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
   const scene = new THREE.Scene(); B3.scene = scene;
-  scene.environment = envMap(); scene.environmentIntensity = 0.5;
+  B3.envTheme = ''; B3.envSwaps = 0;
   B3.camera = new THREE.PerspectiveCamera(28, 1, 0.5, 400);
   B3.hemi = new THREE.HemisphereLight(0xfff1dc, 0x6a4a2c, 0.6); scene.add(B3.hemi);
   const key = new THREE.SpotLight(0xfff0d8, 900, 0, 0.7, 0.95, 1.6);
@@ -284,7 +332,7 @@ export function destroy(opts = {}) {
   B3.hemi = null; B3.key = null; B3.fill = null;
   B3.table = null; B3.top = null; B3.board = null; B3.preDim = null; B3.dimIdx = null;
   B3.frame = null; B3.towels = null; B3.bell = null; B3.towelCloth = null; B3.towelStripe = null;
-  B3.tileGeo = null; B3.bodyMat = null; B3.stagedMat = null; B3.lastMat = null; B3.envRT = null;
+  B3.tileGeo = null; B3.bodyMat = null; B3.stagedMat = null; B3.lastMat = null; B3.envRT = null; B3.envTheme = ''; B3.envSwaps = 0;
   B3.boardCanvas = null; B3.tiles = []; B3.frames.length = 0; B3.intervals.length = 0; B3.texKey = '';
   R.proj.fn = null;
 }
@@ -305,19 +353,19 @@ export function setTheme(theme) {
   
   B3.table.material.map.wrapS = B3.table.material.map.wrapT = THREE.MirroredRepeatWrapping; B3.table.material.map.repeat.set(2, 2);
   B3.table.material.needsUpdate = true;
-  // W2-S2-06: tone Tier-3 counter towels down to muted warm taupe linen (day) / shadowed twilight linen (night)
-  const towelHex = dark ? 0x524b61 : 0xb5a892;
-  const stripeHex = dark ? 0x26444a : 0x3b7870;
-  for (const m of B3.towelCloth || []) { m.color.set(towelHex); m.needsUpdate = true; }
-  for (const m of B3.towelStripe || []) { m.color.set(stripeHex); m.needsUpdate = true; }
-  // W2-S1-04: Night lighting uses a warm brass-lamp key (0xffe1b0, ~500) over cool twilight fill (0x5c72b8)
-  B3.key.intensity = dark ? 500 : 900; B3.key.color.set(dark ? 0xffe1b0 : 0xfff0d8);
-  B3.hemi.color.set(dark ? 0x8697c8 : 0xfff1dc); B3.hemi.groundColor.set(dark ? 0x1d182c : 0x6a4a2c); B3.hemi.intensity = dark ? 0.28 : 0.6;
-  B3.fill.intensity = dark ? 0.4 : 0.5; B3.fill.color.set(dark ? 0x5c72b8 : 0xcfe0ff);
-  B3.scene.environmentIntensity = dark ? 0.28 : 0.5;
-  if (B3.bodyMat) { B3.bodyMat.color.set(dark ? 0xd8cdb6 : 0xeadfc4); B3.bodyMat.needsUpdate = true; }
-  if (B3.top) { B3.top.emissive.set(dark ? 0x302c44 : 0x000000); B3.top.emissiveIntensity = dark ? 0.45 : 0; B3.top.needsUpdate = true; }
-  if (B3.preDim) { B3.preDim.material.color.set(dark ? 0x14121f : 0x1e140a); B3.preDim.material.needsUpdate = true; }
+  // W3-S2-01 / W2-S1-04 / W2-S2-06: apply unified LIGHTING_PROFILES (including theme-matched PMREM envMap swap)
+  const profileName = dark ? 'night' : 'day';
+  const prof = LIGHTING_PROFILES[profileName];
+  if (B3.envTheme !== profileName) B3.scene.environment = envMap(profileName);
+  for (const m of B3.towelCloth || []) { m.color.set(prof.towel.cloth); m.needsUpdate = true; }
+  for (const m of B3.towelStripe || []) { m.color.set(prof.towel.stripe); m.needsUpdate = true; }
+  B3.key.intensity = prof.key.intensity; B3.key.color.set(prof.key.color);
+  B3.hemi.color.set(prof.hemi.sky); B3.hemi.groundColor.set(prof.hemi.ground); B3.hemi.intensity = prof.hemi.intensity;
+  B3.fill.intensity = prof.fill.intensity; B3.fill.color.set(prof.fill.color);
+  B3.scene.environmentIntensity = prof.envIntensity;
+  if (B3.bodyMat) { B3.bodyMat.color.set(prof.tile.bodyColor); B3.bodyMat.needsUpdate = true; }
+  if (B3.top) { B3.top.emissive.set(prof.top.emissive); B3.top.emissiveIntensity = prof.top.emissiveIntensity; B3.top.needsUpdate = true; }
+  if (B3.preDim) { B3.preDim.material.color.set(prof.preDimColor); B3.preDim.material.needsUpdate = true; }
   invalidateFaceCache();
   B3.texKey = '';
 }
@@ -508,6 +556,10 @@ export function debug() {
     faceCache: faceCache.size, tileCache: R.tileCacheSize(),
     boardCanvas: !!B3.boardCanvas, tilePool: B3.tiles.length,
     envTempDisposed: B3.envTempDisposed || 0, disposed: B3.lastDispose || null,
+    envTheme: B3.envTheme || '', envSwaps: B3.envSwaps || 0,
+    lightingProfile: B3.dark ? 'night' : 'day',
+    envIntensity: B3.scene ? B3.scene.environmentIntensity : 0,
+    tileCoatRoughness: B3.bodyMat && B3.bodyMat.clearcoatRoughness != null ? B3.bodyMat.clearcoatRoughness : null,
     topMat: B3.top ? B3.top.type : null, tableMat: B3.table && B3.table.material ? B3.table.material.type : null,
     keyType: B3.key ? B3.key.type : null,
     frames: B3.frames.length, intervals: B3.intervals.slice(),
