@@ -313,7 +313,7 @@ const colPan = (i) => ((i % N) - 7) / 7 * 0.7;
 function sheetFocusSel(scr) {
   const ae = document.activeElement;
   if (!ae || !scr.contains(ae)) return null;
-  for (const [a, b] of [['data-persona', 'data-val'], ['data-kind', 'data-k'], ['data-set', 'data-val'], ['data-level'], ['data-tab'], ['data-remove'], ['data-add'], ['data-name'], ['data-hints'], ['data-hints-unl'], ['data-challenge'], ['data-tips']]) {
+  for (const [a, b] of [['data-persona', 'data-val'], ['data-kind', 'data-k'], ['data-set', 'data-val'], ['data-level'], ['data-tab'], ['data-remove'], ['data-add'], ['data-name'], ['data-hints'], ['data-hints-unl'], ['data-challenge'], ['data-tips'], ['data-go']]) {
     if (ae.hasAttribute(a)) return b && ae.hasAttribute(b) ? `[${a}="${ae.getAttribute(a)}"][${b}="${ae.getAttribute(b)}"]` : `[${a}="${ae.getAttribute(a)}"]`;
   }
   return null;
@@ -322,7 +322,8 @@ function sheetFocusSel(scr) {
 function showScene(name, arg) {
   const prev = G.scene;
   const app = $('#app'), scr = $('#screen');
-  const sameSheet = prev === name && (name === 'setup' || name === 'settings' || name === 'help');
+  const sameSheet = prev === name && (name === 'setup' || name === 'settings' || name === 'help' || name === 'title');
+  const keyFocus = scr.querySelector(':focus-visible');   // only for someone on the keyboard: focusing the board also shows its cursor
   const savedScroll = sameSheet ? scr.scrollTop : 0;
   const focusSel = sameSheet ? ((arg && arg.focus) || sheetFocusSel(scr)) : null;
   if (name !== prev && !SHEETS.includes(name)) G.back = name;
@@ -350,7 +351,7 @@ function showScene(name, arg) {
   const game = name === 'game';
   app.hidden = !game; scr.hidden = game;
   document.body.dataset.scene = name;
-  if (game) { renderGame(); layout(); if (G.aiHeld && !G.dialog && !document.hidden) releaseAi(); return; }
+  if (game) { renderGame(); layout(); if (keyFocus && !G.privacy) $('#board').focus({ preventScroll: true }); if (G.aiHeld && !G.dialog && !document.hidden) releaseAi(); return; }
   scr.innerHTML = screenHtml(name, arg);
   wireScreen(name);
   scr.scrollTop = savedScroll;
@@ -358,7 +359,9 @@ function showScene(name, arg) {
     const f = focusSel && scr.querySelector(focusSel);
     if (f) f.focus({ preventScroll: true });
   } else {
-    const f = scr.querySelector('.primary, h1, button'); if (f && name !== 'title') f.focus({ preventScroll: true });
+    // back on the title: the button that opened the sheet, or Continue / New game (it takes no focus when the game starts up)
+    const opener = name === 'title' && scr.querySelector(`[data-go="${prev}"]`);
+    const f = opener || scr.querySelector('.primary, h1[tabindex], button'); if (f) f.focus({ preventScroll: true });
   }
 }
 
@@ -406,6 +409,17 @@ function wireScreen(name) {
   const scr = $('#screen');
   scr.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
   scr.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', back));
+  // tabs and radio groups are one Tab stop each: the arrow keys, Home and End move inside and choose (Up and Down only in radio groups, so they still scroll Help)
+  scr.querySelectorAll('[role="tablist"], [role="radiogroup"]').forEach((g) => g.addEventListener('keydown', (e) => {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const items = [...g.querySelectorAll('[role="tab"], [role="radio"]')], at = items.indexOf(e.target.closest('button')), n = items.length;
+    const radio = g.getAttribute('role') === 'radiogroup';
+    const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: radio && 1, ArrowUp: radio && -1 }[e.key];
+    const to = e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : step ? (at + step + n) % n : -1;
+    if (at < 0 || to < 0) return;
+    e.preventDefault();
+    if (to !== at) { items[to].click(); document.activeElement.scrollIntoView({ block: 'nearest' }); }   // the sheet may have been scrolled away from it
+  }));
   if (name === 'setup') {
     const st = G.setup;
     scr.querySelectorAll('[data-kind]').forEach((b) => b.addEventListener('click', () => {
@@ -420,14 +434,6 @@ function wireScreen(name) {
       seat.persona = b.dataset.val;
       delete seat.level;
       showScene('setup', { focus: `[data-persona="${b.dataset.persona}"][data-val="${b.dataset.val}"]` });
-    }));
-    // the four portrait cards are one radio group: the arrow keys move to the neighbour and choose it (Tab leaves the group)
-    scr.querySelectorAll('[data-persona]').forEach((b) => b.addEventListener('keydown', (e) => {
-      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-      if (!step || e.altKey || e.ctrlKey || e.metaKey) return;
-      const cards = [...b.parentElement.querySelectorAll('[data-persona]')];
-      e.preventDefault();
-      cards[(cards.indexOf(b) + step + cards.length) % cards.length].click();
     }));
     scr.querySelectorAll('[data-level]').forEach((sel) => sel.addEventListener('change', () => { st.seats[+sel.dataset.level].level = sel.value; G.houseOpen = true; showScene('setup', { focus: `[data-level="${sel.dataset.level}"]` }); }));
     scr.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => {
@@ -1369,13 +1375,14 @@ function renderTurnline() {
 
 function renderActions() {
   const s = G.s, p = cur(), human = p.kind === 'human' && !G.privacy;
-  const el = $('#actions');
+  const el = $('#actions'), keyFocus = el.querySelector(':focus-visible');
   el.innerHTML = UI.actionsHtml({ mobile: isNarrow(), staged: G.staged.length > 0, canSwap: s.bag.length >= RACK, canPlay: G.staged.length > 0 && G.preview && G.preview.ok, playScore: G.staged.length > 0 && G.preview && G.preview.ok ? G.preview.score : null, hints: !s.challenge && p.hints != null && p.kind === 'human' ? p.hints : null, unlimited: !s.challenge && !!p.unl });
   el.classList.toggle('waiting', !human || s.over);
   el.querySelectorAll('[data-act]').forEach((b) => {
     if ((!human || s.over) && !(b.dataset.act === 'shuffle' && waitSeat())) b.disabled = true;
     b.addEventListener('click', () => { unlock(); ({ play: doPlay, pass: doPass, swap: doSwap, hint: doHint, recall: recallAll, shuffle: shuffleRack })[b.dataset.act](); });
   });
+  if (keyFocus) $('#board').focus({ preventScroll: true });   // its button is gone (a Swap or Pass just confirmed, a tile staged): the board, not the top of the page
 }
 
 function renderRack() {
@@ -1780,7 +1787,11 @@ function openDialog(name, arg) {
   syncInert();
   if (name !== 'blank' && !(name === 'review' && prev === 'review')) sfx('open');
   m.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => closeDialog()));
-  m.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { closeDialog(true); go(b.dataset.go); }));
+  m.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => {
+    const ret = G.returnFocus;
+    closeDialog(true); go(b.dataset.go);
+    if (G.dialog) G.returnFocus = ret;   // it asked first (Leave without saving?): Cancel still goes back to what opened the menu
+  }));
   m.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => openDialog(b.dataset.open)));
   if (name === 'swap') {
     const picked = new Set();

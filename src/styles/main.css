@@ -154,6 +154,11 @@ body.theme-dark .btn.primary small { color: #2A2310; }
 .seg { display: inline-flex; border: 1.5px solid var(--brass); border-radius: 10px; overflow: hidden; flex-wrap: wrap; }
 .seat .seg { display: grid; grid-template-columns: 1fr 1fr; }
 .seg button { min-height: 44px; padding: 6px 14px; border: 0; background: transparent; font-weight: 600; }
+.seg:focus-within { overflow: visible; }   /* or the group's rounded clip cuts off the focus ring */
+.seg button:first-child { border-radius: 8px 0 0 8px; }
+.seg button:last-child { border-radius: 0 8px 8px 0; }
+.seg button:focus-visible { position: relative; z-index: 1; }
+.seg button, .tabs button, .opps .opp { scroll-margin: 72px 0 12px; }   /* clear of the sticky sheet heading */
 .seg button[aria-checked="true"] { background: var(--primary); color: var(--on-primary); }
 .field { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
 .field span em { font-weight: 400; color: var(--muted); }

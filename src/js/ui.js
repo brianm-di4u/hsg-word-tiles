@@ -96,8 +96,8 @@ export function setupHtml(setup, opts = {}) {
       ${badge(human ? { name: st.name || `Player ${k + 1}` } : { name: persona(st.persona).name, persona: st.persona }, k, 40)}
       <div class="seat-main${human ? ' seat-human' : ''}">
         <div class="seg" role="radiogroup" aria-label="Seat ${k + 1} player">
-          <button role="radio" aria-checked="${human}" data-kind="human" data-k="${k}">Person</button>
-          <button role="radio" aria-checked="${!human}" data-kind="ai" data-k="${k}">Computer</button>
+          <button role="radio" aria-checked="${human}" tabindex="${human ? 0 : -1}" data-kind="human" data-k="${k}">Person</button>
+          <button role="radio" aria-checked="${!human}" tabindex="${human ? -1 : 0}" data-kind="ai" data-k="${k}">Computer</button>
         </div>
         ${human
           ? `<label class="field"><span>Name</span><input data-name="${k}" value="${esc(st.name || '')}" maxlength="16" placeholder="Player ${k + 1}" autocomplete="off"></label>`
@@ -445,15 +445,15 @@ export function helpHtml(tab, lex, twos = [], opts = {}) {
   }[tab];
   return `<div class="sheet help">
     ${band()}
-    <header class="sheet-head"><h1 tabindex="-1">How to play</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
-    <div class="tabs" role="tablist">${tabs.map(([k, t]) => `<button role="tab" aria-selected="${k === tab}" data-tab="${k}">${t}</button>`).join('')}</div>
-    <div class="help-body" role="tabpanel">${body}</div>
+    <header class="sheet-head"><h1 id="help-h" tabindex="-1">How to play</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    <div class="tabs" role="tablist" aria-labelledby="help-h">${tabs.map(([k, t]) => `<button role="tab" id="help-tab-${k}" aria-controls="help-panel" aria-selected="${k === tab}" tabindex="${k === tab ? 0 : -1}" data-tab="${k}">${t}</button>`).join('')}</div>
+    <div class="help-body" id="help-panel" role="tabpanel" aria-labelledby="help-tab-${tab}">${body}</div>
   </div>`;
 }
 
 // ---------- settings ----------
 export function settingsHtml(st, canVibrate = false) {
-  const seg = (key, opts, label) => `<div class="setrow"><span>${label}</span><div class="seg" role="radiogroup" aria-label="${label}">${opts.map(([v, t]) => `<button role="radio" aria-checked="${st[key] === v}" data-set="${key}" data-val="${v}">${t}</button>`).join('')}</div></div>`;
+  const seg = (key, opts, label) => `<div class="setrow"><span id="set-${key}">${label}</span><div class="seg" role="radiogroup" aria-labelledby="set-${key}">${opts.map(([v, t], i) => `<button role="radio" aria-checked="${st[key] === v}" tabindex="${i === Math.max(0, opts.findIndex((o) => o[0] === st[key])) ? 0 : -1}" data-set="${key}" data-val="${v}">${t}</button>`).join('')}</div></div>`;
   return `<div class="sheet settings">
     ${band()}
     <header class="sheet-head"><h1 tabindex="-1">Settings</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
