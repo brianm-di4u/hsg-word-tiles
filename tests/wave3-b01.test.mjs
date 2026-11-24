@@ -1,0 +1,121 @@
+// Wave 3, batch W3-B01: W4-S2-01, W4-P-N01, W4-P-N02, W4-S2-04.
+const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
+const normalSound = () => {
+  window.__TEST_TIPS__ = false;
+  if (!localStorage.getItem('hs-letters-settings-v1')) {
+    localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'normal', sound: false, motion: 'full' }));
+  }
+};
+const SEATS = [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }];
+const N = 15;
+
+async function freezeClock(t) { await t.page.clock.install(); await t.reload(); await ready(t); }
+async function stopClock(t) { const now = await t.page.evaluate(() => Date.now()); await t.page.clock.pauseAt(now + 500); }
+
+export const tests = [
+  // ---------- W4-S2-01 ----------
+  {
+    name: 'W4-S2-01 cancelTurnTimers cancels orphaned AI clacks, stings, and yourturn on skipComputerWait and on leaving game',
+    viewports: ['desktop'],
+    initScript: normalSound,
+    async run(t) {
+      await ready(t);
+      await freezeClock(t);
+      await t.seed(5);
+      await t.game('newGame', { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'hard' }] });
+      await t.waitIdle(8000);
+      const s0 = await t.state();
+      s0.game.players[1].rack = 'SPRINGX'.split('');
+      await t.game('setState', { game: s0.game });
+      await t.waitIdle(5000);
+      await stopClock(t);
+
+      // Human passes so Hard AI plays SPRING (multi-tile Hot Springs word -> clacks + steam/sting + yourturn timers)
+      await t.game('act', 'pass');
+      await t.page.clock.runFor(400);
+      await t.page.waitForFunction(() => { const g = window.__game.getState(); return g.aiThinking && g.aiWait.reply; }, null, { timeout: 15000, polling: 50 });
+
+      // 1st Space lands AI reply and schedules clacks + celebration + yourturn + G.turnWait
+      await t.page.keyboard.press('Space');
+      await t.page.waitForFunction(() => window.__game.getState().game.move === 2, null, { timeout: 5000, polling: 50 });
+      const pendingBefore = await t.page.evaluate(() => ({
+        timers: window.__G.turnTimers.size,
+        turnWait: !!window.__G.turnWait,
+        pulse: !!window.__G.lastPulse,
+        totalSfx: window.__game.audioState().total,
+      }));
+      t.expect(pendingBefore.timers >= 3, 'AI play registered pending turn timers (' + pendingBefore.timers + ')');
+      t.equal(pendingBefore.turnWait, true, 'G.turnWait is active');
+      t.equal(pendingBefore.pulse, true, 'G.lastPulse is active');
+
+      // 2nd Space skips AI hand-over via skipComputerWait(): must cancel all turnTimers and clear G.lastPulse
+      await t.page.keyboard.press('Space');
+      await t.page.waitForFunction(() => !window.__game.getState().aiWait.turn, null, { timeout: 5000, polling: 50 });
+      const afterSkip = await t.page.evaluate(() => ({
+        timers: window.__G.turnTimers.size,
+        turnWait: !!window.__G.turnWait,
+        pulse: !!window.__G.lastPulse,
+        totalSfx: window.__game.audioState().total,
+      }));
+      t.equal(afterSkip.timers, 0, 'skipComputerWait cleared every pending turn timer');
+      t.equal(afterSkip.turnWait, false, 'G.turnWait cleared');
+      t.equal(afterSkip.pulse, false, 'G.lastPulse cleared');
+
+      // Advance clock 3 seconds: ZERO orphaned clacks, stings, or yourturn may fire
+      await t.page.clock.runFor(3000);
+      const totalLater = await t.page.evaluate(() => window.__game.audioState().total);
+      t.equal(totalLater, afterSkip.totalSfx, 'no orphaned clack/sting/yourturn cues fired after skip (' + totalLater + ' vs ' + afterSkip.totalSfx + ')');
+    },
+  },
+  {
+    name: 'W4-S2-01 click, Enter, and Space skip finishGame 900 ms overTimer straight to Game Over',
+    viewports: ['desktop'],
+    initScript: normalSound,
+    async run(t) {
+      await ready(t);
+      await freezeClock(t);
+      const triggerEnd = async () => {
+        await t.seed(5);
+        await t.game('newGame', { seats: SEATS });
+        await t.waitIdle(8000);
+        const st = await t.state();
+        const g = st.game;
+        g.board = Array(N * N).fill(null);
+        g.board[111] = { l: 'C', blank: false };
+        g.board[112] = { l: 'A', blank: false };
+        g.board[113] = { l: 'T', blank: false };
+        g.bag = []; g.move = 10; g.cur = 0;
+        g.players[0].rack = ['S']; g.players[0].score = 120;
+        g.players[1].rack = ['E', 'R']; g.players[1].score = 80;
+        await t.game('setState', { game: g });
+        await t.waitIdle(5000);
+        await stopClock(t);
+        t.expect((await t.game('act', 'stage', [{ i: 114, l: 'S' }])).ok, 'final S staged');
+        t.expect((await t.game('act', 'play')).ok, 'final play applied');
+        await t.page.clock.runFor(200);
+        const hasTimer = await t.page.evaluate(() => window.__G.scene === 'game' && !!window.__G.overTimer);
+        t.equal(hasTimer, true, 'finishGame scheduled 900 ms overTimer while still in game');
+      };
+
+      // 1) Enter skips straight to over without waiting 900 ms
+      await triggerEnd();
+      await t.page.keyboard.press('Enter');
+      t.equal((await t.state()).scene, 'over', 'Enter skipped overTimer straight to over');
+      t.equal(await t.page.evaluate(() => window.__G.overTimer), 0, 'overTimer cleared after Enter skip');
+
+      // 2) Space skips straight to over
+      await t.page.clock.resume();
+      await triggerEnd();
+      await t.page.keyboard.press('Space');
+      t.equal((await t.state()).scene, 'over', 'Space skipped overTimer straight to over');
+
+      // 3) Board click skips straight to over
+      await t.page.clock.resume();
+      await triggerEnd();
+      const [bx, by] = await t.game('act', 'screen', 40);
+      await t.page.mouse.click(bx, by);
+      t.equal((await t.state()).scene, 'over', 'board click skipped overTimer straight to over');
+      await t.page.clock.resume();
+    },
+  },
+];

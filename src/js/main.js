@@ -44,7 +44,7 @@ const G = {
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
   preview: null, hint: null, last: new Set(), lastPulse: null, anim: new Map(), animUntil: 0,
-  breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
+  breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, releaseAiTimer: 0, turnTimers: new Set(), privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
   errFlash: false, scoreHi: null, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, springsOpen: false,
   returnFocus: null, parCache: {}, boardTap: null, houseOpen: false,
@@ -316,7 +316,7 @@ function showScene(name, arg) {
   moodUpdate();
   cancelDrag(); G.pinch = null; G.pointers.clear();
   closeDialog(true);
-  if (name !== 'game') { releaseAudio('pause'); clearTimeout(G.overTimer); G.overTimer = 0; G.toastQ = []; hideToastNow(); G.springsOpen = false; G.privacy = false; const priv = $('#privacy'); if (priv) { priv.hidden = true; priv.innerHTML = ''; } }
+  if (name !== 'game') { releaseAudio('pause'); cancelTurnTimers(); G.toastQ = []; hideToastNow(); G.springsOpen = false; G.privacy = false; const priv = $('#privacy'); if (priv) { priv.hidden = true; priv.innerHTML = ''; } }
   syncInert();
   const app = $('#app'), scr = $('#screen');
   const game = name === 'game';
@@ -553,12 +553,11 @@ function startDaily(date) {
 }
 function resumeGame(record) { whenReady(() => beginGame(record.game, record)); }
 function beginGame(s, intent) {
-  clearTimeout(G.overTimer); G.overTimer = 0;
+  cancelTurnTimers();
   clearTimeout(errFlashTimer); G.errFlash = false;
   clearTimeout(scoreHiTimer); G.scoreHi = null;
   clearTimeout(G.plaqueTimer); G.plaqueHi.clear(); G.plaqueSnap = null; G.springsOpen = false;
   steam.arcs.length = 0; steam.arcLog.length = 0;
-  if (G.turnWait) { clearTimeout(G.turnWait.id); G.turnWait = null; }
   if (!G.settings.tipsSeen) store.put(KEYS.settings, G.settings); // the newcomer flag is written before the first save, so a tab closed mid-tips still counts as a newcomer
   G.bark = null;
   const handle = gameSaves.open(s, intent);
@@ -651,17 +650,29 @@ function scheduleAi() {
 }
 
 // A tap on the board, or Space or Enter, while the computer is taking its turn lets its move land at once (the same path as the
-// Instant speed, for this move only): the wait for its reply, then the tiles flying in and the hand-over beat. Never during a menu.
+// Instant speed, for this move only): the wait for its reply, then the tiles flying in and the hand-over beat. Also skips
+// the post-final-move Game Over delay straight to 'over'. Never during a menu.
 function skipComputerWait() {
-  if (G.scene !== 'game' || G.dialog || !G.s || G.s.over || G.privacy) return false;
+  if (G.scene !== 'game' || G.dialog || !G.s || G.privacy) return false;
+  if (G.s.over) {
+    if (G.overTimer) { cancelTurnTimers(); showScene('over'); return true; }
+    if (G.turnWait) {
+      cancelTurnTimers();
+      G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null;
+      finishGame();
+      if (G.overTimer) { cancelTurnTimers(); showScene('over'); }
+      return true;
+    }
+    return false;
+  }
   if (G.aiBusy) {
     G.aiSkip = true;   // the reply is still being worked out: it lands the moment it is ready
-    if (G.aiFire) { clearTimeout(G.aiTimer); const f = G.aiFire; G.aiFire = null; f(); }
+    if (G.aiFire) { clearTimeout(G.aiTimer); G.aiTimer = 0; const f = G.aiFire; G.aiFire = null; f(); }
     return true;
   }
   if (G.turnWait && G.turnWait.fromAi && performance.now() < G.busyUntil) {
-    clearTimeout(G.turnWait.id); G.turnWait = null;
-    G.anim.clear(); G.animUntil = 0; G.busyUntil = 0;
+    cancelTurnTimers();
+    G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null;
     startTurn();
     return true;
   }
@@ -676,11 +687,26 @@ function releaseAi() {
 
 const ctx = () => ({ dict: G.dict, lex: G.lex });
 
-// run `fn` in `ms` milliseconds, as a sound that waits for the tiles to land; it is dropped if another game has begun by then
-const later = (g, ms, fn) => { if (ms <= 0) fn(); else setTimeout(() => { if (G.s === g) fn(); }, ms); };
+// Unified turn-phase timer registry (W4-S2-01): tracks later() celebration/yourturn cues, AI tile clacks,
+// G.turnWait, closeDialog()'s releaseAi timer, and finishGame()'s 900 ms transition so skipping or leaving cancels all.
+function addTurnTimer(fn, ms) {
+  const id = setTimeout(() => { G.turnTimers.delete(id); fn(); }, ms);
+  G.turnTimers.add(id);
+  return id;
+}
+function cancelTurnTimers() {
+  if (G.turnWait) { clearTimeout(G.turnWait.id); G.turnWait = null; }
+  for (const id of G.turnTimers) clearTimeout(id);
+  G.turnTimers.clear();
+  clearTimeout(G.releaseAiTimer); G.releaseAiTimer = 0;
+  clearTimeout(G.overTimer); G.overTimer = 0;
+}
+// run `fn` in `ms` milliseconds, as a sound that waits for the tiles to land; it is dropped if another game has begun or the turn is cancelled
+const later = (g, ms, fn) => { if (ms <= 0) { if (G.s === g) fn(); } else addTurnTimer(() => { if (G.s === g) fn(); }, ms); };
 
 function afterAction(entry, fromAi) {
   const s = G.s;
+  cancelTurnTimers();
   const prevPlaqueSnap = G.plaqueSnap && G.plaqueSnap.s === s ? G.plaqueSnap.list : null;
   cancelDrag();
   G.flash = null;
@@ -700,7 +726,7 @@ function afterAction(entry, fromAi) {
       entry.tiles.forEach((t, k) => G.anim.set(t.i, { t0: t0 + k * 90, dur: 320 }));
       G.animUntil = t0 + entry.tiles.length * 90 + 340;
       G.lastPulse = { t0: G.animUntil - 20, dur: 900 };
-      entry.tiles.forEach((t, k) => setTimeout(() => sfx('place', { pan: colPan(t.i), step: k }), k * 90 + 200 + Math.floor(Math.random() * 24)));
+      entry.tiles.forEach((t, k) => addTurnTimer(() => { if (G.s === s) sfx('place', { pan: colPan(t.i), step: k }); }, k * 90 + 200 + Math.floor(Math.random() * 24)));
       tick();
     } else sfx('play', { pan: colPan(Math.round(entry.tiles.reduce((a, t) => a + (t.i % N), 0) / entry.tiles.length)) });
     celebrate(entry, G.bark, landed);
@@ -1420,6 +1446,7 @@ function openDialog(name, arg) {
     G.returnFocus = ae instanceof HTMLElement && !m.contains(ae) ? ae : null;
   }
   cancelDrag();
+  clearTimeout(G.releaseAiTimer); G.releaseAiTimer = 0;
   G.boardTap = null;
   if (G.springsOpen) syncSpringsDrawer(false);
   G.dialog = name;
@@ -1475,8 +1502,9 @@ function closeDialog(silent) {
     else if (ret && ret.isConnected && !ret.disabled && ret.getClientRects().length > 0 && !ret.closest('[hidden]')) ret.focus({ preventScroll: true });
     else if (G.scene === 'game') $('#board')?.focus({ preventScroll: true });
   }
+  clearTimeout(G.releaseAiTimer); G.releaseAiTimer = 0;
   // a reply held while the dialog was open lands a moment after it closes (and not at all if another dialog opens at once)
-  if (G.aiHeld) setTimeout(releaseAi, 300);
+  if (G.aiHeld && !silent) G.releaseAiTimer = setTimeout(() => { G.releaseAiTimer = 0; releaseAi(); }, 300);
 }
 function askBlank(cb) { G.blankCb = cb; openDialog('blank'); }
 function confirmDialog(title, text, ok, onOk) { openDialog('confirm', { title, text, ok, onOk }); }
