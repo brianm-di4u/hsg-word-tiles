@@ -22,7 +22,7 @@ export const EASY_TWO = new Set([
 // choice among them is drawn from state.rng.ai.
 export const LEVELS = {
   easy: { commonOnly: true, freeLen: 0, allowTwo: EASY_TWO, maxLen: 6, leave: 0, bonusWeight: 0, pick: [0.35, 0.75], slip: 0.65, budget: 900000 },
-  medium: { commonOnly: true, freeLen: 5, leave: 0.5, bonusWeight: 0.5, budget: 900000 },  // freeLen was 4 before wave 2
+  medium: { commonOnly: true, freeLen: 5, leave: 0.65, bonusWeight: 0.5, budget: 900000 },  // freeLen was 4 before wave 2; leave tuned 0.5->0.65 for S3-02 (Ruling 12)
   hard: { leave: 1, defense: true, endgame: true, bonusWeight: 1, budget: 1500000 },
 };
 
