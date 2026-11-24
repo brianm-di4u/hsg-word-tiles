@@ -228,4 +228,105 @@ export const tests = [
       if (t.viewport === 'desktop') await t.shot('W2-S2-02-board-springs');
     },
   },
+  // ---------- W2-S2-03 ----------
+  {
+    name: 'W2-S2-03 title.webp pier inpainted clean, card-club.webp replaced with warm WPA bandstand, fact cards share harmonized gouache framing, and AI-art credit stays verbatim',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      // 1) Verify title.webp dimensions (1600x1000) and clean plain weathered limestone across the former 'E. A. HTCHCOCK' pier band
+      const artAudit = await t.page.evaluate(async () => {
+        const load = (src) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+        const titleIm = await load('assets/title.webp');
+        const cv = document.createElement('canvas'); cv.width = titleIm.naturalWidth; cv.height = titleIm.naturalHeight;
+        const ctx = cv.getContext('2d'); ctx.drawImage(titleIm, 0, 0);
+        // Sample interior of the stone plaque band (x=516..672, y=925..942) where dark carved letters used to sit
+        const band = ctx.getImageData(516, 925, 156, 17).data;
+        let darkLetterPx = 0, total = 0, edgeSum = 0;
+        const lumAt = (x, y) => { const k = (y * 156 + x) * 4; return 0.299 * band[k] + 0.587 * band[k + 1] + 0.114 * band[k + 2]; };
+        for (let y = 0; y < 17; y++) {
+          for (let x = 0; x < 156; x++) {
+            const L = lumAt(x, y);
+            total++;
+            if (L < 62) darkLetterPx++;
+            if (x > 0) edgeSum += Math.abs(L - lumAt(x - 1, y));
+          }
+        }
+        // Sample card-club.webp (420x560) warm gouache tones
+        const clubIm = await load('assets/card-club.webp');
+        const c2 = document.createElement('canvas'); c2.width = clubIm.naturalWidth; c2.height = clubIm.naturalHeight;
+        const g2 = c2.getContext('2d'); g2.drawImage(clubIm, 0, 0);
+        const cd = g2.getImageData(0, 0, clubIm.naturalWidth, clubIm.naturalHeight).data;
+        let rSum = 0, gSum = 0, bSum = 0, n = 0;
+        for (let j = 0; j < cd.length; j += 4) { rSum += cd[j]; gSum += cd[j + 1]; bSum += cd[j + 2]; n++; }
+        return {
+          titleW: titleIm.naturalWidth, titleH: titleIm.naturalHeight,
+          darkRatio: darkLetterPx / total,
+          horizEdgeMean: edgeSum / (17 * 155),
+          clubW: clubIm.naturalWidth, clubH: clubIm.naturalHeight,
+          clubRGB: [rSum / n, gSum / n, bSum / n],
+        };
+      });
+      t.equal(artAudit.titleW, 1600, 'title.webp preserves 1600 px width (CD-WF2-02)');
+      t.equal(artAudit.titleH, 1000, 'title.webp preserves 1000 px height (CD-WF2-02)');
+      t.expect(artAudit.darkRatio < 0.03, `pier plaque band is clean weathered limestone with zero dark carved lettering (darkRatio=${artAudit.darkRatio.toFixed(4)})`);
+      t.expect(artAudit.horizEdgeMean < 5.5, `pier plaque band has smooth natural stone gradient with no carved-letter edge spikes (horizEdgeMean=${artAudit.horizEdgeMean.toFixed(2)})`);
+      t.equal(artAudit.clubW, 420, 'card-club.webp packed at 420 px width');
+      t.equal(artAudit.clubH, 560, 'card-club.webp packed at 560 px height');
+      t.expect(artAudit.clubRGB[0] > artAudit.clubRGB[2] + 35, `card-club.webp carries warm golden WPA gouache palette (RGB=${artAudit.clubRGB.map((x) => x.toFixed(0)).join(',')})`);
+
+      // 2) Open a card-club fact card AND a vig-* fact card: verify harmonized .fact-art brass framing and warm gouache filter
+      await t.game('newGame', { seed: 3 });
+      await t.waitIdle(6000);
+      const clubId = await t.page.evaluate(async () => {
+        const { VIGNETTE } = await import(new URL('src/js/ui.js', location.href).href);
+        const lex = window.__G && window.__G.lex;
+        const entry = lex && lex.data.words.find((w) => w.cat === 'club' && !VIGNETTE[w.id]);
+        return entry ? { id: entry.id, form: entry.forms[0] } : null;
+      });
+      t.expect(!!clubId, 'found a club-category entry rendered with card-club.webp');
+      await t.game('act', 'fact', clubId.id, clubId.form);
+      await t.waitFrames(2);
+      const clubCard = await t.page.evaluate(() => {
+        const wrap = document.querySelector('#modal .fact-art');
+        const img = wrap && wrap.querySelector('img.vig');
+        const cs = img && getComputedStyle(img);
+        const after = wrap && getComputedStyle(wrap, '::after');
+        return {
+          hasWrap: !!wrap,
+          src: img ? img.getAttribute('src') : '',
+          loaded: !!img && img.complete && img.naturalWidth === 420,
+          filter: cs ? cs.filter : '',
+          frameBorder: after ? after.borderStyle : '',
+        };
+      });
+      t.equal(clubCard.hasWrap, true, 'card-club fact card wrapped in harmonized .fact-art frame');
+      t.expect(/card-club/.test(clubCard.src), `club fact card displays card-club.webp (${clubCard.src})`);
+      t.equal(clubCard.loaded, true, 'card-club.webp loaded cleanly at 420x560');
+      t.expect(/sepia/.test(clubCard.filter), `harmonized warm gouache toning applied (${clubCard.filter})`);
+      t.equal(clubCard.frameBorder, 'solid', 'harmonized antique-brass inner frame rendered on .fact-art');
+      await t.shot('W2-S2-03-fact-club');
+      await t.game('act', 'close');
+
+      // Also verify vig-* fact card shares the exact same harmonized .fact-art wrapper & toning
+      await t.game('act', 'fact', 'casino', 'CASINO');
+      await t.waitFrames(2);
+      const vigCard = await t.page.evaluate(() => {
+        const wrap = document.querySelector('#modal .fact-art.is-vig');
+        const img = wrap && wrap.querySelector('img.vig');
+        return { hasWrap: !!wrap, src: img ? img.getAttribute('src') : '', filter: img ? getComputedStyle(img).filter : '' };
+      });
+      t.equal(vigCard.hasWrap, true, 'vig-* fact card shares harmonized .fact-art.is-vig wrapper');
+      t.expect(/vig-southern/.test(vigCard.src) && /sepia/.test(vigCard.filter), `vig-* fact card carries harmonized warm gouache toning (${vigCard.src}, ${vigCard.filter})`);
+      if (t.viewport === 'desktop') await t.shot('W2-S2-03-fact-vig');
+      await t.game('act', 'close');
+
+      // 3) Verify CD-WF0-03 exact plain AI-art credit line untouched in About & sources
+      await t.game('scene', 'about');
+      const aboutText = await t.page.textContent('.sheet.about');
+      t.expect(aboutText.includes('Art: painted with AI image tools for this game.'), 'CD-WF0-03: exact plain AI-art credit wording preserved');
+      t.expect(!/finished by hand/i.test(aboutText), 'CD-WF0-03: no prohibited "finished by hand" phrasing');
+    },
+  },
 ];

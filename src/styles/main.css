@@ -435,8 +435,11 @@ body.reduce .dialog, body.reduce .fact { animation: none; }
 .letters .stile { width: 44px; height: 44px; font-size: 1.2rem; }
 .dialog-wrap { width: 100%; max-width: 560px; }
 .fact { display: grid; grid-template-columns: 210px 1fr; overflow: hidden; animation: sheet 0.2s ease-out; }
-.fact .vig { width: 100%; height: 100%; min-height: 200px; object-fit: cover; }
-.fact .vig.vector { display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, #7FC8B8, #1F5F6B); color: rgba(255, 255, 255, 0.85); }
+.fact-art { position: relative; min-height: 200px; background: #2A1C12; border-right: 2px solid var(--brass); overflow: hidden; }
+.fact-art::after { content: ""; position: absolute; inset: 7px; border: 1px solid rgba(240, 213, 122, 0.58); border-radius: 6px; box-shadow: inset 0 0 18px rgba(28, 18, 10, 0.26); pointer-events: none; }
+.fact .vig { width: 100%; height: 100%; min-height: 200px; object-fit: cover; display: block; filter: sepia(0.08) saturate(1.04) contrast(1.02); }
+.fact-art.is-vig .vig { transform: scale(1.04); filter: sepia(0.06) saturate(1.02) contrast(1.02); }
+.fact .vig.vector { display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, #7FC8B8, #1F5F6B); color: rgba(255, 255, 255, 0.85); filter: none; }
 .fact .vig.vector svg { width: 64px; height: 64px; }
 .fact-body { padding: 18px 20px; }
 .fact-cat { margin: 0; display: flex; align-items: center; gap: 6px; font: 700 0.8rem var(--f-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
@@ -651,6 +654,7 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   .title-art { object-position: 70% 50%; }
   .title-words { padding: max(16px, 7%) 18px 10%; }
   .fact { grid-template-columns: 1fr; }
+  .fact-art { min-height: 150px; max-height: 190px; border-right: 0; border-bottom: 2px solid var(--brass); }
   .fact .vig { min-height: 150px; max-height: 190px; object-position: 50% 40%; }
   .legend li { align-items: flex-start; }
   .sheet { padding: 14px 14px 20px; margin: 4px auto; }

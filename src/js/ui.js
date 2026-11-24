@@ -223,10 +223,11 @@ export function factHtml(entry, lex, form, extra = '') {
   const cat = lex.categories[entry.cat];
   const tier = lex.data.tiers[entry.tier];
   const pic = [VIGNETTE[entry.id], 'card-' + entry.id, 'card-' + entry.cat].find((n) => n && art.has(n));
+  const kind = pic ? (pic.startsWith('vig-') ? 'is-vig' : 'is-card') : 'is-vector';
   const vig = pic ? `<img class="vig" src="${art.src(pic)}" alt="">` : `<div class="vig vector cat-${entry.cat}" aria-hidden="true">${ICON.cat[cat.icon]}</div>`;
   const src = entry.fact.url ? `<a href="${esc(entry.fact.url)}" target="_blank" rel="noopener noreferrer">${esc(entry.fact.src)}</a>` : esc(entry.fact.src);
   return `<div class="card fact" role="document">
-    ${vig}
+    <div class="fact-art ${kind}">${vig}</div>
     <div class="fact-body">
       <p class="fact-cat">${ICON.cat[cat.icon]} <span>${esc(cat.name)}</span><b class="fact-pts">+${tier}</b></p>
       <h2>${esc(form || entry.forms[0])}</h2>
