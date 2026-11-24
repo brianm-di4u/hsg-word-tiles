@@ -314,7 +314,7 @@ export const LIGHTING_PROFILES = {
         [0x141222, 0, -8, 0, 16],
       ],
     },
-    tile: { emissive: 0xffe4be, emissiveIntensity: 0.08, bodyColor: 0xd8cdb6 },
+    tile: { emissive: 0xffe4be, emissiveIntensity: 0.11, bodyColor: 0xd8cdb6 },
     towel: { cloth: 0x524b61, stripe: 0x26444a },
     top: { emissive: 0x302c44, emissiveIntensity: 0.68 },
     preDimColor: 0x14121f,
