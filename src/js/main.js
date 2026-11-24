@@ -122,7 +122,14 @@ async function boot() {
   else G.noSave = storageBlocked();
   loadSettings();
   if (window.__TEST__) G.settings.ai = G.settings.ai || 'normal';
-  loadArt(() => { R.invalidateBoardTexture(); draw(); if (G.scene === 'title' && !G.dialog) showScene('title'); if (G.scene === 'game') renderGame(); });
+  loadArt(() => {
+    R.invalidateBoardTexture();
+    const bw = $('#boardwrap');
+    if (bw && art.ready('counter')) bw.style.backgroundImage = `url(${art.src('counter')})`;
+    if (B3.B3.on) B3.setTheme(dark() ? 'dark' : 'light');
+    if (G.scene === 'game') { layout(); renderGame(); }
+    else { draw(); if (G.scene === 'title' && !G.dialog) showScene('title'); }
+  });
   showScene('title');
   const t0 = performance.now();
   G.dict = await loadDict(DICT_B64);

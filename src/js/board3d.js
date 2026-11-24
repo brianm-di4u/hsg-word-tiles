@@ -81,15 +81,22 @@ function faceMaterial(l, blank) {
   return m;
 }
 
-// woven terry for the towels: fine loops and a soft weave, as a bump-free colour texture
+// woven terry for the towels: muted linen base tinted per theme in setTheme() (#B5A892 day taupe / #524B61 night twilight)
 function clothTexture(grp) {
   const c = document.createElement('canvas'); c.width = c.height = 256;
   const g = c.getContext('2d');
-  g.fillStyle = '#F2EEE4'; g.fillRect(0, 0, 256, 256);
-  for (let k = 0; k < 2600; k++) { const x = Math.random() * 256, y = Math.random() * 256; g.fillStyle = `rgba(${150 + Math.random() * 60},${140 + Math.random() * 60},${120 + Math.random() * 50},0.18)`; g.fillRect(x, y, 2, 2); }
-  for (let y = 0; y < 256; y += 6) { g.fillStyle = 'rgba(120,105,80,0.08)'; g.fillRect(0, y, 256, 2); }
+  g.fillStyle = '#F2F0EC'; g.fillRect(0, 0, 256, 256);
+  let s = 1337;
+  const rnd = () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  for (let k = 0; k < 2600; k++) { const x = rnd() * 256, y = rnd() * 256; const v = Math.round(165 + rnd() * 55); g.fillStyle = `rgba(${v},${v - 4},${v - 10},0.18)`; g.fillRect(x, y, 2, 2); }
+  for (let y = 0; y < 256; y += 6) { g.fillStyle = 'rgba(110,102,90,0.09)'; g.fillRect(0, y, 256, 2); }
   const t = canvasTex(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3);
-  grp.traverse((o) => { if (o.material && o.material.color && o.material.color.getHex() > 0xe0e0e0) { o.material.map = t; o.material.color.set(0xffffff); o.material.needsUpdate = true; } });
+  B3.towelCloth = []; B3.towelStripe = [];
+  grp.traverse((o) => {
+    if (!o.material || !o.material.color) return;
+    if (o.material.color.getHex() > 0xe0e0e0) { o.material.map = t; o.material.color.set(0xb5a892); o.material.needsUpdate = true; B3.towelCloth.push(o.material); }
+    else { B3.towelStripe.push(o.material); }
+  });
 }
 
 function envMap() {
@@ -191,15 +198,22 @@ export function setTheme(theme) {
   const dark = theme === 'dark';
   B3.dark = dark;
   // the counter: the painted walnut when it has loaded, else a plain finish
+  const hasCounter = art.ready('counter');
+  B3.counterArt = hasCounter;
   const c = document.createElement('canvas'); c.width = 2048; c.height = 1365;
   const g = c.getContext('2d');
-  if (art.ready('counter')) g.drawImage(art.img('counter'), 0, 0, c.width, c.height);
+  if (hasCounter) g.drawImage(art.img('counter'), 0, 0, c.width, c.height);
   else { const gr = g.createLinearGradient(0, 0, 2048, 1365); gr.addColorStop(0, '#5A3A22'); gr.addColorStop(1, '#3A2414'); g.fillStyle = gr; g.fillRect(0, 0, 2048, 1365); }
   if (dark) { g.fillStyle = 'rgba(10,8,22,0.55)'; g.fillRect(0, 0, c.width, c.height); }
   B3.table.material.map?.dispose(); B3.table.material.map = canvasTex(c);
   
   B3.table.material.map.wrapS = B3.table.material.map.wrapT = THREE.MirroredRepeatWrapping; B3.table.material.map.repeat.set(2, 2);
   B3.table.material.needsUpdate = true;
+  // W2-S2-06: tone Tier-3 counter towels down to muted warm taupe linen (day) / shadowed twilight linen (night)
+  const towelHex = dark ? 0x524b61 : 0xb5a892;
+  const stripeHex = dark ? 0x26444a : 0x3b7870;
+  for (const m of B3.towelCloth || []) { m.color.set(towelHex); m.needsUpdate = true; }
+  for (const m of B3.towelStripe || []) { m.color.set(stripeHex); m.needsUpdate = true; }
   B3.key.intensity = dark ? 700 : 900; B3.key.color.set(dark ? 0xe0e8ff : 0xfff0d8);
   B3.hemi.intensity = dark ? 0.25 : 0.6; B3.fill.intensity = dark ? 0.8 : 0.5; B3.fill.color.set(dark ? 0x7fb4ff : 0xcfe0ff);
   B3.scene.environmentIntensity = dark ? 0.3 : 0.5;
@@ -334,4 +348,14 @@ export function cellAt(x, y) {
 }
 // approximate on-screen size of one square near the centre (for line widths)
 export function cellPx() { const [x0, y0] = screenOf(HALF - 0.5, HALF); const [x1, y1] = screenOf(HALF + 0.5, HALF); return Math.hypot(x1 - x0, y1 - y0); }
-export function debug() { return { on: B3.on, reason: B3.reason, tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, tilt: TILT, tall: !!B3.tall, preDim: !!(B3.preDim && B3.preDim.visible), bezel: B3.on ? bezelBounds() : null, frames: B3.frames.length, intervals: B3.intervals.slice() }; }
+export function debug() {
+  return {
+    on: B3.on, reason: B3.reason, dark: !!B3.dark, counterArt: !!B3.counterArt,
+    towelColor: B3.towelCloth && B3.towelCloth[0] ? B3.towelCloth[0].color.getHexString() : null,
+    keyColor: B3.key ? B3.key.color.getHexString() : null, keyIntensity: B3.key ? B3.key.intensity : 0,
+    fillColor: B3.fill ? B3.fill.color.getHexString() : null, fillIntensity: B3.fill ? B3.fill.intensity : 0,
+    tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, tilt: TILT, tall: !!B3.tall,
+    preDim: !!(B3.preDim && B3.preDim.visible), bezel: B3.on ? bezelBounds() : null,
+    frames: B3.frames.length, intervals: B3.intervals.slice(),
+  };
+}
