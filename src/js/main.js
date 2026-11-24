@@ -768,11 +768,12 @@ function cancelTurnTimers() {
 // run `fn` in `ms` milliseconds, as a sound that waits for the tiles to land; it is dropped if another game has begun, scene left, or the turn is cancelled
 const later = (g, ms, fn) => { if (ms <= 0) { if (G.s === g && G.scene === 'game') fn(); } else addTurnTimer(() => { if (G.s === g && G.scene === 'game') fn(); }, ms); };
 
-// W4-P-N02 & W4-S1-02: scale per-persona AI drop choreography and hand-over beat with Settings -> Computer speed.
+// W4-P-N02, W4-S1-01 & W4-S1-02: scale per-persona AI drop choreography and hand-over beat with Settings -> Computer speed.
+// Contact occurs deterministically at k2 = CONTACT_K (0.72, ~230 ms at Normal) inside frame(), removing detached setTimeout clacks (CD-WF4-04).
 const AI_PACE = {
-  normal:  { scale: 1,    drop: 320, clack: 200, beat: 250, pulse: 900 },
-  fast:    { scale: 0.45, drop: 160, clack: 100, beat: 100, pulse: 550 },
-  instant: { scale: 0,    drop: 0,   clack: 0,   beat: 0,   pulse: 0 },
+  normal:  { scale: 1,    drop: 320, beat: 250, pulse: 900 },
+  fast:    { scale: 0.45, drop: 160, beat: 100, pulse: 550 },
+  instant: { scale: 0,    drop: 0,   beat: 0,   pulse: 0 },
 };
 function aiTileSchedule(tiles, personaId, scale) {
   const pm = personaMotion(personaId);
@@ -808,8 +809,9 @@ function afterAction(entry, fromAi) {
   const perId = fromAi ? s.players[entry.p].persona : null;
   const aiSched = aiAnim && entry.kind === 'play' ? aiTileSchedule(entry.tiles, perId, aiPace.scale) : null;
   const lastOff = aiSched && aiSched.length ? aiSched[aiSched.length - 1].offset : 0;
-  // seconds until the computer's tiles have landed (nothing to wait for on instant, pass/swap, or with animation off)
-  const landed = aiAnim && entry.kind === 'play' ? (lastOff + aiPace.clack) / 1000 : 0;
+  const contactMs = aiPace ? Math.round(aiPace.drop * R.CONTACT_K) : 0;
+  // seconds until the computer's tiles make marble contact (nothing to wait for on instant, pass/swap, or with animation off)
+  const landed = aiAnim && entry.kind === 'play' ? (lastOff + contactMs) / 1000 : 0;
   if (entry.kind === 'play') {
     G.last = new Set(entry.tiles.map((t) => t.i)); G.lastPulse = null;
     const avgPan = colPan(Math.round(entry.tiles.reduce((a, t) => a + (t.i % N), 0) / entry.tiles.length));
@@ -817,16 +819,28 @@ function afterAction(entry, fromAi) {
       const t0 = performance.now();
       entry.tiles.forEach((t, k) => {
         const sch = aiSched[k];
-        G.anim.set(t.i, { t0: t0 + sch.offset, dur: aiPace.drop, kind: 'ai', lift: sch.lift, roll: sch.roll, persona: perId });
+        G.anim.set(t.i, { t0: t0 + sch.offset, dur: aiPace.drop, kind: 'ai', lift: sch.lift, roll: sch.roll, persona: perId, pan: colPan(t.i), step: k, sq: SQUARES[t.i], clacked: false });
       });
       G.animUntil = t0 + lastOff + aiPace.drop + 20;
       G.lastPulse = { t0: G.animUntil - 20, dur: aiPace.pulse };
-      entry.tiles.forEach((t, k) => addTurnTimer(() => { if (G.s === s && G.scene === 'game') sfx('place', { pan: colPan(t.i), step: k }); }, aiSched[k].offset + aiPace.clack + Math.floor(Math.random() * 24)));
       tick();
     } else if (aiInstant) {
       G.anim.clear(); G.animUntil = 0;
       sfx('place', { pan: avgPan });
-    } else sfx('play', { pan: avgPan, tiles: entry.tiles.length });
+    } else {
+      sfx('play', { pan: avgPan, tiles: entry.tiles.length });
+      if (!fromAi && animOn()) {
+        // W4-S1-01 / CD-WF4-04: zero-hit-stop, non-blocking <= 150 ms human Play commit press finishing cleanly before STING_LAG (280 ms).
+        const t0 = performance.now(), L = entry.tiles.length;
+        const step = L > 1 ? Math.min(20, Math.floor(60 / (L - 1))) : 0, dur = 90;
+        G.anim.clear();
+        entry.tiles.forEach((t, k) => G.anim.set(t.i, { t0: t0 + k * step, dur, kind: 'commit' }));
+        const end = t0 + (L - 1) * step + dur;
+        G.animUntil = end + 10;
+        G.lastPulse = { t0: end, dur: 480 };
+        tick();
+      }
+    }
     celebrate(entry, G.bark, landed, prevPlaqueSnap, { fogRevealed, bagJustEmptied });
     try { recordRegister(entry); } catch (e) { /* the register is a keepsake: a failed write never stops the game */ }
   } else {
@@ -1009,7 +1023,7 @@ function stage(k, i, letter) {
   G.selected = null; G.hint = null; G.badPulse = null;
   forgetHint(s);
   clearToasts();
-  if (animOn()) { const now = performance.now(); G.settle.set(i, now); G.settleUntil = now + 130; }
+  if (animOn()) { const now = performance.now(); G.settle.set(i, now); G.settleUntil = Math.max(G.settleUntil, now + R.SETTLE_MS + 10); }
   const sq = SQUARES[i];
   sfx('place', { pan: colPan(i), step: G.staged.length - 1, ...(sq && sq !== '.' && sq !== '*' ? { sq } : {}) }); buzz('stage');
   updatePreview(); renderStaging();
@@ -1798,6 +1812,16 @@ function frame(now) {
   const interval = G.chainAt && now > G.chainAt && now - G.chainAt < 250 ? now - G.chainAt : 0;
   G.chainAt = 0;
   if (G.scene !== 'game' || !G.s) return;
+  // W4-S1-01 / CD-WF4-04: trigger each AI tile's place clack deterministically on the exact frame k2 >= CONTACT_K (0.72).
+  if (G.anim.size) {
+    for (const [, a] of G.anim) {
+      if (a.kind === 'ai' && !a.clacked && (now - a.t0) / a.dur >= R.CONTACT_K) {
+        a.clacked = true;
+        const sq = a.sq;
+        sfx('place', { pan: a.pan, step: a.step, ...(sq && sq !== '.' && sq !== '*' ? { sq } : {}) });
+      }
+    }
+  }
   const cv = $('#board'), c2 = cv.getContext('2d');
   const d = drawData(now);
   if (B3.B3.on) {

@@ -705,24 +705,26 @@ export function render(d) {
     const w = want[k];
     if (!w) { mf.visible = false; continue; }
     const x = R.FRAME + (w.i % N) + 0.5 - HALF, z = R.FRAME + Math.floor(w.i / N) + 0.5 - HALF;
-    let lift = w.kind === 'staged' ? 0.06 : 0, sc = 1, roll = 0;
+    let lift = w.kind === 'staged' ? 0.06 : 0, sx = 1, sy = 1, roll = 0;
     const a = d.anim && d.anim.get(w.i);
     if (a && w.kind !== 'staged') {
-      const k2 = Math.min(1, Math.max(0, (d.now - a.t0) / a.dur));
-      if (k2 <= 0) { mf.visible = false; continue; }
-      const e = 1 - Math.pow(1 - k2, 3), liftMax = a.lift != null ? a.lift : 2.2;
-      lift = (1 - e) * liftMax; sc = 1 + (1 - e) * 0.15;
-      roll = a.roll && lift > 0.28 ? a.roll * Math.min(1, (lift - 0.28) / Math.max(0.4, liftMax - 0.28)) : 0;
+      const pose = R.tileAnimPose(a, d.now);
+      if (!pose.vis) { mf.visible = false; continue; }
+      lift = pose.lift; sx = pose.sx; sy = pose.sy; roll = pose.roll;
     }
     const t0 = w.kind === 'staged' && d.settle ? d.settle.get(w.i) : null;
-    if (t0 != null) sc = 1 + 0.12 * Math.pow(1 - Math.min(1, Math.max(0, (d.now - t0) / 120)), 3);   // a tile just placed settles into its square
+    if (t0 != null) {
+      const sp = R.stageSettlePose(t0, d.now);
+      if (!sp.vis) { mf.visible = false; continue; }
+      lift = sp.lift; sx = sp.sx; sy = sp.sy;
+    }
     const cr = roll ? Math.cos(roll) : 1, sr = roll ? Math.sin(roll) : 0;
-    _tileMat4.set(cr * sc, -sr * sc, 0, x, sr * sc, cr * sc, 0, TOP + lift, 0, 0, sc, z, 0, 0, 0, 1);
+    _tileMat4.set(cr * sx, -sr * sy, 0, x, sr * sx, cr * sy, 0, TOP + lift, 0, 0, sx, z, 0, 0, 0, 1);
     if (w.kind === 'staged' && nStaged < 16) B3.stagedInst.setMatrixAt(nStaged++, _tileMat4);
     else if (w.kind === 'last' && nLast < 112) B3.lastInst.setMatrixAt(nLast++, _tileMat4);
     else if (nBoard < 112) B3.bodyInst.setMatrixAt(nBoard++, _tileMat4);
     mf.visible = true;
-    mf.position.set(x, TOP + lift, z); mf.rotation.set(0, 0, roll); mf.scale.setScalar(sc);
+    mf.position.set(x, TOP + lift, z); mf.rotation.set(0, 0, roll); mf.scale.set(sx, sy, sx);
     mf.geometry = faceGeometry(w.t.l, w.t.blank, B3.dark);
     mf.material = B3.faceAtlasMat;
   }
@@ -793,6 +795,7 @@ export function debug() {
     keyColor: B3.key ? B3.key.color.getHexString() : null, keyIntensity: B3.key ? B3.key.intensity : 0,
     fillColor: B3.fill ? B3.fill.color.getHexString() : null, fillIntensity: B3.fill ? B3.fill.intensity : 0,
     tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, tilt: TILT, tall: !!B3.tall,
+    animMesh: B3.tiles.filter((t) => t.visible && (t.position.y > TOP + 0.001 || t.scale.x !== 1 || t.scale.y !== 1 || t.rotation.z !== 0)).map((t) => ({ y: +t.position.y.toFixed(3), sx: +t.scale.x.toFixed(3), sy: +t.scale.y.toFixed(3), rz: +t.rotation.z.toFixed(4) })),
     preDim: !!B3.preDimActive, dimOpacity: B3.dimOpacity || 0, dimOpenCount: B3.dimOpenCount || 0,
     bezel: B3.on ? bezelBounds() : null,
     props: B3.on ? { bell: propBounds(B3.bell, 'bell'), towel: propBounds(B3.towels, 'towels') } : null,

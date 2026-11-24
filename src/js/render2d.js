@@ -552,8 +552,55 @@ export function cellAt(x, y) {
   const c = Math.floor(bx - FRAME), r = Math.floor(by - FRAME);
   return r >= 0 && r < N && c >= 0 && c < N ? r * N + c : -1;
 }
-// In 3D, board3d.js sets proj.fn(bx, by, lift) â†’ [x, y] so overlays, pops and steam follow the camera and sit flush on raised tile tops.
+// In 3D, board3d.js sets proj.fn(bx, by, lift) → [x, y] so overlays, pops and steam follow the camera and sit flush on raised tile tops.
 export const TILE_LIFT = 0.24, STAGED_LIFT = 0.30;
+// Unified ceramic tile motion grammar shared by board3d.js, render2d.js, and main.js (W4-S1-01 / CD-WF4-04):
+// AI drops accelerate via easeInQuad to marble contact at k2 = 0.72, clamping roll to 0 above TOP + 0.28, then run
+// an anisotropic ceramic settle (scaleY 0.90 -> 1.02 -> 1.0, scaleXZ <= 1.04). Human Play runs a <= 150 ms commit press
+// (TOP + 0.08 -> TOP + 0) and human stage() runs a crisp 110 ms vertical touch-down + micro-settle.
+export const CONTACT_K = 0.72, SETTLE_MS = 110;
+function settleCurve(s, minY, maxXZ) {
+  if (s <= 0.45) {
+    const t = s / 0.45, e = t * t * (3 - 2 * t);
+    return [maxXZ + (0.99 - maxXZ) * e, minY + (1.02 - minY) * e];
+  }
+  const t = (s - 0.45) / 0.55, e = t * t * (3 - 2 * t);
+  return [0.99 + 0.01 * e, 1.02 - 0.02 * e];
+}
+export function tileAnimPose(a, now) {
+  const k2 = Math.min(1, Math.max(0, (now - a.t0) / a.dur));
+  if (a.kind === 'commit') {
+    if (now < a.t0) return { vis: true, lift: 0.08, sx: 1, sy: 1, roll: 0, alpha: 1 };
+    if (k2 < 0.55) {
+      const u = k2 / 0.55;
+      return { vis: true, lift: 0.08 * (1 - u * u), sx: 1, sy: 1, roll: 0, alpha: 1 };
+    }
+    const [sx, sy] = settleCurve((k2 - 0.55) / 0.45, 0.94, 1.02);
+    return { vis: true, lift: 0, sx, sy, roll: 0, alpha: 1 };
+  }
+  const liftMax = a.lift != null ? a.lift : 2.0;
+  if (k2 <= 0) return { vis: false, lift: liftMax, sx: 1, sy: 1, roll: 0, alpha: 0 };
+  if (k2 < CONTACT_K) {
+    const u = k2 / CONTACT_K;
+    const lift = liftMax * (1 - u * u);
+    const roll = a.roll && lift > 0.28 ? a.roll * Math.min(1, (lift - 0.28) / Math.max(0.4, liftMax - 0.28)) : 0;
+    const sc = 1 + (1 - u * u) * 0.08;
+    return { vis: true, lift, sx: sc, sy: sc, roll, alpha: Math.min(1, u * 3) };
+  }
+  const [sx, sy] = settleCurve((k2 - CONTACT_K) / (1 - CONTACT_K), 0.90, 1.04);
+  return { vis: true, lift: 0, sx, sy, roll: 0, alpha: 1 };
+}
+export function stageSettlePose(t0, now) {
+  if (t0 == null) return { vis: true, lift: 0.06, sx: 1, sy: 1 };
+  if (now < t0) return { vis: false, lift: 0.22, sx: 1, sy: 1 };
+  const u = Math.min(1, (now - t0) / SETTLE_MS);
+  if (u < 0.55) {
+    const v = u / 0.55;
+    return { vis: true, lift: 0.06 + 0.16 * (1 - v * v), sx: 1, sy: 1 };
+  }
+  const [sx, sy] = settleCurve((u - 0.55) / 0.45, 0.93, 1.03);
+  return { vis: true, lift: 0.06, sx, sy };
+}
 export const proj = { fn: null };
 const project = (bx, by, lift = 0) => (proj.fn ? proj.fn(bx, by, lift) : toScreen(bx, by));
 export const cellCenter = (i, lift = 0) => project(FRAME + (i % N) + 0.5, FRAME + Math.floor(i / N) + 0.5, lift);
@@ -648,24 +695,24 @@ export function drawFrame(ctx, d) {
   }
   const cellPx = s, tilePx = cellPx * dpr;
   const at = (i) => toScreen(FRAME + (i % N), FRAME + Math.floor(i / N));
-  const drawTile = (i, t, kind, alpha = 1, lift = 0, sc = 1, rot = 0) => {
+  const drawTile = (i, t, kind, alpha = 1, lift = 0, sx = 1, sy = sx, rot = 0) => {
     const [x, y] = at(i);
-    const spr = tileSprite(t.l, t.blank, tilePx * sc, kind, d.theme || 'light');
+    // WF-4 §1.1: request unscaled cached base sprite and apply transient animation scaling via drawImage (zero per-frame canvas allocation).
+    const spr = tileSprite(t.l, t.blank, tilePx, kind, d.theme || 'light');
     ctx.globalAlpha = alpha;
     if (kind !== 'ghost') {
       ctx.fillStyle = 'rgba(22,13,5,0.24)'; roundRect(ctx, x + cellPx * 0.07, y + cellPx * 0.14 + lift * 0.5, cellPx * 0.91, cellPx * 0.91, cellPx * 0.15); ctx.fill();
       ctx.fillStyle = 'rgba(18,10,4,0.38)'; roundRect(ctx, x + cellPx * 0.06, y + cellPx * 0.09 + lift * 0.3, cellPx * 0.9, cellPx * 0.9, cellPx * 0.14); ctx.fill();
     }
-    const w = cellPx * sc;
+    const w = cellPx * sx, h = cellPx * sy;
     if (rot) {
       ctx.save();
       ctx.translate(x + cellPx / 2, y + cellPx / 2 - lift);
       ctx.rotate(rot);
-      ctx.drawImage(spr, -w / 2, -w / 2, w, w);
+      ctx.drawImage(spr, -w / 2, -h / 2, w, h);
       ctx.restore();
     } else {
-      const off = (cellPx - w) / 2;
-      ctx.drawImage(spr, x + off, y + off - lift, w, w);
+      ctx.drawImage(spr, x + (cellPx - w) / 2, y + (cellPx - h) / 2 - lift, w, h);
     }
     ctx.globalAlpha = 1;
   };
@@ -676,11 +723,9 @@ export function drawFrame(ctx, d) {
       if (!t) continue;
       const a = d.anim && d.anim.get(i);
       if (a) {
-        const k = Math.min(1, Math.max(0, (now - a.t0) / a.dur));
-        if (k <= 0) continue;
-        const e = 1 - Math.pow(1 - k, 3), liftMax = a.lift != null ? a.lift : 2.2, liftU = (1 - e) * liftMax;
-        const rot = a.roll && liftU > 0.28 ? a.roll * Math.min(1, (liftU - 0.28) / Math.max(0.4, liftMax - 0.28)) : 0;
-        drawTile(i, t, 'board', Math.min(1, k * 1.6), liftU * cellPx * 0.42, 1 + (1 - e) * 0.25, rot);
+        const pose = tileAnimPose(a, now);
+        if (!pose.vis) continue;
+        drawTile(i, t, 'board', pose.alpha, pose.lift * cellPx * 0.42, pose.sx, pose.sy, pose.roll);
       } else drawTile(i, t, 'board');
     }
   }
@@ -711,9 +756,12 @@ export function drawFrame(ctx, d) {
     ctx.lineJoin = 'miter';
   }
   if (d.hint) for (const t of d.hint) drawTile(t.i, t, 'ghost', 0.6);
-  // a tile just placed settles into its square: a little larger, easing down to its size in 120 ms
-  const settle = (i) => { const t0 = d.settle && d.settle.get(i); return t0 == null ? 1 : 1 + 0.12 * Math.pow(1 - Math.min(1, Math.max(0, (now - t0) / 120)), 3); };
-  if (!d.mode3d) for (const t of d.staged || []) drawTile(t.i, t, 'staged', d.dragFrom === t.i ? 0.35 : 1, cellPx * 0.04, settle(t.i));
+  // a tile just staged runs a crisp 110 ms vertical touch-down with anisotropic micro-settle (W4-S1-01)
+  if (!d.mode3d) for (const t of d.staged || []) {
+    const sp = stageSettlePose(d.settle ? d.settle.get(t.i) : null, now);
+    if (!sp.vis) continue;
+    drawTile(t.i, t, 'staged', d.dragFrom === t.i ? 0.35 : 1, sp.lift * cellPx * 0.67, sp.sx, sp.sy);
+  }
   // word outlines for the live preview (projected at tile-top lift so rings wrap raised 3D ceramic faces)
   const lw = (k) => Math.max(1.5, (d.cellPx || cellPx) * k);
   const outline = (cells, color, width) => { for (const i of cells) { ctx.strokeStyle = color; ctx.lineWidth = width; poly(ctx, quad(i, 0.03, liftOf(i))); ctx.stroke(); } };
