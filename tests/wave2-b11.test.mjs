@@ -133,4 +133,92 @@ export const tests = [
       await t.page.unroute('**/assets/fonts.css');
     },
   },
+  // ---------- W3-P-N02 ----------
+  {
+    name: 'W3-P-N02 ?art=0 triggers zero .webp and zero art-data.js loads across all screens, Help squares, Fact Cards, and gameplay',
+    viewports: ['desktop'],
+    url: 'index.html?art=0',
+    initScript: quiet,
+    async run(t) {
+      const badReqs = [];
+      t.page.on('request', (req) => {
+        const u = req.url();
+        if (/\.webp(\?|$)/i.test(u) || /art-data\.js(\?|$)/i.test(u)) badReqs.push(u);
+      });
+      await t.page.reload({ waitUntil: 'load' });
+      await ready(t);
+
+      // Check Title vector fallback & body.no-art class
+      const titleCheck = await t.page.evaluate(() => ({
+        noArt: document.body.classList.contains('no-art'),
+        webpImgs: [...document.querySelectorAll('img')].map((i) => i.getAttribute('src')).filter((s) => /\.webp/i.test(s || '')),
+        vectorTitle: !!document.querySelector('.title-art.vector'),
+      }));
+      t.equal(titleCheck.noArt, true, 'body.no-art class set under ?art=0');
+      t.equal(titleCheck.vectorTitle, true, 'Title uses vector fallback art');
+      t.equal(titleCheck.webpImgs.length, 0, 'Title has zero .webp <img> elements');
+
+      // Visit Setup, Help (all tabs including Squares & Words), Register, Records, About
+      for (const sc of ['setup', 'register', 'records', 'about']) {
+        await t.game('scene', sc);
+        const imgs = await t.page.evaluate(() => [...document.querySelectorAll('img')].map((i) => i.getAttribute('src')).filter((s) => /\.webp/i.test(s || '')));
+        t.equal(imgs.length, 0, `${sc} has zero .webp <img> elements`);
+      }
+      await t.game('scene', 'help');
+      for (const tab of ['rules', 'squares', 'words', 'keys']) {
+        await t.page.click(`[data-tab="${tab}"]`);
+        const info = await t.page.evaluate(() => {
+          const imgs = [...document.querySelectorAll('img')].map((i) => i.getAttribute('src')).filter((s) => /\.webp/i.test(s || ''));
+          const sqBgs = [...document.querySelectorAll('.sq-w, .sq-h, .sq-s, .sq-b')].map((el) => getComputedStyle(el).backgroundImage);
+          return { imgs, sqBgs };
+        });
+        t.equal(info.imgs.length, 0, `Help (${tab}) has zero .webp <img> elements`);
+        for (const bg of info.sqBgs) t.expect(!/\.webp/i.test(bg), `Help (${tab}) .sq-* uses pure CSS gradient (${bg})`);
+      }
+      await t.page.click('[data-tab="squares"]');
+      await t.shot('w2-b11-noart-help-squares');
+
+      // Start game, inspect #rackbar CSS, open a Fact Card, and run to Game Over
+      await t.game('newGame', { seed: 41, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'julian' }] });
+      await t.waitIdle(8000);
+      await t.game('act', 'autoplay', 4);
+      await t.waitIdle(8000);
+      const rackBg = await t.page.evaluate(() => getComputedStyle(document.querySelector('#rackbar')).backgroundImage);
+      t.expect(!/\.webp/i.test(rackBg), `#rackbar uses pure CSS gradient under body.no-art (${rackBg})`);
+      await t.shot('w2-b11-noart-board', { timeout: 15000 });
+
+      await t.game('act', 'fact', 'spring', 'SPRING');
+      const factCheck = await t.page.evaluate(() => ({
+        imgs: [...document.querySelectorAll('#modal img')].map((i) => i.getAttribute('src')).filter((s) => /\.webp/i.test(s || '')),
+        vectorVig: !!document.querySelector('#modal .vig.vector'),
+      }));
+      t.equal(factCheck.imgs.length, 0, 'Fact card has zero .webp <img> elements under ?art=0');
+      t.equal(factCheck.vectorVig, true, 'Fact card renders vector fallback vignette');
+      await t.game('act', 'close');
+
+      t.equal(badReqs.length, 0, `zero .webp or art-data.js requests under ?art=0 (got: ${badReqs.join(', ')})`);
+    },
+  },
+  {
+    name: 'W3-P-N02 ?art=0 on file:// skips assets/art-data.js script injection and triggers zero .webp loads',
+    viewports: ['desktop'],
+    fileUrl: true,
+    url: 'index.html?art=0',
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 41 });
+      await t.waitIdle(8000);
+      const res = await t.page.evaluate(() => ({
+        noArt: document.body.classList.contains('no-art'),
+        artDataScripts: document.querySelectorAll('script[src*="art-data.js"]').length,
+        hasArtDataGlobal: typeof window.__ART_DATA !== 'undefined',
+        webpImgs: [...document.querySelectorAll('img')].filter((i) => /\.webp/i.test(i.getAttribute('src') || '')).length,
+      }));
+      t.equal(res.noArt, true, 'file:// ?art=0 sets body.no-art');
+      t.equal(res.artDataScripts, 0, 'file:// ?art=0 never injects assets/art-data.js');
+      t.equal(res.hasArtDataGlobal, false, 'file:// ?art=0 leaves window.__ART_DATA undefined');
+      t.equal(res.webpImgs, 0, 'file:// ?art=0 renders zero .webp <img> elements');
+    },
+  },
 ];
