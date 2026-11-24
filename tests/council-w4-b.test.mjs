@@ -16,10 +16,13 @@ const SEATS = [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', le
 async function freezeClock(t) { await t.page.clock.install(); await t.reload(); await ready(t); }
 async function stopClock(t) { const now = await t.page.evaluate(() => Date.now()); await t.page.clock.pauseAt(now + 500); }
 
-// pixels of the last-play brass (122,75,7) in a square of the overlay canvas round a cell
+// pixels of the last-play brass (122,75,7) in a square of the overlay canvas round a tile face (lifted to TILE_LIFT in 3D per W2-S3-02)
 const brass = (t, i) => t.page.evaluate(async (cell) => {
-  const cv = document.getElementById('board'), [x, y] = await window.__game.act('cell', cell), [x2] = await window.__game.act('cell', cell + 1), k = cv.width / cv.clientWidth;
-  const r = Math.round(0.49 * Math.abs(x2 - x) * k), d = cv.getContext('2d').getImageData(Math.round(x * k) - r, Math.round(y * k) - r, 2 * r, 2 * r).data;
+  const cv = document.getElementById('board'), [x, y] = await window.__game.act('cell', cell, 0.24);
+  const [x2] = await window.__game.act('cell', cell + 1, 0.24), [, y2] = await window.__game.act('cell', cell + 15, 0.24);
+  const k = cv.width / cv.clientWidth;
+  const rx = Math.round(0.48 * Math.abs(x2 - x) * k), ry = Math.round(0.48 * Math.abs(y2 - y) * k);
+  const d = cv.getContext('2d').getImageData(Math.round(x * k) - rx, Math.round(y * k) - ry, 2 * rx, 2 * ry).data;
   let n = 0;
   for (let j = 0; j < d.length; j += 4) if (Math.abs(d[j] - 122) < 14 && Math.abs(d[j + 1] - 75) < 14 && Math.abs(d[j + 2] - 7) < 14 && d[j + 3] > 200) n++;
   return n;

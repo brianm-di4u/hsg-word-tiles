@@ -688,7 +688,7 @@ function afterAction(entry, fromAi) {
   G.bark = said ? { ...said, persona: s.players[entry.p].persona } : null;
   if (entry.kind === 'play' && s.players[entry.p].kind === 'human') coachPlayed();
   // the next player's rack is ready at once (the move is applied), even while the tiles are still landing
-  resetOrder(); G.hint = null; G.breakdown = false; delete s.hintStaged;
+  resetOrder(); G.preview = null; G.hint = null; G.breakdown = false; delete s.hintStaged;
   G.deal = !fromAi && entry.kind !== 'pass' && humans() === 1;
   if (!s.over && cur().kind === 'human') G.privacy = turnPrivacy();
   // seconds until the computer's tiles have landed (nothing to wait for on a pass or swap, or with animation off)
@@ -1606,7 +1606,7 @@ function frame(now) {
   if (G.viewAnim) stepViewAnim(now);
 }
 function drawData(now) {
-  const p = G.preview;
+  const p = G.staged.length ? G.preview : null;
   const badWordCells = p && !p.ok && p.words && p.badWord ? p.words.filter((w) => w.w === p.badWord).flatMap((w) => w.cells) : [];
   const badCells = p && !p.ok ? (badWordCells.length ? [...new Set(badWordCells)] : G.staged.map((t) => t.i)) : null;
   return {
