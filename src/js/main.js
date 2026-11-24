@@ -45,7 +45,7 @@ const G = {
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
   preview: null, hint: null, last: new Set(), lastPulse: null, anim: new Map(), animUntil: 0,
-  breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
+  breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
 };
 window.__G = G;
@@ -178,8 +178,11 @@ function recordRegister(entry) {
   }
   store.put(KEYS.register, reg);
 }
-function recordDaily() {
-  const s = G.s;
+const dailyDone = new WeakSet();
+function recordDaily(s = G.s) {
+  if (!s || !s.daily) return { score: 0, streak: 0 };
+  if (dailyDone.has(s)) return { score: s.players[0].score, streak: G.dailyStreak || 0 };
+  dailyDone.add(s);
   const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
   const date = s.daily.date, score = s.players[0].score;
   const prev = d.days[date];
@@ -205,6 +208,13 @@ function recordStats(s) {
   const r = s.mode === 'daily' ? { stats: applyDaily(stats(), s.players[0].score, G.dailyStreak || 0), pb: null } : applyGame(stats(), s);
   if (s.mode === 'daily' || r.pb) store.put(KEYS.stats, r.stats);
   G.pb = { s, pb: r.pb };
+}
+function persistEndgame(s) {
+  if (!s || !s.over) return;
+  if (s.mode === 'daily') {
+    try { G.dailyStreak = recordDaily(s).streak; } catch (e) { /* daily record is a keepsake: a failed write never stops the game */ }
+  }
+  try { recordStats(s); } catch (e) { /* the records are a keepsake: a failed write never stops the game */ }
 }
 
 // ---------- music and the bed ----------
@@ -232,7 +242,7 @@ function showScene(name, arg) {
   moodUpdate();
   cancelDrag(); G.pinch = null; G.pointers.clear();
   closeDialog(true);
-  if (name !== 'game') { G.toastQ = []; hideToastNow(); }
+  if (name !== 'game') { clearTimeout(G.overTimer); G.overTimer = 0; G.toastQ = []; hideToastNow(); }
   const app = $('#app'), scr = $('#screen');
   const game = name === 'game';
   app.hidden = !game; scr.hidden = game;
@@ -390,6 +400,8 @@ function startDaily(date) {
 }
 function resumeGame(record) { whenReady(() => beginGame(record.game, record)); }
 function beginGame(s, intent) {
+  clearTimeout(G.overTimer); G.overTimer = 0;
+  if (G.turnWait) { clearTimeout(G.turnWait.id); G.turnWait = null; }
   if (!G.settings.tipsSeen) store.put(KEYS.settings, G.settings); // the newcomer flag is written before the first save, so a tab closed mid-tips still counts as a newcomer
   G.bark = null;
   const handle = gameSaves.open(s, intent);
@@ -541,6 +553,7 @@ function afterAction(entry, fromAi) {
   announce(entry);
   moodUpdate();
   if (cur().kind === 'human' && !fromAi) G.lastHuman = s.cur;
+  if (s.over) persistEndgame(s);
   save(s);
   rollScores();
   const wait = G.fast ? 0 : (fromAi && animOn() ? Math.max(0, G.animUntil - performance.now()) + 250 : 150);
@@ -555,14 +568,16 @@ function afterAction(entry, fromAi) {
 const finishedGames = new WeakSet();
 function finishGame() {
   const s = G.s;
-  if (finishedGames.has(s)) return;
+  if (!s || finishedGames.has(s)) return;
   finishedGames.add(s);
+  persistEndgame(s);
   save(s);
-  if (s.mode === 'daily') { G.dailyStreak = recordDaily().streak; findPar(s.daily.date, s); }
-  try { recordStats(s); } catch (e) { /* the records are a keepsake: a failed write never stops the game */ }
+  if (G.scene !== 'game') return;
+  if (s.mode === 'daily') findPar(s.daily.date, s);
   const humanWon = s.result.winners.some((k) => s.players[k].kind === 'human');
   sfx(humanWon || s.mode === 'daily' ? 'fanfare' : 'turn');
-  setTimeout(() => { if (G.s === s) showScene('over'); }, G.fast ? 0 : 900);
+  clearTimeout(G.overTimer);
+  G.overTimer = setTimeout(() => { G.overTimer = 0; if (G.s === s && G.scene === 'game') showScene('over'); }, G.fast ? 0 : 900);
 }
 
 // What the finished game set, for the results screen ("new personal best").
