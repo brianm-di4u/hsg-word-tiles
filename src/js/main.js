@@ -1108,7 +1108,7 @@ function renderPreview() {
       if (G.breakdown) html += UI.breakdownHtml(p, G.s.board, G.staged);
       cls = hintLive() ? 'ok hintlive' : 'ok';
     } else { html = esc(p.error); cls = 'bad'; }
-  } else if (G.hoverInfo) html = G.hoverInfo;
+  } else if (G.hoverInfo) html = G.hoverBath ? `<span class="sq sq-B preview-bath" aria-hidden="true">${UI.bathMedallionHtml(G.hoverBath, false)}</span><span>${esc(G.hoverInfo)}</span>` : esc(G.hoverInfo);
   else if (G.lastLine && G.bark) html = `<span class="bark"><b>${esc(SHORT[G.bark.persona] || '')}:</b> “${esc(G.bark.text)}”</span><span class="said">${esc(G.lastLine)}</span>`;
   else if (G.lastLine) html = esc(G.lastLine);
   else html = cur().kind === 'human' ? (G.s.move === 0 ? (isNarrow() ? 'Start on the centre square.' : 'Start on the Display Spring in the centre.') : (isNarrow() ? 'Drag tiles to the board.' : 'Drag tiles to the board to make a word.')) : '';
@@ -1810,16 +1810,18 @@ function hoverSquare(e) {
   if (G.drag || e.pointerType !== 'mouse' || G.scene !== 'game' || !G.s) return;
   const b = $('#board'), r = b.getBoundingClientRect();
   const i = pick(e.clientX - r.left, e.clientY - r.top);
-  let info = null, pointer = false;
+  let info = null, bath = null, pointer = false;
   if (i >= 0 && !G.staged.length) {
-    if (!G.s.board[i]) info = squareInfo(i);
-    else if (!G.aiBusy && !G.hintBusy && !G.dialog) {
+    if (!G.s.board[i]) {
+      info = squareInfo(i);
+      if (SQUARES[i] === 'B') bath = BATHS[i];
+    } else if (!G.aiBusy && !G.hintBusy && !G.dialog) {
       const hit = themedWordAt(G.s, G.lex, i);
       if (hit) { info = `${hit.form}: Hot Springs word — click to read its history card`; pointer = true; }
     }
   }
   b.style.cursor = pointer ? 'pointer' : '';
-  if (info !== G.hoverInfo) { G.hoverInfo = info; renderPreview(); }
+  if (info !== G.hoverInfo || bath !== G.hoverBath) { G.hoverInfo = info; G.hoverBath = bath; renderPreview(); }
 }
 
 // Dragging works like the block puzzle's: on touch the tile floats well clear of the finger at about the size of a

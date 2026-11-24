@@ -330,6 +330,15 @@ function workedExample() {
     <p><b>A worked play.</b> FIND scores ${parts.join(' + ')} = ${sum}. The Steam square then doubles the whole word: <b>${total} points</b>.</p></div>`;
 }
 
+// Bathhouse Row octagonal painted medallion swatch matching the board's dark-espresso/gold bezel + '+20' pip (W2-S5-08 / CD-WF2-01).
+export function bathMedallionHtml(name = 'Fordyce', pip = true) {
+  const key = 'bath-' + String(name).toLowerCase();
+  const inner = art.has(key)
+    ? `<img class="row-med" src="${art.src(key)}" alt="">`
+    : `<span class="row-fallback">${ICON.cat.arch}</span>`;
+  return `<span class="row-bez"><span class="row-dark"><span class="row-rim"><span class="row-win">${inner}</span></span></span></span>${pip ? `<b class="row-pip">+${ROW_BONUS}</b>` : ''}`;
+}
+
 export function helpHtml(tab, lex, twos = []) {
   const tierList = Object.values(lex.data.tiers).join(' / ');
   const tabs = [['rules', 'How to play'], ['squares', 'Squares and scoring'], ['words', 'Hot Springs words'], ['keys', 'Controls']];
@@ -367,7 +376,7 @@ export function helpHtml(tab, lex, twos = []) {
         <li><span class="sq sq-h"><i>×3</i></span><span><b>Hot</b> triples the letter on it.</span></li>
         <li><span class="sq sq-s word"><i>×2</i></span><span><b>Steam</b> doubles the whole word.</span></li>
         <li><span class="sq sq-b word"><i>×3</i></span><span><b>Boiling Spring</b> triples the whole word.</span></li>
-        <li><span class="sq sq-B"><i class="row">${ICON.cat.arch}</i></span><span><b>Bathhouse Row</b>: eight squares named for the eight historic bathhouses. A Hot Springs word that covers one earns ${ROW_BONUS} more.</span></li>
+        <li><span class="sq sq-B" aria-hidden="true">${bathMedallionHtml('Fordyce', true)}</span><span><b>Bathhouse Row</b>: eight squares named for the eight historic bathhouses. A Hot Springs word that covers one earns ${ROW_BONUS} more.</span></li>
       </ul>
       <h2>Bonuses</h2>
       <ul class="legend plain">

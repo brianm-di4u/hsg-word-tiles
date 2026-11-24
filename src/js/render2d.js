@@ -129,53 +129,6 @@ function rowEmblem(ctx, cx, cy, r) {
   ctx.restore();
 }
 
-// Small building glyphs for the Bathhouse Row squares (shapes from research/town-content.md §2).
-const BATH_COLORS = { Superior: '#4E7D5B', Hale: '#A9432C', Maurice: '#2A9D8F', Fordyce: '#6E4B2F', Quapaw: '#C8963E', Ozark: '#A9432C', Buckstaff: '#C9A23F', Lamar: '#7E2F1F' };
-function bathGlyph(ctx, name, cx, cy, s, gold) {
-  const col = gold ? '#E9C766' : BATH_COLORS[name] || '#6E4B2F';
-  ctx.save(); ctx.translate(cx, cy); ctx.scale(s, s);
-  const BODY = gold ? '#1E1A14' : '#F3EFE6', INK = gold ? '#F0D57A' : '#3A2E22';
-  ctx.fillStyle = BODY; ctx.strokeStyle = INK; ctx.lineWidth = gold ? 0.045 : 0.035; ctx.lineJoin = 'round';
-  const body = (x, y, w, h) => { ctx.beginPath(); ctx.rect(x, y, w, h); ctx.fill(); ctx.stroke(); };
-  const roof = (x, y, w, h) => { ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w / 2, y - h); ctx.lineTo(x + w, y); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = BODY; };
-  const windows = (n, y) => { ctx.fillStyle = INK; for (let k = 0; k < n; k++) ctx.fillRect(-0.4 + (k + 0.5) * (0.8 / n) - 0.03, y, 0.06, 0.1); ctx.fillStyle = BODY; };
-  switch (name) {
-    case 'Quapaw':
-      body(-0.45, -0.05, 0.9, 0.38);
-      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, -0.05, 0.26, Math.PI, 0); ctx.fill(); ctx.stroke();
-      ctx.strokeStyle = '#6E4B2F'; ctx.lineWidth = 0.025;
-      for (let k = 0; k < 3; k++) { ctx.beginPath(); for (let x = -0.22; x <= 0.22; x += 0.055) ctx.lineTo(x, -0.12 - k * 0.06 + (Math.round(x / 0.055) % 2 ? 0.03 : 0)); ctx.stroke(); }
-      ctx.fillStyle = gold ? INK : '#B87333'; ctx.fillRect(-0.03, -0.38, 0.06, 0.08); windows(4, 0.08); break;
-    case 'Ozark':
-      body(-0.3, 0, 0.6, 0.33);
-      for (const x of [-0.42, 0.24]) { body(x, -0.2, 0.18, 0.53); body(x + 0.02, -0.3, 0.14, 0.1); roof(x + 0.02, -0.3, 0.14, 0.12); }
-      windows(3, 0.1); break;
-    case 'Hale':
-      body(-0.45, -0.05, 0.9, 0.38); roof(-0.5, -0.05, 1.0, 0.24);
-      ctx.beginPath(); ctx.moveTo(-0.12, 0.1); ctx.bezierCurveTo(-0.12, -0.02, -0.04, -0.06, 0, -0.1); ctx.bezierCurveTo(0.04, -0.06, 0.12, -0.02, 0.12, 0.1); ctx.fill(); ctx.stroke(); windows(4, 0.15); break;
-    case 'Superior':
-      body(-0.45, -0.15, 0.9, 0.48);
-      ctx.fillStyle = col; for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(-0.3 + k * 0.2, -0.05, 0.05, 0, Math.PI * 2); ctx.fill(); }
-      ctx.fillStyle = BODY; windows(4, 0.1); break;
-    case 'Maurice':
-      body(-0.45, -0.1, 0.9, 0.43); ctx.fillStyle = col; ctx.fillRect(-0.47, -0.16, 0.94, 0.07);
-      for (let k = 0; k < 3; k++) { ctx.fillStyle = gold ? '#3A3326' : '#7FC8B8'; ctx.beginPath(); ctx.arc(-0.24 + k * 0.24, 0.12, 0.07, Math.PI, 0); ctx.lineTo(-0.17 + k * 0.24, 0.22); ctx.lineTo(-0.31 + k * 0.24, 0.22); ctx.closePath(); ctx.fill(); ctx.stroke(); }
-      break;
-    case 'Fordyce':
-      body(-0.45, -0.12, 0.9, 0.45); roof(-0.47, -0.12, 0.3, 0.14); roof(0.17, -0.12, 0.3, 0.14);
-      ctx.fillStyle = col; for (let k = 0; k < 4; k++) { ctx.beginPath(); const x = -0.3 + k * 0.2, y = 0.0; ctx.moveTo(x, y - 0.06); ctx.lineTo(x + 0.05, y); ctx.lineTo(x, y + 0.06); ctx.lineTo(x - 0.05, y); ctx.closePath(); ctx.fill(); }
-      ctx.fillStyle = BODY; windows(4, 0.18); break;
-    case 'Buckstaff':
-      body(-0.45, -0.1, 0.9, 0.43); ctx.fillStyle = col; ctx.fillRect(-0.45, -0.14, 0.9, 0.06);
-      ctx.strokeStyle = INK; for (let k = 0; k < 6; k++) { ctx.beginPath(); ctx.moveTo(-0.37 + k * 0.148, -0.05); ctx.lineTo(-0.37 + k * 0.148, 0.3); ctx.stroke(); }
-      break;
-    default: // Lamar
-      body(-0.42, -0.1, 0.84, 0.43); ctx.fillStyle = col; ctx.fillRect(-0.44, -0.15, 0.88, 0.06);
-      ctx.fillStyle = gold ? INK : '#9FC9C9'; ctx.fillRect(-0.12, -0.22, 0.24, 0.07); ctx.strokeRect(-0.12, -0.22, 0.24, 0.07); windows(3, 0.08);
-  }
-  ctx.restore();
-}
-
 // The static board face, size × size px. theme: 'light' | 'dark'.
 export function paintBoard(size, theme = 'light') {
   const cv = mk(size, size), ctx = cv.getContext('2d');
@@ -425,7 +378,6 @@ export function tileSprite(l, blank, w, kind = 'board') {
   const g = ctx.createLinearGradient(inset, inset, inset + s, inset + s);
   g.addColorStop(0, '#FFFBF1'); g.addColorStop(0.6, '#F3EAD6'); g.addColorStop(1, '#E2D5B8');
   roundRect(ctx, inset, inset, s, s, r); ctx.fillStyle = g; ctx.fill();
-  if (art.ready('tile-glaze') && !blank) { ctx.save(); roundRect(ctx, inset, inset, s, s, r); ctx.clip(); ctx.globalAlpha = 0.5; ctx.drawImage(art.img('tile-glaze'), inset, inset, s, s); ctx.restore(); }
   // edge: dark lower bevel, bright upper rim
   ctx.lineWidth = Math.max(1, w * 0.035);
   ctx.strokeStyle = 'rgba(120,95,55,0.55)'; roundRect(ctx, inset, inset, s, s, r); ctx.stroke();
