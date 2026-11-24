@@ -159,6 +159,16 @@ body.reduce .check input, body.reduce .check input::after { transition: none; }
 .opps .opp b, .opps .opp small { overflow-wrap: anywhere; }
 @media (max-width: 520px) { .opps { grid-template-columns: minmax(0, 1fr); } }
 .add { margin: 4px 0 8px; }
+.house-rules { margin: 8px 0 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--panel-2); overflow: hidden; }
+.house-rules[open] { border-color: var(--brass); }
+.house-rules summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; cursor: pointer; list-style: none; font-weight: 700; color: var(--ink); }
+.house-rules summary::-webkit-details-marker { display: none; }
+.house-rules summary small { margin-left: auto; font: 600 0.82em var(--f-ui); color: var(--muted); }
+.house-rules summary::after { content: "▾"; margin-left: 6px; font-size: 0.95em; color: var(--muted); transition: transform 0.14s ease-out; }
+.house-rules[open] summary::after { transform: rotate(180deg); }
+body.reduce .house-rules summary::after { transition: none; }
+.house-body { padding: 4px 12px 12px; border-top: 1px dotted var(--line); display: flex; flex-direction: column; gap: 6px; }
+.check:has(input:disabled) { opacity: 0.55; cursor: default; }
 .setup [data-start] { width: 100%; }
 
 /* badges */
@@ -178,6 +188,15 @@ body.reduce .check input, body.reduce .check input::after { transition: none; }
 #topbar { grid-area: top; display: flex; align-items: center; gap: 10px; color: #F6EFDF; }
 #turnline { flex: 1; display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 #turnline .who { font: 600 1.15rem var(--f-serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#turnline .turn-head { display: flex; align-items: center; gap: 6px; overflow: visible; }
+#turnline .who-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#turnline .mode-badge {
+  display: inline-flex; align-items: center; flex: none; white-space: nowrap;
+  padding: 1px 8px; border-radius: 99px;
+  background: #8E3622; border: 1px solid #F3DD8B; color: #FFF8E6;
+  font: 700 0.72rem / 1.3 var(--f-ui); letter-spacing: 0.05em; text-transform: uppercase;
+}
+body.theme-dark #turnline .mode-badge { background: #D4AF37; border-color: #F3DD8B; color: #14121F; }
 #turnline .bag { font-size: 0.85em; color: #E6D8BC; }
 #turnline .bag.phase-final, #turnline .bag.phase-empty { color: #F3DD8B; font-weight: 700; }
 #turnline .daily-head { display: flex; align-items: center; gap: 6px; overflow: visible; }
@@ -636,7 +655,7 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   #scores { display: none; }
   #topbar { gap: 6px; }
   #turnline { align-items: center; }
-  #turnline .chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  #turnline .chips { display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap; }
   #turnline .bag { font-size: 0.78em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   #turnline .bag.phase-final, #turnline .bag.phase-empty { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; }
   #turnline .daily-turn { font-size: 0.78rem; padding: 2px 8px; }

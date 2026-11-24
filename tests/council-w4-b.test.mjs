@@ -107,6 +107,9 @@ export const tests = [
     async run(t) {
       await ready(t);
       await t.page.click('#screen [data-go="setup"]');
+      // W1-S2-04 / CD-WF1-05: Challenge mode sits inside a collapsed "House rules" disclosure by default
+      t.equal(await t.page.evaluate(() => document.querySelector('.house-rules')?.open), false, 'House rules starts collapsed');
+      await t.page.click('.house-rules summary');
       t.equal(await t.page.isChecked('[data-challenge]'), false, 'it is off');
       t.expect(/Challenge mode: invalid words cost your turn/.test(await t.page.textContent('.setup .check:has([data-challenge])')), 'it is labelled as the finding words it');
       await t.page.check('[data-challenge]');

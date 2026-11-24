@@ -140,4 +140,87 @@ export const tests = [
       await t.shot('W1-P-N01-over-unlimited');
     },
   },
+
+  // ---------- W1-S2-04 ----------
+  {
+    name: 'W1-S2-04 Challenge mode enforces end-to-end invariants across collapsed House rules, Hints, Help 2-letter table, #turnline badge, and Continue',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      // 1) Setup: House rules starts collapsed with >=44px summary, accurate Pass-and-Play/veteran copy, and auto-disables Hints
+      await t.page.click('#screen [data-go="setup"]');
+      const hr = await t.page.evaluate(() => {
+        const d = document.querySelector('.house-rules');
+        const s = d && d.querySelector('summary');
+        return { open: !!d?.open, sumH: s ? s.getBoundingClientRect().height : 0, text: s ? s.textContent : '' };
+      });
+      t.equal(hr.open, false, 'House rules disclosure starts collapsed');
+      t.expect(hr.sumH >= 44, 'House rules summary meets >=44px floor (' + hr.sumH + ')');
+      t.expect(/House rules/i.test(hr.text), 'summary labeled House rules');
+      await t.page.click('.house-rules summary');
+      const hrBody = await t.page.textContent('.house-rules .house-body');
+      t.expect(/Pass-and-Play/i.test(hrBody) && /veteran/i.test(hrBody) && /human seats only/i.test(hrBody), 'Challenge copy frames Pass-and-Play / veteran strict-dictionary rule accurately');
+      await t.page.check('[data-challenge]');
+      t.equal(await t.page.isChecked('[data-hints]'), false, 'enabling Challenge unchecks Hints');
+      t.equal(await t.page.isDisabled('[data-hints]'), true, 'enabling Challenge disables Hints checkbox');
+      t.equal(await t.page.isDisabled('[data-hints-unl]'), true, 'enabling Challenge disables Hints allowance select');
+      await t.page.locator('.house-rules').scrollIntoViewIfNeeded();
+      await t.shot('W1-S2-04-setup-challenge');
+      await t.page.uncheck('[data-challenge]');
+      t.equal(await t.page.isDisabled('[data-hints]'), false, 'disabling Challenge re-enables Hints checkbox');
+      t.equal(await t.page.isChecked('[data-hints]'), true, 'disabling Challenge restores previous Hints state');
+      await t.page.check('[data-challenge]');
+      await t.page.click('[data-start]');
+      await t.waitIdle(8000);
+
+      // 2) Active Challenge game: no Hint button, doHint() guarded, persistent Challenge badge in #turnline
+      const st = await t.state();
+      t.equal(st.game.challenge, true, 'started game is in Challenge mode');
+      t.equal(st.game.players[0].hints, null, 'human seat has hints === null');
+      t.equal(await t.page.locator('[data-act="hint"]').count(), 0, 'Hint button is omitted in Challenge mode');
+      t.equal(await t.game('act', 'hint'), 0, 'doHint() stages nothing in Challenge mode');
+      const badge = await t.page.evaluate(() => {
+        const el = document.querySelector('#turnline .mode-badge');
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { text: el.textContent.trim(), visible: r.width > 0 && r.height > 0 && r.right <= innerWidth + 1 };
+      });
+      t.expect(badge && badge.text === 'Challenge' && badge.visible, 'persistent Challenge badge visible in #turnline (' + JSON.stringify(badge) + ')');
+      const contrastDay = await t.contrastReport({ selector: '#turnline .mode-badge', min: 4.5, largeMin: 3 });
+      t.equal(contrastDay.fails.length, 0, 'Challenge badge passes Day WCAG contrast (' + JSON.stringify(contrastDay.fails) + ')');
+      await t.shot('W1-S2-04-turnline-challenge');
+
+      // 3) Legacy resumed Challenge save that still held p.hints = 3 must still hide Hint and guard doHint()
+      const legacy = (await t.state()).game;
+      legacy.players[0].hints = 3;
+      await t.game('setState', { game: legacy });
+      t.equal(await t.page.locator('[data-act="hint"]').count(), 0, 'legacy Challenge save still hides Hint button');
+      t.equal(await t.game('act', 'hint'), 0, 'legacy Challenge save still guards doHint()');
+
+      // 4) Active Challenge game hides Help 2-letter table and locks Check a word
+      await t.game('scene', 'help');
+      t.equal(await t.page.locator('#screen .twos').count(), 0, '2-letter word list is hidden during active Challenge game');
+      t.expect(/Hidden while a Challenge game is in progress/.test(await t.page.textContent('[data-twos-hidden]')), 'Help explains 2-letter list is hidden');
+      await t.page.fill('#wc-in', 'SPRING');
+      await t.page.click('.wordcheck button[type="submit"]');
+      t.expect(/off while a Challenge game is in progress/.test(await t.page.textContent('#wc-out')), 'Check a word remains locked');
+      await t.shot('W1-S2-04-help-challenge');
+
+      // 5) Title Continue subtitle shows Challenge badge after reload
+      await t.reload();
+      await ready(t);
+      const cont = await t.page.textContent('[data-go="continue"]');
+      t.expect(/Challenge/.test(cont), 'Continue subtitle shows Challenge (' + cont + ')');
+      await t.shot('W1-S2-04-title-continue');
+
+      // 6) Non-Challenge game restores 2-letter word list in Help
+      await t.game('newGame', { seats: SEATS, challenge: false });
+      await t.waitIdle(8000);
+      t.equal(await t.page.locator('#turnline .mode-badge').count(), 0, 'normal game has no Challenge badge');
+      await t.game('scene', 'help');
+      t.equal(await t.page.locator('#screen .twos').count(), 1, '2-letter list returns outside Challenge mode');
+      t.equal((await t.page.textContent('#screen .twos')).trim().split(/\s+/).length, 104, 'all 104 two-letter words present');
+    },
+  },
 ];

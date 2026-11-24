@@ -109,11 +109,16 @@ export function setupHtml(setup) {
     <header class="sheet-head"><h1 tabindex="-1">New game</h1><button class="iconbtn" data-go="title" aria-label="Back to the title screen">${ICON.close}</button></header>
     <ol class="seats">${setup.seats.map(seat).join('')}</ol>
     ${setup.seats.length < 4 ? '<button class="btn quiet add" data-add>Add a player</button>' : ''}
-    <label class="check"><input type="checkbox" data-hints ${setup.hints ? 'checked' : ''}> Spring Guide hints</label>
-    <label class="field hint-allow"><span>Hints for each player</span><select data-hints-unl ${setup.hints ? '' : 'disabled'}><option value="3" ${setup.hintsUnl ? '' : 'selected'}>Three</option><option value="unl" ${setup.hintsUnl ? 'selected' : ''}>Unlimited</option></select></label>
-    <p class="seat-note" data-hints-note>Personal bests are for unaided games: taking any hint, or turning Unlimited hints on, sets no personal best.</p>
-    <label class="check"><input type="checkbox" data-challenge ${setup.challenge ? 'checked' : ''}> Challenge mode: invalid words cost your turn</label>
-    <p class="seat-note">Off by default. When it is on, the board stops saying whether a word is in the dictionary: play one that is not and you lose the turn, like a pass.</p>
+    <label class="check"><input type="checkbox" data-hints ${setup.hints && !setup.challenge ? 'checked' : ''} ${setup.challenge ? 'disabled' : ''}> Spring Guide hints</label>
+    <label class="field hint-allow"><span>Hints for each player</span><select data-hints-unl ${setup.hints && !setup.challenge ? '' : 'disabled'}><option value="3" ${setup.hintsUnl ? '' : 'selected'}>Three</option><option value="unl" ${setup.hintsUnl ? 'selected' : ''}>Unlimited</option></select></label>
+    <p class="seat-note" data-hints-note>${setup.challenge ? 'Spring Guide hints are off while Challenge mode is on.' : 'Personal bests are for unaided games: taking any hint, or turning Unlimited hints on, sets no personal best.'}</p>
+    <details class="house-rules"${setup.challenge ? ' open' : ''}>
+      <summary>House rules <small>${setup.challenge ? 'Challenge on' : 'Pass-and-play &amp; veteran options'}</small></summary>
+      <div class="house-body">
+        <label class="check"><input type="checkbox" data-challenge ${setup.challenge ? 'checked' : ''}> Challenge mode: invalid words cost your turn</label>
+        <p class="seat-note">A Pass-and-Play and veteran strict-dictionary rule (off by default). The board hides word validity, Check a word and the two-letter list are locked, and Spring Guide hints are turned off; an invalid word costs your turn. Computer opponents play from the dictionary, so this rule hits human seats only.</p>
+      </div>
+    </details>
     <p class="goal"><b>The goal:</b> score more than the others by building words.</p>
     <p class="note">${humans >= 2 ? 'Pass and play: each person\'s tiles stay hidden until they tap to take their turn.' : humans === 1 ? 'You against the computer.' : 'Computers only: sit back and watch.'}</p>
     <button class="btn primary big" data-start>Start</button>
@@ -341,7 +346,7 @@ export function bathMedallionHtml(name = 'Fordyce', pip = true) {
   return `<span class="row-bez"><span class="row-dark"><span class="row-rim"><span class="row-win">${inner}</span></span></span></span>${pip ? `<b class="row-pip">+${ROW_BONUS}</b>` : ''}`;
 }
 
-export function helpHtml(tab, lex, twos = []) {
+export function helpHtml(tab, lex, twos = [], opts = {}) {
   const tierList = Object.values(lex.data.tiers).join(' / ');
   const tabs = [['rules', 'How to play'], ['squares', 'Squares and scoring'], ['words', 'Hot Springs words'], ['keys', 'Controls']];
   const tileRow = Object.entries(TILES).map(([l, t]) => `<span class="tchip"><b>${l}</b><i>${t.value}</i><small>×${t.count}</small></span>`).join('');
@@ -357,9 +362,11 @@ export function helpHtml(tab, lex, twos = []) {
         <li>Draw back up to seven tiles from the bag.</li>
       </ol>
       ${workedExample()}
-      <p>Words come from the public-domain ENABLE list (168,000 words; no proper nouns) with a few additions: the two-letter words below and some everyday ones such as EMAIL, APP and BLOG. A play with a word that isn't on the list is handed back and you keep your turn (unless you chose Challenge mode in the setup: then the strip does not say whether a word is valid, and a word that isn't on the list costs you the turn). While you place tiles, the strip under the board shows the words, the score and any bonus.</p>
+      <p>Words come from the public-domain ENABLE list (168,000 words; no proper nouns) with a few additions: the two-letter words below and some everyday ones such as EMAIL, APP and BLOG. A play with a word that isn't on the list is handed back and you keep your turn (unless you chose Challenge mode in the setup: then the strip does not say whether a word is valid, Spring Guide hints, Check a word and the two-letter list are off, and a word that isn't on the list costs you the turn). While you place tiles, the strip under the board shows the words, the score and any bonus.</p>
       <p>Stuck? The <b>Spring Guide</b> (Hint) sets a strong play on the board for you to keep, move or take back. <b>Other plays</b> under the board shows its next two choices, and the tiles each one keeps, for no extra charge. Three hints per player in a game against the computer or pass-and-play (or unlimited in the setup), none in the Daily Soak. Personal bests are for unaided games: taking any hint, or turning Unlimited hints on, sets no personal best.</p>
-      ${twos.length ? `<h2>Two-letter words</h2>
+      ${opts.challengeOn
+        ? '<h2>Two-letter words</h2><p class="note" data-twos-hidden>Hidden while a Challenge game is in progress.</p>'
+        : twos.length ? `<h2>Two-letter words</h2>
       <p>All ${twos.length} of these are playable. QI and ZA help when you are holding a lone Q or Z.</p>
       <p class="twos">${twos.join(' ')}</p>` : ''}
       <h2>Check a word</h2>

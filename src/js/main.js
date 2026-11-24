@@ -327,10 +327,13 @@ function screenHtml(name) {
       const found = lex.data.words.filter((e) => e.forms.some((f) => reg[f])).length;
       const di = dailyInfo();
       const rec = stats();
-      return UI.titleHtml({ records: rec.games ? `${UI.plural(rec.games, 'game')} · ${UI.plural(rec.wins, 'win')}` : 'Your wins and bests', noSave: G.noSave, newerSave: G.newerSave, canContinue: !!sv, continueLine: sv ? (sv.mode === 'daily' ? 'Daily Soak in progress' : `${sv.players.map((p) => p.name).join(' vs ')} · move ${sv.move + 1}`) : '', dailyLine: UI.dailyLine(di), found, total: lex.data.words.length, loading: !G.ready });
+      return UI.titleHtml({ records: rec.games ? `${UI.plural(rec.games, 'game')} · ${UI.plural(rec.wins, 'win')}` : 'Your wins and bests', noSave: G.noSave, newerSave: G.newerSave, canContinue: !!sv, continueLine: sv ? (sv.mode === 'daily' ? 'Daily Soak in progress' : `${sv.players.map((p) => p.name).join(' vs ')} · move ${sv.move + 1}${sv.challenge ? ' · Challenge' : ''}`) : '', dailyLine: UI.dailyLine(di), found, total: lex.data.words.length, loading: !G.ready });
     }
     case 'setup': return UI.setupHtml(G.setup);
-    case 'help': return UI.helpHtml(G.helpTab, lex, twoLetterWords());
+    case 'help': {
+      const challengeOn = !!(G.s && G.s.challenge && !G.s.over);
+      return UI.helpHtml(G.helpTab, lex, challengeOn ? [] : twoLetterWords(), { challengeOn });
+    }
     case 'settings': return UI.settingsHtml(G.settings, typeof navigator.vibrate === 'function');
     case 'register': return UI.registerHtml(lex, register(), G.noSave, G.newerSave);
     case 'records': return UI.recordsHtml(stats(), { found: lex.data.words.filter((e) => e.forms.some((f) => register()[f])).length, total: lex.data.words.length, daily: dailyInfo(), today: today() });
@@ -379,12 +382,28 @@ function wireScreen(name) {
     scr.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => { st.seats.splice(+b.dataset.remove, 1); showScene('setup'); }));
     const add = scr.querySelector('[data-add]');
     if (add) add.addEventListener('click', () => { const used = new Set(st.seats.map((x) => x.persona)); st.seats.push({ kind: 'ai', persona: (PERSONAS.find((p) => !used.has(p.id)) || PERSONAS[0]).id }); showScene('setup'); });
+    let savedHints = null;
     scr.querySelector('[data-hints]').addEventListener('change', (e) => { st.hints = e.target.checked; scr.querySelector('[data-hints-unl]').disabled = !e.target.checked; });
     scr.querySelector('[data-hints-unl]').addEventListener('change', (e) => { st.hintsUnl = e.target.value === 'unl'; });
-    scr.querySelector('[data-challenge]').addEventListener('change', (e) => { st.challenge = e.target.checked; });
+    scr.querySelector('[data-challenge]').addEventListener('change', (e) => {
+      st.challenge = e.target.checked;
+      const hi = scr.querySelector('[data-hints]'), unl = scr.querySelector('[data-hints-unl]');
+      if (st.challenge) {
+        if (savedHints == null) savedHints = !!st.hints;
+        st.hints = false;
+        hi.checked = false; hi.disabled = true; unl.disabled = true;
+      } else {
+        if (savedHints != null) { st.hints = savedHints; savedHints = null; }
+        hi.disabled = false; hi.checked = !!st.hints; unl.disabled = !st.hints;
+      }
+      const note = scr.querySelector('[data-hints-note]');
+      if (note) note.textContent = st.challenge ? 'Spring Guide hints are off while Challenge mode is on.' : 'Personal bests are for unaided games: taking any hint, or turning Unlimited hints on, sets no personal best.';
+      const sum = scr.querySelector('.house-rules summary small');
+      if (sum) sum.textContent = st.challenge ? 'Challenge on' : 'Pass-and-play & veteran options';
+    });
     scr.querySelector('[data-start]').addEventListener('click', () => {
       G.settings.lastSetup = st; saveSettings();
-      replaceSave(() => newGame({ mode: 'play', hintsUnl: !!st.hintsUnl, challenge: !!st.challenge, seats: st.seats.map((x, k) => (x.kind === 'human' ? { kind: 'human', name: (x.name || '').trim() || (st.seats.filter((y) => y.kind === 'human').length > 1 ? `Player ${k + 1}` : 'You') } : { kind: 'ai', persona: x.persona, level: seatLevel(x), name: persona(x.persona).name })), hints: st.hints }));
+      replaceSave(() => newGame({ mode: 'play', hintsUnl: !!st.hintsUnl && !st.challenge, challenge: !!st.challenge, seats: st.seats.map((x, k) => (x.kind === 'human' ? { kind: 'human', name: (x.name || '').trim() || (st.seats.filter((y) => y.kind === 'human').length > 1 ? `Player ${k + 1}` : 'You') } : { kind: 'ai', persona: x.persona, level: seatLevel(x), name: persona(x.persona).name })), hints: st.hints && !st.challenge }));
     });
   }
   if (name === 'help') {
@@ -479,9 +498,9 @@ function newGame(opts) {
     const seed = G.nextSeed != null ? G.nextSeed : (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
     G.nextSeed = null;
     const s = E.createGame({ ...opts, seed }, G.lex);
-    if (opts.hints === false) for (const p of s.players) p.hints = null;
+    if (opts.hints === false || s.challenge) for (const p of s.players) { p.hints = null; delete p.unl; delete p.taken; }
     for (const p of s.players) if (p.kind !== 'human') p.hints = null;
-    if (opts.hints !== false && opts.hintsUnl) for (const p of s.players) if (p.kind === 'human') { p.unl = true; p.taken = 0; }
+    if (opts.hints !== false && opts.hintsUnl && !s.challenge) for (const p of s.players) if (p.kind === 'human') { p.unl = true; p.taken = 0; }
     beginGame(s, intent);
   });
 }
@@ -519,7 +538,7 @@ function beginGame(s, intent) {
 // A hint taken this turn comes back after a reload, put on the board as it was (only if it still fits: the rack, the board and the turn).
 function restoreHint(s) {
   const h = s.hintStaged;
-  if (!h || h.move !== s.move || s.over || cur().kind !== 'human' || G.staged.length || !Array.isArray(h.tiles) || h.tiles.length > RACK) return;
+  if (!h || s.challenge || h.move !== s.move || s.over || cur().kind !== 'human' || G.staged.length || !Array.isArray(h.tiles) || h.tiles.length > RACK) return;
   const used = new Set(), seen = new Set(), staged = [];
   for (const t of h.tiles) {
     if (!t || !Number.isInteger(t.i) || t.i < 0 || t.i >= N * N || s.board[t.i] || seen.has(t.i) || typeof t.l !== 'string' || !/^[A-Z]$/.test(t.l)) return;
@@ -811,7 +830,7 @@ function doSwap() {
   openDialog('swap');
 }
 async function doHint() {
-  if (!humanCanAct()) return;
+  if (!humanCanAct() || G.s.challenge) return;
   const p = cur();
   if (p.hints == null || (p.hints <= 0 && !p.unl)) return;
   cancelDrag();
@@ -974,14 +993,15 @@ function renderTurnline() {
     : left < RACK
       ? `${UI.plural(left, 'tile')} ${mobile ? 'left' : 'in the bag'} · Final stretch · swaps closed`
       : `${UI.plural(left, 'tile')} in the bag`;
+  const chalBadge = s.challenge ? '<span class="mode-badge" title="Challenge mode: invalid words cost your turn">Challenge</span>' : '';
   const mobileBag = s.over
     ? 'Game over'
     : left < RACK
       ? bagLine
       : `${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'} · ${bagLine}`;
   tl.innerHTML = mobile
-    ? `<span class="chips">${UI.scoresHtml(s, true)}</span><span class="bag${phaseCls}">${mobileBag}</span>`
-    : s.over ? 'Game over' : `<span class="who">${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'}</span><span class="bag${phaseCls}">${bagLine}</span>`;
+    ? `<span class="chips">${UI.scoresHtml(s, true)}${chalBadge}</span><span class="bag${phaseCls}">${mobileBag}</span>`
+    : s.over ? `<span class="who turn-head"><span>Game over</span>${chalBadge}</span>` : `<span class="who turn-head"><span class="who-name">${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'}</span>${chalBadge}</span><span class="bag${phaseCls}">${bagLine}</span>`;
 }
 
 // The ledger shows whole entries only; the full ledger is in the menu.
@@ -997,7 +1017,7 @@ function trimLedger() {
 function renderActions() {
   const s = G.s, p = cur(), human = p.kind === 'human' && !G.privacy;
   const el = $('#actions');
-  el.innerHTML = UI.actionsHtml({ mobile: isNarrow(), staged: G.staged.length > 0, canSwap: s.bag.length >= RACK, canPlay: G.staged.length > 0 && G.preview && G.preview.ok, playScore: G.staged.length > 0 && G.preview && G.preview.ok ? G.preview.score : null, hints: p.hints != null && p.kind === 'human' ? p.hints : null, unlimited: !!p.unl });
+  el.innerHTML = UI.actionsHtml({ mobile: isNarrow(), staged: G.staged.length > 0, canSwap: s.bag.length >= RACK, canPlay: G.staged.length > 0 && G.preview && G.preview.ok, playScore: G.staged.length > 0 && G.preview && G.preview.ok ? G.preview.score : null, hints: !s.challenge && p.hints != null && p.kind === 'human' ? p.hints : null, unlimited: !s.challenge && !!p.unl });
   el.classList.toggle('waiting', !human || s.over);
   el.querySelectorAll('[data-act]').forEach((b) => {
     if ((!human || s.over) && !(b.dataset.act === 'shuffle' && waitSeat())) b.disabled = true;
