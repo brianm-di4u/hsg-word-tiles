@@ -346,4 +346,130 @@ export const tests = [
       await t.shot('w2-b10-night-midgame', { timeout: 15000 });
     },
   },
+  // ---------- W2-S1-02 ----------
+  {
+    name: 'W2-S1-02 progressive open-square dimming renders depth-tested underneath 3D tiles at DIM_STEP=0.018 / DIM_MAX=0.30 (zero 2D overlay smudge), preserving stained-glass richness and softening Day plaque gloss',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 41, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'julian' }] });
+      await t.waitIdle(8000);
+
+      // 1) Verify DIM_STEP = 0.018 and DIM_MAX in 0.28..0.32
+      const consts = await t.page.evaluate(async () => {
+        const R = await import(new URL('src/js/render2d.js', location.href).href);
+        return { step: R.DIM_STEP, max: R.DIM_MAX, dimmable: R.DIMMABLE.length };
+      });
+      t.equal(consts.step, 0.018, `DIM_STEP is 0.018 (got ${consts.step})`);
+      t.expect(consts.max >= 0.28 && consts.max <= 0.32, `DIM_MAX is in 0.28..0.32 (got ${consts.max})`);
+
+      // 2) Verify Day .plaque / .springs-bar softened gloss while preserving warm antique-brass identity & WCAG >= 5.5:1 contrast
+      const plaqueStyle = await t.page.evaluate(() => {
+        const el = document.querySelector('#springs .plaque, #springs .springs-bar');
+        const cs = el ? getComputedStyle(el) : null;
+        const stops = cs ? (cs.backgroundImage.match(/rgba?\([^)]+\)/g) || []) : [];
+        return { found: !!el, bg: cs ? cs.backgroundImage : '', shadow: cs ? cs.boxShadow : '', color: cs ? cs.color : '', stops };
+      });
+      t.equal(plaqueStyle.found, true, 'Day Featured Springs plaque/bar rendered');
+      t.expect(plaqueStyle.stops.length >= 3, `Day plaque retains multi-stop warm antique-brass gradient (${plaqueStyle.stops.length} stops)`);
+      const parseRgb = (s) => { const m = s.match(/rgba?\(([^)]+)\)/); if (!m) return null; const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return { r: v[0], g: v[1], b: v[2], a: v[3] == null ? 1 : v[3] }; };
+      const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+      const relLum = (c) => 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b);
+      const cr = (a, b) => { const l1 = relLum(a), l2 = relLum(b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); };
+      const fg = parseRgb(plaqueStyle.color);
+      const topStop = parseRgb(plaqueStyle.stops[0]);
+      t.expect(topStop.r > topStop.g && topStop.g > topStop.b && topStop.r - topStop.b >= 70, `Day plaque preserves warm antique-brass hue (CD-WF2-04: ${plaqueStyle.stops[0]})`);
+      t.expect(topStop.r <= 232 && topStop.g <= 208, `Day plaque top specular stop softened below old #F5E29B glare (${plaqueStyle.stops[0]})`);
+      for (const st of plaqueStyle.stops) {
+        const bg = parseRgb(st);
+        t.expect(cr(fg, bg) >= 5.5, `Day plaque contrast ${plaqueStyle.color} vs ${st} = ${cr(fg, bg).toFixed(2)} >= 5.5`);
+      }
+      t.expect(!/rgba\(255,\s*250,\s*220,\s*0\.8/.test(plaqueStyle.shadow), `Day plaque specular top inset highlight softened (${plaqueStyle.shadow})`);
+
+      // 3) Measure open Hot 3L & Bathhouse Row squares at 0-down baseline vs 10-down ramp vs 24-down max
+      const hotIdx = SQUARE.findIndex((k, i) => k === 'h' && i >= 30 && i < 100);
+      const rowIdx = SQUARE.findIndex((k, i) => k === 'B' && i >= 30 && i < 100);
+      const mode3d = (await t.state()).view.mode3d;
+
+      // Baseline: stage 1 tile on CENTER (down=0, preDim=false -> dimOpacity=0)
+      const rack0 = (await t.state()).game.players[0].rack.find((l) => l !== '?') || 'E';
+      await t.game('act', 'stage', [{ i: CENTER, l: rack0 }]);
+      await t.waitFrames(3);
+      const measureCell = async (idx) => {
+        const overlayAlpha = await t.page.evaluate(async (cell) => {
+          const cv = document.getElementById('board'), k = cv.width / cv.clientWidth;
+          const [x, y] = await window.__game.act('cell', cell);
+          const [x2] = await window.__game.act('cell', cell + 1);
+          const c = Math.abs(x2 - x), r = Math.max(2, Math.round(0.07 * c * k));
+          const px = Math.round((x - 0.36 * c) * k), py = Math.round((y - 0.36 * c) * k);
+          const d = cv.getContext('2d').getImageData(px - r, py - r, 2 * r, 2 * r).data;
+          let a = 0, n = 0;
+          for (let j = 0; j < d.length; j += 4) { a += d[j + 3]; n++; }
+          return a / n;
+        }, idx);
+        const buf = await t.page.locator('#boardwrap').screenshot();
+        const png = decodePng(buf);
+        const geom = await t.page.evaluate(async (cell) => {
+          const bw = document.getElementById('boardwrap').getBoundingClientRect();
+          const [x, y] = await window.__game.act('cell', cell);
+          const [x2] = await window.__game.act('cell', cell + 1);
+          return { w: bw.width, h: bw.height, x, y, c: Math.abs(x2 - x) };
+        }, idx);
+        const sx = png.width / geom.w, sy = png.height / geom.h;
+        const r = Math.max(2, geom.c * 0.08);
+        const cx = geom.x - 0.35 * geom.c, cy = geom.y - 0.35 * geom.c;
+        const sample = samplePngBox(png, (cx - r) * sx, (cy - r) * sy, (cx + r) * sx, (cy + r) * sy);
+        // Peak cool blue-vs-red hue delta inside the cell (confirms stained-glass cobalt saturation survives dimming)
+        let peakBlue = -255;
+        const bx0 = Math.max(0, Math.floor((geom.x - 0.42 * geom.c) * sx));
+        const bx1 = Math.min(png.width, Math.ceil((geom.x + 0.42 * geom.c) * sx));
+        const by0 = Math.max(0, Math.floor((geom.y - 0.42 * geom.c) * sy));
+        const by1 = Math.min(png.height, Math.ceil((geom.y + 0.42 * geom.c) * sy));
+        for (let py = by0; py < by1; py++) {
+          for (let px = bx0; px < bx1; px++) {
+            const o = (py * png.width + px) * png.bpp;
+            const d = png.data[o + 2] - png.data[o];
+            if (d > peakBlue) peakBlue = d;
+          }
+        }
+        return { overlayAlpha, peakBlue, ...sample };
+      };
+      const baseHot = await measureCell(hotIdx);
+      const baseRow = await measureCell(rowIdx);
+      await t.game('act', 'recall');
+
+      // 10 tiles down: intermediate smooth ramp (~0.18)
+      const g10 = (await t.state()).game;
+      for (let k = 0; k < 10; k++) g10.board[105 + k] = { l: 'ETAOINSHRD'[k], blank: false };
+      await t.game('setState', { game: g10 });
+      await t.waitFrames(3);
+      if (mode3d) {
+        const b3Mid = await t.game('act', 'b3');
+        t.expect(Math.abs(b3Mid.dimOpacity - 0.18) < 0.005, `3D dimming ramps smoothly at 10 tiles (dimOpacity=${b3Mid.dimOpacity.toFixed(3)}, want 0.180)`);
+      }
+
+      // 24 tiles down: full DIM_MAX = 0.30
+      const g24 = (await t.state()).game;
+      for (let k = 0; k < 24; k++) g24.board[105 + k] = { l: 'ETAOINSHR'[k % 9], blank: false };
+      await t.game('setState', { game: g24 });
+      await t.waitIdle(6000);
+      await t.game('act', 'freezeFx', 0);
+      await t.waitFrames(3);
+
+      const fullHot = await measureCell(hotIdx);
+      const fullRow = await measureCell(rowIdx);
+      t.log(`W2-S1-02 (${t.viewport}, ${mode3d ? '3D' : '2D'}): hot lum ${baseHot.lum.toFixed(1)} -> ${fullHot.lum.toFixed(1)} (overlay alpha=${fullHot.overlayAlpha.toFixed(1)}), row lum ${baseRow.lum.toFixed(1)} -> ${fullRow.lum.toFixed(1)}`);
+      if (mode3d) {
+        const b3Full = await t.game('act', 'b3');
+        t.equal(b3Full.preDim, false, 'Turn-1 preDim is false once 24 tiles are down');
+        t.expect(Math.abs(b3Full.dimOpacity - 0.30) < 0.005, `3D depth-tested dimming reaches DIM_MAX=0.30 at 24 tiles (got ${b3Full.dimOpacity.toFixed(3)})`);
+        t.expect(fullHot.overlayAlpha < 1 && fullRow.overlayAlpha < 1, `2D #board overlay carries zero dimming wash over 3D tiles (alpha ${fullHot.overlayAlpha.toFixed(1)}, ${fullRow.overlayAlpha.toFixed(1)})`);
+      }
+      t.expect(fullHot.lum < baseHot.lum * 0.88 && fullHot.lum > baseHot.lum * 0.56, `Hot 3L square visibly dimmed while preserving richness (${baseHot.lum.toFixed(1)} -> ${fullHot.lum.toFixed(1)})`);
+      t.expect(fullRow.lum < baseRow.lum * 0.88 && fullRow.lum > baseRow.lum * 0.56, `Bathhouse Row square visibly dimmed while preserving richness (${baseRow.lum.toFixed(1)} -> ${fullRow.lum.toFixed(1)})`);
+      t.expect(fullHot.peakBlue >= 28, `dimmed Hot 3L stained-glass retains cool blue hue richness (peak b-r=${fullHot.peakBlue})`);
+      await t.shot('w2-b10-day-dimming-plaques', { timeout: 15000 });
+    },
+  },
 ];

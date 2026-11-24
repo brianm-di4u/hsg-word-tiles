@@ -135,8 +135,9 @@ export function init(canvas, theme) {
   const side = new THREE.MeshStandardMaterial({ color: 0x3a2414, roughness: 0.6 });
   B3.board = new THREE.Mesh(new THREE.BoxGeometry(U, TOP, U), [side, side, B3.top, side, side, side]);
   B3.board.position.y = TOP / 2; B3.board.receiveShadow = true; B3.board.castShadow = true; scene.add(B3.board);
-  // W2-S5-01: Turn-1 gentle pre-dim quads on outer-ring DIMMABLE squares seated beneath 3D tiles (y = TOP + 0.002).
-  // Built as one merged BufferGeometry (1 draw call, zero extra Three.js exports).
+  // W2-S5-01 & W2-S1-02: depth-tested open-square dimming quads on DIMMABLE squares seated strictly beneath 3D tiles
+  // (y = TOP + 0.002, depthTest: true, depthWrite: false). Handles both Turn-1 PRE_DIM and progressive mid-game dimming
+  // in 1 draw call without smudging raised 3D ceramic tiles.
   const preCount = R.DIMMABLE.length;
   const prePos = new Float32Array(preCount * 4 * 3);
   const preIdx = new Uint16Array(preCount * 6);
@@ -156,8 +157,12 @@ export function init(canvas, theme) {
   const preGeo = new THREE.BufferGeometry();
   preGeo.setAttribute('position', new THREE.BufferAttribute(prePos, 3));
   preGeo.setIndex(new THREE.BufferAttribute(preIdx, 1));
-  const preMat = new THREE.MeshBasicMaterial({ color: 0x1e140a, transparent: true, opacity: R.PRE_DIM, depthWrite: false });
+  const preMat = new THREE.MeshBasicMaterial({ color: 0x1e140a, transparent: true, opacity: R.PRE_DIM, depthWrite: false, depthTest: true });
   B3.preDim = new THREE.Mesh(preGeo, preMat);
+  B3.dimIdx = preIdx;
+  B3.preDimActive = false;
+  B3.dimOpacity = 0;
+  B3.dimOpenCount = 0;
   B3.preDim.renderOrder = 1;
   B3.preDim.visible = false;
   scene.add(B3.preDim);
@@ -220,6 +225,7 @@ export function setTheme(theme) {
   B3.fill.intensity = dark ? 0.4 : 0.5; B3.fill.color.set(dark ? 0x5c72b8 : 0xcfe0ff);
   B3.scene.environmentIntensity = dark ? 0.28 : 0.5;
   if (B3.bodyMat) { B3.bodyMat.color.set(dark ? 0xd8cdb6 : 0xeadfc4); B3.bodyMat.needsUpdate = true; }
+  if (B3.preDim) { B3.preDim.material.color.set(dark ? 0x14121f : 0x1e140a); B3.preDim.material.needsUpdate = true; }
   B3.texKey = '';
 }
 
@@ -290,7 +296,35 @@ export function render(d) {
   // board face: the same texture the 2D board uses
   const tex = R.boardTexture(d.theme);
   if (tex !== B3.boardCanvas) { B3.top.map?.dispose(); B3.top.map = canvasTex(tex); B3.top.map.minFilter = THREE.LinearMipmapLinearFilter; B3.top.needsUpdate = true; B3.boardCanvas = tex; }
-  if (B3.preDim) B3.preDim.visible = !d.board[CENTER] && !(d.staged && d.staged.some((t) => t.i === CENTER));
+  const openCenter = !d.board[CENTER] && !(d.staged && d.staged.some((t) => t.i === CENTER));
+  const down = d.board.reduce((n, t) => n + (t ? 1 : 0), 0);
+  const preActive = openCenter && down === 0;
+  const effDim = Math.max(Math.min(R.DIM_MAX, R.DIM_STEP * down), preActive ? R.PRE_DIM : 0);
+  B3.preDimActive = preActive;
+  B3.dimOpacity = effDim;
+  if (B3.preDim) {
+    if (effDim > 0) {
+      const stagedSet = d.staged && d.staged.length ? new Set(d.staged.map((t) => t.i)) : null;
+      const idxArr = B3.dimIdx;
+      let openCount = 0;
+      for (let k = 0; k < R.DIMMABLE.length; k++) {
+        const ci = R.DIMMABLE[k];
+        if (d.board[ci] || (stagedSet && stagedSet.has(ci))) continue;
+        const v = k * 4, io = openCount * 6;
+        idxArr[io] = v; idxArr[io + 1] = v + 3; idxArr[io + 2] = v + 2;
+        idxArr[io + 3] = v; idxArr[io + 4] = v + 2; idxArr[io + 5] = v + 1;
+        openCount++;
+      }
+      B3.dimOpenCount = openCount;
+      B3.preDim.visible = openCount > 0;
+      B3.preDim.material.opacity = effDim;
+      B3.preDim.geometry.setDrawRange(0, openCount * 6);
+      B3.preDim.geometry.index.needsUpdate = true;
+    } else {
+      B3.dimOpenCount = 0;
+      B3.preDim.visible = false;
+    }
+  }
   // tiles: placed, then staged; the dragged staged tile is hidden
   const want = [];
   for (let i = 0; i < N * N; i++) if (d.board[i]) want.push({ i, t: d.board[i], kind: d.last && d.last.has(i) ? 'last' : 'board' });
@@ -358,7 +392,8 @@ export function debug() {
     keyColor: B3.key ? B3.key.color.getHexString() : null, keyIntensity: B3.key ? B3.key.intensity : 0,
     fillColor: B3.fill ? B3.fill.color.getHexString() : null, fillIntensity: B3.fill ? B3.fill.intensity : 0,
     tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, tilt: TILT, tall: !!B3.tall,
-    preDim: !!(B3.preDim && B3.preDim.visible), bezel: B3.on ? bezelBounds() : null,
+    preDim: !!B3.preDimActive, dimOpacity: B3.dimOpacity || 0, dimOpenCount: B3.dimOpenCount || 0,
+    bezel: B3.on ? bezelBounds() : null,
     frames: B3.frames.length, intervals: B3.intervals.slice(),
   };
 }

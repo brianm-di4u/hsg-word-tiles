@@ -463,12 +463,12 @@ const poly = (ctx, pts) => { ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ct
 
 // W2-S5-01: compact curved lower-rim brass START ribbon exposing the luminous turquoise Display Spring pool.
 const START_RIBBON = { w: 0.74, h: 0.24, y: 0.30, bow: 0.065 }, START_TEXT = 0.165;
-// S2-24: as tiles cover the board the glass discs and Bathhouse Row medallions of the squares still open step back: a wash of
-// DIM_STEP more per tile on the board, up to DIM_MAX, so the tiles are the loudest thing on it.
-// W2-S5-01: before Move 1 (while CENTER is empty and unstaged), apply a gentle PRE_DIM wash on outer-ring DIMMABLE squares
-// (beneath 3D tiles in board3d.js, and beneath tiles on the flat 2D board) so H8 commands Turn-1 focus.
+// S2-24 / W2-S1-02: as tiles cover the board the glass discs and Bathhouse Row medallions of the squares still open step back:
+// a wash of DIM_STEP more per tile on the board, up to DIM_MAX, drawn underneath 3D tiles in board3d.js (y = TOP + 0.002)
+// and beneath 2D tiles on the flat board so placed ivory tiles stay Rank 1 without washing out stained-glass hues (CD-WF2-04).
+// W2-S5-01: before Move 1 (while CENTER is empty and unstaged), apply a gentle PRE_DIM wash on outer-ring DIMMABLE squares.
 export const PRE_DIM = 0.12;
-const DIM_STEP = 0.012, DIM_MAX = 0.16;
+export const DIM_STEP = 0.018, DIM_MAX = 0.30;
 export const DIMMABLE = SQUARE.map((k, i) => (PREMIUM[k] || k === 'B' ? i : -1)).filter((i) => i >= 0);
 
 let boardTex = null, boardKey = '';
@@ -494,16 +494,19 @@ export function drawFrame(ctx, d) {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(boardTexture(d.theme), ox, oy, U * s, U * s);
   }
-  // the squares nobody has covered, dimmed a little more with every tile down (the same wash on the flat and the 3D board)
+  // W2-S1-02 / W2-P-N03: on the 3D board, open-square dimming is rendered inside board3d.js at y = TOP + 0.002
+  // (depth-tested underneath raised 3D ceramic tiles) so it never smudges tile tops; on the flat 2D board it draws here beneath 2D tiles.
   const openCenter = !d.board[CENTER] && !(d.staged && d.staged.some((t) => t.i === CENTER));
-  const down = d.board.reduce((n, t) => n + (t ? 1 : 0), 0), dim = Math.min(DIM_MAX, DIM_STEP * down);
-  const flatPreDim = !d.flatOnly && openCenter && down === 0 ? PRE_DIM : 0;
-  const effDim = Math.max(dim, flatPreDim);
-  if (effDim > 0) {
-    ctx.fillStyle = 'rgba(30,20,10,' + effDim.toFixed(3) + ')';
-    for (const i of DIMMABLE) {
-      if (d.board[i] || (d.staged && d.staged.some((t) => t.i === i))) continue;
-      poly(ctx, quad(i, 0.035)); ctx.fill();
+  if (!d.flatOnly) {
+    const down = d.board.reduce((n, t) => n + (t ? 1 : 0), 0), dim = Math.min(DIM_MAX, DIM_STEP * down);
+    const flatPreDim = openCenter && down === 0 ? PRE_DIM : 0;
+    const effDim = Math.max(dim, flatPreDim);
+    if (effDim > 0) {
+      ctx.fillStyle = (d.theme === 'dark' ? 'rgba(20,18,31,' : 'rgba(30,20,10,') + effDim.toFixed(3) + ')';
+      for (const i of DIMMABLE) {
+        if (d.board[i] || (d.staged && d.staged.some((t) => t.i === i))) continue;
+        poly(ctx, quad(i, 0.035)); ctx.fill();
+      }
     }
   }
   // W2-S5-01: focused, reduced-motion-safe concentric brass/aqua spotlight halo directly on H8 (CENTER) on Turn 1.

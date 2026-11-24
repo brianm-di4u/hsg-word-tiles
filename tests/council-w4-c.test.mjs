@@ -322,16 +322,15 @@ export const tests = [
       }, i);
       t.expect(squares.glass > 0 && squares.glass < 105 && squares.row > 0 && squares.row < 105, 'the squares measured are open ones (' + squares.glass + ', ' + squares.row + ')');
       const mode3d = (await t.state()).view.mode3d;
-      // W2-S5-01 applies a gentle 0.12 Turn-1 pre-dim on outer DIMMABLE squares while CENTER is open and unstaged
-      // (under 3D tiles on #gl in 3D mode, and on #board in flat mode). On the flat board, stage one tile on CENTER
-      // (down still 0) so `empty` measures the un-dimmed open square baseline before progressive 24-tile dimming.
-      if (!mode3d) {
-        const rack0 = (await t.state()).game.players[0].rack.find((l) => l !== '?') || 'E';
-        await t.game('act', 'stage', [{ i: 112, l: rack0 }]);
-        await t.waitFrames(2);
-      }
+      // W2-S5-01 & W2-S1-02 apply a gentle 0.12 Turn-1 pre-dim while CENTER is open and unstaged, and progressive
+      // dimming (DIM_STEP=0.018, DIM_MAX=0.30) underneath 3D tiles in board3d.js (y = TOP + 0.002) and beneath 2D tiles
+      // on the flat board. Stage one tile on CENTER (down still 0) so `empty` measures the un-dimmed open baseline.
+      const rack0 = (await t.state()).game.players[0].rack.find((l) => l !== '?') || 'E';
+      await t.game('act', 'stage', [{ i: 112, l: rack0 }]);
+      await t.waitFrames(2);
       const empty = { glass: await patch(squares.glass), row: await patch(squares.row) };
-      if (!mode3d) await t.game('act', 'recall');
+      const b3Empty = mode3d ? await t.game('act', 'b3') : null;
+      await t.game('act', 'recall');
       // tiles along the middle row and the one below: about 24, so the wash is at its most
       const g = (await t.state()).game;
       for (let k = 0; k < 24; k++) g.board[105 + k] = { l: 'ETAOINSHR'[k % 9], blank: false };
@@ -339,10 +338,18 @@ export const tests = [
       await t.waitIdle(5000);
       await t.waitForStable(300);
       const full = { glass: await patch(squares.glass), row: await patch(squares.row) };
+      const b3Full = mode3d ? await t.game('act', 'b3') : null;
       for (const key of ['glass', 'row']) {
-        t.log(key + ' square (' + (mode3d ? '3D overlay' : 'flat') + '): alpha ' + empty[key].alpha.toFixed(1) + ' to ' + full[key].alpha.toFixed(1) + ', luminance ' + empty[key].lum.toFixed(1) + ' to ' + full[key].lum.toFixed(1));
-        if (mode3d) t.expect(empty[key].alpha < 1 && full[key].alpha > 25 && full[key].alpha < 55, key + ' square: no wash on the empty board, then a light one (alpha ' + full[key].alpha.toFixed(1) + ')');
-        else t.expect(full[key].lum < empty[key].lum * 0.92 && full[key].lum > empty[key].lum * 0.75, key + ' square is dimmer once tiles cover the board, but not dark (' + empty[key].lum.toFixed(0) + ' to ' + full[key].lum.toFixed(0) + ')');
+        t.log(key + ' square (' + (mode3d ? '3D depth-tested' : 'flat') + '): overlay alpha ' + empty[key].alpha.toFixed(1) + ' to ' + full[key].alpha.toFixed(1) + ', luminance ' + empty[key].lum.toFixed(1) + ' to ' + full[key].lum.toFixed(1));
+        if (mode3d) {
+          t.expect(empty[key].alpha < 1 && full[key].alpha < 1, key + ' square: 2D #board overlay stays transparent (no wash smudging raised 3D tiles; alpha ' + full[key].alpha.toFixed(1) + ')');
+        } else {
+          t.expect(full[key].lum < empty[key].lum * 0.85 && full[key].lum > empty[key].lum * 0.60, key + ' square is dimmer once tiles cover the board, but not dark (' + empty[key].lum.toFixed(0) + ' to ' + full[key].lum.toFixed(0) + ')');
+        }
+      }
+      if (mode3d) {
+        t.expect(b3Empty.dimOpacity === 0 && b3Full.dimOpacity >= 0.28 && b3Full.dimOpacity <= 0.32, '3D depth-tested dimming ramps from 0 to 0.28..0.32 underneath tiles (' + b3Empty.dimOpacity + ' -> ' + b3Full.dimOpacity + ')');
+        t.expect(b3Full.dimOpenCount > 0 && b3Full.dimOpenCount < 54, '3D depth-tested dimming skips covered squares (' + b3Full.dimOpenCount + ' open)');
       }
       await t.shot('S2-24-dimmed-discs-' + (mode3d ? '3d' : 'flat'));
     },

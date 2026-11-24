@@ -401,8 +401,8 @@ body.theme-dark .pcard .score.score-updated { background: rgba(212, 175, 55, 0.2
 .plaques { display: flex; flex-direction: column; gap: 6px; }
 .plaque {
   display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 10px; border-radius: 8px; text-align: left;
-  background: linear-gradient(160deg, #F5E29B, #DFBC5B 55%, #C49B38); border: 1px solid #6E4B1E; color: #1F1406;
-  box-shadow: inset 0 1px 0 rgba(255, 250, 220, 0.8), inset 0 -2px 0 rgba(90, 60, 10, 0.35), 0 2px 5px rgba(0, 0, 0, 0.35);
+  background: linear-gradient(160deg, #E3CA84, #CFA94E 55%, #B88F36); border: 1px solid #6E4B1E; color: #1F1406;
+  box-shadow: inset 0 1px 0 rgba(255, 245, 210, 0.36), inset 0 -2px 0 rgba(90, 60, 10, 0.3), 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 .plaque .pcat, .springs-bar .pcat { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 .plaque .pcat svg, .springs-bar .pcat svg { width: 18px; height: 18px; display: block; flex: none; }
@@ -420,8 +420,8 @@ body.theme-dark .plaque.claimed { background: linear-gradient(160deg, #1F544D, #
 /* collapsible mobile Featured Springs drawer bar (>= 44 px) */
 .springs-bar {
   width: 100%; min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; text-align: left;
-  background: linear-gradient(160deg, #F5E29B, #DFBC5B 55%, #C49B38); border: 1px solid #6E4B1E; color: #1F1406;
-  box-shadow: inset 0 1px 0 rgba(255, 250, 220, 0.8), inset 0 -2px 0 rgba(90, 60, 10, 0.35), 0 2px 5px rgba(0, 0, 0, 0.35);
+  background: linear-gradient(160deg, #E3CA84, #CFA94E 55%, #B88F36); border: 1px solid #6E4B1E; color: #1F1406;
+  box-shadow: inset 0 1px 0 rgba(255, 245, 210, 0.36), inset 0 -2px 0 rgba(90, 60, 10, 0.3), 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 .sbar-meta { display: flex; flex-direction: column; line-height: 1.1; flex: none; }
 .sbar-meta b { font: 700 0.82rem var(--f-serif); }
