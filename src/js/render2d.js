@@ -678,7 +678,8 @@ export function drawFrame(ctx, d) {
   // the last play: a dark brass ring with a pale line inside it and a corner pip, so it shows on cream marble and is not only a
   // colour; a brief glow when the computer's tiles have just landed (projected at TILE_LIFT so rings wrap raised 3D tile faces)
   if (d.last && d.last.size) {
-    const k = d.lastPulse ? Math.min(1, Math.max(0, (now - d.lastPulse.t0) / d.lastPulse.dur)) : 1;
+    const pulsing = !!(d.lastPulse && now >= d.lastPulse.t0 && now < d.lastPulse.t0 + d.lastPulse.dur);
+    const k = pulsing ? Math.min(1, Math.max(0, (now - d.lastPulse.t0) / d.lastPulse.dur)) : 1;
     const w = Math.max(1.5, (d.cellPx || cellPx) * 0.07), brass = 'rgba(122,75,7,0.97)';
     ctx.lineJoin = 'round';
     for (const i of d.last) {
@@ -686,7 +687,12 @@ export function drawFrame(ctx, d) {
       const a = d.anim && d.anim.get(i);
       if (a && now < a.t0 + a.dur) continue;   // still flying in
       const q = quad(i, 0.04, TILE_LIFT), q2 = quad(i, 0.1, TILE_LIFT), pip = (a, b) => [a[0] + (b[0] - a[0]) * 0.3, a[1] + (b[1] - a[1]) * 0.3];
-      if (k < 1) { ctx.fillStyle = 'rgba(240,213,122,' + (0.55 * (1 - k)).toFixed(3) + ')'; poly(ctx, q); ctx.fill(); }
+      if (pulsing) {
+        const glowA = 0.72 * Math.pow(1 - k, 1.7);
+        ctx.strokeStyle = 'rgba(240,213,122,' + glowA.toFixed(3) + ')';
+        ctx.lineWidth = w * 1.9;
+        poly(ctx, q); ctx.stroke();
+      }
       ctx.strokeStyle = brass; ctx.lineWidth = w; poly(ctx, q); ctx.stroke();
       ctx.strokeStyle = 'rgba(255,243,196,0.9)'; ctx.lineWidth = Math.max(1, w * 0.3); poly(ctx, q2); ctx.stroke();
       ctx.fillStyle = brass; poly(ctx, [q[0], pip(q[0], q[1]), pip(q[0], q[3])]); ctx.fill();

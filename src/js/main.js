@@ -2,7 +2,7 @@
 import { loadDict, has } from './dict.js';
 import { makeLexicon, townWordsInRack } from './lexicon.js';
 import * as E from './engine.js';
-import { N, CENTER, RACK, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, SQUARE as SQUARES, BATHHOUSES as BATHS } from './score.js';
+import { N, CENTER, RACK, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, SQUARE as SQUARES, BATHHOUSES as BATHS, findWords } from './score.js';
 import { seedState } from './rng.js';
 import * as R from './render2d.js';
 import { audio, unlock, sfx, pauseAudio, resumeAudio, setTune, holdAudio, releaseAudio, syncAudio, audioList, audioRender, renderCue, tuneName } from './audio.js';
@@ -45,7 +45,7 @@ const G = {
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
   preview: null, hint: null, last: new Set(), lastPulse: null, anim: new Map(), animUntil: 0,
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, releaseAiTimer: 0, turnTimers: new Set(), privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
-  drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
+  drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, pendingVfx: null, busyUntil: 0, lastHuman: -1,
   errFlash: false, scoreHi: null, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, springsOpen: false,
   returnFocus: null, parCache: {}, boardTap: null, houseOpen: false,
 };
@@ -321,11 +321,12 @@ function showScene(name, arg) {
     if (SHEETS.includes(name)) {
       if (G.aiFire) { clearTimeout(G.aiTimer); G.aiTimer = 0; G.aiHeld = G.aiFire; G.aiFire = null; }
       if (G.turnWait) { const run = G.turnWait.run; clearTimeout(G.turnWait.id); G.turnWait = null; if (!G.aiHeld && run) G.aiHeld = run; G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; }
+      G.pendingVfx = null;
       cancelTurnTimers();
     } else {
       clearTimeout(G.aiTimer); G.aiTimer = 0;
       G.aiHeld = null; G.aiFire = null; G.aiBusy = false; G.aiSkip = false; G.aiToken++;
-      G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null;
+      G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; G.pendingVfx = null;
       cancelTurnTimers();
     }
     G.toastQ = []; hideToastNow(); G.springsOpen = false; G.privacy = false; const priv = $('#privacy'); if (priv) { priv.hidden = true; priv.innerHTML = ''; }
@@ -568,12 +569,13 @@ function resumeGame(record) { whenReady(() => beginGame(record.game, record)); }
 function beginGame(s, intent) {
   clearTimeout(G.aiTimer); G.aiTimer = 0;
   G.aiHeld = null; G.aiFire = null; G.aiBusy = false; G.aiSkip = false; G.aiToken++;
-  G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null;
+  G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; G.pendingVfx = null;
   cancelTurnTimers();
   clearTimeout(errFlashTimer); G.errFlash = false;
   clearTimeout(scoreHiTimer); G.scoreHi = null;
   clearTimeout(G.plaqueTimer); G.plaqueHi.clear(); G.plaqueSnap = null; G.springsOpen = false;
-  steam.arcs.length = 0; steam.arcLog.length = 0;
+  steam.parts.length = 0; steam.sweeps.length = 0; steam.arcs.length = 0; steam.arcLog.length = 0;
+  document.querySelectorAll('#boardwrap .pop').forEach((el) => el.remove());
   if (!G.settings.tipsSeen) store.put(KEYS.settings, G.settings); // the newcomer flag is written before the first save, so a tab closed mid-tips still counts as a newcomer
   G.bark = null;
   const handle = gameSaves.open(s, intent);
@@ -682,8 +684,9 @@ function scheduleAi() {
 function skipComputerWait() {
   if (G.scene !== 'game' || G.dialog || !G.s || G.privacy) return false;
   if (G.s.over) {
-    if (G.overTimer) { cancelTurnTimers(); showScene('over'); return true; }
+    if (G.overTimer) { G.pendingVfx = null; cancelTurnTimers(); showScene('over'); return true; }
     if (G.turnWait) {
+      G.pendingVfx = null;
       cancelTurnTimers();
       G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null;
       finishGame();
@@ -698,8 +701,10 @@ function skipComputerWait() {
     return true;
   }
   if (G.turnWait && G.turnWait.fromAi && performance.now() < G.busyUntil) {
+    const snapVfx = G.pendingVfx; G.pendingVfx = null;
     cancelTurnTimers();
     G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null;
+    if (snapVfx) snapVfx();
     startTurn();
     return true;
   }
@@ -740,6 +745,7 @@ const AI_PACE = {
 
 function afterAction(entry, fromAi) {
   const s = G.s;
+  G.pendingVfx = null;
   cancelTurnTimers();
   const prevPlaqueSnap = G.plaqueSnap && G.plaqueSnap.s === s ? G.plaqueSnap.list : null;
   cancelDrag();
@@ -770,8 +776,7 @@ function afterAction(entry, fromAi) {
       G.anim.clear(); G.animUntil = 0;
       sfx('place', { pan: avgPan });
     } else sfx('play', { pan: avgPan });
-    celebrate(entry, G.bark, landed);
-    emitPlaqueArcs(s, entry, prevPlaqueSnap);
+    celebrate(entry, G.bark, landed, prevPlaqueSnap);
     try { recordRegister(entry); } catch (e) { /* the register is a keepsake: a failed write never stops the game */ }
   } else {
     sfx(entry.kind === 'swap' ? 'swap' : 'turn');
@@ -827,12 +832,28 @@ function pbLines() {
 }
 
 const STING_LAG = 0.28;   // seconds: the score sting follows the clacks of the tiles instead of landing on them
+// Resolve exact board cell indices of scored words from the post-play board without altering saved log entries.
+function scoredWordCells(board, tiles, words) {
+  if (!tiles || !tiles.length || !words || !words.length) return [];
+  const prev = board.slice();
+  for (const t of tiles) prev[t.i] = null;
+  const found = findWords(prev, tiles);
+  if (!found || !found.words) return tiles.map((t) => t.i);
+  const want = new Set(words.map((w) => w.w));
+  const out = [], seen = new Set();
+  for (const fw of found.words) {
+    if (!want.has(fw.w)) continue;
+    for (const ci of fw.cells) if (!seen.has(ci)) { seen.add(ci); out.push(ci); }
+  }
+  return out;
+}
 // Toasts and effects for a play: Full Soak, Hot Springs words, a Featured Spring.
-// `wait` is the seconds the computer's tiles take to land: the cues (not the toasts) hold back until they have
-function celebrate(e, bark, wait = 0) {
+// `wait` is the seconds the computer's tiles take to land: both audio cues and board VFX hold back until touchdown (W4-S5-13).
+function celebrate(e, bark, wait = 0, prevPlaqueSnap = null) {
   const s = G.s, cue = (name, opts) => later(s, wait * 1000, () => sfx(name, opts));
   const p = G.s.players[e.p];
   const themed = e.words.filter((w) => w.themed);
+  const themedCells = scoredWordCells(s.board, e.tiles, themed);
   let found = false;
   if (p.kind === 'human' && (e.full || e.featured)) buzz('big');
   const who = bark ? { p, k: e.p } : null, quote = (ev) => (bark && bark.event === ev ? `“${bark.text}”` : null);
@@ -846,10 +867,26 @@ function celebrate(e, bark, wait = 0) {
     const fresh = p.kind === 'human' && !register()[w.w];   // celebrate runs before recordRegister: this is the first time the word is signed in
     if (fresh) found = true;
     toast({ kind: 'themed', title: `${w.w} +${w.bonus}${w.bath ? ` · Row +${ROW_BONUS}` : ''}`, sub: fresh ? 'New in your Register' : G.lex.categories[entry.cat].name, fact: entry.id, form: w.w });
-    steamBurst(e.tiles.map((t) => t.i));
   }
-  if (themed.length) goldSweep(e.tiles.map((t) => t.i));
-  if (!themed.length && e.score >= UI.SCORE_BIG) sparkBurst(e.tiles.map((t) => t.i));
+  const fireVfx = () => {
+    if (G.s !== s || G.scene !== 'game') return;
+    if (themedCells.length) {
+      steamBurst(themedCells);
+      goldSweep(themedCells);
+    }
+    if (!themed.length && e.score >= UI.SCORE_BIG) sparkBurst(e.tiles.map((t) => t.i));
+    emitPlaqueArcs(s, e, prevPlaqueSnap);
+    scorePop(e, themed.length > 0);
+  };
+  if (wait > 0) {
+    G.pendingVfx = fireVfx;
+    later(s, wait * 1000, () => {
+      if (G.pendingVfx === fireVfx) G.pendingVfx = null;
+      fireVfx();
+    });
+  } else {
+    fireVfx();
+  }
   if (themed.length && !e.featured) cue('steam');
   if (e.full) { toast({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); cue('chime', { delay: STING_LAG }); }   // the chime follows the play (and a Featured Spring's bell) by a beat, so they do not stack at full volume
   // one sting a play: a Featured Spring or a Full Soak has its own, then a word new to the Register, then the size of the score
@@ -857,7 +894,6 @@ function celebrate(e, bark, wait = 0) {
   for (const ck of done) toast({ kind: 'themed', title: `${G.lex.categories[ck].name}: complete`, sub: 'All its words are in your Register.', keep: true });
   const st = done.length && !e.featured && !e.full ? 'fanfare' : UI.stingFor(e, found); if (st) cue(st, { delay: STING_LAG });
   if (!e.full && bark && bark.event === 'big') toast({ kind: 'bark', who, title: `${p.name}: ${e.words[0].w} +${e.score}`, sub: quote('big') });
-  scorePop(e, themed.length > 0);
 }
 
 function announce(e) {
@@ -1861,7 +1897,8 @@ function steamLoop(now) {
   }
   steam.sweeps = steam.sweeps.filter((w) => now - w.t0 < SWEEP_MS);
   for (const w of steam.sweeps) {
-    const n = w.cells.length, head = ((now - w.t0) / SWEEP_MS) * (n + 1);
+    const n = w.cells.length, u = Math.min(1, Math.max(0, (now - w.t0) / SWEEP_MS));
+    const head = (1 - Math.pow(1 - u, 1.8)) * (n + 0.6);
     w.cells.forEach((i, j) => {
       const a = Math.max(0, 1 - Math.abs(head - j - 0.5) / 1.8);
       if (a <= 0) return;
@@ -2415,7 +2452,7 @@ window.__game = {
     return JSON.parse(JSON.stringify({ scene: G.scene, dialog: G.dialog, game: G.s, staged: G.staged, order: G.order, preview: G.preview, settings: G.settings,
       view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, pulse: !!G.lastPulse, aiWait: { reply: !!G.aiFire, turn: !!(G.turnWait && G.turnWait.fromAi) }, ready: G.ready, privacy: G.privacy,
       drag: G.drag && G.drag.active ? { from: G.drag.from, target: G.drag.target, blocked: G.drag.blocked, lift: G.drag.lift, size: G.drag.size } : null,
-      ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, arcs: steam.arcs.length, arcLog: steam.arcLog.slice(-6), wisps: steam.parts.filter((p) => !p.rgb).map((p) => p.i), sparks: steam.parts.filter((p) => p.rgb).length, sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
+      ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, sweepCells: steam.sweeps.length ? steam.sweeps[0].cells.slice() : [], arcs: steam.arcs.length, arcLog: steam.arcLog.slice(-6), wisps: steam.parts.filter((p) => !p.rgb).map((p) => p.i), sparks: steam.parts.filter((p) => p.rgb).length, sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
   },
   setState(o) {
     if (o.game) {
