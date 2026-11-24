@@ -173,11 +173,13 @@ export const tests = [
       t.expect(/Display Spring/.test(await say(CENTER)), 'the Display Spring is named by its name');
       await t.shot('S2-02-square-info');
       if (t.viewport === 'mobile') {
-        // with a tile placed the strip is for the play, not for a square
+        // W6-S2-05: tapping an empty premium square while staging keeps the live play preview intact and adds a quiet .sq-tip sub-line
         await t.game('act', 'stage', [{ i: CENTER, l: (await t.game('act', 'rackTile', 0))[2] }]);
         const [x, y] = await at(4);
         await t.tap([x, y]);
-        t.expect(!/Boiling|Steam|Warm|Hot spring/.test(await t.page.textContent('#preview')), 'a tap with tiles placed leaves the strip alone');
+        await t.page.waitForFunction(() => /Boiling|Steam|Warm|Hot spring/.test(document.querySelector('#preview .sq-tip')?.textContent || ''), null, { timeout: 3000 });
+        t.expect(/Boiling|Steam|Warm|Hot spring/.test(await t.page.textContent('#preview .sq-tip')), 'a tap with tiles placed shows the square rule as a quiet .sq-tip sub-line');
+        t.expect(/two letters|word|pts/i.test(await t.page.textContent('#preview')), 'the staged play preview stays visible above the sub-line');
       }
     },
   },

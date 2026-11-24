@@ -202,4 +202,82 @@ export const tests = [
       t.expect(!!afterBack.days[dates.d2], 'older date result is still recorded in d.days');
     },
   },
+  {
+    name: 'W6-S2-05 Escape dismisses any toast, rackDown clears transient toasts, non-keep toasts never hide #preview during staging, and empty-square tooltips render beneath #preview while staging',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      const CENTER = 112;
+      await t.game('newGame', { seed: 3, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(8000);
+      const s = await t.state();
+      s.game.players[0].rack = 'SPRINGE'.split('');
+      await t.game('setState', { game: s.game });
+      await t.waitIdle(5000);
+
+      // 1) Escape dismisses a live toast without opening Pause
+      await t.game('act', 'toast', { kind: 'soak', title: 'Full Soak! +40', sub: 'All seven tiles played.' });
+      await t.page.waitForSelector('#toast.on', { timeout: 3000 });
+      await t.page.keyboard.press('Escape');
+      await t.page.waitForFunction(() => !document.querySelector('#toast').classList.contains('on'), null, { timeout: 3000 });
+      t.equal((await t.state()).dialog, null, 'Escape dismissed toast without opening Pause');
+
+      // 2) Pressing down on a rack tile (rackDown, before any drag motion) clears a transient toast immediately
+      await t.game('act', 'toast', { kind: 'bark', title: 'Opal Vance: TEA +18', sub: '“Nice warm cup.”' });
+      await t.page.waitForSelector('#toast.on', { timeout: 3000 });
+      const [rx, ry] = await t.game('act', 'rackTile', 0);
+      await t.page.mouse.move(rx, ry);
+      await t.page.mouse.down();
+      await t.page.waitForFunction(() => !document.querySelector('#toast').classList.contains('on'), null, { timeout: 3000 });
+      t.equal(await t.page.locator('#app.toasting').count(), 0, 'rackDown cleared transient toast before drag activation');
+      await t.page.mouse.up();
+
+      // 3) Even a non-keep toast triggered while tiles are staged NEVER sets #app.toasting or hides #preview
+      await t.game('act', 'stage', [...'SPRING'].map((l, k) => ({ i: CENTER - 2 + k, l })));
+      await t.game('act', 'toast', { kind: 'save', title: 'Notice', sub: 'Test notice while staging.' });
+      await t.page.waitForSelector('#toast.on', { timeout: 3000 });
+      const stgToast = await t.page.evaluate(() => ({
+        toasting: document.querySelector('#app').classList.contains('toasting'),
+        keepChip: document.querySelector('#toast').classList.contains('keep-chip'),
+        ptsColor: getComputedStyle(document.querySelector('#preview .pts')).color,
+      }));
+      t.equal(stgToast.toasting, false, '#app.toasting is never set while G.staged.length > 0');
+      t.equal(stgToast.keepChip, true, 'non-keep toast lifts into non-blocking chip during staging');
+      t.expect(stgToast.ptsColor !== 'rgba(0, 0, 0, 0)', `staged #preview .pts remains opaque (${stgToast.ptsColor})`);
+      // Escape dismisses the toast while leaving staged tiles untouched
+      await t.page.keyboard.press('Escape');
+      await t.page.waitForFunction(() => !document.querySelector('#toast').classList.contains('on'), null, { timeout: 3000 });
+      t.equal((await t.state()).staged.length, 6, 'Escape dismissed toast without recalling staged tiles');
+
+      // 4) Empty-square premium & Bathhouse Row tooltips render as a quiet .sq-tip sub-line beneath live #preview during active staging
+      const inspectCell = async (idx) => {
+        const [x, y] = await t.game('act', 'screen', idx);
+        if (t.viewport === 'mobile') await t.tap([x, y]);
+        else await t.page.mouse.move(x, y);
+      };
+      await inspectCell(4); // empty premium square
+      await t.page.waitForFunction(() => /Warm|Hot|Steam|Boiling/.test(document.querySelector('#preview .sq-tip')?.textContent || ''), null, { timeout: 3000 });
+      const premTip = await t.page.evaluate(() => ({
+        preview: document.querySelector('#preview').textContent,
+        tip: document.querySelector('#preview .sq-tip')?.textContent?.trim() || '',
+        tipVisible: getComputedStyle(document.querySelector('#preview .sq-tip')).display !== 'none',
+      }));
+      t.equal(premTip.tipVisible, true, 'premium .sq-tip sub-line is visible during staging');
+      t.expect(/SPRING/.test(premTip.preview) && /pts/.test(premTip.preview), 'live staged score stays visible alongside .sq-tip');
+      t.expect(/Warm|Hot|Steam|Boiling/.test(premTip.tip), `premium rule tooltip shown during staging (${premTip.tip})`);
+
+      await inspectCell(8); // Superior Bathhouse Row square
+      await t.page.waitForFunction(() => /Superior Bathhouse/.test(document.querySelector('#preview .sq-tip')?.textContent || ''), null, { timeout: 3000 });
+      const bathTip = await t.page.evaluate(() => ({
+        tip: document.querySelector('#preview .sq-tip')?.textContent?.trim() || '',
+        hasMed: !!document.querySelector('#preview .sq-tip .preview-bath'),
+      }));
+      t.expect(/Superior Bathhouse/.test(bathTip.tip) && /\+20/.test(bathTip.tip), `Bathhouse Row rule tooltip shown during staging (${bathTip.tip})`);
+      t.equal(bathTip.hasMed, true, 'Bathhouse Row sub-line shows medallion icon');
+      const contrast = await t.contrastReport({ selector: '#preview', min: 4.5, largeMin: 3 });
+      t.equal(contrast.fails.length, 0, `staged #preview with .sq-tip passes WCAG contrast (${JSON.stringify(contrast.fails)})`);
+      await t.shot('w3-b05-staging-sq-tip');
+    },
+  },
 ];

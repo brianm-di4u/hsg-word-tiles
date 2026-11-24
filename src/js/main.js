@@ -780,7 +780,7 @@ function afterAction(entry, fromAi) {
   cancelTurnTimers();
   const prevPlaqueSnap = G.plaqueSnap && G.plaqueSnap.s === s ? G.plaqueSnap.list : null;
   cancelDrag();
-  G.flash = null; G.badPulse = null;
+  G.flash = null; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer);
   const said = s.players[entry.p].kind === 'ai' ? barkFor(s, entry) : null;
   G.bark = said ? { ...said, persona: s.players[entry.p].persona } : null;
   if (entry.kind === 'play' && s.players[entry.p].kind === 'human') coachPlayed();
@@ -1004,7 +1004,7 @@ function unstage(i, toPos) {
 }
 // a paid hint comes back after a reload only while its tiles are untouched: taking them back, or staging another tile, ends it
 function forgetHint(s) { if (s && s.hintStaged) { delete s.hintStaged; save(s); } }
-function recallAll() { if (!G.staged.length) return; for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; G.badPulse = null; forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
+function recallAll() { if (!G.staged.length) return; for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer); forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
 function shuffleRack() {
   const o = G.order;
   for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; }
@@ -1355,6 +1355,7 @@ function renderPreview() {
       if (G.breakdown) html += UI.breakdownHtml(p, G.s.board, G.staged);
       cls = hintLive() ? 'ok hintlive' : 'ok';
     } else { html = esc(p.error); cls = 'bad'; }
+    if (G.hoverInfo) html += `<span class="said sq-tip">${G.hoverBath ? `<span class="sq sq-B preview-bath" aria-hidden="true">${UI.bathMedallionHtml(G.hoverBath, false)}</span>` : ''}<span>${esc(G.hoverInfo)}</span></span>`;
   } else if (G.hoverInfo) html = G.hoverBath ? `<span class="sq sq-B preview-bath" aria-hidden="true">${UI.bathMedallionHtml(G.hoverBath, false)}</span><span>${esc(G.hoverInfo)}</span>` : esc(G.hoverInfo);
   else if (G.lastLine && G.bark) html = `<span class="bark"><b>${esc(SHORT[G.bark.persona] || '')}:</b> “${esc(G.bark.text)}”</span><span class="said">${esc(G.lastLine)}</span>`;
   else if (G.lastLine) html = esc(G.lastLine);
@@ -1402,7 +1403,7 @@ function renderPrivacy() {
   if ((wasHidden || !el.contains(document.activeElement)) && !G.dialog) el.querySelector('[data-reveal]')?.focus({ preventScroll: true });
 }
 
-let flashTimer = 0, errFlashTimer = 0, scoreHiTimer = 0;
+let flashTimer = 0, errFlashTimer = 0, scoreHiTimer = 0, hoverTapTimer = 0;
 function flash(text, ms = 2600) { G.flash = text; clearTimeout(flashTimer); renderPreview(); liveSay(text); flashTimer = setTimeout(() => { G.flash = null; renderPreview(); }, ms); }
 function shake() {
   const el = $('#preview');
@@ -1476,7 +1477,7 @@ function syncToastStaging() {
   const el = $('#toast'), app = $('#app');
   if (!el || !app) return;
   const on = el.classList.contains('on');
-  const chip = on && !!(G.toastNow && G.toastNow.keep) && (G.staged.length > 0 || !!(G.drag && G.drag.active) || !!G.hoverInfo);
+  const chip = on && (G.staged.length > 0 || (!!(G.toastNow && G.toastNow.keep) && (!!(G.drag && G.drag.active) || !!G.hoverInfo)));
   el.classList.toggle('keep-chip', chip);
   app.classList.toggle('toasting', on && !chip);
 }
@@ -2117,6 +2118,7 @@ function rackDown(e, k) {
   if (!(humanCanAct() || waiting()) || e.button > 0) return;
   if (!claimPointer(e)) return;
   unlock();
+  clearToasts();
   e.preventDefault();
   G.drag = { from: 'rack', k, move: G.s.move, x0: e.clientX, y0: e.clientY, id: e.pointerId, touch: e.pointerType === 'touch', active: false, tile: tileOf(k) };
   // #app outlasts every re-render, so the rest of the drag reaches us even if the tile's button goes
@@ -2211,17 +2213,17 @@ function hoverSquare(e) {
   }
   const i = onBoard ? pick(mx, my) : -1;
   let info = null, bath = null, pointer = false;
-  if (i >= 0 && !G.staged.length) {
-    if (!G.s.board[i]) {
+  if (i >= 0) {
+    if (!G.s.board[i] && !G.staged.some((t) => t.i === i)) {
       info = squareInfo(i);
       if (SQUARES[i] === 'B') bath = BATHS[i];
-    } else if (!G.aiBusy && !G.hintBusy && !G.dialog) {
+    } else if (!G.staged.length && G.s.board[i] && !G.aiBusy && !G.hintBusy && !G.dialog) {
       const hit = themedWordAt(G.s, G.lex, i);
       if (hit) { info = `${hit.form}: Hot Springs word — click to read its history card`; pointer = true; }
     }
   }
   b.style.cursor = pointer ? 'pointer' : '';
-  if (info !== G.hoverInfo || bath !== G.hoverBath) { G.hoverInfo = info; G.hoverBath = bath; if (info) clearToasts(); else syncToastStaging(); renderPreview(); }
+  if (info !== G.hoverInfo || bath !== G.hoverBath) { G.hoverInfo = info; G.hoverBath = bath; clearTimeout(hoverTapTimer); if (info) clearToasts(); else syncToastStaging(); renderPreview(); }
 }
 
 // Dragging works like the block puzzle's: on touch the tile floats well clear of the finger at about the size of a
@@ -2427,8 +2429,19 @@ function onUp(e) {
     const hit = themedWordAt(G.s, G.lex, i);
     if (hit) { openFact(hit.id, hit.form); return; }
   }
-  // a finger has no hover: a tap on an empty square says what it is, while nothing is placed
-  if (d.touch && i >= 0 && !G.s.board[i] && !G.staged.length && !G.aiBusy && !G.hintBusy && !G.dialog) { const info = squareInfo(i); if (info) { clearToasts(); flash(info, 3600); } }
+  // a finger has no hover: a tap on an empty square says what it is (as a quiet sub-line beneath #preview when staging)
+  if (d.touch && i >= 0 && !G.s.board[i] && !G.staged.some((t) => t.i === i) && !G.aiBusy && !G.hintBusy && !G.dialog) {
+    const info = squareInfo(i);
+    if (info) {
+      clearToasts();
+      if (G.staged.length) {
+        G.hoverInfo = info; G.hoverBath = SQUARES[i] === 'B' ? BATHS[i] : null;
+        renderPreview();
+        clearTimeout(hoverTapTimer);
+        hoverTapTimer = setTimeout(() => { if (G.hoverInfo === info) { G.hoverInfo = null; G.hoverBath = null; syncToastStaging(); renderPreview(); } }, 3600);
+      } else flash(info, 3600);
+    }
+  }
   if (i >= 0 && humanCanAct()) {
     if (G.cursor.on && G.cursor.i === i) G.cursor.dir = G.cursor.dir === 1 ? N : 1;
     G.cursor.i = i; G.cursor.on = !d.touch; draw();
@@ -2487,6 +2500,7 @@ function onKey(e) {
     return;
   }
   if (G.springsOpen && k === 'Escape') { e.preventDefault(); syncSpringsDrawer(false); $('#springs [data-springs-toggle]')?.focus(); return; }
+  if (k === 'Escape' && $('#toast')?.classList.contains('on')) { e.preventDefault(); hideToast(); return; }
   if (!humanCanAct()) { if (k === 'Escape') { e.preventDefault(); openDialog('pause'); } return; }
   const c = G.cursor;
   const move = (dr, dc) => { const r = Math.floor(c.i / N) + dr, col = (c.i % N) + dc; if (r >= 0 && r < N && col >= 0 && col < N) c.i = r * N + col; c.on = true; ensureVisible(c.i); draw(); sayCursor(c.i); };
