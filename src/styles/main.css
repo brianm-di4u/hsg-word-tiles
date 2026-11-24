@@ -439,6 +439,10 @@ body.theme-dark .pword b.fog { background: #3E3A54; box-shadow: inset 0 1px 2px 
 body.theme-dark .plaque.claimed { background: linear-gradient(160deg, #1F544D, #19433E 55%, #12332F); border-color: #6CC2B4; color: #E8F8F4; }
 .plaque.plaque-updated, .springs-bar.plaque-updated { box-shadow: 0 0 0 2.5px #F3DD8B, inset 0 0 0 2px rgba(255, 250, 220, 0.85), 0 2px 6px rgba(0, 0, 0, 0.4); }
 .plaque.claimed.plaque-updated { box-shadow: 0 0 0 2.5px #7FD3C4, inset 0 0 0 2px #FFFFFF, 0 2px 6px rgba(0, 0, 0, 0.4); }
+.pword b.fog-clear { animation: fog-clear 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes fog-clear { 0% { opacity: 0.35; transform: scaleY(0.25); background: #FFFDF5; } 60% { opacity: 1; transform: scaleY(1.08); box-shadow: 0 0 10px rgba(243, 221, 139, 0.85); } 100% { opacity: 1; transform: scaleY(1); } }
+.plaque.just-claimed, .springs-bar.just-claimed { animation: plaque-claim 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes plaque-claim { 0% { filter: brightness(1.32); transform: scale(1.03); box-shadow: 0 0 0 3px #F3DD8B, 0 0 16px rgba(127, 211, 196, 0.7); } 100% { filter: brightness(1); transform: scale(1); } }
 .pby { margin-left: auto; font: 700 0.8em var(--f-ui); white-space: nowrap; }
 /* collapsible mobile Featured Springs drawer bar (>= 44 px) */
 .springs-bar {
@@ -970,6 +974,9 @@ body.reduce .stile,
 body.reduce .sbar-chev svg { transition: none; }
 body.reduce .thinking i,
 body.reduce .pcard.on,
+body.reduce .pword b.fog-clear,
+body.reduce .plaque.just-claimed,
+body.reduce .springs-bar.just-claimed,
 body.reduce .rtile.deal,
 body.reduce .score.bump,
 body.reduce #preview.shake,
@@ -996,6 +1003,9 @@ body.reduce .pop.themed { animation: pop-fade 0.95s ease-out forwards; }
   body:not(.motion-full) .sbar-chev svg { transition: none; }
   body:not(.motion-full) .thinking i,
   body:not(.motion-full) .pcard.on,
+  body:not(.motion-full) .pword b.fog-clear,
+  body:not(.motion-full) .plaque.just-claimed,
+  body:not(.motion-full) .springs-bar.just-claimed,
   body:not(.motion-full) .rtile.deal,
   body:not(.motion-full) .score.bump,
   body:not(.motion-full) #preview.shake,

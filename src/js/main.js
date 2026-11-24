@@ -46,7 +46,7 @@ const G = {
   preview: null, hint: null, last: new Set(), lastPulse: null, badPulse: null, anim: new Map(), animUntil: 0,
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, releaseAiTimer: 0, turnTimers: new Set(), privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, pendingVfx: null, busyUntil: 0, lastHuman: -1,
-  errFlash: false, scoreHi: null, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, springsOpen: false,
+  errFlash: false, scoreHi: null, scoreRollRaf: 0, flipTimer: 0, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, plaqueFx: null, plaqueFxTimer: 0, springsOpen: false,
   returnFocus: null, parCache: {}, boardTap: null, houseOpen: false,
 };
 window.__G = G;
@@ -99,6 +99,7 @@ function applySettings() {
     clearFx();
     const fx = $('#fx'); if (fx) fx.getContext('2d').clearRect(0, 0, fx.width, fx.height);
     G.anim.clear(); G.animUntil = 0; G.lastPulse = null; G.badPulse = null; G.settle.clear(); G.settleUntil = 0;
+    cancelScoreRoll(); endFlip(); endReturn(); clearPlaqueFx();
     if (G.viewAnim) { R.view.zoom = G.viewAnim.to.zoom; R.view.cx = G.viewAnim.to.cx; R.view.cy = G.viewAnim.to.cy; G.viewAnim = null; R.clampView(); }
   }
   const sb = $('#b-sound'); if (sb) { sb.innerHTML = UI.ICON.sound(st.sound); sb.setAttribute('aria-label', st.sound ? 'Sound on (click to mute)' : 'Sound off (click to unmute)'); }
@@ -328,7 +329,7 @@ function showScene(name, arg) {
   if (SHEETS.includes(name) && !SHEETS.includes(prev)) G.back = prev;
   G.scene = name;
   moodUpdate();
-  cancelDrag(); G.pinch = null; G.pointers.clear();
+  cancelDrag(); endReturn(); endFlip(); cancelScoreRoll(); G.pinch = null; G.pointers.clear();
   closeDialog(true);
   if (name !== 'game') {
     releaseAudio('pause');
@@ -603,8 +604,8 @@ function beginGame(s, intent) {
   G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; G.badPulse = null; G.pendingVfx = null;
   cancelTurnTimers();
   clearTimeout(errFlashTimer); G.errFlash = false;
-  clearTimeout(scoreHiTimer); G.scoreHi = null;
-  clearTimeout(G.plaqueTimer); G.plaqueHi.clear(); G.plaqueSnap = null; G.springsOpen = false;
+  clearTimeout(scoreHiTimer); G.scoreHi = null; cancelScoreRoll(); endFlip(); endReturn();
+  clearTimeout(G.plaqueTimer); G.plaqueHi.clear(); G.plaqueSnap = null; clearPlaqueFx(); G.springsOpen = false;
   clearFx(); steam.arcLog.length = 0;
   document.querySelectorAll('#boardwrap .pop').forEach((el) => el.remove());
   if (!G.settings.tipsSeen) store.put(KEYS.settings, G.settings); // the newcomer flag is written before the first save, so a tab closed mid-tips still counts as a newcomer
@@ -794,7 +795,7 @@ function afterAction(entry, fromAi) {
   const fogRevealed = !!(prevPlaqueSnap && s.featured.some((f, k) => f.by == null && prevPlaqueSnap[k] && f.shown.length > prevPlaqueSnap[k].shown));
   const bagJustEmptied = s.mode !== 'daily' && !s.over && G.bagLen > 0 && s.bag.length === 0;
   G.bagLen = s.bag.length;
-  cancelDrag();
+  cancelDrag(); endReturn(); endFlip();
   G.flash = null; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer);
   const said = s.players[entry.p].kind === 'ai' ? barkFor(s, entry) : null;
   G.bark = said ? { ...said, persona: s.players[entry.p].persona } : null;
@@ -862,8 +863,9 @@ function afterAction(entry, fromAi) {
     startTurn();
   };
   G.turnWait = { fromAi, run: runTurn, id: setTimeout(runTurn, wait) };
+  const prevScore = entry && entry.kind === 'play' && s.players[entry.p] ? Math.max(0, s.players[entry.p].score - (entry.score || 0)) : 0;
   renderGame();
-  rollScores(entry);
+  rollScores(entry, prevScore);
 }
 
 // A game is finished once. More than one start-of-turn timer can still be pending when the last move lands (a move
@@ -1012,12 +1014,17 @@ function updatePreview() {
   // a Challenge game does not say whether the words are in the dictionary until they are played
   G.preview = E.evaluate(G.s, stagedTiles(), G.s.challenge ? { ...ctx(), skipDict: true } : ctx());
 }
+function flushSettle() {
+  if (!G.settle.size) return;
+  G.settle.clear(); G.settleUntil = 0; draw();
+}
 function stage(k, i, letter) {
   const s = G.s;
   if (!s || s.over || cur().kind !== 'human') return false;
   const l = cur().rack[k];
   if (l == null || i < 0 || s.board[i] || G.staged.some((t) => t.i === i || t.k === k)) return false;
   if (l === '?' && !letter) { askBlank((ch) => stage(k, i, ch)); return true; }
+  endReturn(); endFlip(); flushSettle();
   G.staged.push({ k, i, l: l === '?' ? letter : l, blank: l === '?' });
   G.order = G.order.filter((x) => x !== k);
   G.selected = null; G.hint = null; G.badPulse = null;
@@ -1029,9 +1036,18 @@ function stage(k, i, letter) {
   updatePreview(); renderStaging();
   return true;
 }
+function cellScreenBox(i, lift = R.STAGED_LIFT) {
+  const b = $('#board');
+  if (!b) return null;
+  const br = b.getBoundingClientRect(), [cx, cy] = R.cellCenter(i, lift), sz = Math.round(pxPerCell());
+  return { left: br.left + cx - sz / 2, top: br.top + cy - sz / 2, width: sz, height: sz };
+}
 function unstage(i, toPos) {
   const t = G.staged.find((x) => x.i === i);
   if (!t) return;
+  endReturn(); endFlip(); flushSettle();
+  const fromBox = animOn() && !G.drag && toPos == null && G.scene === 'game' ? cellScreenBox(i, R.STAGED_LIFT) : null;
+  const flyTile = fromBox ? { l: t.blank ? '' : t.l, blank: t.blank } : null;
   G.staged = G.staged.filter((x) => x !== t);
   G.badPulse = null;
   forgetHint(G.s);
@@ -1039,14 +1055,47 @@ function unstage(i, toPos) {
   if (toPos != null) G.order.splice(toPos, 0, t.k); else G.order.push(t.k);
   sfx('recall');
   updatePreview(); renderStaging();
+  if (fromBox && flyTile) {
+    const destEl = document.querySelector(`#rack .rtile[data-k="${t.k}"]`);
+    if (destEl) flyGhost(flyTile, fromBox, destEl.getBoundingClientRect(), 130, t.k);
+  }
 }
 // a paid hint comes back after a reload only while its tiles are untouched: taking them back, or staging another tile, ends it
 function forgetHint(s) { if (s && s.hintStaged) { delete s.hintStaged; save(s); } }
-function recallAll() { if (!G.staged.length) return; for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer); forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
+function recallAll() { if (!G.staged.length) return; endReturn(); endFlip(); flushSettle(); for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer); forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
+function endFlip() {
+  clearTimeout(G.flipTimer); G.flipTimer = 0;
+  document.querySelectorAll('#rack .rtile').forEach((el) => {
+    if (el.dataset.flip) { delete el.dataset.flip; el.style.transition = ''; el.style.transform = ''; }
+  });
+}
 function shuffleRack() {
+  endReturn(); endFlip();
   const o = G.order;
+  const before = animOn() ? new Map([...document.querySelectorAll('#rack .rtile')].map((el) => [el.dataset.k, el.getBoundingClientRect().left])) : null;
+  const snap = o.slice();
   for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; }
+  if (o.length > 1 && o.every((v, idx) => v === snap[idx])) [o[0], o[1]] = [o[1], o[0]];
   sfx('shuffle'); renderRack();
+  if (before && before.size) {
+    const rk = $('#rack');
+    const moved = [];
+    document.querySelectorAll('#rack .rtile').forEach((el) => {
+      const prevL = before.get(el.dataset.k);
+      if (prevL == null) return;
+      const dx = prevL - el.getBoundingClientRect().left;
+      if (Math.abs(dx) < 0.5) return;
+      el.dataset.flip = '1';
+      el.style.transition = 'none';
+      el.style.transform = `translateX(${dx.toFixed(1)}px)${el.classList.contains('sel') ? ' translateY(-8px)' : ''}`;
+      moved.push(el);
+    });
+    if (moved.length && rk) {
+      void rk.offsetWidth;
+      for (const el of moved) { el.style.transition = 'transform 160ms cubic-bezier(0.22, 1, 0.36, 1)'; el.style.transform = ''; }
+      G.flipTimer = setTimeout(endFlip, 175);
+    }
+  }
 }
 
 function humanCanAct() { return G.s && !G.s.over && cur().kind === 'human' && !G.aiBusy && !G.hintBusy && !G.privacy && G.scene === 'game' && !G.dialog; }
@@ -1063,7 +1112,7 @@ function refusedCells(r) {
 }
 function doPlay() {
   if (!humanCanAct()) return;
-  cancelDrag();   // a staged tile still in the air goes back to its square and counts
+  cancelDrag(); endReturn(); endFlip(); flushSettle();   // a staged tile still in the air goes back to its square and counts
   if (!G.staged.length) { flash('Place tiles on the board first.'); oops(); return; }
   const r = E.apply(G.s, { type: 'play', tiles: stagedTiles() }, ctx());
   if (!r.ok && r.badWord && G.s.challenge) { loseTurn(r.badWord, refusedCells(r)); return; }
@@ -1095,7 +1144,7 @@ async function doHint() {
   if (!humanCanAct() || G.s.challenge) return;
   const p = cur();
   if (p.hints == null || (p.hints <= 0 && !p.unl)) return;
-  cancelDrag();
+  cancelDrag(); endReturn(); endFlip();
   recallAll();
   // staging is locked (humanCanAct) until the hint arrives, so it can't land on top of new tiles
   const s = G.s, move = s.move;
@@ -1122,6 +1171,13 @@ function putHint(m) {
   }
   G.hint = null; clearToasts();
   G.staged.forEach((t, k) => sfx('place', { pan: colPan(t.i), step: k, delay: k * HINT_CLACK_S, gain: HINT_CLACK_GAIN }));   // the tiles of a hint are set down one after another, softly
+  if (animOn()) {
+    // W4-S1-03: stagger visual G.settle entrance by k * 60 ms matching HINT_CLACK_S (flushable on any input).
+    const now = performance.now(), stepMs = Math.round(HINT_CLACK_S * 1000);
+    G.settle.clear();
+    G.staged.forEach((t, k) => G.settle.set(t.i, now + k * stepMs));
+    G.settleUntil = now + Math.max(0, G.staged.length - 1) * stepMs + R.SETTLE_MS + 10;
+  }
   s.hintStaged = { move: s.move, tiles: G.staged.map((t) => ({ i: t.i, l: t.l, blank: t.blank })) };   // kept in the save: the hint is paid for, so a reload must not lose it
   updatePreview(); save(s); renderGame();
   const keep = m.keep.length ? m.keep.map((l) => (l === '?' ? 'a blank' : l)).join('') : 'no tiles';
@@ -1150,22 +1206,46 @@ function renderStaging() {
   draw();
   startSteam();
 }
+function clearPlaqueFx() {
+  clearTimeout(G.plaqueFxTimer); G.plaqueFxTimer = 0; G.plaqueFx = null;
+  document.querySelectorAll('.fog-clear').forEach((el) => el.classList.remove('fog-clear'));
+  document.querySelectorAll('.just-claimed').forEach((el) => el.classList.remove('just-claimed'));
+}
 function syncPlaqueSnap(s) {
-  const next = s.featured.map((f) => ({ by: f.by, shown: f.shown.length }));
+  const next = s.featured.map((f) => ({ by: f.by, shown: f.shown.length, indices: f.shown.slice() }));
   const prev = G.plaqueSnap && G.plaqueSnap.s === s ? G.plaqueSnap.list : null;
   G.plaqueSnap = { s, list: next };
-  if (!prev || G.fast || !reduced()) return;
-  const changed = [];
-  for (let k = 0; k < next.length; k++) {
-    if (prev[k] && (next[k].by !== prev[k].by || next[k].shown > prev[k].shown)) changed.push(k);
+  if (!prev || G.fast) return;
+  if (reduced()) {
+    const changed = [];
+    for (let k = 0; k < next.length; k++) {
+      if (prev[k] && (next[k].by !== prev[k].by || next[k].shown > prev[k].shown)) changed.push(k);
+    }
+    if (!changed.length) return;
+    for (const k of changed) G.plaqueHi.add(k);
+    clearTimeout(G.plaqueTimer);
+    G.plaqueTimer = setTimeout(() => {
+      G.plaqueHi.clear();
+      document.querySelectorAll('.plaque-updated').forEach((el) => el.classList.remove('plaque-updated'));
+    }, 750);
+    return;
   }
-  if (!changed.length) return;
-  for (const k of changed) G.plaqueHi.add(k);
-  clearTimeout(G.plaqueTimer);
-  G.plaqueTimer = setTimeout(() => {
-    G.plaqueHi.clear();
-    document.querySelectorAll('.plaque-updated').forEach((el) => el.classList.remove('plaque-updated'));
-  }, 750);
+  if (!animOn()) return;
+  const cleared = new Map(), claimed = new Set();
+  for (let k = 0; k < next.length; k++) {
+    const p = prev[k];
+    if (!p) continue;
+    if (next[k].by != null && p.by == null) claimed.add(k);
+    else if (next[k].by == null && p.by == null) {
+      const oldSet = new Set(p.indices || []);
+      const fresh = next[k].indices.filter((j) => !oldSet.has(j));
+      if (fresh.length) cleared.set(k, fresh);
+    }
+  }
+  if (!cleared.size && !claimed.size) return;
+  clearTimeout(G.plaqueFxTimer);
+  G.plaqueFx = { cleared, claimed };
+  G.plaqueFxTimer = setTimeout(clearPlaqueFx, 260);
 }
 function syncSpringsDrawer(open) {
   G.springsOpen = !!open;
@@ -1184,6 +1264,7 @@ function syncSpringsDrawer(open) {
 }
 function renderGame() {
   if (G.scene !== 'game' || !G.s) return;
+  cancelScoreRoll();
   const s = G.s;
   const mobile = isNarrow();
   if (!mobile) G.springsOpen = false;
@@ -1197,15 +1278,25 @@ function renderGame() {
   const toggle = springs.querySelector('[data-springs-toggle]');
   if (toggle) {
     if (G.plaqueHi.size) toggle.classList.add('plaque-updated');
+    if (G.plaqueFx && G.plaqueFx.claimed.size) toggle.classList.add('just-claimed');
     toggle.addEventListener('click', () => {
       if (G.coach && G.coach.phase === 'plaques') coachDismiss('plaques');
       syncSpringsDrawer(!G.springsOpen);
     });
   }
   springs.querySelectorAll('[data-plaque]').forEach((b) => {
-    if (G.plaqueHi.has(+b.dataset.plaque)) b.classList.add('plaque-updated');
+    const pk = +b.dataset.plaque;
+    if (G.plaqueHi.has(pk)) b.classList.add('plaque-updated');
+    if (G.plaqueFx) {
+      if (G.plaqueFx.claimed.has(pk)) b.classList.add('just-claimed');
+      const cols = G.plaqueFx.cleared.get(pk);
+      if (cols && cols.length) {
+        const letters = b.querySelectorAll('.pword b');
+        for (const j of cols) if (letters[j]) letters[j].classList.add('fog-clear');
+      }
+    }
     b.addEventListener('click', () => {
-      const f = s.featured[+b.dataset.plaque];
+      const f = s.featured[pk];
       if (G.coach && G.coach.phase === 'plaques') coachDismiss('plaques');
       if (f.by != null) { syncSpringsDrawer(false); openFact(G.lex.entry(f.word).id, f.word); }
       else flash(`Featured Spring: ${f.word.length} letters, ${G.lex.categories[f.cat].name}. Form any form of it to claim +${FEATURED_BONUS}.`);
@@ -1434,7 +1525,7 @@ function renderPrivacy() {
   el.innerHTML = UI.privacyHtml(cur(), G.s.cur);
   syncInert();
   el.querySelector('[data-reveal]').addEventListener('click', () => {
-    unlock(); G.revealed = G.s.cur; G.privacy = false; restoreHint(G.s); updatePreview(); sfx('turn'); renderGame();
+    unlock(); G.revealed = G.s.cur; G.privacy = false; restoreHint(G.s); updatePreview(); sfx('turn'); G.deal = animOn(); renderGame();
     const b = $('#board'); if (b) b.focus({ preventScroll: true });
   });
   if ((wasHidden || !el.contains(document.activeElement)) && !G.dialog) el.querySelector('[data-reveal]')?.focus({ preventScroll: true });
@@ -1455,17 +1546,44 @@ function shake() {
   errFlashTimer = setTimeout(() => { G.errFlash = false; $('#preview')?.classList.remove('err-flash'); }, 450);
 }
 
-function rollScores(entry) {
+const SCORE_ROLL_MS = 280;
+function cancelScoreRoll() {
+  if (G.scoreRollRaf) { cancelAnimationFrame(G.scoreRollRaf); G.scoreRollRaf = 0; }
+}
+function rollScores(entry, prevScore = null) {
+  cancelScoreRoll();
   if (G.fast) return;
   if (entry && (entry.kind !== 'play' || !entry.score)) return;
   const sel = entry ? `[data-score="${entry.p}"]` : '[data-score]';
+  const els = [...document.querySelectorAll(sel)];
+  if (!els.length) return;
   if (animOn()) {
-    document.querySelectorAll(sel).forEach((el) => el.classList.add('bump'));
+    const target = entry && G.s && G.s.players[entry.p] ? G.s.players[entry.p].score : null;
+    const from = prevScore != null ? prevScore : (target != null && entry ? Math.max(0, target - entry.score) : target);
+    for (const el of els) {
+      el.classList.remove('bump');
+      void el.offsetWidth;
+      el.classList.add('bump');
+      el.addEventListener('animationend', () => el.classList.remove('bump'), { once: true });
+    }
+    if (target != null && from != null && from !== target) {
+      const t0 = performance.now();
+      for (const el of els) el.textContent = String(from);
+      const step = (now) => {
+        if (!els[0].isConnected) { G.scoreRollRaf = 0; return; }
+        const u = Math.min(1, Math.max(0, (now - t0) / SCORE_ROLL_MS));
+        const val = u >= 1 ? target : Math.round(from + (target - from) * (1 - Math.pow(1 - u, 3)));
+        for (const el of els) el.textContent = String(val);
+        if (u < 1) G.scoreRollRaf = requestAnimationFrame(step);
+        else G.scoreRollRaf = 0;
+      };
+      G.scoreRollRaf = requestAnimationFrame(step);
+    }
     return;
   }
   if (!reduced()) return;
   G.scoreHi = entry ? entry.p : 'all';
-  document.querySelectorAll(sel).forEach((el) => el.classList.add('score-updated'));
+  els.forEach((el) => el.classList.add('score-updated'));
   clearTimeout(scoreHiTimer);
   scoreHiTimer = setTimeout(() => {
     G.scoreHi = null;
@@ -1641,7 +1759,7 @@ function openDialog(name, arg) {
     const ae = document.activeElement;
     G.returnFocus = ae instanceof HTMLElement && !m.contains(ae) ? ae : null;
   }
-  cancelDrag();
+  cancelDrag(); endReturn(); endFlip();
   clearTimeout(G.releaseAiTimer); G.releaseAiTimer = 0;
   G.boardTap = null;
   if (G.springsOpen) syncSpringsDrawer(false);
@@ -2156,13 +2274,14 @@ function pick(x, y) { return B3.B3.on ? B3.cellAt(x, y) : R.cellAt(x, y); }
 function claimPointer(e) {
   if (!G.drag && !G.pinch && !G.pointers.size) return true;
   if (!e.isPrimary) return false;
-  cancelDrag(); G.pinch = null; G.pointers.clear();
+  cancelDrag(); endReturn(); endFlip(); G.pinch = null; G.pointers.clear();
   return true;
 }
 function capture(el, id) { try { el.setPointerCapture(id); } catch (err) { /* synthetic or already gone */ } }
 
 function rackDown(e, k) {
   if (!(humanCanAct() || waiting()) || e.button > 0) return;
+  endReturn(); endFlip(); flushSettle();
   if (!claimPointer(e)) return;
   unlock();
   clearToasts();
@@ -2186,6 +2305,7 @@ function minimapPanTo(x, y) {
 }
 function boardDown(e) {
   if (G.scene !== 'game') return;
+  endReturn(); flushSettle();
   if (e.isPrimary) claimPointer(e);
   else if (G.pinch || (G.drag && G.drag.from !== 'pan')) return;   // a tile is in hand, or a pinch is on: ignore more fingers
   unlock();
@@ -2321,6 +2441,33 @@ function placeGhost(d, x, y) {
   gh.classList.toggle('over-blocked', d.blocked != null);
   gh.style.transform = `translate(${x - d.size / 2}px, ${y - d.lift - d.size / 2 - hoverOff}px)`;
 }
+// W4-S1-03: Frame-1-interruptible <= 140 ms ghost flight for tap-to-place and single unstage().
+function flyGhost(tile, fromBox, toBox, ms = 130, hideRackK = null) {
+  endReturn();
+  if (!animOn() || !fromBox || !toBox) return;
+  const gh = $('#ghost');
+  const sz = Math.max(22, Math.round(Math.max(fromBox.width, toBox.width)));
+  gh.classList.remove('over-target', 'over-blocked');
+  gh.width = gh.height = Math.round(sz * dpr());
+  gh.style.width = gh.style.height = sz + 'px';
+  gh.getContext('2d').drawImage(R.tileSprite(tile.l, tile.blank, gh.width, 'staged', dark() ? 'dark' : 'light'), 0, 0);
+  const fx = fromBox.left + fromBox.width / 2 - sz / 2, fy = fromBox.top + fromBox.height / 2 - sz / 2;
+  const tx = toBox.left + toBox.width / 2 - sz / 2, ty = toBox.top + toBox.height / 2 - sz / 2;
+  gh.style.transition = 'none';
+  gh.style.transform = `translate(${fx.toFixed(1)}px, ${fy.toFixed(1)}px)`;
+  gh.style.scale = String((fromBox.width / sz).toFixed(3));
+  gh.hidden = false;
+  if (hideRackK != null) {
+    G.returning = hideRackK;
+    const dest = document.querySelector(`#rack .rtile[data-k="${hideRackK}"]`);
+    if (dest) dest.style.visibility = 'hidden';
+  }
+  void gh.offsetWidth;
+  gh.style.transition = `transform ${ms}ms cubic-bezier(0.22, 1, 0.36, 1), scale ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+  gh.style.transform = `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
+  gh.style.scale = String((toBox.width / sz).toFixed(3));
+  G.returnTimer = setTimeout(endReturn, ms + 15);
+}
 // a tile that missed the board flies back to its place on the rack
 function returnToRack(d) {
   G.order.splice(d.from === 'rack' ? slot(d) : G.order.length, 0, d.k);
@@ -2338,7 +2485,7 @@ function returnToRack(d) {
   G.returnTimer = setTimeout(endReturn, 210);
 }
 function endReturn() {
-  clearTimeout(G.returnTimer);
+  clearTimeout(G.returnTimer); G.returnTimer = 0;
   const gh = $('#ghost');
   gh.classList.remove('over-target', 'over-blocked');
   gh.hidden = true;
@@ -2470,7 +2617,16 @@ function onUp(e) {
   if (d.from === 'board') { unstage(d.i); return; }
   const [x, y] = boardPoint(e);
   const i = pick(x, y);
-  if (G.selected != null && humanCanAct() && i >= 0) { stage(G.selected, i); return; }
+  if (G.selected != null && humanCanAct() && i >= 0) {
+    const selK = G.selected, fromEl = document.querySelector(`#rack .rtile[data-k="${selK}"]`);
+    const fromBox = animOn() && fromEl ? fromEl.getBoundingClientRect() : null;
+    const rawL = cur().rack[selK];
+    if (stage(selK, i) && fromBox && rawL !== '?') {
+      const toBox = cellScreenBox(i, R.STAGED_LIFT);
+      if (toBox) flyGhost({ l: rawL, blank: false }, fromBox, toBox, 120, null);
+    }
+    return;
+  }
   // W2-S4-13: tapping an already-placed Hot Springs word on the board (when no rack tile is selected or staged) opens its history card.
   if (i >= 0 && G.s && G.s.board[i] && G.selected == null && !G.staged.length && !G.aiBusy && !G.hintBusy && !(G.turnWait && G.turnWait.fromAi) && !G.dialog && !G.privacy) {
     const hit = themedWordAt(G.s, G.lex, i);

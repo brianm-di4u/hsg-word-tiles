@@ -288,4 +288,183 @@ export const tests = [
       await t.page.clock.resume();
     },
   },
+
+  // ---------- W4-S1-03 ----------
+  {
+    name: 'W4-S1-03 rollScores 280ms count-up + .bump, 160ms interruptible shuffle FLIP, staggered putHint settle, and <=140ms tap/unstage ghost flight',
+    viewports: ['desktop'],
+    url: 'index.html?gl=3d',
+    initScript: fullMotion,
+    async run(t) {
+      await ready(t);
+      await freezeClock(t);
+      await t.seed(5);
+      await t.game('newGame', { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(8000);
+      const s0 = await t.state();
+      s0.game.players[0].rack = 'SPRINGA'.split('');
+      await t.game('setState', { game: s0.game });
+      await t.waitIdle(5000);
+      await stopClock(t);
+
+      // 1) Interruptible 160 ms CSS FLIP slide in shuffleRack()
+      await t.page.click('[data-act="shuffle"]');
+      const flipStart = await t.page.evaluate(() => {
+        const tiles = [...document.querySelectorAll('#rack .rtile')];
+        const flipped = tiles.filter((el) => el.dataset.flip === '1' && /160ms/.test(el.style.transition));
+        return { total: tiles.length, flipped: flipped.length };
+      });
+      t.expect(flipStart.flipped >= 2, `shuffleRack started 160 ms FLIP slide on ${flipStart.flipped} tiles`);
+      await t.page.clock.runFor(200);
+      const flipEnd = await t.page.evaluate(() => document.querySelectorAll('#rack .rtile[data-flip="1"]').length);
+      t.equal(flipEnd, 0, 'shuffleRack FLIP cleaned up after 160 ms');
+
+      // 2) Staggered G.settle by k * 60 ms in putHint(), flushable on input
+      const hintN = await t.game('act', 'hint');
+      t.expect(hintN >= 3, `Spring Guide staged ${hintN} tiles`);
+      const hintStagger = await t.page.evaluate(() => {
+        const vals = [...window.__G.settle.values()].sort((a, b) => a - b);
+        const gaps = vals.slice(1).map((v, k) => Math.round(v - vals[k]));
+        return { count: vals.length, gaps };
+      });
+      t.equal(hintStagger.count, hintN, 'putHint populated G.settle for every staged tile');
+      t.equal(hintStagger.gaps[0], 60, `putHint staggered visual settle by 60 ms matching HINT_CLACK_S (${JSON.stringify(hintStagger.gaps)})`);
+      // Frame-1 input flush: clicking Recall or board flushes pending G.settle immediately
+      await t.game('act', 'recall');
+      t.equal(await t.page.evaluate(() => window.__G.settle.size), 0, 'recall flushed staggered hint G.settle immediately');
+
+      // 3) Frame-1-interruptible <= 140 ms ghost flight on tap-to-place and single unstage()
+      const r0 = await t.game('act', 'rackTile', 0);
+      await t.page.mouse.click(r0[0], r0[1]); // select tile 0
+      const cPt = await t.game('act', 'screen', CENTER);
+      await t.page.mouse.click(cPt[0], cPt[1]); // tap-to-place on H8
+      const flyPlace = await t.page.evaluate(() => {
+        const gh = document.getElementById('ghost');
+        return { staged: window.__G.staged.length, visible: !gh.hidden, tr: gh.style.transition };
+      });
+      t.equal(flyPlace.staged, 1, 'tap-to-place staged tile immediately');
+      t.equal(flyPlace.visible, true, 'tap-to-place launched #ghost flight');
+      t.expect(/120ms/.test(flyPlace.tr), `tap-to-place ghost flight <= 140 ms (${flyPlace.tr})`);
+      await t.page.clock.runFor(150);
+      t.equal(await t.page.evaluate(() => document.getElementById('ghost').hidden), true, 'tap-to-place ghost finished cleanly');
+
+      // Single unstage() via tap on staged tile -> <= 140 ms ghost flight back to rack, interruptible on Frame 1
+      await t.page.mouse.click(cPt[0], cPt[1]);
+      const flyBack = await t.page.evaluate(() => {
+        const gh = document.getElementById('ghost');
+        return { staged: window.__G.staged.length, visible: !gh.hidden, tr: gh.style.transition, returning: window.__G.returning };
+      });
+      t.equal(flyBack.staged, 0, 'tap on staged tile unstaged immediately');
+      t.equal(flyBack.visible, true, 'single unstage launched #ghost return flight');
+      t.expect(/130ms/.test(flyBack.tr), `single unstage ghost flight <= 140 ms (${flyBack.tr})`);
+      t.expect(flyBack.returning != null, 'returning tile hidden in rack during flight');
+      // Interrupt on Frame 1 by clicking rack tile -> ghost hides & returning clears immediately
+      const r1 = await t.game('act', 'rackTile', 0);
+      await t.page.mouse.down({ button: 'left' });
+      await t.page.mouse.click(r1[0], r1[1]);
+      t.equal(await t.page.evaluate(() => document.getElementById('ghost').hidden && window.__G.returning == null), true, 'ghost flight interrupted cleanly on Frame 1 input');
+
+      // 4) rollScores() 280 ms numeric count-up + .bump targeting only scoring player after renderGame()
+      await t.game('act', 'recall');
+      await t.game('act', 'stage', [
+        { i: CENTER, l: 'S' }, { i: CENTER + 1, l: 'P' }, { i: CENTER + 2, l: 'R' },
+        { i: CENTER + 3, l: 'I' }, { i: CENTER + 4, l: 'N' }, { i: CENTER + 5, l: 'G' },
+      ]);
+      t.expect((await t.game('act', 'play')).ok, 'played SPRING for score roll-up');
+      const rollStart = await t.page.evaluate(() => {
+        const s0El = document.querySelector('[data-score="0"]');
+        const s1El = document.querySelector('[data-score="1"]');
+        return {
+          finalScore: window.__G.s.players[0].score,
+          text0: Number(s0El.textContent),
+          bump0: s0El.classList.contains('bump'),
+          bump1: s1El.classList.contains('bump'),
+        };
+      });
+      t.expect(rollStart.finalScore >= 20, `scored ${rollStart.finalScore} pts`);
+      t.equal(rollStart.bump0, true, 'scoring seat [data-score="0"] received .bump after renderGame()');
+      t.equal(rollStart.bump1, false, 'non-scoring seat [data-score="1"] did not receive .bump');
+      t.equal(rollStart.text0, 0, 'rollScores started count-up at prevScore (0)');
+
+      await t.page.clock.runFor(90);
+      const rollMid = await t.page.evaluate(() => Number(document.querySelector('[data-score="0"]').textContent));
+      t.expect(rollMid > 0 && rollMid < rollStart.finalScore, `score rolled smoothly through intermediate value (${rollMid} of ${rollStart.finalScore})`);
+
+      await t.page.clock.runFor(240);
+      const rollEnd = await t.page.evaluate(() => Number(document.querySelector('[data-score="0"]').textContent));
+      t.equal(rollEnd, rollStart.finalScore, `score roll-up landed cleanly on ${rollStart.finalScore}`);
+      await t.page.clock.resume();
+    },
+  },
+  {
+    name: 'W4-S1-03 Pass-and-Play reveal triggers staggered G.deal and Featured Springs diff applies 240ms .fog-clear & .just-claimed transitions (gated on animOn)',
+    viewports: ['desktop'],
+    url: 'index.html?gl=3d',
+    initScript: fullMotion,
+    async run(t) {
+      await ready(t);
+      await freezeClock(t);
+      await t.seed(7);
+      await t.game('newGame', { seats: [{ kind: 'human', name: 'Ann' }, { kind: 'human', name: 'Bo' }] });
+      await t.waitIdle(8000);
+      await stopClock(t);
+
+      // 1) Pass-and-Play reveal triggers staggered .rtile.deal animation
+      await t.page.click('#privacy [data-reveal]');
+      const dealInfo = await t.page.evaluate(() => {
+        const tiles = [...document.querySelectorAll('#rack .rtile.deal')];
+        return { count: tiles.length, delays: tiles.map((el) => el.style.getPropertyValue('--i')) };
+      });
+      t.equal(dealInfo.count, 7, 'Pass-and-Play reveal dealt all 7 rack tiles with .deal stagger');
+      t.equal(dealInfo.delays.join(','), '0,1,2,3,4,5,6', 'Pass-and-Play .deal tiles carry 0..6 stagger indices');
+
+      // 2) Featured Springs diff: force a fog-letter clear and a claim across plays -> verify .fog-clear & .just-claimed (240 ms)
+      const st = await t.state();
+      let fIdx = st.game.featured.findIndex((f) => f.word.length <= 7);
+      if (fIdx < 0) { fIdx = 0; st.game.featured[0] = { word: 'SPRING', id: 'spring', cat: 'springs', shown: [0], by: null }; }
+      const otherIdx = fIdx === 0 ? 1 : 0;
+      const targetWord = st.game.featured[fIdx].word;
+      const startCol = Math.max(0, Math.min(15 - targetWord.length, 7 - Math.floor(targetWord.length / 2)));
+      st.game.players[0].rack = (targetWord + 'AAAAAAA').slice(0, 7).split('');
+      await t.game('setState', { game: st.game });
+      await t.game('act', 'reveal');
+      // First pass both seats so round clears a fogged letter on Featured Springs -> .fog-clear on newly cleared cell only
+      await t.game('act', 'pass');
+      await t.page.clock.runFor(200);
+      await t.game('act', 'reveal');
+      await t.game('act', 'pass');
+      const fogInfo = await t.page.evaluate(() => {
+        const els = [...document.querySelectorAll('.pword b.fog-clear')];
+        return { count: els.length, anim: els[0] ? getComputedStyle(els[0]).animationName : null };
+      });
+      t.expect(fogInfo.count >= 1, `round fog reveal applied .fog-clear to newly revealed plaque letters (${fogInfo.count})`);
+      t.equal(fogInfo.anim, 'fog-clear', '.fog-clear runs 240 ms fog-clear CSS transition');
+      await t.game('act', 'reveal');
+      await t.shot('w3-b08-plaque-fog-clear', { wait: false });
+      await t.page.clock.runFor(300);
+      t.equal(await t.page.evaluate(() => document.querySelectorAll('.pword b.fog-clear').length), 0, '.fog-clear cleaned up after 260 ms');
+
+      // Now claim Featured Spring fIdx by playing targetWord across row 7 -> .just-claimed on plaque fIdx only
+      const tiles = [...targetWord].map((l, k) => ({ i: 7 * 15 + startCol + k, l }));
+      await t.game('act', 'stage', tiles);
+      t.expect((await t.game('act', 'play')).ok, `claimed Featured Spring ${targetWord}`);
+      const claimInfo = await t.page.evaluate(({ fIdx, otherIdx }) => {
+        const p0 = document.querySelector(`[data-plaque="${fIdx}"]`);
+        const p1 = document.querySelector(`[data-plaque="${otherIdx}"]`);
+        return {
+          p0Claimed: p0 && p0.classList.contains('just-claimed'),
+          p1Claimed: p1 && p1.classList.contains('just-claimed'),
+          anim: p0 ? getComputedStyle(p0).animationName : null,
+        };
+      }, { fIdx, otherIdx });
+      t.equal(claimInfo.p0Claimed, true, `claimed plaque ${fIdx} received .just-claimed`);
+      t.equal(claimInfo.p1Claimed, false, `unclaimed plaque ${otherIdx} did not receive .just-claimed`);
+      t.equal(claimInfo.anim, 'plaque-claim', '.just-claimed runs 240 ms plaque-claim CSS transition');
+      await t.game('act', 'reveal');
+      await t.shot('w3-b08-plaque-just-claimed', { wait: false });
+      await t.page.clock.runFor(300);
+      t.equal(await t.page.evaluate(() => document.querySelectorAll('.just-claimed').length), 0, '.just-claimed cleaned up after 260 ms');
+      await t.page.clock.resume();
+    },
+  },
 ];
