@@ -221,4 +221,60 @@ export const tests = [
       t.equal(res.webpImgs, 0, 'file:// ?art=0 renders zero .webp <img> elements');
     },
   },
+  // ---------- W3-S5-01 ----------
+  {
+    name: 'W3-S5-01 package.json wires full data/build/pipeline scripts, manifest schema is uniform across all 46 WebPs, CI checks freshness, and build-art fails loudly without --allow-missing',
+    node: true,
+    async run(t) {
+      const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+      const sc = pkg.scripts || {};
+      t.expect(sc.data.includes('tools/check-facts.mjs') && sc.data.includes('tools/build-data.mjs'), `npm run data wires check-facts and build-data (${sc.data})`);
+      for (const name of ['build:art', 'build:fonts', 'build:three', 'build:meshes', 'check:facts', 'check:pipeline']) {
+        t.expect(typeof sc[name] === 'string' && sc[name].length > 0, `package.json exposes ${name} script`);
+      }
+      t.expect(sc.pretest.includes('check:pipeline'), `pretest runs check:pipeline (${sc.pretest})`);
+
+      // Blender pieces.py no longer hardcodes a local Windows Blender 5.2 path, and build-meshes resolves BLENDER_BIN
+      const piecesPy = fs.readFileSync(path.join(root, 'art-src/blender/pieces.py'), 'utf8');
+      t.expect(!/C:\\Program Files\\Blender Foundation/.test(piecesPy), 'pieces.py does not hardcode a machine-local Blender path');
+      const buildMeshes = fs.readFileSync(path.join(root, 'tools/build-meshes.mjs'), 'utf8');
+      t.expect(buildMeshes.includes('BLENDER_BIN') && buildMeshes.includes("'blender'"), 'tools/build-meshes.mjs resolves BLENDER_BIN with PATH fallback');
+
+      // assets/manifest.json has uniform { file, w, h, bytes } across all 46 assets (and from on all 18 vig-*)
+      const manifest = JSON.parse(fs.readFileSync(path.join(root, 'assets/manifest.json'), 'utf8'));
+      const keys = Object.keys(manifest);
+      t.equal(keys.length, 46, `assets/manifest.json lists all 46 WebPs (got ${keys.length})`);
+      const vigs = keys.filter((k) => k.startsWith('vig-'));
+      t.equal(vigs.length, 18, `assets/manifest.json lists all 18 vig-* entries (got ${vigs.length})`);
+      for (const k of keys) {
+        const e = manifest[k];
+        const fp = path.join(root, 'assets', e.file || '');
+        t.expect(typeof e.file === 'string' && e.file === `${k}.webp`, `${k}: uniform file field`);
+        t.expect(Number.isInteger(e.w) && e.w > 0 && Number.isInteger(e.h) && e.h > 0, `${k}: uniform w/h`);
+        t.expect(Number.isInteger(e.bytes) && e.bytes === fs.statSync(fp).size, `${k}: exact bytes field (${e.bytes})`);
+        if (k.startsWith('vig-')) t.expect(typeof e.from === 'string' && e.from.length > 0, `${k}: preserves from attribution`);
+      }
+
+      // CI workflow runs freshness gate
+      const ci = fs.readFileSync(path.join(root, '.github/workflows/test.yml'), 'utf8');
+      t.expect(ci.includes('check:pipeline -- --fresh'), 'CI runs check:pipeline -- --fresh');
+      t.expect(ci.includes('tools/dev'), 'CI installs tools/dev for worker-src.js freshness verification');
+
+      // tools/check-pipeline.mjs --fresh passes cleanly
+      const out = execFileSync(process.execPath, [path.join(root, 'tools/check-pipeline.mjs'), '--fresh'], { cwd: root, encoding: 'utf8' });
+      t.expect(out.includes('check-pipeline ok') && out.includes('worker-src.js'), `check-pipeline --fresh passes (${out.trim()})`);
+
+      // tools/build-art.mjs fails loudly (non-zero exit) when raw PNGs are missing and --allow-missing is NOT given
+      const rawPresent = fs.existsSync(path.join(root, 'art-src/title.png'));
+      if (!rawPresent) {
+        let exited = 0;
+        try {
+          execFileSync(process.execPath, [path.join(root, 'tools/build-art.mjs'), '--only', 'title'], { cwd: root, stdio: 'pipe' });
+        } catch (err) {
+          exited = err.status || 1;
+        }
+        t.expect(exited !== 0, `tools/build-art.mjs without --allow-missing fails loudly when raw PNGs are absent (exit ${exited})`);
+      }
+    },
+  },
 ];

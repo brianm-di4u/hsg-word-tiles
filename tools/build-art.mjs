@@ -2,7 +2,7 @@
 // Packs the painted art (art-src/art.json -> assets/*.webp via the shared art-pack tool), then writes
 // src/js/art-list.js: the names the game may request. Only files that exist in assets/ are listed, so the
 // game never asks for a missing image (a 404 would fail the harness).
-//   node tools/build-art.mjs [--only a,b]
+//   node tools/build-art.mjs [--only a,b] [--allow-missing] [--list-only]
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,15 +12,26 @@ const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = path.resolve(GAME);
 const args = process.argv.slice(2);
 if (!args.includes('--list-only')) {
-  try { execFileSync(process.execPath, [path.join(ROOT, 'shared', 'test-harness', 'art-pack.mjs'), '.', ...args], { cwd: ROOT, stdio: 'inherit' }); } catch (e) { console.log('art-pack reported missing files; listing what exists'); }
+  // Fail loudly on any art-pack error; callers must pass --allow-missing explicitly when raw PNGs are absent.
+  execFileSync(process.execPath, [path.join(ROOT, 'shared', 'test-harness', 'art-pack.mjs'), '.', ...args], { cwd: ROOT, stdio: 'inherit' });
 }
-const man = JSON.parse(fs.readFileSync(path.join(GAME, 'assets', 'manifest.json'), 'utf8'));
-// the landmark vignettes are copied from Bathhouse Barons (same collection, MIT) rather than packed here: keep them listed
-for (const f of fs.readdirSync(path.join(GAME, 'assets')).filter((f) => /^vig-.*\.webp$/.test(f))) {
+const manPath = path.join(GAME, 'assets', 'manifest.json');
+const man = JSON.parse(fs.readFileSync(manPath, 'utf8'));
+// the landmark vignettes are copied from Bathhouse Barons (same collection, MIT) rather than packed here: keep them
+// listed with uniform { file, w, h, bytes, from } metadata
+for (const f of fs.readdirSync(path.join(GAME, 'assets')).filter((f) => /^vig-.*\.webp$/.test(f)).sort()) {
   const n = f.slice(0, -5);
-  if (!man[n]) man[n] = { w: 320, h: 320, from: 'Bathhouse Barons (hsg-property-game, MIT)' };
+  const fp = path.join(GAME, 'assets', f);
+  const prev = man[n] || {};
+  man[n] = {
+    file: f,
+    w: prev.w || 320,
+    h: prev.h || 320,
+    bytes: fs.statSync(fp).size,
+    from: prev.from || 'Bathhouse Barons (hsg-property-game, MIT)',
+  };
 }
-fs.writeFileSync(path.join(GAME, 'assets', 'manifest.json'), JSON.stringify(man, null, 1));
+fs.writeFileSync(manPath, JSON.stringify(man, null, 1) + '\n');
 const names = Object.keys(man).filter((n) => fs.existsSync(path.join(GAME, 'assets', n + '.webp')));
 
 names.sort();

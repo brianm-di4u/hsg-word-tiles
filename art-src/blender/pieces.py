@@ -1,6 +1,7 @@
 # Bathhouse Letters: 3D pieces for the board table, built in Blender's Python and exported as compact meshes.
-#   "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" -b --factory-startup --python art-src/blender/pieces.py -- export src/js/pieces-mesh.js
-#   (add "render <dir>" instead of "export <file>" to render a preview of each piece with Cycles)
+#   npm run build:meshes    (uses BLENDER_BIN env var, falling back to `blender` on PATH)
+#   blender -b --factory-startup --python art-src/blender/pieces.py -- export src/js/pieces-mesh.js
+#   (pass "render <dir>" instead of "export <file>" to render a preview of each piece with Cycles)
 # Units are board cells (one square = 1). Pieces:
 #   tile    a glazed ceramic tile, 0.9 x 0.9 x 0.24 with a soft bevel; its top faces use material 'tiletop', which the
 #           game replaces with the letter texture (UVs are made from positions in board3d.js)

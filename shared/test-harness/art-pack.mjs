@@ -22,7 +22,8 @@ const ROOT = path.resolve(HERE, '..', '..');
 const args = process.argv.slice(2);
 const target = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--only');
 const only = (() => { const i = args.indexOf('--only'); return i >= 0 ? args[i + 1].split(',') : null; })();
-if (!target) { console.error('usage: node shared/test-harness/art-pack.mjs games/<slug> [--only a,b]'); process.exit(2); }
+const allowMissing = args.includes('--allow-missing');
+if (!target) { console.error('usage: node shared/test-harness/art-pack.mjs games/<slug> [--only a,b] [--allow-missing]'); process.exit(2); }
 
 const gameDir = path.resolve(ROOT, target);
 const srcDir = path.join(gameDir, 'art-src');
@@ -100,14 +101,26 @@ for (const it of spec.items) {
   manifest[it.name] = { file: it.name + '.webp', w: it.w, h: it.h, bytes: buf.length };
   console.log(`  packed   ${it.name.padEnd(22)} ${it.w}x${it.h}  ${(buf.length / 1024).toFixed(1)} KB`);
 }
-// Drop entries whose items were removed from the spec.
-for (const k of Object.keys(manifest)) if (!spec.items.some((i) => i.name === k)) delete manifest[k];
+// Drop entries whose items were removed from the spec, while preserving externally-sourced (`from`) entries
+// (e.g., vig-* vignettes copied from Bathhouse Barons) with uniform { file, w, h, bytes, from } metadata.
+for (const k of Object.keys(manifest)) {
+  const entry = manifest[k];
+  if (entry && entry.from) {
+    const file = entry.file || `${k}.webp`;
+    const fp = path.join(outDir, file);
+    if (fs.existsSync(fp)) {
+      manifest[k] = { file, w: entry.w || 320, h: entry.h || 320, bytes: fs.statSync(fp).size, from: entry.from };
+      continue;
+    }
+  }
+  if (!spec.items.some((i) => i.name === k)) delete manifest[k];
+}
 fs.writeFileSync(manPath, JSON.stringify(manifest, null, 1) + '\n');
-const total = Object.values(manifest).reduce((a, m) => a + m.bytes, 0);
+const total = Object.values(manifest).reduce((a, m) => a + (m.bytes || 0), 0);
 console.log(`  total    ${Object.keys(manifest).length} assets, ${(total / 1024 / 1024).toFixed(2)} MB`);
 
-// Contact sheet: every packed asset on a checkerboard, labelled.
-const names = Object.keys(manifest).sort();
+// Contact sheet: every asset in the manifest whose WebP exists on disk (including preserved `from` entries), labelled.
+const names = Object.keys(manifest).filter((n) => manifest[n]?.file && fs.existsSync(path.join(outDir, manifest[n].file))).sort();
 const cells = names.map((n) => ({ n, url: 'data:image/webp;base64,' + fs.readFileSync(path.join(outDir, manifest[n].file)).toString('base64') }));
 const sheet = await page.evaluate(async (cells) => {
   const cw = 200, chh = 230, cols = Math.min(6, Math.max(1, cells.length)), rows = Math.ceil(cells.length / cols);
@@ -124,4 +137,4 @@ const sheet = await page.evaluate(async (cells) => {
 }, cells);
 fs.writeFileSync(path.join(srcDir, 'sheet.png'), Buffer.from(sheet, 'base64'));
 await browser.close();
-process.exit(failed ? 1 : 0);
+process.exit(failed && !allowMissing ? 1 : 0);
