@@ -268,4 +268,115 @@ export const tests = [
       t.equal(ghEnd.cls, '', '#ghost hover classes cleared after drag ends');
     },
   },
+  {
+    name: 'W2-S4-10 Setup and Final Soak sticky footers & trimmed .over-art keep primary CTAs above the fold (1280x800, 1024x600, 390x844)',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+
+      // 1) Setup sheet: Start and How to play stay completely visible above the fold inside sticky .sheet-foot
+      await t.game('scene', 'setup');
+      await t.waitFrames(2);
+      const checkSetup = async (label, shotName) => {
+        const m = await t.page.evaluate(() => {
+          const foot = document.querySelector('.setup .sheet-foot');
+          const start = document.querySelector('.setup [data-start]');
+          const help = document.querySelector('.setup [data-go="help"]');
+          const art = document.querySelector('.setup .sheet-art');
+          const scr = document.querySelector('#screen');
+          const fcs = foot ? getComputedStyle(foot) : null;
+          const fr = foot ? foot.getBoundingClientRect() : null;
+          const sr = start ? start.getBoundingClientRect() : null;
+          const hr = help ? help.getBoundingClientRect() : null;
+          return {
+            W: innerWidth, H: innerHeight,
+            hasFoot: !!foot,
+            position: fcs ? fcs.position : '',
+            footBottom: fr ? fr.bottom : -1,
+            scrollsY: scr.scrollHeight > scr.clientHeight + 20,
+            startTop: sr ? sr.top : -1, startBottom: sr ? sr.bottom : 9999, startH: sr ? sr.height : 0,
+            helpTop: hr ? hr.top : -1, helpBottom: hr ? hr.bottom : 9999, helpH: hr ? hr.height : 0,
+            artH: art ? art.getBoundingClientRect().height : 0,
+            overflowX: scr.scrollWidth - scr.clientWidth,
+          };
+        });
+        t.equal(m.hasFoot, true, `${label}: .setup .sheet-foot exists`);
+        t.equal(m.position, 'sticky', `${label}: .setup .sheet-foot is position: sticky`);
+        if (m.scrollsY) {
+          t.expect(m.footBottom >= m.H - 2 && m.footBottom <= m.H + 1, `${label}: sticky footer sits flush at viewport bottom with no peeking strip beneath (${m.footBottom.toFixed(1)} vs ${m.H})`);
+        }
+        t.expect(m.startTop >= 0 && m.startBottom <= m.H + 0.5, `${label}: Start CTA completely above fold (${m.startTop.toFixed(1)}..${m.startBottom.toFixed(1)} <= ${m.H})`);
+        t.expect(m.startH >= 44, `${label}: Start CTA >= 44 px (${m.startH.toFixed(1)} px)`);
+        t.expect(m.helpTop >= 0 && m.helpBottom <= m.H + 0.5, `${label}: How to play CTA above fold (${m.helpBottom.toFixed(1)} <= ${m.H})`);
+        t.expect(m.helpH >= 44, `${label}: How to play CTA >= 44 px (${m.helpH.toFixed(1)} px)`);
+        t.expect(m.overflowX <= 0, `${label}: zero horizontal overflow (${m.overflowX})`);
+        if (shotName) await t.shot(shotName);
+      };
+
+      await checkSetup(t.viewport === 'desktop' ? 'setup 1280x800' : 'setup 390x844', 'w2-b08-setup');
+      if (t.viewport === 'desktop') {
+        await t.page.setViewportSize({ width: 1024, height: 600 });
+        await t.waitFrames(2);
+        await checkSetup('setup 1024x600', 'w2-b08-setup-1024x600');
+        await t.page.setViewportSize({ width: 1280, height: 800 });
+        await t.waitFrames(2);
+      }
+
+      // 2) Final Soak (game over) sheet: Play again, What you missed, and Title screen remain completely above fold,
+      // and .over-art is trimmed to ~72-80 px on <= 800 px tall viewports and mobile.
+      await t.game('newGame', { seed: 41, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'julian' }] });
+      await t.waitIdle(8000);
+      await t.game('act', 'autoplay', 999);
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 15000 });
+      await t.waitFrames(2);
+
+      const checkOver = async (label, shotName, checkArtTrim) => {
+        const m = await t.page.evaluate(() => {
+          const btns = document.querySelector('.over .dlg-btns');
+          const again = document.querySelector('.over [data-again]');
+          const title = document.querySelector('.over [data-go="title"]');
+          const art = document.querySelector('.over .over-art');
+          const scr = document.querySelector('#screen');
+          const bcs = btns ? getComputedStyle(btns) : null;
+          const br = btns ? btns.getBoundingClientRect() : null;
+          const ar = again ? again.getBoundingClientRect() : null;
+          const tr = title ? title.getBoundingClientRect() : null;
+          return {
+            W: innerWidth, H: innerHeight,
+            position: bcs ? bcs.position : '',
+            footBottom: br ? br.bottom : -1,
+            scrollsY: scr.scrollHeight > scr.clientHeight + 20,
+            againTop: ar ? ar.top : -1, againBottom: ar ? ar.bottom : 9999, againH: ar ? ar.height : 0,
+            titleTop: tr ? tr.top : -1, titleBottom: tr ? tr.bottom : 9999, titleH: tr ? tr.height : 0,
+            artH: art ? art.getBoundingClientRect().height : 0,
+            overflowX: scr.scrollWidth - scr.clientWidth,
+          };
+        });
+        t.equal(m.position, 'sticky', `${label}: .over .dlg-btns is position: sticky`);
+        if (m.scrollsY) {
+          t.expect(m.footBottom >= m.H - 2 && m.footBottom <= m.H + 1, `${label}: sticky footer sits flush at viewport bottom with no peeking strip beneath (${m.footBottom.toFixed(1)} vs ${m.H})`);
+        }
+        t.expect(m.againTop >= 0 && m.againBottom <= m.H + 0.5, `${label}: Play again CTA completely above fold (${m.againTop.toFixed(1)}..${m.againBottom.toFixed(1)} <= ${m.H})`);
+        t.expect(m.againH >= 44, `${label}: Play again CTA >= 44 px (${m.againH.toFixed(1)} px)`);
+        t.expect(m.titleTop >= 0 && m.titleBottom <= m.H + 0.5, `${label}: Title screen CTA completely above fold (${m.titleTop.toFixed(1)}..${m.titleBottom.toFixed(1)} <= ${m.H})`);
+        t.expect(m.titleH >= 44, `${label}: Title screen CTA >= 44 px (${m.titleH.toFixed(1)} px)`);
+        if (checkArtTrim) {
+          t.expect(m.artH >= 70 && m.artH <= 82, `${label}: .over-art trimmed to ~72-80 px (got ${m.artH.toFixed(1)} px)`);
+        }
+        t.expect(m.overflowX <= 0, `${label}: zero horizontal overflow (${m.overflowX})`);
+        const cr = await t.contrastReport({ selector: '.over .dlg-btns', min: 4.5, largeMin: 3 });
+        t.equal(cr.fails.length, 0, `${label}: sticky footer contrast >= 4.5:1 (${JSON.stringify(cr.fails)})`);
+        if (shotName) await t.shot(shotName);
+      };
+
+      await checkOver(t.viewport === 'desktop' ? 'over 1280x800' : 'over 390x844', 'w2-b08-over', true);
+      if (t.viewport === 'desktop') {
+        await t.page.setViewportSize({ width: 1024, height: 600 });
+        await t.waitFrames(2);
+        await checkOver('over 1024x600', 'w2-b08-over-1024x600', true);
+        await t.page.setViewportSize({ width: t.vp.width, height: t.vp.height });
+      }
+    },
+  },
 ];

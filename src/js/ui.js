@@ -121,8 +121,10 @@ export function setupHtml(setup) {
     </details>
     <p class="goal"><b>The goal:</b> score more than the others by building words.</p>
     <p class="note">${humans >= 2 ? 'Pass and play: each person\'s tiles stay hidden until they tap to take their turn.' : humans === 1 ? 'You against the computer.' : 'Computers only: sit back and watch.'}</p>
-    <button class="btn primary big" data-start>Start</button>
-    <button class="btn link" data-go="help">How to play</button>
+    <div class="sheet-foot">
+      <button class="btn primary big" data-start>Start</button>
+      <button class="btn link" data-go="help">How to play</button>
+    </div>
   </div>`;
 }
 
