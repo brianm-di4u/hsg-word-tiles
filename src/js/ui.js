@@ -208,7 +208,9 @@ export function logHtml(s, lex) {
   return s.log.slice().reverse().filter((e) => e.kind !== 'end').slice(0, 40).map((e) => {
     const p = s.players[e.p];
     if (e.kind === 'play') {
-      const ws = e.words.map((w) => `<span class="${w.themed ? 'themed' : ''}">${w.w}</span>`).join(', ');
+      const ws = e.words.map((w) => (w.themed
+        ? `<button type="button" class="themed-link" data-fact="${esc(w.themed)}" data-form="${esc(w.w)}" aria-label="${esc(w.w)}, Hot Springs word: read its history card">${ICON.steam}<span>${esc(w.w)}</span></button>`
+        : `<span>${esc(w.w)}</span>`)).join(', ');
       const extras = [e.full ? `Full Soak +${FULL_SOAK}` : '', e.themed ? `Hot Springs +${e.themed}` : '', e.featured ? `Featured +${FEATURED_BONUS}` : ''].filter(Boolean).join(' · ');
       return `<li><b class="who">${esc(p.name)}</b> ${ws} <em>${e.score}</em>${extras ? `<small>${extras}</small>` : ''}</li>`;
     }

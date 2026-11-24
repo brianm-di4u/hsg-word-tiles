@@ -150,4 +150,77 @@ export const tests = [
       t.expect(brass >= 20, `reduced-motion spotlight halo still renders cleanly around H8 (${brass} brass samples)`);
     },
   },
+  // ---------- W2-S4-13 ----------
+  {
+    name: 'W2-S4-13 inline #log chips, Pause Steam Ledger chips, and tapping placed Hot Springs board words all open sourced history cards',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 3, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(6000);
+      const s = await t.state();
+      s.game.players[0].rack = 'STEAMXQ'.split('');
+      await t.game('setState', { game: s.game });
+      await t.game('act', 'stage', [...'STEAM'].map((l, k) => ({ i: CENTER - 2 + k, l })));
+      await t.game('act', 'play');
+      await t.waitIdle(10000);
+
+      // 1) Inline #log renders STEAM as clickable <button class="themed-link" data-fact="steam" data-form="STEAM">
+      const inlineChip = await t.page.evaluate(() => {
+        const b = document.querySelector('#log button.themed-link[data-fact="steam"][data-form="STEAM"]');
+        const r = b ? b.getBoundingClientRect() : null;
+        return { found: !!b, h: r ? r.height : 0, text: b ? b.textContent.trim() : '' };
+      });
+      t.equal(inlineChip.found, true, 'inline #log renders STEAM as <button class="themed-link" data-fact="steam" data-form="STEAM">');
+      if (t.viewport === 'mobile') t.expect(inlineChip.h >= 44, `mobile inline .themed-link touch height >= 44 px (${inlineChip.h.toFixed(1)} px)`);
+      const cDay = await t.contrastReport({ selector: '#ledger', min: 4.5, largeMin: 3 });
+      t.equal(cDay.fails.length, 0, 'inline #ledger .themed-link passes Day WCAG contrast (' + JSON.stringify(cDay.fails) + ')');
+
+      await t.page.click('#log button.themed-link[data-fact="steam"]');
+      t.equal((await t.state()).dialog, 'fact', 'clicking inline #log .themed-link opens fact card');
+      t.expect(/Valley of Vapors/.test(await t.page.textContent('#modal')) && /Source:/.test(await t.page.textContent('#modal')), 'fact card displays sourced STEAM history');
+      await t.shot('W2-S4-13-ledger-fact');
+      await t.game('act', 'close');
+
+      // 2) Pause -> Steam ledger modal renders clickable .themed-link chip opening the fact card
+      await t.game('act', 'open', 'pause');
+      await t.page.click('#modal [data-open="ledger"]');
+      const dlgChip = await t.page.evaluate(() => {
+        const b = document.querySelector('#modal .ledger-dlg button.themed-link[data-fact="steam"][data-form="STEAM"]');
+        return { found: !!b, h: b ? b.getBoundingClientRect().height : 0 };
+      });
+      t.equal(dlgChip.found, true, 'Pause Steam Ledger renders STEAM as clickable .themed-link button');
+      t.expect(dlgChip.h >= 44, `Pause Steam Ledger .themed-link height >= 44 px (${dlgChip.h.toFixed(1)} px)`);
+      await t.page.click('#modal .ledger-dlg button.themed-link[data-fact="steam"]');
+      t.equal((await t.state()).dialog, 'fact', 'clicking Pause Steam Ledger .themed-link opens fact card');
+      t.expect(/Valley of Vapors/.test(await t.page.textContent('#modal')), 'Pause Steam Ledger opens STEAM fact card');
+      await t.game('act', 'close');
+
+      // 3) Tapping an already-placed Hot Springs word on the board (with nothing selected/staged) opens its history card
+      const pt = await t.game('act', 'screen', CENTER);
+      if (t.viewport === 'mobile') await t.tap(pt); else await t.page.mouse.click(pt[0], pt[1]);
+      t.equal((await t.state()).dialog, 'fact', 'tapping placed STEAM on the board opens its fact card');
+      t.expect(/Valley of Vapors/.test(await t.page.textContent('#modal')), 'board tap opened the STEAM fact card');
+      await t.game('act', 'close');
+
+      // 4) When a tile IS staged, tapping a placed Hot Springs word does NOT hijack staging with a fact card
+      const freeCell = CENTER + N;
+      const st2 = await t.state();
+      const spare = st2.game.players[0].rack.find((l) => l !== '?') || 'E';
+      if (!st2.game.board[freeCell]) {
+        await t.game('act', 'stage', [{ i: freeCell, l: spare }]);
+        if (t.viewport === 'mobile') await t.tap(pt); else await t.page.mouse.click(pt[0], pt[1]);
+        t.equal((await t.state()).dialog, null, 'tapping placed Hot Springs word while tiles are staged does not open a modal');
+        await t.game('act', 'recall');
+      }
+
+      // 5) Night-mode contrast check on inline #ledger .themed-link
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="theme"][data-val="dark"]');
+      await t.game('scene', 'game');
+      const cNight = await t.contrastReport({ selector: '#ledger', min: 4.5, largeMin: 3 });
+      t.equal(cNight.fails.length, 0, 'inline #ledger .themed-link passes Night WCAG contrast (' + JSON.stringify(cNight.fails) + ')');
+    },
+  },
 ];
