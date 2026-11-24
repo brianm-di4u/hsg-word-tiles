@@ -284,7 +284,11 @@ function moodUpdate() {
       if (s.daily.turns <= 1) inten = 0.85;
       else if (s.daily.turns <= 3) inten = 0.5;
     } else if (s.bag.length === 0) {
-      inten = 0.7;
+      inten = 0.9;
+    } else if (s.bag.length < RACK) {
+      inten = 0.6;
+    } else if (s.bag.length < 14) {
+      inten = 0.35;
     }
   }
   k.music.intensity(inten);
@@ -949,10 +953,21 @@ function renderTurnline() {
     }
     return;
   }
-  const bagLine = `${UI.plural(s.bag.length, 'tile')} in the bag`;
+  const left = s.bag.length;
+  const phaseCls = !s.over && left === 0 ? ' phase-empty' : !s.over && left < RACK ? ' phase-final' : '';
+  const bagLine = left === 0
+    ? 'Bag empty · go out to collect remaining tiles'
+    : left < RACK
+      ? `${UI.plural(left, 'tile')} ${mobile ? 'left' : 'in the bag'} · Final stretch · swaps closed`
+      : `${UI.plural(left, 'tile')} in the bag`;
+  const mobileBag = s.over
+    ? 'Game over'
+    : left < RACK
+      ? bagLine
+      : `${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'} · ${bagLine}`;
   tl.innerHTML = mobile
-    ? `<span class="chips">${UI.scoresHtml(s, true)}</span><span class="bag">${s.over ? 'Game over' : `${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'} · ${bagLine}`}</span>`
-    : s.over ? 'Game over' : `<span class="who">${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'}</span><span class="bag">${bagLine}</span>`;
+    ? `<span class="chips">${UI.scoresHtml(s, true)}</span><span class="bag${phaseCls}">${mobileBag}</span>`
+    : s.over ? 'Game over' : `<span class="who">${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'}</span><span class="bag${phaseCls}">${bagLine}</span>`;
 }
 
 // The ledger shows whole entries only; the full ledger is in the menu.
@@ -2019,7 +2034,7 @@ window.__game = {
       if (handle && gameSaves.replaceFixture(handle, before, replacement)) gameHandles.set(replacement, handle);
       G.s = replacement; G.last = new Set(lastTiles(G.s)); resetOrder(); G.revealed = G.s.cur; G.privacy = false;
     }
-    if (o.scene) showScene(o.scene); else renderGame();
+    if (o.scene) showScene(o.scene); else { moodUpdate(); renderGame(); }
     if (o.staged) { for (const t of o.staged) { const k = cur().rack.findIndex((l, j) => (t.blank ? l === '?' : l === t.l) && !G.staged.some((x) => x.k === j)); if (k >= 0) { G.staged.push({ k, i: t.i, l: t.l, blank: !!t.blank }); G.order = G.order.filter((x) => x !== k); } } updatePreview(); renderGame(); }
     if (G.s && !G.s.over && cur().kind === 'ai' && G.scene === 'game') scheduleAi();
     return true;
@@ -2036,7 +2051,7 @@ window.__game = {
     return true;
   },
   audioList() { return audioList(); },
-  audioRender(name, seconds = 30, wantWav = false) { return audioRender(name, seconds, !!wantWav); },
+  audioRender(name, seconds = 30, wantWav = false, opts) { return audioRender(name, seconds, !!wantWav, opts); },
   audioState() {
     const k = audio.kit, i = k && k.music.info();
     return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, ticking: k ? k.ticking : false, holds: [...audio.holds], tune: tuneName(), intensity: k ? k.music.inten : 0, bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), total: audio.total, cues: audio.cues.slice(), fxGain: audio.bus ? audio.bus.sfx.gain.value : null, musGain: audio.bus ? audio.bus.mus.gain.value : null };

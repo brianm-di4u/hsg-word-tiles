@@ -179,6 +179,7 @@ body.reduce .check input, body.reduce .check input::after { transition: none; }
 #turnline { flex: 1; display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 #turnline .who { font: 600 1.15rem var(--f-serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #turnline .bag { font-size: 0.85em; color: #E6D8BC; }
+#turnline .bag.phase-final, #turnline .bag.phase-empty { color: #F3DD8B; font-weight: 700; }
 #turnline .daily-head { display: flex; align-items: center; gap: 6px; overflow: visible; }
 #turnline .daily-row { align-items: center; gap: 6px; }
 #turnline .daily-turn {
@@ -299,6 +300,14 @@ body.theme-dark .plaque, body.theme-dark .springs-bar { background: linear-gradi
 .pmeta { flex: 1; display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .pmeta b { font: 600 1.02em var(--f-serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pmeta small { color: var(--muted); }
+.ptiles {
+  align-self: flex-start; display: inline-flex; align-items: center; margin-top: 2px;
+  padding: 1px 7px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line);
+  color: var(--ink); font: 700 0.72rem / 1.25 var(--f-ui); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ptiles.low { background: #8E3622; border-color: #8E3622; color: #FFF; }
+body.theme-dark .ptiles.low { background: #D4AF37; border-color: #D4AF37; color: #14121F; }
+#scores.many .pcard .ptiles { font-size: 0.68rem; padding: 0 6px; margin-top: 1px; }
 .pcard .score { font: 600 1.6em var(--f-serif); font-variant-numeric: tabular-nums; }
 .score.bump { animation: bump 0.5s; }
 @keyframes bump { 40% { transform: scale(1.18); color: var(--gold); } }
@@ -308,6 +317,11 @@ body.theme-dark .pcard .score.score-updated { background: rgba(212, 175, 55, 0.2
 .chip { display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border-radius: 99px; background: rgba(255, 248, 230, 0.12); border: 1.5px solid transparent; color: #F6EFDF; }
 .chip.on { border-color: #F0D57A; background: rgba(240, 213, 122, 0.2); }
 .chip .score { font: 600 1.05em var(--f-serif); font-variant-numeric: tabular-nums; }
+.ctiles {
+  padding: 1px 6px; border-radius: 99px; background: rgba(20, 14, 8, 0.72); border: 1px solid rgba(243, 221, 139, 0.5);
+  color: #F3DD8B; font: 700 0.68rem / 1.25 var(--f-ui); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ctiles.low { background: #DFBC5B; border-color: #DFBC5B; color: #1F1406; }
 .badge.has-face i { display: none; }
 .chip .badge:not(.has-face) b { transform: translate(-2px, -1.5px); font-size: 9px; }
 .chip .badge i { width: 13px; height: 13px; font-size: 8.5px; line-height: 13px; right: -4px; bottom: -4px; }
@@ -553,6 +567,7 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   #turnline { align-items: center; }
   #turnline .chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
   #turnline .bag { font-size: 0.78em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  #turnline .bag.phase-final, #turnline .bag.phase-empty { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; }
   #turnline .daily-turn { font-size: 0.78rem; padding: 2px 8px; }
   #turnline .daily-sub { justify-content: center; font-size: 0.76em; }
   .springs-drawer .plaque { min-height: 44px; width: 100%; min-width: 0; padding: 6px 10px; gap: 8px; }

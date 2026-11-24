@@ -137,13 +137,17 @@ export function breakdownHtml(p, board, staged) {
 }
 
 export function scoresHtml(s, compact) {
+  const showTiles = s.mode !== 'daily' && s.bag.length === 0;
   return s.players.map((p, k) => {
     const per = p.persona ? persona(p.persona) : null;
     const active = !s.over && k === s.cur;
     const sub = per ? `${LEVEL_NAME[p.level || per.level]} · fictional` : (p.kind === 'human' ? 'Person' : '');
+    const n = showTiles && Array.isArray(p.rack) ? p.rack.length : null;
+    const tileLabel = n != null ? plural(n, 'tile') : '';
+    const lowCls = n === 1 ? ' low' : '';
     return compact
-      ? `<div class="chip ${active ? 'on' : ''}" aria-current="${active}" aria-label="${esc(p.name)}: ${p.score} points${active ? ', current turn' : ''}">${badge(p, k, 26)}<span class="sr-only">${esc(p.name)} </span><b class="score" data-score="${k}">${p.score}</b></div>`
-      : `<div class="pcard ${active ? 'on' : ''}" aria-current="${active}">${badge(p, k, 44)}<div class="pmeta"><b>${esc(p.name)}</b><small>${esc(sub)}</small></div><b class="score" data-score="${k}">${p.score}</b></div>`;
+      ? `<div class="chip ${active ? 'on' : ''}" aria-current="${active}" aria-label="${esc(p.name)}: ${p.score} points${n != null ? `, ${tileLabel} left` : ''}${active ? ', current turn' : ''}">${badge(p, k, 26)}<span class="sr-only">${esc(p.name)} </span><b class="score" data-score="${k}">${p.score}</b>${n != null ? `<span class="ctiles${lowCls}" data-tiles="${k}" aria-hidden="true">${tileLabel}</span>` : ''}</div>`
+      : `<div class="pcard ${active ? 'on' : ''}" aria-current="${active}">${badge(p, k, 44)}<div class="pmeta"><b>${esc(p.name)}</b><small>${esc(sub)}</small>${n != null ? `<span class="ptiles${lowCls}" data-tiles="${k}">${tileLabel}</span>` : ''}</div><b class="score" data-score="${k}">${p.score}</b></div>`;
   }).join('');
 }
 

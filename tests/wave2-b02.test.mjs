@@ -4,11 +4,14 @@ import { createGame, apply } from '../src/js/engine.js';
 import { chooseAction, openedPremium, leaveValue, rackMinus, LEVELS } from '../src/js/ai.js';
 import { generateMoves } from '../src/js/movegen.js';
 import { townWordsInRack } from '../src/js/lexicon.js';
+import { SCORES } from '../src/js/music.js';
+import { scoresHtml } from '../src/js/ui.js';
 import { dailyPar } from '../src/js/par.js';
 import { SQUARE, N } from '../src/js/score.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false })); };
+const withSound = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: true })); };
 
 export const tests = [
   {
@@ -217,6 +220,125 @@ export const tests = [
       st.players[0].rack = ['S', 'P', 'A', 'Q', 'X', 'Z', 'V'];
       await t.game('setState', { game: st });
       t.equal((await geom()).visible, false, 'turning Hot Springs rack cue Off in Settings hides it');
+    },
+  },
+  {
+    name: 'W1-S3-04 SCORES.table defines perc2 + lead.lift and scoresHtml shows per-seat tile counts strictly when bag is empty (Node)',
+    node: true,
+    async run(t) {
+      t.expect(!!SCORES.table.perc2 && Array.isArray(SCORES.table.perc2.b) && SCORES.table.perc2.b.length >= 2, 'SCORES.table defines perc2 brush layer');
+      t.equal(SCORES.table.lead.lift, true, 'SCORES.table defines lead.lift');
+
+      const mk = (bagLen, mode = 'play') => ({
+        mode, over: false, cur: 0, bag: Array(bagLen).fill('E'),
+        players: [
+          { kind: 'human', name: 'You', score: 180, rack: ['A', 'E', 'S'] },
+          { kind: 'human', name: 'Player 2', score: 170, rack: ['T'] },
+          { kind: 'human', name: 'Player 3', score: 165, rack: ['R', 'N', 'I', 'O', 'L'] },
+        ],
+      });
+      const fullDesk = scoresHtml(mk(12), false);
+      const fullMob = scoresHtml(mk(12), true);
+      t.expect(!/data-tiles/.test(fullDesk) && !/data-tiles/.test(fullMob), 'tile counts stay hidden while bag > 0');
+
+      const emptyDesk = scoresHtml(mk(0), false);
+      const emptyMob = scoresHtml(mk(0), true);
+      t.expect(emptyDesk.includes('3 tiles') && emptyDesk.includes('1 tile') && emptyDesk.includes('5 tiles'), 'desktop .pcard shows each seat tile count when bag === 0');
+      t.expect(emptyMob.includes('3 tiles') && emptyMob.includes('1 tile') && emptyMob.includes('5 tiles'), 'mobile .chip shows each seat tile count when bag === 0');
+      t.expect(/1 tile left/.test(emptyMob), 'mobile .chip aria-label includes remaining tile count');
+
+      const dailyEmpty = scoresHtml(mk(0, 'daily'), false);
+      t.expect(!/data-tiles/.test(dailyEmpty), 'Daily Soak does not show opponent rack counts');
+    },
+  },
+  {
+    name: 'W1-S3-04 Standard Play shows empty-bag per-seat tile counts (2P & 4P), phase callouts at bag < 7 and bag === 0, and progressive endgame music escalation',
+    viewports: ['desktop', 'mobile'],
+    initScript: withSound,
+    async run(t) {
+      await ready(t);
+      // Unlock WebAudio via a real gesture on Title
+      await t.page.click('[data-go="setup"]');
+      await t.game('newGame', {
+        seed: 12,
+        seats: [
+          { kind: 'human', name: 'You' },
+          { kind: 'ai', persona: 'opal', level: 'easy' },
+          { kind: 'ai', persona: 'hollis', level: 'medium' },
+          { kind: 'ai', persona: 'julian', level: 'hard' },
+        ],
+      });
+      await t.waitIdle(6000);
+
+      // 1) Midgame (bag >= 14): intensity 0, no phase callout, no tile counts
+      let st = (await t.state()).game;
+      st.bag = Array(20).fill('E');
+      await t.game('setState', { game: st });
+      t.equal(await t.page.evaluate(() => window.__game.audioState().intensity), 0, 'bag=20 intensity is 0');
+      t.equal(await t.page.locator('[data-tiles]').count(), 0, 'no seat tile counts while bag > 0');
+
+      // 2) Approaching endgame (bag < 14, >= 7): progressive ramp to 0.35
+      st = (await t.state()).game;
+      st.bag = Array(10).fill('E');
+      await t.game('setState', { game: st });
+      t.equal(await t.page.evaluate(() => window.__game.audioState().intensity), 0.35, 'bag=10 (< 14) ramps intensity to 0.35');
+
+      // 3) Final stretch (bag < 7, > 0): swaps closed callout + intensity 0.6 (activates perc2)
+      st = (await t.state()).game;
+      st.bag = Array(5).fill('E');
+      await t.game('setState', { game: st });
+      t.equal(await t.page.evaluate(() => window.__game.audioState().intensity), 0.6, 'bag=5 (< 7) ramps intensity to 0.6');
+      const finalCallout = await t.page.evaluate(() => {
+        const el = document.querySelector('#turnline .bag');
+        return { text: el.textContent.trim(), clipped: el.scrollWidth > el.clientWidth + 1 };
+      });
+      t.expect(/Final stretch · swaps closed/.test(finalCallout.text), 'bag < 7 displays Final stretch · swaps closed (' + finalCallout.text + ')');
+      t.equal(finalCallout.clipped, false, 'Final stretch callout is never truncated');
+      t.equal(await t.page.locator('[data-act="swap"]').isDisabled(), true, 'Swap button is disabled at bag < 7');
+
+      // 4) Empty bag (bag === 0) with 4 players: per-seat remaining tile counts visible on all 4 seats + Bag empty callout + intensity 0.9 (perc2 + lead.lift)
+      st = (await t.state()).game;
+      st.bag = [];
+      st.players[0].rack = ['A', 'E', 'S'];
+      st.players[1].rack = ['T'];
+      st.players[2].rack = ['R', 'N', 'I', 'O'];
+      st.players[3].rack = ['L', 'D'];
+      await t.game('setState', { game: st });
+      t.equal(await t.page.evaluate(() => window.__game.audioState().intensity), 0.9, 'bag=0 ramps intensity to 0.9');
+
+      const emptyHud = await t.page.evaluate(() => {
+        const bag = document.querySelector('#turnline .bag');
+        const tiles = [...document.querySelectorAll('[data-tiles]')].map((el) => ({
+          seat: +el.dataset.tiles,
+          text: el.textContent.trim(),
+          low: el.classList.contains('low'),
+          visible: el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0,
+        }));
+        return { text: bag.textContent.trim(), clipped: bag.scrollWidth > bag.clientWidth + 1, tiles };
+      });
+      t.expect(/Bag empty · go out to collect remaining tiles/.test(emptyHud.text), 'bag === 0 displays Bag empty callout (' + emptyHud.text + ')');
+      t.equal(emptyHud.clipped, false, 'Bag empty callout is never truncated');
+      t.equal(emptyHud.tiles.length, 4, 'all 4 seats display remaining tile counts');
+      t.equal(emptyHud.tiles.map((x) => x.text).join('|'), '3 tiles|1 tile|4 tiles|2 tiles', 'exact tile counts rendered per seat');
+      t.expect(emptyHud.tiles.every((x) => x.visible), 'all 4 seat tile counts are visible even in 4P compact layout');
+      t.equal(emptyHud.tiles[1].low, true, '1-tile seat carries .low highlight');
+
+      const contrast = await t.contrastReport({ selector: t.viewport === 'mobile' ? '#turnline' : '#scores, #turnline', min: 4.5, largeMin: 3 });
+      t.equal(contrast.fails.length, 0, 'endgame HUD passes WCAG contrast (' + JSON.stringify(contrast.fails) + ')');
+      await t.checkLayout({ allowScrollY: true });
+      await t.shot('W1-S3-04-endgame-4p');
+
+      // 5) Offline audio render verification (desktop): SCORES.table at inten=0 vs 0.6 vs 0.9 and full volume headroom <= 0.88
+      if (t.viewport === 'desktop') {
+        const r0 = await t.game('audioRender', 'table', 20, false, { intensity: 0 });
+        const r6 = await t.game('audioRender', 'table', 20, false, { intensity: 0.6 });
+        const r9 = await t.game('audioRender', 'table', 20, false, { intensity: 0.9 });
+        const r9Full = await t.game('audioRender', 'table', 20, false, { intensity: 0.9, vol: 1 });
+        t.log(`table render (20s): i=0 peak=${r0.peak} rms=${r0.rmsDb}dB bars=${r0.built.bars} | i=0.6 peak=${r6.peak} rms=${r6.rmsDb}dB bars=${r6.built.bars} | i=0.9 peak=${r9.peak} rms=${r9.rmsDb}dB bars=${r9.built.bars} | i=0.9@vol1 peak=${r9Full.peak}`);
+        t.expect(r6.peak > r0.peak, `perc2 brush layer raises peak at intensity=0.6 (${r6.peak} > ${r0.peak})`);
+        t.expect(r9.peak > r0.peak && r9.rms > r0.rms && r9.peak < 0.3, `endgame climax at intensity=0.9 lifts peak & RMS cleanly (peak ${r9.peak}, rms ${r9.rmsDb} dB)`);
+        t.expect(r9Full.peak <= 0.88, `endgame table at 100% volume stays safely under 0.88 peak (${r9Full.peak})`);
+      }
     },
   },
 ];

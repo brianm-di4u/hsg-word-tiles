@@ -173,11 +173,13 @@ export function sfx(name, opts = {}) {
 // ---------- for the tests: render a tune or the bed on its own, offline, at the level the game ships ----------
 export const tuneName = () => { const s = audio.kit && audio.kit.music.score; return s ? Object.keys(SCORES).find((n) => SCORES[n] === s) : null; };
 export const audioList = () => ({ music: Object.keys(SCORES), ambience: Object.keys(SCENES) });
-export function audioRender(name, seconds, wantWav) {
+export function audioRender(name, seconds, wantWav, opts = {}) {
   const music = !!SCORES[name];
   if (!music && !SCENES[name]) return Promise.reject(new Error('no such piece: ' + name));
   return measureAudio((oc, dest) => {
     const g = graph(oc, dest, 7);
+    if (opts && typeof opts.vol === 'number') g.mus.gain.value = musicGain(opts.vol, 1);
+    if (opts && typeof opts.intensity === 'number') g.kit.music.intensity(opts.intensity);
     if (music) g.kit.music.play(SCORES[name], { at: 0, fade: 0.05 }); else g.kit.amb.play(SCENES[name], { at: 0, fade: 0.05 });
     g.kit.scheduleUntil(seconds);
     return music ? () => g.kit.music.info() : null;

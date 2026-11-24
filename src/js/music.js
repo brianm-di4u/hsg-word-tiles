@@ -334,7 +334,8 @@ export const SCORES = {
     bpm: 72, key: 65, scale: [0, 2, 4, 5, 7, 9, 10], form: 'AABA',
     sections: { A: [0, 5, 3, 6, 0, 5, 3, 0], B: [3, 1, 5, 2, 3, 6, 4, 0] },
     pad: { inst: 'pad', gain: 0.018 }, bass: { inst: 'bass', pattern: 'root', gain: 0.042 },
-    lead: { inst: 'flute', gain: 0.042, vary: 0.35, rest: 0.22, oct: 1 },
+    lead: { inst: 'flute', gain: 0.042, vary: 0.35, rest: 0.22, oct: 1, lift: true },
+    perc2: { b: [0.5, 1.5, 2.5, 3.5], gain: 0.26 },
     lp: 3200, delay: 0.22, delayBeats: 0.75,
   },
   // The results sheet: a little brighter and a little quicker, mallets over a two-note bass. 20 bars at 84 bpm, about 57 s, key of A.
