@@ -1,5 +1,9 @@
 // Wave 2, batch W2-B10: W2-S2-06, W2-S1-01, W2-S1-04, W2-S1-02 (visual hierarchy).
+import fs from 'node:fs';
+import path from 'node:path';
 import zlib from 'node:zlib';
+import { root } from './lib.mjs';
+import { SQUARE, CENTER, N } from '../src/js/score.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => {
@@ -155,6 +159,95 @@ export const tests = [
       const bg = await t.page.evaluate(() => document.querySelector('#boardwrap').style.backgroundImage);
       t.expect(bg.includes('counter'), `2D ?gl=0 #boardwrap refreshed counter.webp (${bg})`);
       await t.page.unroute('**/assets/counter.webp');
+    },
+  },
+  // ---------- W2-S1-01 ----------
+  {
+    name: 'W2-S1-01 neutral empty marble steps 15-20% below bright ivory tiles in Day travertine and Night twilight with single soft marble pass (no double-multiply)',
+    viewports: ['desktop'],
+    url: 'index.html?gl=0',
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 41, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'julian' }] });
+      await t.waitIdle(8000);
+      await t.game('act', 'autoplay', 10);
+      await t.waitIdle(12000);
+      await t.game('act', 'freezeFx', 0);
+      await t.waitFrames(3);
+
+      const sampleBoard = () => t.page.evaluate(async () => {
+        const st = window.__game.getState();
+        const cv = document.getElementById('board'), ctx = cv.getContext('2d');
+        const k = cv.width / cv.clientWidth;
+        const [x0] = await window.__game.act('cell', 112);
+        const [x1] = await window.__game.act('cell', 113);
+        const cell = Math.abs(x1 - x0);
+        const neutralCells = [], tileCells = [];
+        for (let i = 0; i < 225; i++) {
+          const r = Math.floor(i / 15), c = i % 15;
+          if (r < 2 || r > 12 || c < 2 || c > 12) continue;
+          if (st.game.board[i] && !st.game.board[i].blank && st.game.board[i].l === 'I') tileCells.push(i);
+          else if (!st.game.board[i] && window.__G && !['w', 'h', 's', 'b', 'B', '*'].includes(st.game.board[i])) neutralCells.push(i);
+        }
+        // Pick verified empty neutral squares (no premium/bath/center)
+        const { SQUARE: SQ } = await import(new URL('src/js/score.js', location.href).href);
+        const empties = [];
+        for (let i = 0; i < 225 && empties.length < 12; i++) {
+          const r = Math.floor(i / 15), c = i % 15;
+          if (r >= 2 && r <= 12 && c >= 2 && c <= 12 && SQ[i] === '.' && !st.game.board[i]) empties.push(i);
+        }
+        const tiles = [];
+        for (let i = 0; i < 225 && tiles.length < 8; i++) {
+          if (st.game.board[i] && !st.game.board[i].blank) tiles.push(i);
+        }
+        let mSum = 0, mSq = 0, mN = 0;
+        for (const idx of empties) {
+          const [cx, cy] = await window.__game.act('cell', idx);
+          const half = Math.max(3, Math.round(cell * 0.28 * k));
+          const d = ctx.getImageData(Math.round(cx * k) - half, Math.round(cy * k) - half, half * 2, half * 2).data;
+          for (let j = 0; j < d.length; j += 4) {
+            const l = 0.2126 * d[j] + 0.7152 * d[j + 1] + 0.0722 * d[j + 2];
+            mSum += l; mSq += l * l; mN++;
+          }
+        }
+        // Sample upper-left ivory tile body corner (clear of letter glyph & point numeral)
+        let tSum = 0, tN = 0;
+        for (const idx of tiles) {
+          const [cx, cy] = await window.__game.act('cell', idx);
+          const px = Math.round((cx - cell * 0.34) * k), py = Math.round((cy - cell * 0.34) * k);
+          const w = Math.max(3, Math.round(cell * 0.16 * k));
+          const d = ctx.getImageData(px, py, w, w).data;
+          for (let j = 0; j < d.length; j += 4) {
+            tSum += 0.2126 * d[j] + 0.7152 * d[j + 1] + 0.0722 * d[j + 2]; tN++;
+          }
+        }
+        const mean = mSum / mN;
+        return { marbleMean: mean, marbleStd: Math.sqrt(Math.max(0, mSq / mN - mean * mean)), tileLum: tSum / tN, empties: empties.length, tiles: tiles.length };
+      });
+
+      const day = await sampleBoard();
+      t.log(`W2-S1-01 Day 2D live (marble.webp): tileLum=${day.tileLum.toFixed(1)}, marbleMean=${day.marbleMean.toFixed(1)}, std=${day.marbleStd.toFixed(1)}`);
+      t.expect(day.tileLum >= 236, `Day ivory ceramic tiles stay bright (#FFFDF5, lum=${day.tileLum.toFixed(1)} >= 236)`);
+      t.expect(day.marbleMean >= 180 && day.marbleMean <= 216, `Day empty marble steps down into calm warm travertine (lum=${day.marbleMean.toFixed(1)}, target 180..216)`);
+      t.expect(day.tileLum - day.marbleMean >= 28, `strict Day figure-ground step >= 28 lum pts (${(day.tileLum - day.marbleMean).toFixed(1)})`);
+      t.expect(day.marbleStd < 12, `Day marble veining stays calm without harsh double-multiply clutter (std=${day.marbleStd.toFixed(1)} < 12)`);
+      await t.shot('w2-b10-day-midgame-2d');
+
+      // Switch to Night and verify calm twilight slate-limestone marble ground
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="theme"][data-val="dark"]');
+      await t.game('scene', 'game');
+      await t.waitIdle(6000);
+      await t.waitFrames(3);
+      const night = await sampleBoard();
+      t.log(`W2-S1-01 Night 2D live (marble.webp): tileLum=${night.tileLum.toFixed(1)}, marbleMean=${night.marbleMean.toFixed(1)}, std=${night.marbleStd.toFixed(1)}`);
+      t.expect(night.marbleMean >= 38 && night.marbleMean <= 74, `Night empty marble uses calm twilight slate-limestone (lum=${night.marbleMean.toFixed(1)}, target 38..74)`);
+      t.expect(night.tileLum - night.marbleMean >= 150, `Night ivory tiles pop sharply above twilight slate-limestone (delta=${(night.tileLum - night.marbleMean).toFixed(1)})`);
+
+      // Confirm render2d.js removed the 0.45 double-multiply pass on marble.webp
+      const src = fs.readFileSync(path.join(root, 'src/js/render2d.js'), 'utf8');
+      t.expect(!/globalCompositeOperation\s*=\s*['"]multiply['"]/.test(src), 'render2d.js removed marble double-multiply pass');
     },
   },
 ];

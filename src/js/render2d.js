@@ -21,10 +21,11 @@ export const PREMIUM = {
   b: { name: 'BOILING', mult: '3W', unit: 'WORD', glass: ['#F0A27A', '#C4532F', '#7E2F1F'], lead: 0, rings: 3 },
 };
 
-function marble(ctx, x, y, w, h, rnd, light = true) {
+function marble(ctx, x, y, w, h, rnd, theme = 'light') {
+  const dark = theme === 'dark';
   const g = ctx.createLinearGradient(x, y, x + w, y + h);
-  if (light) { g.addColorStop(0, '#FBF9F4'); g.addColorStop(0.55, '#F1EDE4'); g.addColorStop(1, '#E7E1D4'); }
-  else { g.addColorStop(0, '#EDE7DA'); g.addColorStop(1, '#DCD3C1'); }
+  if (dark) { g.addColorStop(0, '#3B384D'); g.addColorStop(0.55, '#353244'); g.addColorStop(1, '#2D2A3B'); }
+  else { g.addColorStop(0, '#DDD3C1'); g.addColorStop(0.55, '#D8CEBC'); g.addColorStop(1, '#CFC4B0'); }
   ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
   // veins: a few soft wandering strokes
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
@@ -38,8 +39,10 @@ function marble(ctx, x, y, w, h, rnd, light = true) {
       ctx.quadraticCurveTo(px + (rnd() - 0.5) * w * 0.4, (py + ny) / 2, nx, ny);
       px = nx; py = ny;
     }
-    ctx.strokeStyle = `rgba(150,140,125,${0.10 + rnd() * 0.12})`; ctx.lineWidth = Math.max(1, w * (0.008 + rnd() * 0.02)); ctx.stroke();
-    ctx.strokeStyle = 'rgba(120,112,100,0.10)'; ctx.lineWidth = Math.max(0.6, w * 0.004); ctx.stroke();
+    ctx.strokeStyle = dark ? `rgba(120,116,148,${0.07 + rnd() * 0.06})` : `rgba(130,118,100,${0.06 + rnd() * 0.07})`;
+    ctx.lineWidth = Math.max(1, w * (0.008 + rnd() * 0.018)); ctx.stroke();
+    ctx.strokeStyle = dark ? 'rgba(18,16,28,0.12)' : 'rgba(110,98,82,0.06)';
+    ctx.lineWidth = Math.max(0.6, w * 0.004); ctx.stroke();
   }
   ctx.restore();
 }
@@ -247,24 +250,31 @@ export function paintBoard(size, theme = 'light') {
     ctx.restore();
   }
   // grout under the cells
-  ctx.fillStyle = '#7A6340'; ctx.fillRect(f, f, cell * N, cell * N);
+  const dark = theme === 'dark';
+  ctx.fillStyle = dark ? '#221E30' : '#7A6340'; ctx.fillRect(f, f, cell * N, cell * N);
   const gap = Math.max(1, cell * 0.035);
   for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
     const i = r * N + c, k = SQUARE[i];
     const x = f + c * cell + gap / 2, y = f + r * cell + gap / 2, w = cell - gap;
     if (art.ready('marble')) {
-      // each square is its own slab cut from a different part of the marble
+      // W2-S1-01: calm honed travertine (#D8CEBC day / #353244 night) ground with a single soft marble.webp pass
+      // (0.27 alpha, no double-multiply) so bright ivory ceramic tiles hold Rank 1 figure-ground contrast (CD-WF2-03).
       const m = art.img('marble'), sw = m.width * (0.14 + rnd() * 0.16);
+      const base = ctx.createLinearGradient(x, y, x + w, y + w);
+      if (dark) { base.addColorStop(0, '#383548'); base.addColorStop(1, '#312E40'); }
+      else { base.addColorStop(0, '#D6CCB8'); base.addColorStop(1, '#CEC3AD'); }
+      ctx.fillStyle = base; ctx.fillRect(x, y, w, w);
       ctx.save(); ctx.translate(x + w / 2, y + w / 2); ctx.rotate(Math.floor(rnd() * 4) * Math.PI / 2); if (rnd() < 0.5) ctx.scale(-1, 1);
       const sx = rnd() * (m.width - sw), sy = rnd() * (m.height - sw);
+      if (dark) ctx.globalCompositeOperation = 'soft-light';
+      ctx.globalAlpha = 0.27;
       ctx.drawImage(m, sx, sy, sw, sw, -w / 2, -w / 2, w, w);
-      ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = 0.45; ctx.drawImage(m, sx, sy, sw, sw, -w / 2, -w / 2, w, w);
       ctx.restore();
-    } else marble(ctx, x, y, w, w, rnd);
-    // bevel: light top-left, shade bottom-right
-    ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = Math.max(0.8, cell * 0.02);
+    } else marble(ctx, x, y, w, w, rnd, theme);
+    // bevel: subtle light top-left, shade bottom-right (calibrated for calm Day travertine & Night twilight stone)
+    ctx.strokeStyle = dark ? 'rgba(200,205,235,0.12)' : 'rgba(255,250,238,0.36)'; ctx.lineWidth = Math.max(0.8, cell * 0.02);
     ctx.beginPath(); ctx.moveTo(x + 1, y + w - 1); ctx.lineTo(x + 1, y + 1); ctx.lineTo(x + w - 1, y + 1); ctx.stroke();
-    ctx.strokeStyle = 'rgba(80,60,40,0.28)';
+    ctx.strokeStyle = dark ? 'rgba(8,6,16,0.44)' : 'rgba(88,70,46,0.28)';
     ctx.beginPath(); ctx.moveTo(x + w - 1, y + 1); ctx.lineTo(x + w - 1, y + w - 1); ctx.lineTo(x + 1, y + w - 1); ctx.stroke();
     const cx = x + w / 2, cy = y + w / 2;
     if (PREMIUM[k]) {
@@ -365,7 +375,7 @@ export function paintBoard(size, theme = 'light') {
 // The flat top of a 3D tile: the face texture spans the tile's footprint; the flat top is about 0.08-0.92 of it.
 function paintFace(ctx, l, blank, w) {
   const g = ctx.createLinearGradient(0, 0, w, w);
-  g.addColorStop(0, '#FFFBF1'); g.addColorStop(0.6, '#F5EDDB'); g.addColorStop(1, '#EADFC6');
+  g.addColorStop(0, '#FFFDF5'); g.addColorStop(0.6, '#FAF3E3'); g.addColorStop(1, '#F0E6CE');
   ctx.fillStyle = g; ctx.fillRect(0, 0, w, w);
   if (!l) return;
   ctx.save();
@@ -391,11 +401,11 @@ export function tileSprite(l, blank, w, kind = 'board') {
   const inset = w * 0.05, s = w - inset * 2, r = s * 0.14;
   // body
   const g = ctx.createLinearGradient(inset, inset, inset + s, inset + s);
-  g.addColorStop(0, '#FFFBF1'); g.addColorStop(0.6, '#F3EAD6'); g.addColorStop(1, '#E2D5B8');
+  g.addColorStop(0, '#FFFDF5'); g.addColorStop(0.6, '#F8F0DE'); g.addColorStop(1, '#EAE0C7');
   roundRect(ctx, inset, inset, s, s, r); ctx.fillStyle = g; ctx.fill();
   // edge: dark lower bevel, bright upper rim
-  ctx.lineWidth = Math.max(1, w * 0.035);
-  ctx.strokeStyle = 'rgba(120,95,55,0.55)'; roundRect(ctx, inset, inset, s, s, r); ctx.stroke();
+  ctx.lineWidth = Math.max(1, w * 0.038);
+  ctx.strokeStyle = 'rgba(92,70,38,0.62)'; roundRect(ctx, inset, inset, s, s, r); ctx.stroke();
   ctx.lineWidth = Math.max(0.8, w * 0.025); ctx.strokeStyle = 'rgba(255,255,255,0.85)';
   ctx.beginPath(); ctx.moveTo(inset + r, inset + w * 0.02); ctx.lineTo(inset + s - r, inset + w * 0.02); ctx.stroke();
   // glaze highlight
@@ -536,7 +546,10 @@ export function drawFrame(ctx, d) {
     const [x, y] = at(i);
     const spr = tileSprite(t.l, t.blank, tilePx * sc, kind);
     ctx.globalAlpha = alpha;
-    if (kind !== 'ghost') { ctx.fillStyle = 'rgba(40,25,10,0.28)'; roundRect(ctx, x + cellPx * 0.08, y + cellPx * 0.12 + lift * 0.5, cellPx * 0.9, cellPx * 0.9, cellPx * 0.14); ctx.fill(); }
+    if (kind !== 'ghost') {
+      ctx.fillStyle = 'rgba(22,13,5,0.24)'; roundRect(ctx, x + cellPx * 0.07, y + cellPx * 0.14 + lift * 0.5, cellPx * 0.91, cellPx * 0.91, cellPx * 0.15); ctx.fill();
+      ctx.fillStyle = 'rgba(18,10,4,0.38)'; roundRect(ctx, x + cellPx * 0.06, y + cellPx * 0.09 + lift * 0.3, cellPx * 0.9, cellPx * 0.9, cellPx * 0.14); ctx.fill();
+    }
     const off = (cellPx - cellPx * sc) / 2;
     ctx.drawImage(spr, x + off, y + off - lift, cellPx * sc, cellPx * sc);
     ctx.globalAlpha = 1;
