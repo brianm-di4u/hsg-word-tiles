@@ -111,19 +111,52 @@ function clothTexture(grp) {
 
 function envMap() {
   const pm = new THREE.PMREMGenerator(B3.renderer), sc = new THREE.Scene();
-  sc.add(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, color: 0x8f7a64 })));
-  const panel = (c, x, y, z, s) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(s, s), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide })); m.position.set(x, y, z); m.lookAt(0, 0, 0); sc.add(m); };
+  const temps = [];
+  const add = (geo, mat, pos) => {
+    const m = new THREE.Mesh(geo, mat);
+    if (pos) { m.position.set(...pos); m.lookAt(0, 0, 0); }
+    sc.add(m); temps.push(m);
+  };
+  add(new THREE.SphereGeometry(10, 32, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, color: 0x8f7a64 }));
+  const panel = (c, x, y, z, s) => add(new THREE.PlaneGeometry(s, s), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }), [x, y, z]);
   panel(0xfff0d0, -4, 7, -3, 6); panel(0xc8d8ff, 6, 3, 6, 5); panel(0xffd9a0, 0, 2, 9, 7); panel(0x3a2414, 0, -8, 0, 16);
-  const t = pm.fromScene(sc, 0.02).texture; pm.dispose();
-  return t;
+  const rt = pm.fromScene(sc, 0.02);
+  for (const m of temps) { m.geometry.dispose(); m.material.dispose(); }
+  B3.envTempDisposed = temps.length;
+  B3.envRT = rt;
+  pm.dispose();
+  return rt.texture;
+}
+
+function clearContextListeners(keepRestored = false) {
+  const cv = B3._ctxCanvas;
+  if (!cv) return;
+  if (B3._onLost) { cv.removeEventListener('webglcontextlost', B3._onLost); B3._onLost = null; }
+  if (!keepRestored) {
+    if (B3._onRestored) { cv.removeEventListener('webglcontextrestored', B3._onRestored); B3._onRestored = null; }
+    B3._ctxCanvas = null;
+  }
 }
 
 // ---------- build ----------
-export function init(canvas, theme) {
+export function init(canvas, theme, hooks = {}) {
+  clearContextListeners(false);
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }); }
   catch (e) { B3.reason = 'context'; return false; }
   B3.renderer = renderer; B3.canvas = canvas;
+  const onLost = (e) => {
+    e.preventDefault();
+    if (!B3.on) return;
+    if (hooks.onContextLost) hooks.onContextLost(e);
+    else destroy({ fromContextLoss: true });
+  };
+  const onRestored = (e) => {
+    if (hooks.onContextRestored) hooks.onContextRestored(e);
+  };
+  canvas.addEventListener('webglcontextlost', onLost, false);
+  canvas.addEventListener('webglcontextrestored', onRestored, false);
+  B3._ctxCanvas = canvas; B3._onLost = onLost; B3._onRestored = onRestored;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -137,11 +170,11 @@ export function init(canvas, theme) {
   key.shadow.mapSize.set(sm, sm); key.shadow.camera.near = 10; key.shadow.camera.far = 60; key.shadow.bias = -0.0004; key.shadow.normalBias = 0.03; key.shadow.radius = 3;
   scene.add(key); scene.add(key.target); B3.key = key;
   B3.fill = new THREE.DirectionalLight(0xcfe0ff, 0.5); B3.fill.position.set(12, 10, 16); scene.add(B3.fill);
-  // counter and board slab
-  B3.table = new THREE.Mesh(new THREE.PlaneGeometry(64, 42), new THREE.MeshPhysicalMaterial({ roughness: 0.42, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.25 }));
+  // counter and board slab (MeshStandardMaterial per CD-WF3-02 / CD-WF6-01; hero ceramic tiles keep MeshPhysicalMaterial clearcoat)
+  B3.table = new THREE.Mesh(new THREE.PlaneGeometry(64, 42), new THREE.MeshStandardMaterial({ roughness: 0.48, metalness: 0 }));
   B3.table.rotation.x = -Math.PI / 2; B3.table.receiveShadow = true; scene.add(B3.table);
   B3.boardCanvas = null;
-  B3.top = new THREE.MeshPhysicalMaterial({ roughness: 0.55, metalness: 0, clearcoat: 0.18, clearcoatRoughness: 0.45 });
+  B3.top = new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0 });
   const side = new THREE.MeshStandardMaterial({ color: 0x3a2414, roughness: 0.6 });
   B3.board = new THREE.Mesh(new THREE.BoxGeometry(U, TOP, U), [side, side, B3.top, side, side, side]);
   B3.board.position.y = TOP / 2; B3.board.receiveShadow = true; B3.board.castShadow = true; scene.add(B3.board);
@@ -202,10 +235,48 @@ function tileMesh() {
   return g;
 }
 
-export function destroy() {
+const TEX_PROPS = ['map', 'emissiveMap', 'roughnessMap', 'metalnessMap', 'normalMap', 'aoMap', 'alphaMap', 'bumpMap', 'clearcoatMap', 'clearcoatRoughnessMap', 'envMap'];
+export function destroy(opts = {}) {
+  const fromLoss = !!opts.fromContextLoss;
+  clearContextListeners(fromLoss);
   if (!B3.renderer) return;
-  B3.renderer.dispose(); B3.renderer.forceContextLoss?.();
-  B3.on = false; B3.renderer = null; R.proj.fn = null; faceCache.clear(); B3.intervals.length = 0;
+  const geos = new Set(), mats = new Set(), texs = new Set();
+  const collectMat = (m) => {
+    if (!m) return;
+    if (Array.isArray(m)) { m.forEach(collectMat); return; }
+    mats.add(m);
+    for (const p of TEX_PROPS) if (m[p] && typeof m[p].dispose === 'function') texs.add(m[p]);
+  };
+  if (B3.scene) {
+    B3.scene.traverse((o) => {
+      if (o.geometry && typeof o.geometry.dispose === 'function') geos.add(o.geometry);
+      if (o.material) collectMat(o.material);
+    });
+    if (B3.scene.environment && typeof B3.scene.environment.dispose === 'function') texs.add(B3.scene.environment);
+    B3.scene.environment = null;
+  }
+  for (const m of faceCache.values()) collectMat(m);
+  faceCache.clear();
+  for (const g of B3.tileGeo || []) if (g.geo && typeof g.geo.dispose === 'function') geos.add(g.geo);
+  collectMat(B3.top);
+  collectMat(B3.table && B3.table.material);
+  collectMat(B3.bodyMat);
+  collectMat(B3.stagedMat);
+  collectMat(B3.lastMat);
+  for (const t of texs) t.dispose();
+  if (B3.envRT && typeof B3.envRT.dispose === 'function') B3.envRT.dispose();
+  for (const m of mats) if (typeof m.dispose === 'function') m.dispose();
+  for (const g of geos) g.dispose();
+  B3.lastDispose = { geometries: geos.size, materials: mats.size, textures: texs.size };
+  B3.renderer.dispose();
+  if (!fromLoss) B3.renderer.forceContextLoss?.();
+  B3.on = false; B3.renderer = null; B3.canvas = null; B3.scene = null; B3.camera = null;
+  B3.hemi = null; B3.key = null; B3.fill = null;
+  B3.table = null; B3.top = null; B3.board = null; B3.preDim = null; B3.dimIdx = null;
+  B3.frame = null; B3.towels = null; B3.bell = null; B3.towelCloth = null; B3.towelStripe = null;
+  B3.tileGeo = null; B3.bodyMat = null; B3.stagedMat = null; B3.lastMat = null; B3.envRT = null;
+  B3.boardCanvas = null; B3.tiles = []; B3.frames.length = 0; B3.intervals.length = 0; B3.texKey = '';
+  R.proj.fn = null;
 }
 
 export function setTheme(theme) {
@@ -235,6 +306,7 @@ export function setTheme(theme) {
   B3.fill.intensity = dark ? 0.4 : 0.5; B3.fill.color.set(dark ? 0x5c72b8 : 0xcfe0ff);
   B3.scene.environmentIntensity = dark ? 0.28 : 0.5;
   if (B3.bodyMat) { B3.bodyMat.color.set(dark ? 0xd8cdb6 : 0xeadfc4); B3.bodyMat.needsUpdate = true; }
+  if (B3.top) { B3.top.emissive.set(dark ? 0x302c44 : 0x000000); B3.top.emissiveIntensity = dark ? 0.45 : 0; B3.top.needsUpdate = true; }
   if (B3.preDim) { B3.preDim.material.color.set(dark ? 0x14121f : 0x1e140a); B3.preDim.material.needsUpdate = true; }
   invalidateFaceCache();
   B3.texKey = '';
@@ -256,7 +328,7 @@ export function resize(w, h) {
   TILT = tall ? PORTRAIT_TILT : 0.3; MARGIN = tall ? 0.008 : 0.025;
   // on phones the board fills the width and the props would only show as slivers
   B3.tall = tall; B3.towels.visible = B3.bell.visible = !tall;
-  B3.top.clearcoat = tall ? 0.08 : 0.18;
+  B3.top.roughness = tall ? 0.6 : 0.55;
   B3.fit = fitDistance();
 }
 function applyPose(tx, tz, dist) {
@@ -406,6 +478,10 @@ export function debug() {
     preDim: !!B3.preDimActive, dimOpacity: B3.dimOpacity || 0, dimOpenCount: B3.dimOpenCount || 0,
     bezel: B3.on ? bezelBounds() : null,
     faceCache: faceCache.size, tileCache: R.tileCacheSize(),
+    boardCanvas: !!B3.boardCanvas, tilePool: B3.tiles.length,
+    envTempDisposed: B3.envTempDisposed || 0, disposed: B3.lastDispose || null,
+    topMat: B3.top ? B3.top.type : null, tableMat: B3.table && B3.table.material ? B3.table.material.type : null,
+    keyType: B3.key ? B3.key.type : null,
     frames: B3.frames.length, intervals: B3.intervals.slice(),
   };
 }

@@ -277,4 +277,73 @@ export const tests = [
       }
     },
   },
+  // ---------- W3-S5-02 ----------
+  {
+    name: 'W3-S5-02 webglcontextlost falls back cleanly to 2D (disposing GPU resources & resetting caches/frames), webglcontextrestored recovers 3D, and envMap disposes all 5 temp meshes',
+    viewports: ['desktop'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 41, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'julian' }] });
+      await t.waitIdle(8000);
+      await t.game('act', 'autoplay', 6);
+      await t.waitIdle(10000);
+      await t.waitFrames(3);
+
+      const before = await t.game('act', 'b3');
+      if (!t.gpu) {
+        t.equal(before.on, false, 'non-GPU run stays on 2D fallback');
+        return;
+      }
+      t.equal(before.on, true, '3D board active before context loss');
+      t.equal(before.keyType, 'SpotLight', 'preserves warm overhead SpotLight lamp pool (CD-WF3-02)');
+      t.equal(before.tableMat, 'MeshStandardMaterial', 'B3.table uses MeshStandardMaterial (CD-WF3-02/CD-WF6-01)');
+      t.equal(before.topMat, 'MeshStandardMaterial', 'B3.top uses MeshStandardMaterial (CD-WF3-02/CD-WF6-01)');
+      t.equal(before.envTempDisposed, 5, 'envMap() disposes all 5 temporary meshes/materials immediately after pm.fromScene()');
+      t.expect(before.faceCache > 0 && before.tiles > 0 && before.frames > 0, `3D board populated (faceCache=${before.faceCache}, tiles=${before.tiles}, frames=${before.frames})`);
+
+      // 1) Trigger real webglcontextlost on #gl and confirm e.preventDefault(), 2D fallback, full GPU disposal, and non-blank 2D canvas
+      const lostResult = await t.page.evaluate(() => {
+        const gl = document.getElementById('gl');
+        const ev = new Event('webglcontextlost', { cancelable: true });
+        gl.dispatchEvent(ev);
+        return { defaultPrevented: ev.defaultPrevented, glHidden: gl.hidden };
+      });
+      await t.waitFrames(4);
+      const afterLoss = await t.game('act', 'b3');
+      const board2dSample = await t.page.evaluate(() => {
+        const cv = document.getElementById('board');
+        const d = cv.getContext('2d').getImageData(Math.round(cv.width / 2) - 8, Math.round(cv.height / 2) - 8, 16, 16).data;
+        let alpha = 0;
+        for (let i = 3; i < d.length; i += 4) alpha += d[i];
+        return { meanAlpha: alpha / (d.length / 4), glHidden: document.getElementById('gl').hidden };
+      });
+      t.equal(lostResult.defaultPrevented, true, 'webglcontextlost calls e.preventDefault() so restoration is allowed');
+      t.equal(afterLoss.on, false, 'B3.on switches to false on webglcontextlost');
+      t.equal(afterLoss.reason, 'context-lost', 'B3.reason records context-lost');
+      t.equal(board2dSample.glHidden, true, '#gl canvas is hidden after context loss');
+      t.expect(board2dSample.meanAlpha > 200, `2D fallback renders opaque board immediately after context loss (alpha=${board2dSample.meanAlpha.toFixed(1)})`);
+      t.equal(afterLoss.faceCache, 0, 'B3.destroy() clears faceCache');
+      t.equal(afterLoss.boardCanvas, false, 'B3.destroy() resets B3.boardCanvas to null');
+      t.equal(afterLoss.tilePool, 0, 'B3.destroy() resets B3.tiles to []');
+      t.equal(afterLoss.frames, 0, 'B3.destroy() resets B3.frames to []');
+      t.expect(afterLoss.disposed && afterLoss.disposed.geometries >= 5 && afterLoss.disposed.materials >= 8 && afterLoss.disposed.textures >= 5,
+        `B3.destroy() disposed GPU resources (${JSON.stringify(afterLoss.disposed)})`);
+      await t.shot('w2-b11-context-lost-2d');
+
+      // 2) Dispatch webglcontextrestored on #gl and confirm clean 3D recovery
+      await t.page.evaluate(() => {
+        document.getElementById('gl').dispatchEvent(new Event('webglcontextrestored'));
+      });
+      await t.waitFrames(5);
+      const afterRestore = await t.game('act', 'b3');
+      const glShown = await t.page.evaluate(() => !document.getElementById('gl').hidden);
+      t.equal(afterRestore.on, true, 'webglcontextrestored recovers 3D board cleanly');
+      t.equal(glShown, true, '#gl canvas visible again after restore');
+      t.expect(afterRestore.tiles >= before.tiles && afterRestore.faceCache > 0, `3D tiles restored cleanly (tiles=${afterRestore.tiles}, faceCache=${afterRestore.faceCache})`);
+      const [cx, cy] = await t.game('act', 'cell', 112);
+      t.equal(await t.game('act', 'cellAt', cx, cy), 112, '3D camera picking round-trips after webglcontextrestored');
+      await t.shot('w2-b11-context-restored-3d', { timeout: 15000 });
+    },
+  },
 ];

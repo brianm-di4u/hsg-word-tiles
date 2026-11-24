@@ -1543,13 +1543,21 @@ function ensure3d() {
     b.reason = p.ok ? '' : p.why;
     if (p.ok) {
       const old = $('#gl'), cv = old.cloneNode(); old.replaceWith(cv); cv.hidden = false;
-      if (!B3.init(cv, dark() ? 'dark' : 'light')) { cv.hidden = true; }
+      const hooks = {
+        onContextLost: () => fallback2D('context-lost', { fromContextLoss: true }),
+        onContextRestored: () => {
+          if (cv !== $('#gl') || G.settings.board3d === 'off' || /[?&]gl=0\b/.test(location.search)) return;
+          B3.B3.tried = false; B3.B3.reason = '';
+          layout();
+        },
+      };
+      if (!B3.init(cv, dark() ? 'dark' : 'light', hooks)) { cv.hidden = true; }
     }
   } else if (!want && b.on) {
     B3.destroy(); $('#gl').hidden = true;
   }
 }
-function fallback2D(why) { B3.destroy(); B3.B3.reason = why; B3.B3.tried = true; $('#gl').hidden = true; layout(); }
+function fallback2D(why, opts) { B3.destroy(opts); B3.B3.reason = why; B3.B3.tried = true; $('#gl').hidden = true; layout(); }
 
 let raf = 0;
 function draw() {
