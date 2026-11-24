@@ -230,7 +230,7 @@ body.theme-dark #turnline .mode-badge { background: #D4AF37; border-color: #F3DD
 #b-zoom { position: absolute; right: 8px; top: 8px; background: rgba(20, 14, 8, 0.7); }
 #b-zoomin { display: none; }
 #b-zoomin[data-mode="out"] .zin { display: none; }
-@media (max-width: 860px), (max-aspect-ratio: 1/1), (max-height: 520px) { #b-zoomin { display: grid; } }
+@media (max-width: 860px), (max-aspect-ratio: 1/1), (max-height: 520px) { #b-zoomin { display: grid; } #b-zoom { display: none; } }
 #preview { grid-area: preview; min-height: 46px; padding: 8px 14px; border-radius: 10px; background: var(--strip); color: var(--strip-ink); display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; font-size: 0.98em; }
 #preview .words b { font: 800 1.05em var(--f-serif); letter-spacing: 0.05em; margin-right: 6px; }
 #preview .words b.themed { color: #9FE3D6; }

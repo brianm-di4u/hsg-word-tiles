@@ -635,10 +635,20 @@ export function drawFrame(ctx, d) {
 }
 
 // When zoomed in: a small map of the whole board in the corner, with the part on screen outlined.
-export function drawMinimap(ctx, board, staged, rect) {
-  const S = 74, x0 = 10, y0 = view.H - S - 10, c = S / N;
+export const MINIMAP_ZOOM = 1.2;
+export function minimapBox() {
+  const S = 74, x0 = 10, y0 = view.H - S - 10, pad = 6;
+  return { x0, y0, S, pad, left: x0 - pad, top: y0 - pad, right: x0 + S + pad, bottom: y0 + S + pad };
+}
+export function minimapHit(x, y) {
+  if (view.zoom <= MINIMAP_ZOOM) return false;
+  const m = minimapBox();
+  return x >= m.left && x <= m.right && y >= m.top && y <= m.bottom;
+}
+export function drawMinimap(ctx, board, staged, vp) {
+  const { x0, y0, S, pad } = minimapBox(), c = S / N;
   ctx.save();
-  ctx.fillStyle = '#1E140A'; roundRect(ctx, x0 - 6, y0 - 6, S + 12, S + 12, 9); ctx.fill();
+  ctx.fillStyle = '#1E140A'; roundRect(ctx, x0 - pad, y0 - pad, S + pad * 2, S + pad * 2, 9); ctx.fill();
   ctx.fillStyle = '#EFE8D8'; ctx.fillRect(x0, y0, S, S);
   ctx.beginPath(); ctx.rect(x0, y0, S, S); ctx.clip();
   for (let i = 0; i < N * N; i++) {
@@ -648,9 +658,21 @@ export function drawMinimap(ctx, board, staged, rect) {
   }
   ctx.fillStyle = '#D9A23A';
   for (const t of staged || []) ctx.fillRect(x0 + (t.i % N) * c, y0 + Math.floor(t.i / N) * c, c, c);
-  // rect: the visible board area in cells [x, y, w, h] (board units, FRAME included)
-  const k = S / N, rx = x0 + (rect[0] - FRAME) * k, ry = y0 + (rect[1] - FRAME) * k;
-  ctx.strokeStyle = '#F0D57A'; ctx.lineWidth = 2.5; ctx.strokeRect(rx, ry, rect[2] * k, rect[3] * k);
-  ctx.strokeStyle = 'rgba(20,14,8,0.8)'; ctx.lineWidth = 1; ctx.strokeRect(rx - 1.5, ry - 1.5, rect[2] * k + 3, rect[3] * k + 3);
+  // vp: either { kind: 'poly', pts: [[bx, by], ...] } from 3D B3.boardAt() frustum corners,
+  // or { kind: 'rect', rect: [x, y, w, h] } / [x, y, w, h] in 2D board units (FRAME included).
+  const k = S / N;
+  if (vp && vp.kind === 'poly' && vp.pts && vp.pts.length >= 3) {
+    const pts = vp.pts.map(([bx, by]) => [x0 + (bx - FRAME) * k, y0 + (by - FRAME) * k]);
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(20,14,8,0.85)'; ctx.lineWidth = 4; poly(ctx, pts); ctx.stroke();
+    ctx.strokeStyle = '#F0D57A'; ctx.lineWidth = 2.2; poly(ctx, pts); ctx.stroke();
+  } else {
+    const rect = Array.isArray(vp) ? vp : vp && vp.rect;
+    if (rect) {
+      const rx = x0 + (rect[0] - FRAME) * k, ry = y0 + (rect[1] - FRAME) * k;
+      ctx.strokeStyle = '#F0D57A'; ctx.lineWidth = 2.5; ctx.strokeRect(rx, ry, rect[2] * k, rect[3] * k);
+      ctx.strokeStyle = 'rgba(20,14,8,0.8)'; ctx.lineWidth = 1; ctx.strokeRect(rx - 1.5, ry - 1.5, rect[2] * k + 3, rect[3] * k + 3);
+    }
+  }
   ctx.restore();
 }

@@ -1500,6 +1500,16 @@ function draw() {
   if (raf) return;
   raf = requestAnimationFrame(frame);
 }
+function minimapViewport() {
+  if (B3.B3.on) {
+    const W = R.view.W, H = R.view.H;
+    const pts = [[0, 0], [W, 0], [W, H], [0, H]].map(([sx, sy]) => B3.boardAt(sx, sy));
+    if (pts.every(Boolean)) return { kind: 'poly', pts };
+  }
+  const wCells = R.U / R.view.zoom * (R.view.W / Math.min(R.view.W, R.view.H));
+  const hCells = R.U / R.view.zoom * (R.view.H / Math.min(R.view.W, R.view.H));
+  return { kind: 'rect', rect: [R.view.cx - wCells / 2, R.view.cy - hCells / 2, wCells, hCells] };
+}
 function frame(now) {
   raf = 0;
   // the time since the last frame of a running animation is a real frame interval; frames drawn for any other reason are not
@@ -1514,12 +1524,12 @@ function frame(now) {
     if (G.settings.board3d === 'auto' && B3.slowFrames()) { fallback2D('slow'); return; }
   }
   R.drawFrame(c2, d);
-  if (R.view.zoom > 1.2) {
-    // the visible area in board cells (the 3D camera frames the same centre and zoom)
-    const wCells = R.U / R.view.zoom * (R.view.W / Math.min(R.view.W, R.view.H)), hCells = R.U / R.view.zoom * (R.view.H / Math.min(R.view.W, R.view.H));
+  if (R.view.zoom > R.MINIMAP_ZOOM) {
+    const vp = minimapViewport();
+    G.minimapView = vp;
     c2.setTransform(R.view.dpr, 0, 0, R.view.dpr, 0, 0);
-    R.drawMinimap(c2, G.s.board, G.staged, [R.view.cx - wCells / 2, R.view.cy - hCells / 2, wCells, hCells]);
-  }
+    R.drawMinimap(c2, G.s.board, G.staged, vp);
+  } else G.minimapView = null;
   if (G.anim.size && now < G.animUntil + 50) { G.chainAt = now; draw(); }
   else if (G.anim.size) G.anim.clear();
   if (G.lastPulse) { if (now < G.lastPulse.t0 + G.lastPulse.dur) { G.chainAt = now; draw(); } else G.lastPulse = null; }
@@ -1565,7 +1575,7 @@ function zoomByKey(k) {
 }
 function syncZoomBtn() {
   const out = R.view.zoom > 1.01, b = $('#b-zoomin');
-  $('#b-zoom').hidden = !out;
+  $('#b-zoom').hidden = !out || isNarrow();
   b.dataset.mode = out ? 'out' : 'in';
   b.setAttribute('aria-label', out ? 'Show the whole board' : 'Zoom in on the board');
 }
@@ -1777,12 +1787,28 @@ function rackDown(e, k) {
 }
 const tileOf = (k) => { const l = (waitSeat() || cur()).rack[k]; return { l: l === '?' ? '' : l, blank: l === '?' }; };
 
+function minimapPanTo(x, y) {
+  const m = R.minimapBox();
+  const u = clamp((x - m.x0) / m.S, 0, 1);
+  const v = clamp((y - m.y0) / m.S, 0, 1);
+  G.viewAnim = null;
+  R.view.cx = R.FRAME + u * N;
+  R.view.cy = R.FRAME + v * N;
+  R.clampView();
+  draw();
+}
 function boardDown(e) {
   if (G.scene !== 'game') return;
   if (e.isPrimary) claimPointer(e);
   else if (G.pinch || (G.drag && G.drag.from !== 'pan')) return;   // a tile is in hand, or a pinch is on: ignore more fingers
   unlock();
   const [x, y] = boardPoint(e);
+  if (G.pointers.size === 0 && R.minimapHit(x, y)) {
+    G.drag = { from: 'minimap', move: G.s && G.s.move, x0: e.clientX, y0: e.clientY, id: e.pointerId, touch: e.pointerType === 'touch', active: true };
+    capture($('#board'), e.pointerId);
+    minimapPanTo(x, y);
+    return;
+  }
   G.pointers.set(e.pointerId, { x, y });
   if (G.pointers.size === 2) {
     // pinch zoom
@@ -1830,7 +1856,13 @@ function themedWordAt(s, lex, i) {
 function hoverSquare(e) {
   if (G.drag || e.pointerType !== 'mouse' || G.scene !== 'game' || !G.s) return;
   const b = $('#board'), r = b.getBoundingClientRect();
-  const i = pick(e.clientX - r.left, e.clientY - r.top);
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  if (R.minimapHit(mx, my)) {
+    b.style.cursor = 'pointer';
+    if (G.hoverInfo !== null || G.hoverBath !== null) { G.hoverInfo = null; G.hoverBath = null; renderPreview(); }
+    return;
+  }
+  const i = pick(mx, my);
   let info = null, bath = null, pointer = false;
   if (i >= 0 && !G.staged.length) {
     if (!G.s.board[i]) {
@@ -1914,7 +1946,7 @@ function cancelDrag() {
   if (!d) return;
   G.drag = null;
   try { if ($('#app').hasPointerCapture(d.id)) $('#app').releasePointerCapture(d.id); } catch (err) { /* gone */ }
-  if (!d.active || d.from === 'pan') return;
+  if (!d.active || d.from === 'pan' || d.from === 'minimap') return;
   if (d.from === 'board' && G.s && !G.s.board[d.i] && !G.staged.some((t) => t.i === d.i || t.k === d.k)) G.staged.push({ k: d.k, i: d.i, l: d.tile.l, blank: d.tile.blank });
   else if (!G.order.includes(d.k) && !G.staged.some((t) => t.k === d.k)) G.order.splice(slot(d), 0, d.k);
   $('#ghost').hidden = true;
@@ -1935,7 +1967,12 @@ function onMove(e) {
   }
   if (!d || e.pointerId !== d.id) return;
   // a mouse moving with no button held: the button came up where we could not see it (outside the window)
-  if (e.pointerType === 'mouse' && !e.buttons) { const pan = d.from === 'pan' && d.active; cancelDrag(); if (pan) layout(); draw(); return; }
+  if (e.pointerType === 'mouse' && !e.buttons) { const pan = (d.from === 'pan' || d.from === 'minimap') && d.active; cancelDrag(); if (pan) layout(); draw(); return; }
+  if (d.from === 'minimap') {
+    const [x, y] = boardPoint(e);
+    minimapPanTo(x, y);
+    return;
+  }
   const dist = Math.hypot(e.clientX - d.x0, e.clientY - d.y0);
   if (d.from === 'pan') {
     if (R.view.zoom > 1.01 && (d.active || dist > 6)) {
@@ -1987,6 +2024,7 @@ function onUp(e) {
   const d = G.drag;
   if (!d || e.pointerId !== d.id) return;
   G.drag = null;
+  if (d.from === 'minimap') { layout(); return; }
   if (d.active && d.from !== 'pan') {
     // drop on exactly the square the ghost showed
     if (d.target != null) {
@@ -2172,7 +2210,8 @@ function wireStatic() {
   document.addEventListener('keydown', onKey);
   window.addEventListener('pointerdown', (e) => { G.input = e.pointerType === 'touch' ? 'touch' : 'mouse'; if (G.springsOpen && (!e.target || !e.target.closest || !e.target.closest('#springs'))) syncSpringsDrawer(false); }, true);
   window.addEventListener('pointerdown', (e) => {
-    G.boardTap = !G.dialog && !G.privacy && e.isPrimary && e.target && e.target.closest && e.target.closest('#boardwrap')
+    const onMini = e.target === $('#board') && R.minimapHit(...boardPoint(e));
+    G.boardTap = !onMini && !G.dialog && !G.privacy && e.isPrimary && e.target && e.target.closest && e.target.closest('#boardwrap')
       ? { id: e.pointerId, x: e.clientX, y: e.clientY }
       : null;
   }, true);
@@ -2260,6 +2299,7 @@ window.__game = {
       case 'dragLift': return dragGeom({ touch: true }).lift;
       case 'killWorker': { const w = aiClient.worker; if (w) { w.onmessage = null; w.onerror = null; w.terminate(); } return aiClient.mode; } // dies without a word, as iOS can do
       case 'zoom': R.view.zoom = a[0]; if (a[1] != null) { R.view.cx = a[1]; R.view.cy = a[2]; } R.clampView(); layout(); return true;
+      case 'minimap': return { on: R.view.zoom > R.MINIMAP_ZOOM, box: R.minimapBox(), view: G.minimapView || null };
       case 'reveal': G.revealed = G.s.cur; G.privacy = false; renderGame(); return true;
       case 'hint': await doHint(); return G.staged.length;
       case 'daily': startDaily(a[0]); return true;
