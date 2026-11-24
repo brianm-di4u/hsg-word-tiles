@@ -883,6 +883,7 @@ function hintNext() {
 function renderStaging() {
   if (G.scene !== 'game' || !G.s) return;
   renderActions(); renderRack(); renderPreview();
+  syncToastStaging();
   coachRender();
   draw();
   startSteam();
@@ -1235,41 +1236,57 @@ function scorePop(e, themed) {
   setTimeout(() => el.remove(), ms + 100);
 }
 
-// Toasts: one at a time, newest on top of the queue; click to read the card.
+// Toasts: one at a time, newest on top of the queue; every toast is click/tap-dismissible (fact toasts open the card or dismiss via ×).
 function toast(t) {
   G.toastQ.push(t);
   if (G.toastQ.length > 4) G.toastQ.shift();
   showToast();
 }
 let toastTimer = 0;
+function syncToastStaging() {
+  const el = $('#toast'), app = $('#app');
+  if (!el || !app) return;
+  const on = el.classList.contains('on');
+  const chip = on && !!(G.toastNow && G.toastNow.keep) && (G.staged.length > 0 || !!(G.drag && G.drag.active) || !!G.hoverInfo);
+  el.classList.toggle('keep-chip', chip);
+  app.classList.toggle('toasting', on && !chip);
+}
 function showToast() {
   const el = $('#toast');
-  if (!G.toastQ.length) { el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); return; }
+  if (!G.toastQ.length) { G.toastNow = null; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app')?.classList.remove('toasting'); return; }
   if (el.dataset.busy === '1') return;
   const t = G.toastNow = G.toastQ.shift();
   el.dataset.busy = '1';
   el.className = `on ${t.kind}`;
   el.setAttribute('aria-hidden', 'false');
-  $('#app').classList.add('toasting');
-  el.innerHTML = `<button type="button" ${t.fact ? `data-fact="${t.fact}" data-form="${t.form || ''}"` : 'tabindex="-1"'}><span class="ti">${t.who ? UI.badge(t.who.p, t.who.k, 34) : t.kind === 'soak' ? UI.ICON.play : UI.ICON.steam}</span><span class="tt"><b>${esc(t.title)}</b><small>${esc(t.sub || '')}</small></span>${t.fact ? '<em>Read the card ›</em>' : ''}</button>`;
+  const icon = t.who ? UI.badge(t.who.p, t.who.k, 34) : t.kind === 'soak' ? UI.ICON.play : UI.ICON.steam;
+  if (t.fact) {
+    el.innerHTML = `<button type="button" class="toast-main" data-fact="${t.fact}" data-form="${t.form || ''}"><span class="ti">${icon}</span><span class="tt"><b>${esc(t.title)}</b><small>${esc(t.sub || '')}</small></span><em>Read the card ›</em></button><button type="button" class="toast-x" data-toast-dismiss aria-label="Dismiss notice">${UI.ICON.close}</button>`;
+  } else {
+    el.innerHTML = `<button type="button" class="toast-main" data-toast-dismiss aria-label="Dismiss: ${esc(t.title)}${t.sub ? '. ' + esc(t.sub) : ''}"><span class="ti">${icon}</span><span class="tt"><b>${esc(t.title)}</b><small>${esc(t.sub || '')}</small></span><span class="tx" aria-hidden="true">${UI.ICON.close}</span></button>`;
+  }
   const b = el.querySelector('[data-fact]');
   if (b) b.addEventListener('click', () => { openFact(b.dataset.fact, b.dataset.form); hideToast(); });
+  const x = el.querySelector('[data-toast-dismiss]');
+  if (x) x.addEventListener('click', () => hideToast());
+  syncToastStaging();
   clearTimeout(toastTimer);
   toastTimer = setTimeout(hideToast, t.kind === 'themed' ? 5200 : 3200);
 }
 // the player has gone back to planning: a banner still over the preview strip would hide the score and the errors, so it goes (the ledger keeps the word)
-// A toast marked `keep` (a finished Register category) survives it: it is the one thing the player has earned and could not yet read.
+// A toast marked `keep` (a finished Register category) survives it, but lifts into a slim non-blocking chip above #preview while staging/dragging/inspecting.
 function clearToasts() {
   G.toastQ = G.toastQ.filter((t) => t.keep);
   if ($('#toast').classList.contains('on') && !(G.toastNow && G.toastNow.keep)) { hideToastNow(); showToast(); }
+  syncToastStaging();
 }
 function blurToastFocus(el) {
   if (!el.contains(document.activeElement)) return;
   if (!G.dialog && G.scene === 'game') { const b = $('#board'); if (b) { b.focus({ preventScroll: true }); return; } }
   document.activeElement.blur();
 }
-function hideToastNow() { const el = $('#toast'); clearTimeout(toastTimer); blurToastFocus(el); el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); }
-function hideToast() { const el = $('#toast'); blurToastFocus(el); el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); setTimeout(showToast, 200); }
+function hideToastNow() { const el = $('#toast'); clearTimeout(toastTimer); blurToastFocus(el); G.toastNow = null; el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); }
+function hideToast() { const el = $('#toast'); clearTimeout(toastTimer); blurToastFocus(el); G.toastNow = null; el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); setTimeout(showToast, 200); }
 
 // The strip under the board (or Shift+B) opens how the staged play adds up; the words are read out for a screen reader.
 function toggleBreakdown() {
@@ -1857,12 +1874,13 @@ function hoverSquare(e) {
   if (G.drag || e.pointerType !== 'mouse' || G.scene !== 'game' || !G.s) return;
   const b = $('#board'), r = b.getBoundingClientRect();
   const mx = e.clientX - r.left, my = e.clientY - r.top;
-  if (R.minimapHit(mx, my)) {
+  const onBoard = e.target === b && mx >= 0 && my >= 0 && mx <= r.width && my <= r.height;
+  if (onBoard && R.minimapHit(mx, my)) {
     b.style.cursor = 'pointer';
     if (G.hoverInfo !== null || G.hoverBath !== null) { G.hoverInfo = null; G.hoverBath = null; renderPreview(); }
     return;
   }
-  const i = pick(mx, my);
+  const i = onBoard ? pick(mx, my) : -1;
   let info = null, bath = null, pointer = false;
   if (i >= 0 && !G.staged.length) {
     if (!G.s.board[i]) {
@@ -1874,7 +1892,7 @@ function hoverSquare(e) {
     }
   }
   b.style.cursor = pointer ? 'pointer' : '';
-  if (info !== G.hoverInfo || bath !== G.hoverBath) { G.hoverInfo = info; G.hoverBath = bath; renderPreview(); }
+  if (info !== G.hoverInfo || bath !== G.hoverBath) { G.hoverInfo = info; G.hoverBath = bath; if (info) clearToasts(); else syncToastStaging(); renderPreview(); }
 }
 
 // Dragging works like the block puzzle's: on touch the tile floats well clear of the finger at about the size of a
@@ -1998,6 +2016,7 @@ function onMove(e) {
     // the tile may have moved since the press (typed onto the board, recalled): then there is nothing to lift
     if (d.from === 'board' ? !G.staged.some((t) => t.i === d.i && t.k === d.k) : !G.order.includes(d.k)) { G.drag = null; return; }
     d.active = true;
+    clearToasts();
     if (G.springsOpen) syncSpringsDrawer(false);
     if (d.from === 'board') G.staged = G.staged.filter((t) => t.i !== d.i);
     else { d.pos0 = G.order.indexOf(d.k); G.order = G.order.filter((x) => x !== d.k); }
@@ -2071,7 +2090,7 @@ function onUp(e) {
     if (hit) { openFact(hit.id, hit.form); return; }
   }
   // a finger has no hover: a tap on an empty square says what it is, while nothing is placed
-  if (d.touch && i >= 0 && !G.s.board[i] && !G.staged.length && !G.aiBusy && !G.hintBusy && !G.dialog) { const info = squareInfo(i); if (info) flash(info, 3600); }
+  if (d.touch && i >= 0 && !G.s.board[i] && !G.staged.length && !G.aiBusy && !G.hintBusy && !G.dialog) { const info = squareInfo(i); if (info) { clearToasts(); flash(info, 3600); } }
   if (i >= 0 && humanCanAct()) {
     if (G.cursor.on && G.cursor.i === i) G.cursor.dir = G.cursor.dir === 1 ? N : 1;
     G.cursor.i = i; G.cursor.on = !d.touch; draw();

@@ -437,13 +437,20 @@ body.theme-dark .springs-drawer { background: rgba(18, 15, 30, 0.97); }
 #crash { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 70; display: flex; gap: 12px; align-items: center; max-width: calc(100vw - 32px); padding: 8px 12px; border-radius: 10px; border: 1.5px solid #6E4B1E; background: linear-gradient(160deg, #FBF3D9, #F0D57A 70%, #D9B85A); color: #2A1E0C; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
 body.theme-dark #crash { background: linear-gradient(160deg, #2E2A44, #3A3456); color: #F3DD8B; border-color: #8C7530; }
 
-/* toast: a banner over the preview strip, so it never covers the board or the scores */
+/* toast: a banner over the preview strip, so it never covers the board or the scores; keep-toasts lift into a slim non-blocking chip above #preview while staging */
 #toast { grid-area: preview; z-index: 6; align-self: stretch; display: none; min-width: 0; }
-#toast.on { display: flex; animation: toastin 0.22s ease-out; }
+#toast.on { display: flex; gap: 4px; align-items: stretch; animation: toastin 0.22s ease-out; }
+#toast.on.keep-chip { align-self: start; transform: translateY(calc(-100% - 6px)); animation: none; z-index: 8; }
 @keyframes toastin { from { transform: translateY(8px); } }
 #app.toasting #preview > * , #app.toasting #preview { color: transparent; }
 body.reduce #toast.on { animation: none; }
-#toast button { flex: 1; min-width: 0; display: flex; gap: 10px; align-items: center; text-align: left; padding: 6px 12px; border-radius: 10px; border: 1.5px solid #6E4B1E; background: linear-gradient(160deg, #FBF3D9, #F0D57A 70%, #D9B85A); color: #2A1E0C; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
+#toast button { min-height: 44px; display: flex; gap: 10px; align-items: center; text-align: left; padding: 6px 12px; border-radius: 10px; border: 1.5px solid #6E4B1E; background: linear-gradient(160deg, #FBF3D9, #F0D57A 70%, #D9B85A); color: #2A1E0C; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
+#toast .toast-main { flex: 1; min-width: 0; }
+#toast .toast-x { flex: none; width: 44px; padding: 0; justify-content: center; }
+#toast .tx { flex: none; display: grid; place-items: center; width: 22px; height: 22px; opacity: 0.78; }
+#toast .tx svg, #toast .toast-x svg { width: 16px; height: 16px; display: block; }
+#toast.keep-chip button { padding: 4px 10px; }
+#toast.keep-chip .ti svg { width: 18px; height: 18px; }
 #toast.featured button { background: linear-gradient(160deg, #E0F4EF, #9FE3D6 60%, #5CB8A9); color: #0E2A26; }
 body.theme-dark #toast button { background: linear-gradient(160deg, #2E2A44, #3A3456); color: #F3DD8B; border-color: #8C7530; }
 body.theme-dark #toast.featured button { background: linear-gradient(160deg, #1E4A44, #24625A); color: #E0F4EF; }
