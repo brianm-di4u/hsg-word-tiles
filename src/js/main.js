@@ -2665,12 +2665,20 @@ function onKey(e) {
   if (G.dialog) {
     if (e.key === 'Tab') { trapTab(e, $('#modal')); return; }
     if (e.key === 'Escape') { e.preventDefault(); closeDialog(); }
-    if (G.dialog === 'blank' && /^[a-z]$/i.test(e.key)) { e.preventDefault(); const f = G.blankCb; closeDialog(); f && f(e.key.toUpperCase()); }
+    if (G.dialog === 'blank' && /^[a-z]$/i.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); const f = G.blankCb; closeDialog(); f && f(e.key.toUpperCase()); }
     return;
   }
-  if (G.scene !== 'game') { if (e.key === 'Escape' && G.scene !== 'title') { e.preventDefault(); back(); } return; }
+  const field = !!e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName);
+  if (G.scene !== 'game') {
+    if (e.key === 'Escape' && G.scene !== 'title') {
+      // in a text box or a drop-down, Escape only leaves that control (and shuts its list); the next one closes the sheet
+      if (field && !/^(checkbox|radio|range)$/.test(e.target.type)) { e.target.blur(); return; }
+      e.preventDefault(); back();
+    }
+    return;
+  }
   if (G.privacy && e.key === 'Tab') { trapTab(e, $('#privacy')); return; }
-  if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  if (field) return;
   const tileBtn = e.target && e.target.closest && e.target.closest('#rack .rtile');
   if (tileBtn && e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
     e.preventDefault();
@@ -2684,6 +2692,15 @@ function onKey(e) {
       const l = (waitSeat() || cur()).rack[tileK];
       liveSay(`${l === '?' ? 'Blank tile' : l} moved to position ${next + 1} of ${G.order.length}.`);
     }
+    return;
+  }
+  // in the rack and the action bar (toolbars) Left, Right, Home and End step between the buttons; Up and Down still go to the board
+  const bar = e.target && e.target.closest && e.target.closest('#rack, #actions');
+  if (bar && /^(ArrowLeft|ArrowRight|Home|End)$/.test(e.key) && !e.altKey && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    const bs = [...bar.querySelectorAll('button:not([disabled]):not(.lifted)')], at = bs.indexOf(e.target.closest('button')), n = bs.length;
+    const to = e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : (at + (e.key === 'ArrowLeft' ? n - 1 : 1)) % n;
+    bs[to]?.focus();
     return;
   }
   // Enter and Space on a focused button or link press it (Swap, Pass, Hint, Menu...); on the board or the page they play and turn the cursor
@@ -2706,7 +2723,7 @@ function onKey(e) {
   if (k === 'Escape' && $('#toast')?.classList.contains('on')) { e.preventDefault(); hideToast(); return; }
   if (!humanCanAct()) { if (k === 'Escape') { e.preventDefault(); openDialog('pause'); } return; }
   const c = G.cursor;
-  const move = (dr, dc) => { const r = Math.floor(c.i / N) + dr, col = (c.i % N) + dc; if (r >= 0 && r < N && col >= 0 && col < N) c.i = r * N + col; c.on = true; ensureVisible(c.i); draw(); sayCursor(c.i); };
+  const move = (dr, dc) => { const r = Math.floor(c.i / N) + dr, col = (c.i % N) + dc; if (r >= 0 && r < N && col >= 0 && col < N) c.i = r * N + col; c.on = true; $('#board').focus({ preventScroll: true }); ensureVisible(c.i); draw(); sayCursor(c.i); };   // the focus goes with the cursor, so Enter plays instead of pressing a button left focused
   if (k === 'ArrowLeft' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(0, -1); }
   else if (k === 'ArrowRight' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(0, 1); }
   else if (k === 'ArrowUp' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(-1, 0); }
