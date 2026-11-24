@@ -1031,6 +1031,7 @@ function stage(k, i, letter) {
   if (l == null || i < 0 || s.board[i] || G.staged.some((t) => t.i === i || t.k === k)) return false;
   if (l === '?' && !letter) { askBlank((ch) => stage(k, i, ch)); return true; }
   endReturn(); endFlip(); flushSettle();
+  G.breakdown = false;   // it covers the bottom rows of a phone's board: it closes when the tiles change
   G.staged.push({ k, i, l: l === '?' ? letter : l, blank: l === '?' });
   G.order = G.order.filter((x) => x !== k);
   G.selected = null; G.hint = null; G.badPulse = null;
@@ -1055,7 +1056,7 @@ function unstage(i, toPos) {
   const fromBox = animOn() && !G.drag && toPos == null && G.scene === 'game' ? cellScreenBox(i, R.STAGED_LIFT) : null;
   const flyTile = fromBox ? { l: t.blank ? '' : t.l, blank: t.blank } : null;
   G.staged = G.staged.filter((x) => x !== t);
-  G.badPulse = null;
+  G.breakdown = false; G.badPulse = null;
   forgetHint(G.s);
   clearToasts();
   if (toPos != null) G.order.splice(toPos, 0, t.k); else G.order.push(t.k);
@@ -1068,7 +1069,7 @@ function unstage(i, toPos) {
 }
 // a paid hint comes back after a reload only while its tiles are untouched: taking them back, or staging another tile, ends it
 function forgetHint(s) { if (s && s.hintStaged) { delete s.hintStaged; save(s); } }
-function recallAll() { if (!G.staged.length) return; endReturn(); endFlip(); flushSettle(); for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer); forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
+function recallAll() { G.breakdown = false; if (!G.staged.length) return; endReturn(); endFlip(); flushSettle(); for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer); forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
 function endFlip() {
   clearTimeout(G.flipTimer); G.flipTimer = 0;
   document.querySelectorAll('#rack .rtile').forEach((el) => {
@@ -1175,7 +1176,7 @@ function putHint(m) {
     const k = cur().rack.findIndex((l, j) => (t.blank ? l === '?' : l === t.l) && !G.staged.some((x) => x.k === j));
     if (k >= 0) { G.staged.push({ k, i: t.i, l: t.l, blank: t.blank }); G.order = G.order.filter((x) => x !== k); }
   }
-  G.hint = null; clearToasts();
+  G.hint = null; G.breakdown = false; clearToasts();
   G.staged.forEach((t, k) => sfx('place', { pan: colPan(t.i), step: k, delay: k * HINT_CLACK_S, gain: HINT_CLACK_GAIN }));   // the tiles of a hint are set down one after another, softly
   if (animOn()) {
     // W4-S1-03: stagger visual G.settle entrance by k * 60 ms matching HINT_CLACK_S (flushable on any input).
@@ -1686,6 +1687,12 @@ function toggleBreakdown() {
   if (!G.preview || !G.preview.ok || !G.staged.length || G.aiBusy || G.flash) return;
   G.breakdown = !G.breakdown; renderPreview();
   if (G.breakdown) { const bd = $('#preview .bd'); if (bd) liveSay(bd.textContent.replace(/\s+/g, ' ').trim()); }
+}
+
+function closeBreakdown() {
+  if (!G.breakdown) return false;
+  G.breakdown = false; renderPreview();
+  return true;
 }
 
 // ---------- first-run tips ----------
@@ -2295,7 +2302,7 @@ function rackDown(e, k) {
   endReturn(); endFlip(); flushSettle();
   if (!claimPointer(e)) return;
   unlock();
-  clearToasts();
+  clearToasts(); closeBreakdown();
   e.preventDefault();
   G.drag = { from: 'rack', k, move: G.s.move, x0: e.clientX, y0: e.clientY, id: e.pointerId, touch: e.pointerType === 'touch', active: false, tile: tileOf(k) };
   // #app outlasts every re-render, so the rest of the drag reaches us even if the tile's button goes
@@ -2561,7 +2568,7 @@ function onMove(e) {
     // the tile may have moved since the press (typed onto the board, recalled): then there is nothing to lift
     if (d.from === 'board' ? !G.staged.some((t) => t.i === d.i && t.k === d.k) : !G.order.includes(d.k)) { G.drag = null; return; }
     d.active = true;
-    clearToasts();
+    clearToasts(); G.breakdown = false;
     if (G.springsOpen) syncSpringsDrawer(false);
     if (d.from === 'board') G.staged = G.staged.filter((t) => t.i !== d.i);
     else { d.pos0 = G.order.indexOf(d.k); G.order = G.order.filter((x) => x !== d.k); }
@@ -2750,7 +2757,7 @@ function onKey(e) {
       } else { flash('That square already has a tile.'); oops(); }
     } else doPlay();
   }
-  else if (k === 'Escape') { e.preventDefault(); if (G.staged.length) recallAll(); else openDialog('pause'); }
+  else if (k === 'Escape') { e.preventDefault(); if (closeBreakdown()) return; if (G.staged.length) recallAll(); else openDialog('pause'); }
   else if (k === 'Backspace') {
     e.preventDefault();
     const t = G.staged[G.staged.length - 1];
@@ -2794,8 +2801,8 @@ function wireStatic() {
     openDialog('tracker');
   });
   $('#b-sound').addEventListener('click', () => { unlock(); G.settings.sound = !G.settings.sound; saveSettings(); if (G.settings.sound) sfx('place'); });
-  // the strip under the board opens the breakdown of the staged play (its button is the keyboard's way in)
-  $('#preview').addEventListener('click', (e) => { if (e.target.closest('[data-hintnext]')) hintNext(); else toggleBreakdown(); });
+  // the strip under the board opens the breakdown of the staged play (its button is the keyboard's way in); a tap or a scroll inside the breakdown leaves it open
+  $('#preview').addEventListener('click', (e) => { if (e.target.closest('.bd')) return; if (e.target.closest('[data-hintnext]')) hintNext(); else toggleBreakdown(); });
   // W2-S4-13: clickable Hot Springs word chips inside the inline Steam ledger open their sourced history card on demand.
   $('#b-ledger').addEventListener('click', () => { unlock(); openDialog('ledger'); });
   $('#log').addEventListener('click', (e) => {

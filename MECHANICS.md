@@ -106,7 +106,8 @@ word shows.
   while the computer's tiles are still landing stay put. Pinch 1×–2.4× is optional;
   one finger pans when zoomed; auto-pan near edges while dragging when zoomed.
 - **Keyboard:** arrow keys move a board cursor; letters place rack tiles at the cursor and advance it;
-  Space flips direction (→ / ↓); Backspace recalls the last staged tile; Enter plays; Esc recalls all;
+  Space flips direction (→ / ↓); Backspace recalls the last staged tile; Enter plays; Esc closes the score
+  breakdown if it is open, else recalls all;
   S swap, P pass, H hint, ? help, M menu. Every button is reachable with Tab.
 
 ## 5. Rendering

@@ -302,7 +302,9 @@ export const tests = [
       await t.game('act', 'recall');
       t.equal(await t.page.locator('#preview .bd').count(), 0, 'taking the tiles back removes it');
       await t.game('act', 'stage', m.tiles);
-      t.equal(await t.page.locator('#preview .bd').count(), 1, 'it stays open while the tiles are staged again');
+      t.equal(await t.page.locator('#preview .bd').count(), 0, 'it starts closed when the tiles are staged again (W5-P-N03: it used to stay pinned over the board)');
+      await t.page.keyboard.press('Shift+B');
+      t.equal(await t.page.locator('#preview .bd').count(), 1, 'and Shift+B opens it again');
       await t.game('act', 'play');
       await t.waitIdle(8000);
       await t.game('act', 'stage', (await t.game('act', 'moves', 1))[0].tiles);
