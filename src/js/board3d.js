@@ -167,7 +167,7 @@ export function init(canvas, theme) {
   B3.tiles = [];
   setTheme(theme);
   B3.on = true;
-  R.proj.fn = (bx, by) => screenOf(bx, by);
+  R.proj.fn = (bx, by, lift = 0) => screenOf(bx, by, lift);
   return true;
 }
 function tileMesh() {

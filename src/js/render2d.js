@@ -440,12 +440,13 @@ export function cellAt(x, y) {
   const c = Math.floor(bx - FRAME), r = Math.floor(by - FRAME);
   return r >= 0 && r < N && c >= 0 && c < N ? r * N + c : -1;
 }
-// In 3D, board3d.js sets proj.fn(bx, by) → [x, y] so overlays, pops and steam follow the camera.
+// In 3D, board3d.js sets proj.fn(bx, by, lift) → [x, y] so overlays, pops and steam follow the camera and sit flush on raised tile tops.
+export const TILE_LIFT = 0.24, STAGED_LIFT = 0.30;
 export const proj = { fn: null };
-const project = (bx, by) => (proj.fn ? proj.fn(bx, by) : toScreen(bx, by));
-export const cellCenter = (i) => project(FRAME + (i % N) + 0.5, FRAME + Math.floor(i / N) + 0.5);
-// the four corners of square i, inset by k cells, in screen px
-const quad = (i, k = 0.04) => { const bx = FRAME + (i % N), by = FRAME + Math.floor(i / N); return [[k, k], [1 - k, k], [1 - k, 1 - k], [k, 1 - k]].map(([u, v]) => project(bx + u, by + v)); };
+const project = (bx, by, lift = 0) => (proj.fn ? proj.fn(bx, by, lift) : toScreen(bx, by));
+export const cellCenter = (i, lift = 0) => project(FRAME + (i % N) + 0.5, FRAME + Math.floor(i / N) + 0.5, lift);
+// the four corners of square i, inset by k cells, in screen px (lifted in 3D when wrapping a raised tile face)
+const quad = (i, k = 0.04, lift = 0) => { const bx = FRAME + (i % N), by = FRAME + Math.floor(i / N); return [[k, k], [1 - k, k], [1 - k, 1 - k], [k, 1 - k]].map(([u, v]) => project(bx + u, by + v, lift)); };
 const poly = (ctx, pts) => { ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); };
 
 // W2-S5-01: compact curved lower-rim brass START ribbon exposing the luminous turquoise Display Spring pool.
@@ -554,8 +555,10 @@ export function drawFrame(ctx, d) {
       } else drawTile(i, t, 'board');
     }
   }
+  const stagedSet = new Set((d.staged || []).map((t) => t.i));
+  const liftOf = (i) => (stagedSet.has(i) ? STAGED_LIFT : d.board[i] ? TILE_LIFT : 0);
   // the last play: a dark brass ring with a pale line inside it and a corner pip, so it shows on cream marble and is not only a
-  // colour; a brief glow when the computer's tiles have just landed (also drawn over the 3D board, where the tiles are not)
+  // colour; a brief glow when the computer's tiles have just landed (projected at TILE_LIFT so rings wrap raised 3D tile faces)
   if (d.last && d.last.size) {
     const k = d.lastPulse ? Math.min(1, Math.max(0, (now - d.lastPulse.t0) / d.lastPulse.dur)) : 1;
     const w = Math.max(1.5, (d.cellPx || cellPx) * 0.07), brass = 'rgba(122,75,7,0.97)';
@@ -564,7 +567,7 @@ export function drawFrame(ctx, d) {
       if (!d.board[i]) continue;
       const a = d.anim && d.anim.get(i);
       if (a && now < a.t0 + a.dur) continue;   // still flying in
-      const q = quad(i, 0.04), q2 = quad(i, 0.1), pip = (a, b) => [a[0] + (b[0] - a[0]) * 0.3, a[1] + (b[1] - a[1]) * 0.3];
+      const q = quad(i, 0.04, TILE_LIFT), q2 = quad(i, 0.1, TILE_LIFT), pip = (a, b) => [a[0] + (b[0] - a[0]) * 0.3, a[1] + (b[1] - a[1]) * 0.3];
       if (k < 1) { ctx.fillStyle = 'rgba(240,213,122,' + (0.55 * (1 - k)).toFixed(3) + ')'; poly(ctx, q); ctx.fill(); }
       ctx.strokeStyle = brass; ctx.lineWidth = w; poly(ctx, q); ctx.stroke();
       ctx.strokeStyle = 'rgba(255,243,196,0.9)'; ctx.lineWidth = Math.max(1, w * 0.3); poly(ctx, q2); ctx.stroke();
@@ -576,9 +579,9 @@ export function drawFrame(ctx, d) {
   // a tile just placed settles into its square: a little larger, easing down to its size in 120 ms
   const settle = (i) => { const t0 = d.settle && d.settle.get(i); return t0 == null ? 1 : 1 + 0.12 * Math.pow(1 - Math.min(1, Math.max(0, (now - t0) / 120)), 3); };
   if (!d.mode3d) for (const t of d.staged || []) drawTile(t.i, t, 'staged', d.dragFrom === t.i ? 0.35 : 1, cellPx * 0.04, settle(t.i));
-  // word outlines for the live preview (projected quads drawn above staged tiles in both 2D and 3D)
+  // word outlines for the live preview (projected at tile-top lift so rings wrap raised 3D ceramic faces)
   const lw = (k) => Math.max(1.5, (d.cellPx || cellPx) * k);
-  const outline = (cells, color, width) => { for (const i of cells) { ctx.strokeStyle = color; ctx.lineWidth = width; poly(ctx, quad(i, 0.03)); ctx.stroke(); } };
+  const outline = (cells, color, width) => { for (const i of cells) { ctx.strokeStyle = color; ctx.lineWidth = width; poly(ctx, quad(i, 0.03, liftOf(i))); ctx.stroke(); } };
   if (d.goodCells) outline(d.goodCells, 'rgba(42,157,143,0.95)', lw(0.06));
   if (d.badCells && d.badCells.length) {
     const bw = lw(0.075), dash = [lw(0.18), lw(0.1)];
@@ -588,7 +591,7 @@ export function drawFrame(ctx, d) {
     ctx.lineWidth = bw;
     ctx.lineCap = 'round';
     for (const i of d.badCells) {
-      const q = quad(i, 0.03);
+      const q = quad(i, 0.03, liftOf(i));
       ctx.setLineDash(dash);
       poly(ctx, q); ctx.stroke();
       ctx.setLineDash([]);
@@ -601,23 +604,31 @@ export function drawFrame(ctx, d) {
     }
     ctx.restore();
   }
-  // while dragging: the tile seated, translucent, in the square it will land on (projected, so it also sits on the
-  // 3D board), or a red dashed outline when that square is taken
+  // while dragging: crisp snapped landing-cell preview with high-contrast gold halo (or lifted crimson dashed outline over taken tiles)
   if (d.target != null && d.target >= 0) {
-    const q = quad(d.target, 0.04), xs = q.map((p) => p[0]), ys = q.map((p) => p[1]);
+    const q = quad(d.target, 0.02), qi = quad(d.target, 0.06);
+    const xs = qi.map((p) => p[0]), ys = qi.map((p) => p[1]);
     const x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(...xs) - x0, h = Math.max(...ys) - y0;
     ctx.save();
-    ctx.fillStyle = 'rgba(217,162,58,0.22)'; poly(ctx, q); ctx.fill();
-    if (d.dragTile) { ctx.globalAlpha = 0.6; ctx.drawImage(tileSprite(d.dragTile.l, d.dragTile.blank, Math.round(Math.max(w, h) * view.dpr), 'staged'), x0, y0, w, h); ctx.globalAlpha = 1; }
-    ctx.strokeStyle = '#F0D57A'; ctx.lineWidth = lw(0.09); poly(ctx, q); ctx.stroke();
+    ctx.fillStyle = 'rgba(217,162,58,0.24)'; poly(ctx, q); ctx.fill();
+    if (d.dragTile) { ctx.globalAlpha = 0.92; ctx.drawImage(tileSprite(d.dragTile.l, d.dragTile.blank, Math.round(Math.max(w, h) * view.dpr), 'staged'), x0, y0, w, h); ctx.globalAlpha = 1; }
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(26,17,8,0.85)'; ctx.lineWidth = lw(0.14); poly(ctx, q); ctx.stroke();
+    ctx.strokeStyle = '#F3DD8B'; ctx.lineWidth = lw(0.08); poly(ctx, q); ctx.stroke();
     ctx.restore();
   }
   if (d.blocked != null && d.blocked >= 0) {
-    ctx.save(); ctx.setLineDash([lw(0.18), lw(0.1)]); ctx.strokeStyle = 'rgba(178,40,28,0.95)'; ctx.lineWidth = lw(0.09);
-    poly(ctx, quad(d.blocked, 0.05)); ctx.stroke(); ctx.restore();
+    const q = quad(d.blocked, 0.03, liftOf(d.blocked));
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.setLineDash([lw(0.18), lw(0.1)]);
+    ctx.strokeStyle = 'rgba(26,17,8,0.85)'; ctx.lineWidth = lw(0.14); poly(ctx, q); ctx.stroke();
+    ctx.strokeStyle = 'rgba(210,36,24,0.98)'; ctx.lineWidth = lw(0.085); poly(ctx, q); ctx.stroke();
+    ctx.restore();
   }
   if (d.cursor) {
-    const q = quad(d.cursor.i, 0.04);
+    const clift = stagedSet.has(d.cursor.i) ? STAGED_LIFT : d.board[d.cursor.i] ? TILE_LIFT + 0.01 : 0;
+    const q = quad(d.cursor.i, 0.04, clift);
     ctx.save();
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#1A1108'; ctx.lineWidth = lw(0.16);
@@ -626,7 +637,7 @@ export function drawFrame(ctx, d) {
     poly(ctx, q); ctx.stroke();
     // direction arrow with matching dark-espresso halo and bright-gold fill
     const bx = FRAME + (d.cursor.i % N), by = FRAME + Math.floor(d.cursor.i / N);
-    const pts = (d.cursor.dir === 1 ? [[0.98, 0.5], [0.8, 0.36], [0.8, 0.64]] : [[0.5, 0.98], [0.36, 0.8], [0.64, 0.8]]).map(([u, v]) => project(bx + u, by + v));
+    const pts = (d.cursor.dir === 1 ? [[0.98, 0.5], [0.8, 0.36], [0.8, 0.64]] : [[0.5, 0.98], [0.36, 0.8], [0.64, 0.8]]).map(([u, v]) => project(bx + u, by + v, clift));
     ctx.strokeStyle = '#1A1108'; ctx.lineWidth = lw(0.08);
     poly(ctx, pts); ctx.stroke();
     ctx.fillStyle = '#F6DF86'; ctx.fill();

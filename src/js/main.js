@@ -1217,7 +1217,7 @@ function scorePop(e, themed) {
   if (G.fast || !e.tiles.length) return;
   const red = reduced();
   const i = e.tiles[e.tiles.length - 1].i;
-  const [x, y] = R.cellCenter(i);
+  const [x, y] = R.cellCenter(i, R.TILE_LIFT);
   const w = red ? 0 : popWeight(e.score), ms = red ? POP_STATIC_MS : Math.round((themed ? POP_THEMED_MS : POP_MS) * (1 + POP_LONGER * w));
   const el = document.createElement('div');
   el.className = red ? 'pop static' : (themed ? 'pop themed' : 'pop'); el.textContent = `+${e.score}`;
@@ -1705,7 +1705,7 @@ function steamLoop(now) {
   steam.parts = steam.parts.filter((p) => (p.life += dt) < p.max);
   for (const p of steam.parts) {
     p.x += p.vx * dt; p.y += p.vy * dt;
-    const [cx, cy] = R.cellCenter(p.i);
+    const [cx, cy] = R.cellCenter(p.i, G.s && G.s.board[p.i] ? R.TILE_LIFT : 0);
     const a = Math.sin(Math.PI * p.life / p.max) * (p.a || 0.45);
     const g = c.createRadialGradient(cx + p.x * cell, cy - p.y * cell, 0, cx + p.x * cell, cy - p.y * cell, p.r * cell * (1 + p.life));
     const rgb = p.rgb || '255,255,255';
@@ -1718,7 +1718,7 @@ function steamLoop(now) {
     w.cells.forEach((i, j) => {
       const a = Math.max(0, 1 - Math.abs(head - j - 0.5) / 1.8);
       if (a <= 0) return;
-      const [cx, cy] = R.cellCenter(i), r = cell * 0.62;
+      const [cx, cy] = R.cellCenter(i, R.TILE_LIFT), r = cell * 0.62;
       const g = c.createRadialGradient(cx, cy, 0, cx, cy, r);
       g.addColorStop(0, `rgba(255,228,120,${0.75 * a})`); g.addColorStop(1, 'rgba(255,214,90,0)');
       c.fillStyle = g; c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.fill();
@@ -1728,7 +1728,7 @@ function steamLoop(now) {
   for (const a of steam.arcs) {
     const u = Math.min(1, Math.max(0, (now - a.t0) / ARC_MS));
     const e = 1 - Math.pow(1 - u, 2.1);
-    const [sx, sy] = R.cellCenter(a.from);
+    const [sx, sy] = R.cellCenter(a.from, G.s && G.s.board[a.from] ? R.TILE_LIFT : 0);
     const [tx, ty] = plaqueTargetPoint(a.plaque);
     const mx = (sx + tx) / 2, my = Math.min(sy, ty) - Math.max(26, cell * 1.35);
     const pt = (t) => {
@@ -1882,9 +1882,9 @@ function hoverSquare(e) {
 // snapped ghost. The board never zooms by itself.
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 function dragGeom(d) {
-  if (!d.touch) return { size: Math.max(40, rackTileSize()), lift: 0 };
   const cell = pxPerCell();
-  return { size: Math.round(clamp(cell * 1.15, 32, 64)), lift: Math.round(clamp(cell * 1.6, 56, 84)) };
+  const size = Math.round(clamp(cell * 1.05, 22, 60));
+  return { size, lift: d.touch ? Math.round(clamp(cell * 1.6, 56, 84)) : 0 };
 }
 // the square under a board-canvas point, also snapping to the edge squares from up to half a square outside the grid
 function squareNear(x, y, m = 0.5) {
@@ -1916,11 +1916,19 @@ function updateDragTarget(d, e) {
   d.blocked = taken ? i : null;
   if (i >= 0) edgePan(x, y);
 }
-function placeGhost(d, x, y) { $('#ghost').style.transform = `translate(${x - d.size / 2}px, ${y - d.lift - d.size / 2}px)`; }
+function placeGhost(d, x, y) {
+  const gh = $('#ghost');
+  const onCell = d.target != null || d.blocked != null;
+  const hoverOff = onCell ? Math.round(d.size * 0.32) : 0;
+  gh.classList.toggle('over-target', d.target != null);
+  gh.classList.toggle('over-blocked', d.blocked != null);
+  gh.style.transform = `translate(${x - d.size / 2}px, ${y - d.lift - d.size / 2 - hoverOff}px)`;
+}
 // a tile that missed the board flies back to its place on the rack
 function returnToRack(d) {
   G.order.splice(d.from === 'rack' ? slot(d) : G.order.length, 0, d.k);
   const gh = $('#ghost');
+  gh.classList.remove('over-target', 'over-blocked');
   if (!animOn()) { gh.hidden = true; updatePreview(); renderStaging(); return; }
   G.returning = d.k;
   updatePreview(); renderStaging();
@@ -1934,7 +1942,9 @@ function returnToRack(d) {
 }
 function endReturn() {
   clearTimeout(G.returnTimer);
-  $('#ghost').hidden = true;
+  const gh = $('#ghost');
+  gh.classList.remove('over-target', 'over-blocked');
+  gh.hidden = true;
   if (G.returning == null) return;
   G.returning = null; renderRack();
 }
@@ -1949,7 +1959,9 @@ function cancelDrag() {
   if (!d.active || d.from === 'pan' || d.from === 'minimap') return;
   if (d.from === 'board' && G.s && !G.s.board[d.i] && !G.staged.some((t) => t.i === d.i || t.k === d.k)) G.staged.push({ k: d.k, i: d.i, l: d.tile.l, blank: d.tile.blank });
   else if (!G.order.includes(d.k) && !G.staged.some((t) => t.k === d.k)) G.order.splice(slot(d), 0, d.k);
-  $('#ghost').hidden = true;
+  const gh = $('#ghost');
+  gh.classList.remove('over-target', 'over-blocked');
+  gh.hidden = true;
   updatePreview(); renderStaging();
 }
 
@@ -1992,21 +2004,23 @@ function onMove(e) {
     endReturn();
     Object.assign(d, dragGeom(d), { hover: -1, target: null, blocked: null });
     const gh = $('#ghost');
+    gh.classList.remove('over-target', 'over-blocked');
     gh.width = gh.height = Math.round(d.size * dpr());
     gh.style.width = gh.style.height = d.size + 'px';
     gh.getContext('2d').drawImage(R.tileSprite(d.tile.l, d.tile.blank, gh.width, 'staged'), 0, 0);
     // it grows from the size it was picked up at (a rack tile or a board square) to its drag size
     const from = d.from === 'rack' ? rackTileSize() : pxPerCell();
     gh.style.transition = 'none'; gh.style.scale = String(from / d.size);
+    updateDragTarget(d, e);
     placeGhost(d, e.clientX, e.clientY);
     gh.hidden = false;
     void gh.offsetWidth;
-    gh.style.transition = animOn() ? 'scale 0.12s ease-out' : 'none'; gh.style.scale = '1';
+    gh.style.transition = animOn() ? 'scale 0.12s ease-out, opacity 0.08s ease-out' : 'none'; gh.style.scale = '1';
     updatePreview(); renderStaging();
   }
   if (!d.active) return;
-  placeGhost(d, e.clientX, e.clientY);
   updateDragTarget(d, e);
+  placeGhost(d, e.clientX, e.clientY);
   draw();
 }
 function edgePan(x, y) {
@@ -2031,13 +2045,13 @@ function onUp(e) {
       // a blank waits on the rack while its letter is chosen, so Cancel leaves it there
       const wait = d.from === 'rack' && d.tile.blank;
       if (wait) G.order.splice(slot(d), 0, d.k);
-      if (stage(d.k, d.target, d.tile.blank ? d.tile.l || null : null)) { $('#ghost').hidden = true; if (wait) renderStaging(); draw(); return; }
+      if (stage(d.k, d.target, d.tile.blank ? d.tile.l || null : null)) { const gh = $('#ghost'); gh.classList.remove('over-target', 'over-blocked'); gh.hidden = true; if (wait) renderStaging(); draw(); return; }
       if (wait) G.order = G.order.filter((x) => x !== d.k);
     }
     // back to the rack, at the drop position when dropped on the rack
     const pos = rackPosAt(e.clientX, e.clientY);
     if (d.from === 'board' || d.blocked != null) sfx(d.blocked != null ? 'error' : 'recall');
-    if (pos != null) { $('#ghost').hidden = true; G.order.splice(pos, 0, d.k); if (d.from === 'rack') sfx('pick'); updatePreview(); renderStaging(); }   // a tile set down in a new place on the rack
+    if (pos != null) { const gh = $('#ghost'); gh.classList.remove('over-target', 'over-blocked'); gh.hidden = true; G.order.splice(pos, 0, d.k); if (d.from === 'rack') sfx('pick'); updatePreview(); renderStaging(); }   // a tile set down in a new place on the rack
     // a staged tile dropped on a taken square goes back to its own square
     else if (d.from === 'board' && d.blocked != null) { G.drag = d; cancelDrag(); }
     else returnToRack(d);
@@ -2287,7 +2301,7 @@ window.__game = {
         return { move: G.s.move, over: G.s.over, scores: G.s.players.map((p) => p.score) };
       }
       case 'eval': return E.evaluate(G.s, a[0], ctx());
-      case 'cell': return R.cellCenter(a[0]).map((v) => Math.round(v * 10) / 10);
+      case 'cell': return R.cellCenter(a[0], a[1] || 0).map((v) => Math.round(v * 10) / 10);
       case 'cellAt': return pick(a[0], a[1]);
       case 'screen': { const r = $('#board').getBoundingClientRect(); const [x, y] = R.cellCenter(a[0]); return [r.left + x, r.top + y]; }
       case 'rackTile': { const el = document.querySelector(`#rack .rtile[data-pos="${a[0]}"]`); if (!el) return null; const b = el.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2, cur().rack[+el.dataset.k]]; }
