@@ -47,7 +47,7 @@ const G = {
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
   errFlash: false, scoreHi: null, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, springsOpen: false,
-  returnFocus: null, parCache: {},
+  returnFocus: null, parCache: {}, boardTap: null,
 };
 window.__G = G;
 
@@ -305,7 +305,7 @@ function showScene(name, arg) {
   moodUpdate();
   cancelDrag(); G.pinch = null; G.pointers.clear();
   closeDialog(true);
-  if (name !== 'game') { clearTimeout(G.overTimer); G.overTimer = 0; G.toastQ = []; hideToastNow(); G.springsOpen = false; G.privacy = false; const priv = $('#privacy'); if (priv) { priv.hidden = true; priv.innerHTML = ''; } }
+  if (name !== 'game') { releaseAudio('pause'); clearTimeout(G.overTimer); G.overTimer = 0; G.toastQ = []; hideToastNow(); G.springsOpen = false; G.privacy = false; const priv = $('#privacy'); if (priv) { priv.hidden = true; priv.innerHTML = ''; } }
   syncInert();
   const app = $('#app'), scr = $('#screen');
   const game = name === 'game';
@@ -1359,6 +1359,7 @@ function openDialog(name, arg) {
     G.returnFocus = ae instanceof HTMLElement && !m.contains(ae) ? ae : null;
   }
   cancelDrag();
+  G.boardTap = null;
   if (G.springsOpen) syncSpringsDrawer(false);
   G.dialog = name;
   let html = '';
@@ -1405,7 +1406,7 @@ function closeDialog(silent) {
   const m = $('#modal');
   if (!G.dialog && m.hidden) return;
   if (G.dialog === 'pause') releaseAudio('pause');
-  G.dialog = null; G.blankCb = null; m.hidden = true; m.innerHTML = '';
+  G.dialog = null; G.blankCb = null; G.boardTap = null; m.hidden = true; m.innerHTML = '';
   syncInert();
   const ret = G.returnFocus; G.returnFocus = null;
   if (!silent) {
@@ -2170,9 +2171,15 @@ function wireStatic() {
   b.addEventListener('blur', () => { G.cursor.on = false; draw(); });
   document.addEventListener('keydown', onKey);
   window.addEventListener('pointerdown', (e) => { G.input = e.pointerType === 'touch' ? 'touch' : 'mouse'; if (G.springsOpen && (!e.target || !e.target.closest || !e.target.closest('#springs'))) syncSpringsDrawer(false); }, true);
-  let boardTap = null;
-  window.addEventListener('pointerdown', (e) => { boardTap = e.isPrimary && e.target.closest && e.target.closest('#boardwrap') ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null; }, true);
-  window.addEventListener('pointerup', (e) => { const t = boardTap; boardTap = null; if (t && t.id === e.pointerId && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 10) skipComputerWait(); }, true);
+  window.addEventListener('pointerdown', (e) => {
+    G.boardTap = !G.dialog && !G.privacy && e.isPrimary && e.target && e.target.closest && e.target.closest('#boardwrap')
+      ? { id: e.pointerId, x: e.clientX, y: e.clientY }
+      : null;
+  }, true);
+  window.addEventListener('pointerup', (e) => {
+    const t = G.boardTap; G.boardTap = null;
+    if (t && t.id === e.pointerId && !G.dialog && !G.privacy && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 10) skipComputerWait();
+  }, true);
   window.addEventListener('keydown', (e) => { if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) G.input = 'key'; }, true);
   window.addEventListener('resize', () => { if (G.drag) G.drag.boxes = null; layout(); if (G.scene === 'game') renderGame(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySettings);

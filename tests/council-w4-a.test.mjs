@@ -337,10 +337,13 @@ export const tests = [
       t.expect(!!(await t.state()).dialog, 'the pause menu is open');
       await t.page.keyboard.press('Enter');
       t.equal((await t.state()).game.move, 1, 'with the pause menu open nothing is skipped');
-      // A click where the board is lands on the menu's backdrop, which closes the menu (as it has since v1.0, main.js); that click
-      // must not let the move land either. (The test used to click there and then press Enter, but by then no menu was open.)
+      // A click where the board is lands on the menu's unobstructed backdrop, which closes the menu (as it has since v1.0, main.js);
+      // that click must not let the move land either. (W1-S2-05: target an unobstructed #modal backdrop point over #boardwrap.)
       if ((await t.state()).dialog !== 'pause') await t.game('act', 'open', 'pause');
-      const [x, y] = await t.game('act', 'screen', 40);
+      const [x, y] = await t.page.evaluate(() => {
+        const br = document.getElementById('boardwrap').getBoundingClientRect();
+        return [Math.round(br.left + 12), Math.round(br.top + 12)];
+      });
       await t.page.mouse.click(x, y);
       const s1 = await t.state();
       t.expect(!s1.dialog && s1.game.move === 1, `a click outside the menu closes it and lets nothing land (dialog ${s1.dialog}, move ${s1.game.move})`);

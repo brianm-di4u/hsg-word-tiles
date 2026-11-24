@@ -223,4 +223,62 @@ export const tests = [
       t.equal((await t.page.textContent('#screen .twos')).trim().split(/\s+/).length, 104, 'all 104 two-letter words present');
     },
   },
+
+  // ---------- W1-S2-05 ----------
+  {
+    name: 'W1-S2-05 Pause sub-dialog navigation releases audio hold cleanly, Pause card compacts into .row2 with accessible backdrop, and backdrop clicks never skip AI waits',
+    viewports: ['desktop', 'mobile'],
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-settings-v1')) {
+        localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'normal', sound: true, music: true, amb: true }));
+      }
+    },
+    async run(t) {
+      await ready(t);
+      await t.page.click('#screen [data-go="setup"]');
+      await t.game('newGame', { seed: 6, seats: SEATS });
+      await t.waitIdle(8000);
+      await t.page.waitForFunction(() => window.__game.audioState().held === false, null, { timeout: 5000 });
+
+      // Open Pause -> verify held + compact .row2 layout + >=44px buttons + accessible backdrop
+      await t.page.click('#b-menu');
+      let a = await t.game('audioState');
+      t.equal(a.held, true, 'Pause holds audio');
+      t.expect(a.holds.includes('pause'), 'holds set includes pause');
+      const pauseGeom = await t.page.evaluate(() => {
+        const card = document.querySelector('#modal .pause');
+        const rows = card ? card.querySelectorAll('.row2').length : 0;
+        const small = [...card.querySelectorAll('button')].filter((b) => b.getBoundingClientRect().height < 44).length;
+        const backdropHit = document.elementFromPoint(10, 10) === document.getElementById('modal');
+        return { rows, small, backdropHit };
+      });
+      t.equal(pauseGeom.rows, 2, 'Pause compacts secondary utilities into 2 .row2 pairs');
+      t.equal(pauseGeom.small, 0, 'all Pause buttons meet >=44px height');
+      t.equal(pauseGeom.backdropHit, true, 'unobstructed #modal backdrop is reachable');
+      await t.shot('W1-S2-05-pause-compact');
+      await t.checkLayout({ allowScrollY: true });
+
+      // Navigate Pause -> each sub-dialog (ledger, tracker, boardtext) -> Close: audio hold MUST be released
+      for (const sub of ['ledger', 'tracker', 'boardtext']) {
+        if ((await t.state()).dialog !== 'pause') await t.page.click('#b-menu');
+        t.equal((await t.game('audioState')).held, true, 'Pause holds audio before opening ' + sub);
+        await t.page.click(`#modal [data-open="${sub}"]`);
+        t.equal((await t.state()).dialog, sub, 'opened sub-dialog ' + sub);
+        a = await t.game('audioState');
+        t.equal(a.held, false, 'switching Pause -> ' + sub + ' releases pause audio hold');
+        t.expect(!a.holds.includes('pause'), 'holds has no leaked pause after switching to ' + sub);
+        // Back button returns to Pause (re-holding audio), then re-open sub-dialog and Close
+        await t.page.click('#modal [data-open="pause"]');
+        t.equal((await t.state()).dialog, 'pause', sub + ' Back returns to Pause');
+        t.equal((await t.game('audioState')).held, true, 'returning to Pause re-holds audio');
+        await t.page.click(`#modal [data-open="${sub}"]`);
+        await t.page.click('#modal [data-close]');
+        t.equal((await t.state()).dialog, null, sub + ' closed');
+        a = await t.game('audioState');
+        t.equal(a.held, false, 'closing ' + sub + ' leaves audio running (never permanently muted)');
+        t.expect(!a.holds.includes('pause'), 'no leaked pause hold after closing ' + sub);
+      }
+    },
+  },
 ];

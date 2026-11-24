@@ -277,18 +277,16 @@ export function pauseHtml(o) {
     <h2 id="pause-h">Paused</h2>
     <nav class="menu">
       <button class="btn primary" data-close>Resume</button>
-      <button class="btn" data-open="ledger">Steam ledger</button>
-      <button class="btn" data-open="boardtext">Read the board</button>
+      <div class="row2"><button class="btn" data-open="ledger">Steam ledger</button><button class="btn" data-open="boardtext">Read the board</button></div>
       ${o.tracker ? '<button class="btn" data-open="tracker">Unseen tiles</button>' : ''}
-      <button class="btn" data-go="help">How to play</button>
-      <button class="btn" data-go="settings">Settings</button>
+      <div class="row2"><button class="btn" data-go="help">How to play</button><button class="btn" data-go="settings">Settings</button></div>
       <button class="btn quiet" data-go="title">Save and quit to title</button>
     </nav>
   </div>`;
 }
 
 export function ledgerHtml(s, lex) {
-  return `<div class="card dialog ledger-dlg" role="dialog" aria-modal="true" aria-labelledby="ledger-h"><h2 id="ledger-h">Steam ledger</h2><ol class="log">${logHtml(s, lex) || '<li>No plays yet.</li>'}</ol><div class="dlg-btns"><button class="btn primary" data-close>Close</button></div></div>`;
+  return `<div class="card dialog ledger-dlg" role="dialog" aria-modal="true" aria-labelledby="ledger-h"><h2 id="ledger-h">Steam ledger</h2><ol class="log">${logHtml(s, lex) || '<li>No plays yet.</li>'}</ol><div class="dlg-btns"><button class="btn quiet" data-open="pause">Back</button><button class="btn primary" data-close>Close</button></div></div>`;
 }
 
 // The board as words (S2-08), for a screen reader: a square is its column letter and row number (H8 is the centre), and a tile
