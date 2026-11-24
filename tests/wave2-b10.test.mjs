@@ -211,12 +211,12 @@ export const tests = [
             mSum += l; mSq += l * l; mN++;
           }
         }
-        // Sample upper-left ivory tile body corner (clear of letter glyph & point numeral)
+        // Sample upper-right ivory tile body corner (clear of upper-left letter serifs & bottom-right point numeral)
         let tSum = 0, tN = 0;
         for (const idx of tiles) {
           const [cx, cy] = await window.__game.act('cell', idx);
-          const px = Math.round((cx - cell * 0.34) * k), py = Math.round((cy - cell * 0.34) * k);
-          const w = Math.max(3, Math.round(cell * 0.16 * k));
+          const px = Math.round((cx + cell * 0.22) * k), py = Math.round((cy - cell * 0.36) * k);
+          const w = Math.max(3, Math.round(cell * 0.14 * k));
           const d = ctx.getImageData(px, py, w, w).data;
           for (let j = 0; j < d.length; j += 4) {
             tSum += 0.2126 * d[j] + 0.7152 * d[j + 1] + 0.0722 * d[j + 2]; tN++;
