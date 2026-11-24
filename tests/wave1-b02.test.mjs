@@ -1,7 +1,47 @@
-// Wave 1, batch W1-B02: W6-P-N01 (endgame persistence ahead of save deletion and cancellable over transition).
+// Wave 1, batch W1-B02: W6-P-N01 (endgame persistence ahead of save deletion) and W6-S6-02 (CD-WF0-01 zero-write boot + idle music scheduler pause).
+import fs from 'node:fs';
+import path from 'node:path';
+import { root } from './lib.mjs';
+import { makeAudioKit, SCORES, SCENES } from '../src/js/music.js';
+
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const SAVE = 'hs-letters-save-v1', STATS = 'hs-letters-stats-v1', DAILY = 'hs-letters-daily-v1';
 const ls = (t, k) => t.page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), k);
+const earned = JSON.parse(fs.readFileSync(path.join(root, 'test-fixtures/save-v1-earned-play.json'), 'utf8'));
+const NEWER_SAVE_OBJ = { ...earned, v: 2, futureField: { a: [1, 2, 3] } };
+
+const spyNewerSave = new Function(`
+  window.__TEST_TIPS__ = false;
+  const origGet = Storage.prototype.getItem;
+  const origSet = Storage.prototype.setItem;
+  const origRem = Storage.prototype.removeItem;
+  const origClr = Storage.prototype.clear;
+  if (!origGet.call(localStorage, 'hs-letters-save-v1')) {
+    origSet.call(localStorage, 'hs-letters-save-v1', ${JSON.stringify(JSON.stringify(NEWER_SAVE_OBJ))});
+    origSet.call(localStorage, 'hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false, theme: 'light' }));
+    origSet.call(localStorage, 'hs-letters-register-v1', JSON.stringify({ SPRING: { id: 'x', first: '2026-01-01', count: 2, best: 40 } }));
+    origSet.call(localStorage, 'hs-letters-daily-v1', JSON.stringify({ days: { '2026-11-01': { score: 100, plays: 1 } }, streak: 2, last: '2026-11-01' }));
+    origSet.call(localStorage, 'hs-letters-stats-v1', JSON.stringify({ games: 3, wins: 2 }));
+  }
+  window.__lsWrites = [];
+  Storage.prototype.setItem = function (k, v) {
+    if (this === window.localStorage) window.__lsWrites.push(['set', String(k)]);
+    return origSet.call(this, k, v);
+  };
+  Storage.prototype.removeItem = function (k) {
+    if (this === window.localStorage) window.__lsWrites.push(['remove', String(k)]);
+    return origRem.call(this, k);
+  };
+  Storage.prototype.clear = function () {
+    if (this === window.localStorage) window.__lsWrites.push(['clear', '']);
+    return origClr.call(this);
+  };
+`);
+
+const spyWriteBlocked = () => {
+  window.__TEST_TIPS__ = false;
+  Storage.prototype.setItem = function () { throw new Error('QuotaExceededError'); };
+};
 
 const spyNormal = () => {
   window.__TEST_TIPS__ = false;
@@ -152,6 +192,131 @@ export const tests = [
       await t.reload();
       await ready(t);
       t.equal((await ls(t, DAILY)).days[date].score, after.game.players[0].score, 'Daily score survives reload');
+    },
+  },
+  {
+    name: 'W6-S6-02 v=2 save triggers ZERO localStorage setItem/removeItem/clear calls across boot and full visit',
+    viewports: ['desktop'],
+    initScript: spyNewerSave,
+    async run(t) {
+      await ready(t);
+      const bootWrites = await t.page.evaluate(() => window.__lsWrites.slice());
+      t.equal(bootWrites.length, 0, 'zero localStorage writes/removes during boot with v=2 save (' + JSON.stringify(bootWrites) + ')');
+      const flags = await t.page.evaluate(() => ({ newerSave: window.__G.newerSave, noSave: window.__G.noSave }));
+      t.equal(flags.newerSave, true, 'G.newerSave is true');
+      t.equal(flags.noSave, false, 'G.noSave is false when newer save is detected');
+      const note = await t.page.textContent('.storage-note');
+      t.expect(/newer version of Bathhouse Letters/.test(note), 'title shows the newer-version notice');
+
+      // Exercise settings, game start, play, and reload
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="theme"][data-val="dark"]');
+      await t.game('newGame', { seed: 5 });
+      await t.waitIdle(8000);
+      const [m] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m.tiles);
+      t.expect((await t.game('act', 'play')).ok, 'played a move in frozen session');
+      await t.waitIdle(8000);
+
+      const visitWrites = await t.page.evaluate(() => window.__lsWrites.slice());
+      t.equal(visitWrites.length, 0, 'zero localStorage writes/removes across entire v=2 visit (' + JSON.stringify(visitWrites) + ')');
+
+      await t.reload();
+      await ready(t);
+      const reloadWrites = await t.page.evaluate(() => window.__lsWrites.slice());
+      t.equal(reloadWrites.length, 0, 'zero localStorage writes/removes on reload (' + JSON.stringify(reloadWrites) + ')');
+    },
+  },
+  {
+    name: 'W6-S6-02 write-blocked storage with no newer save still sets G.noSave via storageBlocked()',
+    viewports: ['desktop'],
+    initScript: spyWriteBlocked,
+    async run(t) {
+      await ready(t);
+      const flags = await t.page.evaluate(() => ({ newerSave: window.__G.newerSave, noSave: window.__G.noSave }));
+      t.equal(flags.newerSave, false, 'G.newerSave is false');
+      t.equal(flags.noSave, true, 'G.noSave is true when setItem throws');
+      t.expect(/progress will not be kept/.test(await t.page.textContent('.storage-note')), 'title shows blocked-storage notice');
+    },
+  },
+  {
+    name: 'W6-S6-02 40 Hz music scheduler pauses when held or muted and resumes cleanly',
+    viewports: ['desktop'],
+    async run(t) {
+      await ready(t);
+      await t.page.click('#screen [data-go="setup"]');
+      await t.page.waitForFunction(() => window.__game.audioState().ctx === 'running', null, { timeout: 8000 });
+      t.equal((await t.game('audioState')).ticking, true, 'scheduler ticks while lobby music and ambience play');
+
+      // Hold under Pause dialog
+      await t.game('newGame', { seed: 6 });
+      await t.waitIdle(5000);
+      t.equal((await t.game('audioState')).ticking, true, 'scheduler ticks during gameplay');
+      await t.page.click('#b-menu');
+      let a = await t.game('audioState');
+      t.equal(a.held, true, 'held under pause card');
+      t.equal(a.ticking, false, '40 Hz scheduler paused while held');
+      await t.page.click('#modal [data-close]');
+      a = await t.game('audioState');
+      t.equal(a.held, false, 'released after closing pause');
+      t.equal(a.ticking, true, 'scheduler resumes after release');
+
+      // Mute music + ambience individually, then master Sound switch
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="music"][data-val="false"]');
+      t.equal((await t.game('audioState')).ticking, true, 'still ticks while ambience is on');
+      await t.page.click('[data-set="amb"][data-val="false"]');
+      t.equal((await t.game('audioState')).ticking, false, 'scheduler paused when both music and ambience are off');
+      await t.page.click('[data-set="music"][data-val="true"]');
+      t.equal((await t.game('audioState')).ticking, true, 'scheduler resumes when music is turned back on');
+      await t.page.click('[data-set="sound"][data-val="false"]');
+      t.equal((await t.game('audioState')).ticking, false, 'scheduler paused when master Sound is off');
+      await t.page.click('[data-set="sound"][data-val="true"]');
+      t.equal((await t.game('audioState')).ticking, true, 'scheduler resumes when master Sound is turned back on');
+    },
+  },
+  {
+    name: 'W6-S6-02 makeAudioKit pauses its interval timer when held or idle and cleans retired nodes (Node)',
+    node: true,
+    async run(t) {
+      const param = () => ({ value: 0, cancelScheduledValues() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {} });
+      const node = () => ({ gain: param(), frequency: param(), Q: param(), detune: param(), pan: param(), delayTime: param(), type: '', connect(d) { return d; }, disconnect() {}, start() {}, stop() {} });
+      const ctx = {
+        sampleRate: 22050, state: 'running', currentTime: 0,
+        createGain: node, createBiquadFilter: node, createOscillator: node, createDelay: node, createStereoPanner: node,
+        createBuffer: (_, len) => ({ getChannelData: () => new Float32Array(len) }),
+        createBufferSource: node,
+      };
+      const origSetI = globalThis.setInterval, origClrI = globalThis.clearInterval;
+      const active = new Set(); let nextId = 1;
+      globalThis.setInterval = (fn, ms) => { const id = nextId++; active.add(id); return id; };
+      globalThis.clearInterval = (id) => { active.delete(id); };
+      try {
+        const kit = makeAudioKit(ctx, node(), { seed: 1 });
+        kit.start();
+        t.equal(active.size, 0, 'idle kit with no score or scene allocates 0 interval timers');
+        t.equal(kit.ticking, false, 'idle kit ticking is false');
+        kit.music.play(SCORES.lobby, { at: 0, fade: 0.05 });
+        t.equal(active.size, 1, 'playing a score starts 1 interval timer');
+        t.equal(kit.ticking, true, 'playing a score sets ticking true');
+        kit.hold();
+        t.equal(active.size, 0, 'hold() clears the 40 Hz interval timer');
+        t.equal(kit.ticking, false, 'hold() sets ticking false');
+        kit.release();
+        t.equal(active.size, 1, 'release() restarts the interval timer');
+        t.equal(kit.ticking, true, 'release() sets ticking true');
+        kit.amb.play(SCENES.bathhouse, { at: 0, fade: 0.05 });
+        kit.music.stop(0.05);
+        t.equal(active.size, 1, 'stopping music keeps timer while ambience is active');
+        kit.amb.stop(0.05);
+        t.equal(active.size, 0, 'stopping both music and ambience clears the 40 Hz interval');
+        t.equal(kit.ticking, false, 'stopping both sets ticking false');
+        kit.stop();
+        t.equal(active.size, 0, 'stop() keeps 0 interval timers');
+      } finally {
+        globalThis.setInterval = origSetI;
+        globalThis.clearInterval = origClrI;
+      }
     },
   },
 ];

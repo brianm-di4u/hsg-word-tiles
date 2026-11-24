@@ -16,7 +16,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
   { const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1; }
   const noise = (t, dur) => { const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true; s.start(t, rr(0, 1.9)); if (dur) s.stop(t + dur); return s; };
 
-  let mLevel = opt.music ?? 0.5, aLevel = opt.ambience ?? 0.5, inten = 0, held = false, timer = 0;
+  let mLevel = opt.music ?? 0.5, aLevel = opt.ambience ?? 0.5, inten = 0, held = false, running = false, timer = 0, cleanTimer = 0;
   const musicBus = gain(mLevel, out), ambBus = gain(aLevel, out);
   const dead = [];   // { at, nodes }: sub-buses to disconnect once their fade-out has finished
   const retire = (bus, nodes, at, fade) => {
@@ -175,6 +175,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
       if (cur && cur.score === score) return;
       if (cur) retire(cur.bus, cur.nodes, at, fade);
       cur = score ? mStart(score, at, fade) : null;
+      syncTimer();
     },
     stop(fade = 1) { music.play(null, { fade }); },
     level(v) { mLevel = v; if (!held) musicBus.gain.setTargetAtTime(v, ctx.currentTime, 0.05); },
@@ -224,6 +225,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
       if (scene && scene.def === def) return;
       if (scene) { const old = scene; retire(old.bus, old.nodes, at, fade); }
       scene = def ? aStart(def, at, fade) : null;
+      syncTimer();
     },
     stop(fade = 1.5) { amb.play(null, { fade }); },
     level(v) { aLevel = v; if (!held) ambBus.gain.setTargetAtTime(v, ctx.currentTime, 0.05); },
@@ -232,6 +234,28 @@ export function makeAudioKit(ctx, out, opt = {}) {
   };
 
   // --------------------------------------------------------------------------------------------- scheduler
+  function flushDead() {
+    const now = ctx.currentTime;
+    for (let i = dead.length - 1; i >= 0; i--) if (dead[i].at <= now) {
+      for (const n of dead[i].nodes) { try { if (n.stop) n.stop(); } catch (e) { /* already stopped */ } try { n.disconnect(); } catch (e) { /* already gone */ } }
+      dead.splice(i, 1);
+    }
+  }
+  function scheduleClean() {
+    clearTimeout(cleanTimer); cleanTimer = 0;
+    if (!running || held || timer || !dead.length) return;
+    const wait = Math.max(20, Math.ceil((Math.max(...dead.map((d) => d.at)) - ctx.currentTime) * 1000) + 50);
+    cleanTimer = setTimeout(() => { cleanTimer = 0; flushDead(); if (dead.length && running && !held && !timer) scheduleClean(); }, wait);
+  }
+  function syncTimer() {
+    if (running && !held && (cur || scene)) {
+      clearTimeout(cleanTimer); cleanTimer = 0;
+      if (!timer) timer = setInterval(() => { if (ctx.state === 'running') scheduleUntil(ctx.currentTime + 0.25); }, 25);
+    } else {
+      if (timer) { clearInterval(timer); timer = 0; }
+      scheduleClean();
+    }
+  }
   function scheduleUntil(T) {
     const now = ctx.currentTime;
     if (!held) {
@@ -246,7 +270,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
         }
       }
     }
-    for (let i = dead.length - 1; i >= 0; i--) if (dead[i].at < now) { for (const n of dead[i].nodes) { try { if (n.stop) n.stop(); } catch (e) { /* already stopped */ } try { n.disconnect(); } catch (e) { /* already gone */ } } dead.splice(i, 1); }
+    flushDead();
   }
 
   return {
@@ -254,12 +278,13 @@ export function makeAudioKit(ctx, out, opt = {}) {
     // Cue variation for the game's own tone() and noise(): multiply the frequency by f and the gain by g, start
     // a noise buffer at offset o (seconds), so no two repeats of a cue are sample-identical.
     jit(cents = 25, db = 1.5) { return { f: 2 ** (rr(-cents, cents) / 1200), g: 10 ** (rr(-db, 0) / 20), o: rr(0, 1.5) }; },
-    start() { if (!timer) timer = setInterval(() => { if (ctx.state === 'running') scheduleUntil(ctx.currentTime + 0.25); }, 25); },
-    stop() { if (timer) clearInterval(timer); timer = 0; },
+    start() { running = true; syncTimer(); },
+    stop() { running = false; if (timer) { clearInterval(timer); timer = 0; } clearTimeout(cleanTimer); cleanTimer = 0; },
     // Pause card or hidden tab: fade both buses out and schedule nothing until release().
-    hold(tc = 0.08) { held = true; const t = ctx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.setTargetAtTime(0, t, tc); ambBus.gain.setTargetAtTime(0, t, tc); },
-    release(tc = 0.3) { held = false; const t = ctx.currentTime; musicBus.gain.setTargetAtTime(mLevel, t, tc); ambBus.gain.setTargetAtTime(aLevel, t, tc); },
+    hold(tc = 0.08) { held = true; syncTimer(); const t = ctx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.setTargetAtTime(0, t, tc); ambBus.gain.setTargetAtTime(0, t, tc); },
+    release(tc = 0.3) { held = false; const t = ctx.currentTime; musicBus.gain.setTargetAtTime(mLevel, t, tc); ambBus.gain.setTargetAtTime(aLevel, t, tc); syncTimer(); },
     get held() { return held; },
+    get ticking() { return !!timer; },
   };
 }
 

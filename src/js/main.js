@@ -106,10 +106,10 @@ function storageBlocked() {
   return !ok;
 }
 async function boot() {
-  G.noSave = storageBlocked();
   // a saved game from a newer version of the game is left alone: this visit writes nothing, under any key, and says so
   G.newerSave = gameSaves.read().kind === 'newer';
-  if (G.newerSave) store.frozen = true;
+  if (G.newerSave) { store.frozen = true; G.noSave = false; }
+  else G.noSave = storageBlocked();
   loadSettings();
   if (window.__TEST__) G.settings.ai = G.settings.ai || 'normal';
   loadArt(() => { R.invalidateBoardTexture(); draw(); if (G.scene === 'title' && !G.dialog) showScene('title'); if (G.scene === 'game') renderGame(); });
@@ -1787,7 +1787,7 @@ window.__game = {
   audioRender(name, seconds = 30, wantWav = false) { return audioRender(name, seconds, !!wantWav); },
   audioState() {
     const k = audio.kit, i = k && k.music.info();
-    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, holds: [...audio.holds], tune: tuneName(), bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), total: audio.total, cues: audio.cues.slice(), fxGain: audio.bus ? audio.bus.sfx.gain.value : null, musGain: audio.bus ? audio.bus.mus.gain.value : null };
+    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, ticking: k ? k.ticking : false, holds: [...audio.holds], tune: tuneName(), bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), total: audio.total, cues: audio.cues.slice(), fxGain: audio.bus ? audio.bus.sfx.gain.value : null, musGain: audio.bus ? audio.bus.mus.gain.value : null };
   },
   async act(name, ...a) {
     switch (name) {
