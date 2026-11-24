@@ -290,4 +290,63 @@ export const tests = [
       await t.shot('w2-b13-day-materials-3d', { timeout: 15000 });
     },
   },
+  // ---------- W3-S2-04 ----------
+  {
+    name: 'W3-S2-04 paintBoard() gates baked radial lamp pool and 0.35-cell inner frame shadows strictly on !mode3d while 3D uses real-time lighting + depth-tested dimming',
+    viewports: ['desktop'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 41, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'julian' }] });
+      await t.waitIdle(8000);
+      await t.game('act', 'autoplay', 8);
+      await t.waitIdle(10000);
+      await t.game('act', 'freezeFx', 0);
+      await t.waitFrames(3);
+
+      const bakeAudit = await t.page.evaluate(async () => {
+        const R = await import(new URL('src/js/render2d.js', location.href).href);
+        const lumOf = (cv, x, y, w, h) => {
+          const d = cv.getContext('2d').getImageData(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h))).data;
+          let r = 0, g = 0, b = 0, n = 0;
+          for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+          r /= n; g /= n; b /= n;
+          return { r, g, b, lum: 0.2126 * r + 0.7152 * g + 0.0722 * b };
+        };
+        const S = 512, cell = S / R.U, f = R.FRAME * cell;
+        const day2d = R.paintBoard(S, 'light', false);
+        const day3d = R.paintBoard(S, 'light', true);
+        const night2d = R.paintBoard(S, 'dark', false);
+        const night3d = R.paintBoard(S, 'dark', true);
+        // Sample neutral top-edge square (row 0, col 1 — empty neutral '.') right next to inner frame (0.08..0.22 cells inside f)
+        const edge2d = lumOf(day2d, f + 1.2 * cell, f + 0.08 * cell, 0.6 * cell, 0.14 * cell);
+        const edge3d = lumOf(day3d, f + 1.2 * cell, f + 0.08 * cell, 0.6 * cell, 0.14 * cell);
+        // Sample interior of the same neutral top-row cell (0.45..0.75 cells inside f, clear of the 0.35-cell frame shadow)
+        const mid2d = lumOf(day2d, f + 1.2 * cell, f + 0.48 * cell, 0.6 * cell, 0.25 * cell);
+        const mid3d = lumOf(day3d, f + 1.2 * cell, f + 0.48 * cell, 0.6 * cell, 0.25 * cell);
+        // Sample Night board near baked warm lamp pool center (row 5, col 6 — neutral '.')
+        const pool2d = lumOf(night2d, f + 6.2 * cell, f + 5.2 * cell, 0.6 * cell, 0.6 * cell);
+        const pool3d = lumOf(night3d, f + 6.2 * cell, f + 5.2 * cell, 0.6 * cell, 0.6 * cell);
+        // Verify boardTexture cache separates mode3d=true vs mode3d=false cleanly
+        const tex2d = R.boardTexture('light', false);
+        const tex3d = R.boardTexture('light', true);
+        return { edge2d, edge3d, mid2d, mid3d, pool2d, pool3d, distinctCache: tex2d !== tex3d };
+      });
+
+      t.equal(bakeAudit.distinctCache, true, 'boardTexture(theme, mode3d) caches 2D and 3D textures separately');
+      const dayEdgeDrop2d = bakeAudit.mid2d.lum - bakeAudit.edge2d.lum;
+      const dayEdgeDrop3d = bakeAudit.mid3d.lum - bakeAudit.edge3d.lum;
+      t.log(`W3-S2-04 Day outer-edge drop: 2D=${dayEdgeDrop2d.toFixed(1)} lum (baked shadow), 3D=${dayEdgeDrop3d.toFixed(1)} lum (clean for real PCF shadows)`);
+      t.expect(dayEdgeDrop2d >= 18, `2D fallback retains baked 0.35-cell inner frame shadow (drop=${dayEdgeDrop2d.toFixed(1)} >= 18)`);
+      t.expect(Math.abs(dayEdgeDrop3d) < 8, `3D boardTexture omits baked inner frame shadow (drop=${dayEdgeDrop3d.toFixed(1)}, |drop| < 8)`);
+      t.expect(bakeAudit.edge3d.lum - bakeAudit.edge2d.lum >= 18, `3D outer ring avoids baked shadow darkening (${bakeAudit.edge3d.lum.toFixed(1)} vs 2D ${bakeAudit.edge2d.lum.toFixed(1)})`);
+      t.log(`W3-S2-04 Night center pool red: 2D=${bakeAudit.pool2d.r.toFixed(1)}, 3D=${bakeAudit.pool3d.r.toFixed(1)}`);
+      t.expect(bakeAudit.pool2d.r - bakeAudit.pool3d.r >= 5, `3D Night boardTexture omits baked warm yellow lamp pool (2D r=${bakeAudit.pool2d.r.toFixed(1)} vs 3D r=${bakeAudit.pool3d.r.toFixed(1)})`);
+
+      const b3 = await t.game('act', 'b3');
+      if (!t.gpu || !b3 || !b3.on) return;
+      t.equal(b3.boardMode3d, true, 'B3.render() requests R.boardTexture(theme, true)');
+      await t.shot('w2-b13-day-3d-clean-shadows', { timeout: 15000 });
+    },
+  },
 ];

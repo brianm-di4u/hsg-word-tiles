@@ -222,7 +222,7 @@ export const LIGHTING_PROFILES = {
     },
     tile: { emissive: 0xffe4be, emissiveIntensity: 0.08, bodyColor: 0xd8cdb6 },
     towel: { cloth: 0x524b61, stripe: 0x26444a },
-    top: { emissive: 0x302c44, emissiveIntensity: 0.52 },
+    top: { emissive: 0x302c44, emissiveIntensity: 0.68 },
     preDimColor: 0x14121f,
   },
 };
@@ -411,7 +411,7 @@ export function destroy(opts = {}) {
   B3.table = null; B3.top = null; B3.board = null; B3.preDim = null; B3.dimIdx = null;
   B3.frame = null; B3.frameWalnut = null; B3.frameWalnutFromCounter = false; B3.towels = null; B3.bell = null; B3.towelCloth = null; B3.towelStripe = null;
   B3.tileGeo = null; B3.bodyMat = null; B3.stagedMat = null; B3.lastMat = null; B3.envRT = null; B3.envTheme = ''; B3.envSwaps = 0;
-  B3.boardCanvas = null; B3.tiles = []; B3.frames.length = 0; B3.intervals.length = 0; B3.texKey = '';
+  B3.boardCanvas = null; B3.boardMode3d = false; B3.tiles = []; B3.frames.length = 0; B3.intervals.length = 0; B3.texKey = '';
   R.proj.fn = null;
 }
 
@@ -516,9 +516,9 @@ function pose() {
 export function render(d) {
   if (!B3.on) return;
   const t0 = performance.now();
-  // board face: the same texture the 2D board uses
-  const tex = R.boardTexture(d.theme);
-  if (tex !== B3.boardCanvas) { B3.top.map?.dispose(); B3.top.map = canvasTex(tex); B3.top.map.minFilter = THREE.LinearMipmapLinearFilter; B3.top.needsUpdate = true; B3.boardCanvas = tex; }
+  // board face: W3-S2-04 requests mode3d=true so baked 2D lamp pool & inner frame shadows are omitted under real-time SpotLight + PCF shadows
+  const tex = R.boardTexture(d.theme, true);
+  if (tex !== B3.boardCanvas) { B3.top.map?.dispose(); B3.top.map = canvasTex(tex); B3.top.map.minFilter = THREE.LinearMipmapLinearFilter; B3.top.needsUpdate = true; B3.boardCanvas = tex; B3.boardMode3d = true; }
   const openCenter = !d.board[CENTER] && !(d.staged && d.staged.some((t) => t.i === CENTER));
   const down = d.board.reduce((n, t) => n + (t ? 1 : 0), 0);
   const preActive = openCenter && down === 0;
@@ -636,7 +636,7 @@ export function debug() {
     bezel: B3.on ? bezelBounds() : null,
     tileTopUv,
     faceCache: faceCache.size, tileCache: R.tileCacheSize(),
-    boardCanvas: !!B3.boardCanvas, tilePool: B3.tiles.length,
+    boardCanvas: !!B3.boardCanvas, boardMode3d: !!B3.boardMode3d, tilePool: B3.tiles.length,
     envTempDisposed: B3.envTempDisposed || 0, disposed: B3.lastDispose || null,
     envTheme: B3.envTheme || '', envSwaps: B3.envSwaps || 0,
     lightingProfile: B3.dark ? 'night' : 'day',

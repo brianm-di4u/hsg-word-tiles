@@ -147,8 +147,8 @@ function rowEmblem(ctx, cx, cy, r) {
   ctx.restore();
 }
 
-// The static board face, size × size px. theme: 'light' | 'dark'.
-export function paintBoard(size, theme = 'light') {
+// The static board face, size × size px. theme: 'light' | 'dark'. mode3d: omit baked 2D lamp pool & frame shadows (W3-S2-04).
+export function paintBoard(size, theme = 'light', mode3d = false) {
   const cv = mk(size, size), ctx = cv.getContext('2d');
   const cell = size / U, f = FRAME * cell, rnd = prng(47);
   // frame: walnut edge, brass rails, terrazzo band
@@ -359,14 +359,17 @@ export function paintBoard(size, theme = 'light') {
       ctx.restore();
     }
   }
-  // lamp pool and an inner shadow under the frame
-  const pool = ctx.createRadialGradient(size * 0.42, size * 0.38, size * 0.05, size * 0.5, size * 0.5, size * 0.72);
-  pool.addColorStop(0, 'rgba(255,236,200,0.10)'); pool.addColorStop(0.6, 'rgba(255,236,200,0)'); pool.addColorStop(1, 'rgba(60,35,15,0.16)');
-  ctx.fillStyle = pool; ctx.fillRect(f, f, cell * N, cell * N);
-  const edge = cell * 0.35;
-  for (const [x0, y0, x1, y1, w0, h0] of [[f, f, f, f + edge, cell * N, edge], [f, f + cell * N, f, f + cell * N - edge, cell * N, -edge], [f, f, f + edge, f, edge, cell * N], [f + cell * N, f, f + cell * N - edge, f, -edge, cell * N]]) {
-    const gsh = ctx.createLinearGradient(x0, y0, x1, y1); gsh.addColorStop(0, 'rgba(50,30,12,0.28)'); gsh.addColorStop(1, 'rgba(50,30,12,0)');
-    ctx.fillStyle = gsh; ctx.fillRect(Math.min(x0, x0 + w0), Math.min(y0, y0 + h0), Math.abs(w0), Math.abs(h0));
+  // W3-S2-04: gate baked 2D radial lamp pool and 0.35-cell inner frame drop shadows on !mode3d so 2D fallback
+  // retains warm depth while 3D relies cleanly on real-time SpotLight + PCF shadows (no double-shaded outer ring).
+  if (!mode3d) {
+    const pool = ctx.createRadialGradient(size * 0.42, size * 0.38, size * 0.05, size * 0.5, size * 0.5, size * 0.72);
+    pool.addColorStop(0, 'rgba(255,236,200,0.10)'); pool.addColorStop(0.6, 'rgba(255,236,200,0)'); pool.addColorStop(1, 'rgba(60,35,15,0.16)');
+    ctx.fillStyle = pool; ctx.fillRect(f, f, cell * N, cell * N);
+    const edge = cell * 0.35;
+    for (const [x0, y0, x1, y1, w0, h0] of [[f, f, f, f + edge, cell * N, edge], [f, f + cell * N, f, f + cell * N - edge, cell * N, -edge], [f, f, f + edge, f, edge, cell * N], [f + cell * N, f, f + cell * N - edge, f, -edge, cell * N]]) {
+      const gsh = ctx.createLinearGradient(x0, y0, x1, y1); gsh.addColorStop(0, 'rgba(50,30,12,0.28)'); gsh.addColorStop(1, 'rgba(50,30,12,0)');
+      ctx.fillStyle = gsh; ctx.fillRect(Math.min(x0, x0 + w0), Math.min(y0, y0 + h0), Math.abs(w0), Math.abs(h0));
+    }
   }
   if (dark) { ctx.fillStyle = 'rgba(20,18,31,0.22)'; ctx.fillRect(0, 0, size, size); }
   return cv;
@@ -554,10 +557,10 @@ export const DIM_STEP = 0.018, DIM_MAX = 0.30;
 export const DIMMABLE = SQUARE.map((k, i) => (PREMIUM[k] || k === 'B' ? i : -1)).filter((i) => i >= 0);
 
 let boardTex = null, boardKey = '';
-export function boardTexture(theme) {
+export function boardTexture(theme, mode3d = false) {
   const size = 2048;
-  const key = `${theme}|${art.version}`;
-  if (!boardTex || key !== boardKey) { boardTex = paintBoard(size, theme); boardKey = key; }
+  const key = `${theme}|${art.version}|${mode3d ? 1 : 0}`;
+  if (!boardTex || key !== boardKey) { boardTex = paintBoard(size, theme, mode3d); boardKey = key; }
   return boardTex;
 }
 export const invalidateBoardTexture = () => { boardKey = ''; };
