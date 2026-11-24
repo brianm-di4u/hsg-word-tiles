@@ -342,4 +342,94 @@ export const tests = [
       t.equal(afterRed.arcLog.length, 0, 'reduced motion logs zero animated wisp arcs');
     },
   },
+  // ---------- W2-S1-16 ----------
+  {
+    name: 'W2-S1-16 outer terrazzo border inlays brass promenade markers outside all 8 Bathhouse Row landmarks (zero interior marble lines), octagonal bezels + +20 pips, and #fx sightline on Row cover',
+    viewports: ['desktop', 'mobile'],
+    url: 'index.html?gl=0',
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-settings-v1')) {
+        localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false, motion: 'full' }));
+      }
+    },
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 3, seats: [{ kind: 'human', name: 'You' }, { kind: 'human', name: 'Player 2' }] });
+      await t.waitIdle(6000);
+      await t.game('act', 'reveal');
+
+      // 1) Inspect the 2048 px painted board texture directly: brass promenade markers on outer terrazzo aligned to all 8 Bathhouse Row landmarks,
+      //    dark-espresso/gold octagonal bezels + bottom-right '+20' pips on each Row square, and calm un-lined interior neutral marble (CD-WF2-03).
+      const boardAudit = await t.page.evaluate(async () => {
+        const base = (f) => new URL('src/js/' + f, location.href).href;
+        const R = await import(base('render2d.js'));
+        const { BATHHOUSES, ROWS } = await import(base('layout.js'));
+        const size = 2048, cell = size / R.U, f = R.FRAME * cell, band = f * 0.78;
+        const outerR = band * 0.18, innerR = f - cell * 0.06;
+        const mid = (outerR + innerR) / 2, halfB = (innerR - outerR) * 0.34;
+        const cv = R.paintBoard(size, 'light'), ctx = cv.getContext('2d');
+        const brassInBand = (x, y, rx, ry) => {
+          const d = ctx.getImageData(Math.round(x - rx), Math.round(y - ry), Math.max(2, Math.round(rx * 2)), Math.max(2, Math.round(ry * 2))).data;
+          let brass = 0;
+          for (let j = 0; j < d.length; j += 4) if (d[j] > 180 && d[j + 1] > 140 && d[j + 2] < 115) brass++;
+          return brass;
+        };
+        // Control spot on empty outer terrazzo border (Top col 2: no Bathhouse Row landmark aligned here)
+        const controlBrass = brassInBand(f + 2.5 * cell, mid, cell * 0.10, halfB * 0.75);
+        const markers = [];
+        for (const [k, name] of Object.entries(BATHHOUSES)) {
+          const i = Number(k), r = Math.floor(i / 15), c = i % 15;
+          let mx, my, horiz;
+          if (r <= 1) { mx = f + (c + 0.5) * cell; my = mid; horiz = true; }
+          else if (r >= 13) { mx = f + (c + 0.5) * cell; my = size - mid; horiz = true; }
+          else if (c <= 1) { mx = mid; my = f + (r + 0.5) * cell; horiz = false; }
+          else { mx = size - mid; my = f + (r + 0.5) * cell; horiz = false; }
+          const borderBrass = brassInBand(mx, my, horiz ? cell * 0.10 : halfB * 0.75, horiz ? halfB * 0.75 : cell * 0.10);
+          // Interior of bottom-right '+20' pip (strictly inside its gold border stroke so removing '+20' drops goldText to 0)
+          const gap = Math.max(1, cell * 0.035), w = cell - gap;
+          const sx = f + c * cell + gap / 2, sy = f + r * cell + gap / 2;
+          const pw = w * 0.48, ph = w * 0.28, px = sx + w * 0.49, py = sy + w * 0.69;
+          const pip = ctx.getImageData(Math.round(px + pw * 0.12), Math.round(py + ph * 0.22), Math.max(4, Math.round(pw * 0.76)), Math.max(4, Math.round(ph * 0.56))).data;
+          let darkPip = 0, goldText = 0;
+          for (let j = 0; j < pip.length; j += 4) {
+            if (pip[j] < 50 && pip[j + 1] < 45 && pip[j + 2] < 40) darkPip++;
+            if (pip[j] > 200 && pip[j + 1] > 170 && pip[j + 2] < 160) goldText++;
+          }
+          markers.push({ name, borderBrass, darkPip, goldText });
+        }
+        // Calm neutral interior marble check (CD-WF2-03): sample an empty neutral square (e.g. row 2 col 2) for zero dark-brass lines
+        let neutralIdx = -1;
+        for (let r = 2; r < 13 && neutralIdx < 0; r++) {
+          for (let c = 2; c < 13 && neutralIdx < 0; c++) {
+            if (ROWS[r][c] === '.') neutralIdx = r * 15 + c;
+          }
+        }
+        const nr = Math.floor(neutralIdx / 15), nc = neutralIdx % 15;
+        const nd = ctx.getImageData(Math.round(f + (nc + 0.15) * cell), Math.round(f + (nr + 0.15) * cell), Math.round(cell * 0.7), Math.round(cell * 0.7)).data;
+        let neutralGold = 0;
+        for (let j = 0; j < nd.length; j += 4) if (nd[j] > 180 && nd[j + 1] > 140 && nd[j + 2] < 95) neutralGold++;
+        return { controlBrass, markers, neutralGold };
+      });
+
+      t.equal(boardAudit.markers.length, 8, 'all 8 Bathhouse Row landmarks audited');
+      for (const m of boardAudit.markers) {
+        t.expect(m.borderBrass >= boardAudit.controlBrass + 60, `${m.name}: inlaid brass promenade marker rises sharply above empty terrazzo control (${m.borderBrass} vs control ${boardAudit.controlBrass})`);
+        t.expect(m.darkPip >= 120 && m.goldText >= 35, `${m.name}: dark-espresso '+20' pip interior renders crisp gold '+20' numerals (${m.darkPip} dark, ${m.goldText} gold text px)`);
+      }
+      t.equal(boardAudit.neutralGold, 0, 'interior neutral marble square stays completely free of brass pinwheel lines (CD-WF2-03)');
+
+      // 2) Covering a Bathhouse Row square emits a rising gold/steam-pulse sightline on #fx toward Featured Springs
+      const s = await t.state();
+      // Place anchor tile adjacent to Superior Bathhouse (cell 8: row 0, col 8) so we can cover cell 8 legally with SPA
+      s.game.board[7] = { l: 'S', blank: false, p: 1, t: 0 };
+      s.game.players[0].rack = 'PAEEEEE'.split('');
+      await t.game('setState', { game: s.game });
+      await t.game('act', 'stage', [{ i: 8, l: 'P' }, { i: 9, l: 'A' }]);
+      await t.game('act', 'play');
+      const afterRow = await t.state();
+      t.expect(afterRow.arcLog.some((a) => a.from === 8 && a.reason === 'row'), `covering Superior Bathhouse (cell 8) emitted #fx sightline arc (${JSON.stringify(afterRow.arcLog)})`);
+      await t.shot('W2-S1-16-promenade-and-bezels');
+    },
+  },
 ];

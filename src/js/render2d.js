@@ -99,6 +99,19 @@ function label(ctx, cx, cy, cell, p) {
 export function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
+function octagonPath(ctx, x, y, w, cut = 0.26) {
+  const k = w * cut;
+  ctx.beginPath();
+  ctx.moveTo(x + k, y);
+  ctx.lineTo(x + w - k, y);
+  ctx.lineTo(x + w, y + k);
+  ctx.lineTo(x + w, y + w - k);
+  ctx.lineTo(x + w - k, y + w);
+  ctx.lineTo(x + k, y + w);
+  ctx.lineTo(x, y + w - k);
+  ctx.lineTo(x, y + k);
+  ctx.closePath();
+}
 
 // The Bathhouse Row emblem: a domed bathhouse front with an arched door, bold enough to read at 30 px.
 function rowEmblem(ctx, cx, cy, r) {
@@ -194,6 +207,69 @@ export function paintBoard(size, theme = 'light') {
   };
   rail(band * 0.18, Math.max(2, cell * 0.06));
   rail(f - cell * 0.06, Math.max(2, cell * 0.08));
+  // W2-S1-16: inlaid brass Bathhouse Row promenade markers strictly along the outer terrazzo border
+  // aligned directly outside each of the 8 Bathhouse Row squares (zero lines on interior neutral marble per CD-WF2-03).
+  {
+    const outerR = band * 0.18, innerR = f - cell * 0.06;
+    const mid = (outerR + innerR) / 2, halfB = (innerR - outerR) * 0.36;
+    const edges = { top: [], bottom: [], left: [], right: [] };
+    for (const key of Object.keys(BATHHOUSES)) {
+      const idx = Number(key), r = Math.floor(idx / N), c = idx % N;
+      if (r <= 1) edges.top.push(f + (c + 0.5) * cell);
+      else if (r >= N - 2) edges.bottom.push(f + (c + 0.5) * cell);
+      else if (c <= 1) edges.left.push(f + (r + 0.5) * cell);
+      else edges.right.push(f + (r + 0.5) * cell);
+    }
+    ctx.save();
+    const promGrad = ctx.createLinearGradient(0, 0, size, size);
+    promGrad.addColorStop(0, '#F0D57A'); promGrad.addColorStop(0.5, '#C49A34'); promGrad.addColorStop(1, '#8C6A1E');
+    ctx.strokeStyle = promGrad; ctx.fillStyle = '#DFBC5B';
+    const drawMarker = (x, y, horiz, dir) => {
+      // Flanking Art Deco brass promenade ticks
+      ctx.lineWidth = Math.max(1.2, cell * 0.032);
+      for (const sgn of [-1, 1]) {
+        const off = sgn * cell * 0.28;
+        ctx.beginPath();
+        if (horiz) { ctx.moveTo(x + off, y - halfB * 0.85); ctx.lineTo(x + off, y + halfB * 0.85); }
+        else { ctx.moveTo(x - halfB * 0.85, y + off); ctx.lineTo(x + halfB * 0.85, y + off); }
+        ctx.stroke();
+      }
+      // Inward-pointing brass promenade chevron/diamond aligned to the Bathhouse Row landmark
+      const d = halfB * 1.05;
+      ctx.beginPath();
+      if (horiz) {
+        ctx.moveTo(x, y + dir * d);
+        ctx.lineTo(x + d * 0.9, y);
+        ctx.lineTo(x, y - dir * d * 0.72);
+        ctx.lineTo(x - d * 0.9, y);
+      } else {
+        ctx.moveTo(x + dir * d, y);
+        ctx.lineTo(x, y + d * 0.9);
+        ctx.lineTo(x - dir * d * 0.72, y);
+        ctx.lineTo(x, y - d * 0.9);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#5A3E12'; ctx.lineWidth = Math.max(0.9, cell * 0.018); ctx.stroke();
+      ctx.strokeStyle = promGrad;
+    };
+    const drawEdge = (pts, fixed, horiz, dir) => {
+      if (pts.length >= 2) {
+        pts.sort((a, b) => a - b);
+        ctx.lineWidth = Math.max(1.4, cell * 0.035);
+        ctx.beginPath();
+        if (horiz) { ctx.moveTo(pts[0], fixed); ctx.lineTo(pts[pts.length - 1], fixed); }
+        else { ctx.moveTo(fixed, pts[0]); ctx.lineTo(fixed, pts[pts.length - 1]); }
+        ctx.stroke();
+      }
+      for (const p of pts) drawMarker(horiz ? p : fixed, horiz ? fixed : p, horiz, dir);
+    };
+    drawEdge(edges.top, mid, true, 1);
+    drawEdge(edges.bottom, size - mid, true, -1);
+    drawEdge(edges.left, mid, false, 1);
+    drawEdge(edges.right, size - mid, false, -1);
+    ctx.restore();
+  }
   // deco corner fans
   for (const [sx, sy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
     ctx.save(); ctx.translate(sx ? size - f * 0.5 : f * 0.5, sy ? size - f * 0.5 : f * 0.5); ctx.rotate((sx ? (sy ? 2 : 1) : (sy ? 3 : 0)) * Math.PI / 2);
@@ -266,17 +342,43 @@ export function paintBoard(size, theme = 'light') {
       ctx.restore();
     } else if (k === 'B') {
       const name = BATHHOUSES[i];
-      ctx.fillStyle = 'rgba(232,222,198,0.97)'; ctx.fillRect(x + w * 0.03, y + w * 0.03, w * 0.94, w * 0.94);
+      // W2-S1-16 / CD-WF2-01: preserve all 8 unique painted bath-*.webp facades inside a bold dark-espresso/gold
+      // octagonal bezel with a crisp brass '+20' corner pip so Bathhouse Row reads unmistakably even at 23-38 px.
+      ctx.save();
+      const bx = x + w * 0.04, by = y + w * 0.04, bw = w * 0.92;
+      const bezGrad = ctx.createLinearGradient(bx, by, bx + bw, by + bw);
+      bezGrad.addColorStop(0, '#332518'); bezGrad.addColorStop(1, '#140E08');
+      octagonPath(ctx, bx, by, bw, 0.28);
+      ctx.fillStyle = bezGrad; ctx.fill();
+      ctx.strokeStyle = '#E9C766'; ctx.lineWidth = Math.max(1.3, w * 0.034); ctx.stroke();
+      // Inner octagonal painted medallion window (keeps the full [0.2..0.8] facade center crisp and unobstructed)
+      const ix = x + w * 0.11, iy = y + w * 0.11, iw = w * 0.78;
       const med = art.img('bath-' + String(name).toLowerCase());
-      if (med) ctx.drawImage(med, x + w * 0.06, y + w * 0.06, w * 0.88, w * 0.88);   // the painted medallion of that bathhouse
-      else {
+      ctx.save();
+      octagonPath(ctx, ix, iy, iw, 0.24);
+      ctx.clip();
+      if (med) {
+        ctx.drawImage(med, ix - iw * 0.04, iy - iw * 0.04, iw * 1.08, iw * 1.08);
+      } else {
         const g = ctx.createRadialGradient(cx - w * 0.12, cy - w * 0.14, w * 0.04, cx, cy, w * 0.43);
         g.addColorStop(0, '#3A3326'); g.addColorStop(1, '#16130F');
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, w * 0.43, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = '#E9C766'; ctx.lineWidth = Math.max(1, w * 0.03); ctx.stroke();
-        rowEmblem(ctx, cx, cy, w * 0.3);
+        ctx.fillStyle = g; ctx.fillRect(ix, iy, iw, iw);
+        rowEmblem(ctx, cx, cy, w * 0.27);
       }
-      ctx.strokeStyle = '#B8902F'; ctx.lineWidth = Math.max(1, w * 0.03); ctx.strokeRect(x + w * 0.035, y + w * 0.035, w * 0.93, w * 0.93);
+      ctx.restore();
+      octagonPath(ctx, ix, iy, iw, 0.24);
+      ctx.strokeStyle = '#F0D57A'; ctx.lineWidth = Math.max(0.9, w * 0.02); ctx.stroke();
+      // Crisp bottom-right brass '+20' corner pip
+      const pw = w * 0.48, ph = w * 0.28, px = x + w * 0.49, py = y + w * 0.69;
+      roundRect(ctx, px, py, pw, ph, ph * 0.42);
+      ctx.fillStyle = 'rgba(20, 14, 8, 0.96)'; ctx.fill();
+      ctx.strokeStyle = '#F0D57A'; ctx.lineWidth = Math.max(1, w * 0.022); ctx.stroke();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#F6DF86';
+      ctx.font = `800 ${cell * 0.205}px ${FONT_UI}`;
+      const pfit = Math.min(1, (pw * 0.84) / ctx.measureText('+20').width);
+      if (pfit < 1) ctx.font = `800 ${cell * 0.205 * pfit}px ${FONT_UI}`;
+      ctx.fillText('+20', px + pw / 2, py + ph * 0.53);
+      ctx.restore();
     }
   }
   // lamp pool and an inner shadow under the frame
