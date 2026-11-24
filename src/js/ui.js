@@ -29,7 +29,7 @@ export const ICON = {
     arch: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M11.4 2.5h1.2v2.6a4.6 4.6 0 0 1 4.2 4.3H7.2a4.6 4.6 0 0 1 4.2-4.3zM2.6 10.4h18.8v1.4h-1v9.4H3.6v-9.4h-1zM9.6 21.2v-4.6a2.4 2.4 0 0 1 4.8 0v4.6z"/></svg>',
     leaf: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19c0-9 6-14 15-14 0 9-5 15-14 15m0-1 8-8" fill="currentColor" stroke="currentColor" stroke-width="1"/></svg>',
     horseshoe: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V11a6 6 0 0 1 12 0v10h-3V11a3 3 0 0 0-6 0v10z" fill="currentColor"/></svg>',
-    dice: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5" fill="currentColor"/><g fill="#fff"><circle cx="8.5" cy="8.5" r="1.6"/><circle cx="15.5" cy="15.5" r="1.6"/><circle cx="12" cy="12" r="1.6"/></g></svg>',
+    dice: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M7 3.5h10A3.5 3.5 0 0 1 20.5 7v10a3.5 3.5 0 0 1-3.5 3.5H7A3.5 3.5 0 0 1 3.5 17V7A3.5 3.5 0 0 1 7 3.5ZM10.1 8.5a1.6 1.6 0 1 0-3.2 0 1.6 1.6 0 1 0 3.2 0ZM13.6 12a1.6 1.6 0 1 0-3.2 0 1.6 1.6 0 1 0 3.2 0ZM17.1 15.5a1.6 1.6 0 1 0-3.2 0 1.6 1.6 0 1 0 3.2 0Z"/></svg>',
     bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v5l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2 16a2 2 0 0 0 4 0z" fill="currentColor"/></svg>',
   },
 };
