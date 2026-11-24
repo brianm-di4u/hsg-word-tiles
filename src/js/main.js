@@ -43,7 +43,7 @@ const G = {
   settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, fxVol: 1, musicVol: 1, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true, townCue: true, tipsSeen: true, vibrate: matchMedia('(pointer: coarse)').matches },
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
-  preview: null, hint: null, last: new Set(), lastPulse: null, anim: new Map(), animUntil: 0,
+  preview: null, hint: null, last: new Set(), lastPulse: null, badPulse: null, anim: new Map(), animUntil: 0,
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, releaseAiTimer: 0, turnTimers: new Set(), privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, pendingVfx: null, busyUntil: 0, lastHuman: -1,
   errFlash: false, scoreHi: null, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, springsOpen: false,
@@ -98,7 +98,7 @@ function applySettings() {
   if (red) {
     clearFx();
     const fx = $('#fx'); if (fx) fx.getContext('2d').clearRect(0, 0, fx.width, fx.height);
-    G.anim.clear(); G.animUntil = 0; G.lastPulse = null; G.settle.clear(); G.settleUntil = 0;
+    G.anim.clear(); G.animUntil = 0; G.lastPulse = null; G.badPulse = null; G.settle.clear(); G.settleUntil = 0;
     if (G.viewAnim) { R.view.zoom = G.viewAnim.to.zoom; R.view.cx = G.viewAnim.to.cx; R.view.cy = G.viewAnim.to.cy; G.viewAnim = null; R.clampView(); }
   }
   const sb = $('#b-sound'); if (sb) { sb.innerHTML = UI.ICON.sound(st.sound); sb.setAttribute('aria-label', st.sound ? 'Sound on (click to mute)' : 'Sound off (click to unmute)'); }
@@ -321,12 +321,12 @@ function showScene(name, arg) {
     if (SHEETS.includes(name)) {
       if (G.aiFire) { clearTimeout(G.aiTimer); G.aiTimer = 0; G.aiHeld = G.aiFire; G.aiFire = null; }
       if (G.turnWait) { const run = G.turnWait.run; clearTimeout(G.turnWait.id); G.turnWait = null; if (!G.aiHeld && run) G.aiHeld = run; G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; }
-      G.pendingVfx = null;
+      G.badPulse = null; G.pendingVfx = null;
       cancelTurnTimers();
     } else {
       clearTimeout(G.aiTimer); G.aiTimer = 0;
       G.aiHeld = null; G.aiFire = null; G.aiBusy = false; G.aiSkip = false; G.aiToken++;
-      G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; G.pendingVfx = null;
+      G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; G.badPulse = null; G.pendingVfx = null;
       cancelTurnTimers();
     }
     G.toastQ = []; hideToastNow(); G.springsOpen = false; G.privacy = false; const priv = $('#privacy'); if (priv) { priv.hidden = true; priv.innerHTML = ''; }
@@ -569,7 +569,7 @@ function resumeGame(record) { whenReady(() => beginGame(record.game, record)); }
 function beginGame(s, intent) {
   clearTimeout(G.aiTimer); G.aiTimer = 0;
   G.aiHeld = null; G.aiFire = null; G.aiBusy = false; G.aiSkip = false; G.aiToken++;
-  G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; G.pendingVfx = null;
+  G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; G.badPulse = null; G.pendingVfx = null;
   cancelTurnTimers();
   clearTimeout(errFlashTimer); G.errFlash = false;
   clearTimeout(scoreHiTimer); G.scoreHi = null;
@@ -749,7 +749,7 @@ function afterAction(entry, fromAi) {
   cancelTurnTimers();
   const prevPlaqueSnap = G.plaqueSnap && G.plaqueSnap.s === s ? G.plaqueSnap.list : null;
   cancelDrag();
-  G.flash = null;
+  G.flash = null; G.badPulse = null;
   const said = s.players[entry.p].kind === 'ai' ? barkFor(s, entry) : null;
   G.bark = said ? { ...said, persona: s.players[entry.p].persona } : null;
   if (entry.kind === 'play' && s.players[entry.p].kind === 'human') coachPlayed();
@@ -952,7 +952,7 @@ function stage(k, i, letter) {
   if (l === '?' && !letter) { askBlank((ch) => stage(k, i, ch)); return true; }
   G.staged.push({ k, i, l: l === '?' ? letter : l, blank: l === '?' });
   G.order = G.order.filter((x) => x !== k);
-  G.selected = null; G.hint = null;
+  G.selected = null; G.hint = null; G.badPulse = null;
   forgetHint(s);
   clearToasts();
   if (animOn()) { const now = performance.now(); G.settle.set(i, now); G.settleUntil = now + 130; }
@@ -964,6 +964,7 @@ function unstage(i, toPos) {
   const t = G.staged.find((x) => x.i === i);
   if (!t) return;
   G.staged = G.staged.filter((x) => x !== t);
+  G.badPulse = null;
   forgetHint(G.s);
   clearToasts();
   if (toPos != null) G.order.splice(toPos, 0, t.k); else G.order.push(t.k);
@@ -972,7 +973,7 @@ function unstage(i, toPos) {
 }
 // a paid hint comes back after a reload only while its tiles are untouched: taking them back, or staging another tile, ends it
 function forgetHint(s) { if (s && s.hintStaged) { delete s.hintStaged; save(s); } }
-function recallAll() { if (!G.staged.length) return; for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
+function recallAll() { if (!G.staged.length) return; for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; G.badPulse = null; forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
 function shuffleRack() {
   const o = G.order;
   for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; }
@@ -981,23 +982,34 @@ function shuffleRack() {
 
 function humanCanAct() { return G.s && !G.s.over && cur().kind === 'human' && !G.aiBusy && !G.hintBusy && !G.privacy && G.scene === 'game' && !G.dialog; }
 
+const BAD_PULSE_MS = 220;
+function pulseBad(cells) {
+  if (!animOn() || !cells || !cells.length || G.scene !== 'game') return;
+  G.badPulse = { cells: [...new Set(cells)], t0: performance.now(), dur: BAD_PULSE_MS };
+  draw();
+}
+function refusedCells(r) {
+  const bw = r && r.words && r.badWord ? r.words.filter((w) => w.w === r.badWord).flatMap((w) => w.cells) : [];
+  return bw.length ? [...new Set(bw)] : G.staged.map((t) => t.i);
+}
 function doPlay() {
   if (!humanCanAct()) return;
   cancelDrag();   // a staged tile still in the air goes back to its square and counts
   if (!G.staged.length) { flash('Place tiles on the board first.'); oops(); return; }
   const r = E.apply(G.s, { type: 'play', tiles: stagedTiles() }, ctx());
-  if (!r.ok && r.badWord && G.s.challenge) { loseTurn(r.badWord); return; }
-  if (!r.ok) { flash(r.error); oops(); shake(); return; }
+  if (!r.ok && r.badWord && G.s.challenge) { loseTurn(r.badWord, refusedCells(r)); return; }
+  if (!r.ok) { flash(r.error); oops(); shake(); pulseBad(refusedCells(r)); return; }
   buzz('play');
   afterAction(r.entry, false);
 }
 // Challenge: the word was not in the dictionary, so the play is not made and the turn is lost, as if the player had passed
-function loseTurn(word) {
+function loseTurn(word, cells) {
   const r = E.apply(G.s, { type: 'pass' }, ctx());
   if (!r.ok) return;
   r.entry.challenge = word;
   oops(); shake();
   afterAction(r.entry, false);
+  pulseBad(cells);
 }
 function doPass() {
   if (!humanCanAct()) return;
@@ -1748,6 +1760,7 @@ function frame(now) {
   if (G.anim.size && now < G.animUntil + 50) { G.chainAt = now; draw(); }
   else if (G.anim.size) G.anim.clear();
   if (G.lastPulse) { if (now < G.lastPulse.t0 + G.lastPulse.dur) { G.chainAt = now; draw(); } else G.lastPulse = null; }
+  if (G.badPulse) { if (now < G.badPulse.t0 + G.badPulse.dur) { G.chainAt = now; draw(); } else G.badPulse = null; }
   if (G.settle.size) { if (now < G.settleUntil) { G.chainAt = now; draw(); } else G.settle.clear(); }
   if (G.viewAnim) stepViewAnim(now);
 }
@@ -1759,7 +1772,7 @@ function drawData(now) {
     board: G.s.board, staged: G.staged, last: G.last, lastPulse: G.lastPulse, hint: G.hint, theme: dark() ? 'dark' : 'light',
     cursor: G.cursor.on && humanCanAct() ? G.cursor : null,
     goodCells: p && p.ok && !G.s.challenge ? [...new Set(p.words.flatMap((w) => w.cells))] : null,
-    badCells,
+    badCells, badPulse: G.badPulse,
     target: G.drag && G.drag.active ? G.drag.target : null, dragFrom: G.drag && G.drag.from === 'board' && G.drag.active ? G.drag.i : null,
     dragTile: G.drag && G.drag.active ? G.drag.tile : null, blocked: G.drag && G.drag.active ? G.drag.blocked : null,
     anim: G.anim, settle: G.settle, now,
@@ -2562,7 +2575,7 @@ window.__game = {
   seed(n) { G.nextSeed = n >>> 0; return true; },
   getState() {
     return JSON.parse(JSON.stringify({ scene: G.scene, dialog: G.dialog, game: G.s, staged: G.staged, order: G.order, preview: G.preview, settings: G.settings,
-      view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, pulse: !!G.lastPulse, aiWait: { reply: !!G.aiFire, turn: !!(G.turnWait && G.turnWait.fromAi) }, ready: G.ready, privacy: G.privacy,
+      view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, pulse: !!G.lastPulse, badPulse: G.badPulse ? { cells: G.badPulse.cells.slice(), dur: G.badPulse.dur } : null, aiWait: { reply: !!G.aiFire, turn: !!(G.turnWait && G.turnWait.fromAi) }, ready: G.ready, privacy: G.privacy,
       drag: G.drag && G.drag.active ? { from: G.drag.from, target: G.drag.target, blocked: G.drag.blocked, lift: G.drag.lift, size: G.drag.size } : null,
       ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, sweepCells: steam.sweeps.length ? steam.sweeps[0].cells.slice() : [], flashes: steam.flashes.length, fx: { on: steam.on, parts: steam.parts.length, maxParts: MAX_PARTICLES, stamps: !!_fxStamps, shapes: FX_SHAPES, flashShapes: steam.flashes.map((f) => f.shape), flashDurs: steam.flashes.map((f) => f.dur), lastTier: steam.lastTier, lastEvent: steam.lastEvent, sparkKinds: steam.parts.filter((p) => p.kind === 'spark').length, steamKinds: steam.parts.filter((p) => p.kind === 'steam').length, wispKinds: steam.parts.filter((p) => p.kind === 'wisp').length }, arcs: steam.arcs.length, arcLog: steam.arcLog.slice(-6), wisps: steam.parts.filter((p) => p.kind !== 'spark').map((p) => p.i), sparks: steam.parts.filter((p) => p.kind === 'spark').length, sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
   },

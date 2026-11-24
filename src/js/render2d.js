@@ -708,15 +708,14 @@ export function drawFrame(ctx, d) {
   const lw = (k) => Math.max(1.5, (d.cellPx || cellPx) * k);
   const outline = (cells, color, width) => { for (const i of cells) { ctx.strokeStyle = color; ctx.lineWidth = width; poly(ctx, quad(i, 0.03, liftOf(i))); ctx.stroke(); } };
   if (d.goodCells) outline(d.goodCells, 'rgba(42,157,143,0.95)', lw(0.06));
-  if (d.badCells && d.badCells.length) {
+  const badPulseOn = !!(d.badPulse && d.badPulse.cells && d.badPulse.cells.length && now >= d.badPulse.t0 && now < d.badPulse.t0 + d.badPulse.dur);
+  if ((d.badCells && d.badCells.length) || badPulseOn) {
     const bw = lw(0.075), dash = [lw(0.18), lw(0.1)];
     const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-    ctx.save();
-    ctx.strokeStyle = 'rgba(178,40,28,0.98)';
-    ctx.lineWidth = bw;
-    ctx.lineCap = 'round';
-    for (const i of d.badCells) {
+    const drawBadCell = (i, alpha) => {
       const q = quad(i, 0.03, liftOf(i));
+      ctx.strokeStyle = `rgba(178,40,28,${alpha.toFixed(3)})`;
+      ctx.lineWidth = bw;
       ctx.setLineDash(dash);
       poly(ctx, q); ctx.stroke();
       ctx.setLineDash([]);
@@ -726,6 +725,25 @@ export function drawFrame(ctx, d) {
       ctx.moveTo(tl1[0], tl1[1]); ctx.lineTo(tl2[0], tl2[1]);
       ctx.moveTo(br1[0], br1[1]); ctx.lineTo(br2[0], br2[1]);
       ctx.stroke();
+    };
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    const badSet = d.badCells && d.badCells.length ? new Set(d.badCells) : null;
+    if (badPulseOn) {
+      const k = Math.min(1, Math.max(0, (now - d.badPulse.t0) / d.badPulse.dur));
+      const env = Math.pow(1 - k, 1.6);
+      for (const i of d.badPulse.cells) {
+        const qOut = quad(i, -0.01 - 0.045 * (1 - env), liftOf(i));
+        ctx.strokeStyle = `rgba(218,46,32,${(0.78 * env).toFixed(3)})`;
+        ctx.lineWidth = lw(0.11);
+        ctx.setLineDash(dash);
+        poly(ctx, qOut); ctx.stroke();
+        if (!badSet || !badSet.has(i)) drawBadCell(i, 0.98 * env);
+      }
+    }
+    if (d.badCells && d.badCells.length) {
+      for (const i of d.badCells) drawBadCell(i, 0.98);
     }
     ctx.restore();
   }
