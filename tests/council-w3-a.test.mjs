@@ -443,10 +443,12 @@ export const tests = [
       for (let k = 0; k < 4; k++) { await t.game('act', 'zoom', 1); await t.waitFrames(3); }
       t.equal((await t.game('act', 'b3')).intervals.length, 0, 'frames drawn for other reasons are not timed');
       // a zoom-out animation is a run of chained frames; repeat it until some are timed (a slow machine may need more than one)
+      // W2-S3-03 hides duplicate #b-zoom on narrow viewports where #b-zoomin toggles zoom-out
+      const zoomOutSel = t.viewport === 'mobile' ? '#b-zoomin' : '#b-zoom';
       let iv = [];
       for (let k = 0; k < 8 && iv.length < 2; k++) {
         await t.game('act', 'zoom', 1.8, 7, 7);
-        await t.page.click('#b-zoom');
+        await t.page.click(zoomOutSel);
         await t.page.waitForFunction(() => !window.__G.viewAnim, null, { timeout: 5000 });
         iv = (await t.game('act', 'b3')).intervals;
       }
