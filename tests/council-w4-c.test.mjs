@@ -207,7 +207,7 @@ export const tests = [
     },
   },
   {
-    name: 'S1-20 with animation off there is no pop and no sparks for a big play',
+    name: 'S1-20 with animation off there is no rising big pop and no sparks for a big play',
     viewports: ['desktop'],
     reducedMotion: true,
     initScript: seeded(3),
@@ -217,7 +217,13 @@ export const tests = [
       const m = list.filter((x) => !x.words.some((w) => w.themed || w.bonus)).reduce((a, x) => (x.score > a.score ? x : a));
       await t.game('act', 'stage', m.tiles); await t.game('act', 'play');
       t.expect(m.score >= 45, 'a big play of ' + m.score);
-      t.equal(await t.page.locator('.pop').count(), 0, 'no pop');
+      const pop = await t.page.evaluate(() => {
+        const el = document.querySelector('.pop');
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        return { staticCls: el.classList.contains('static'), anim: cs.animationName, rise: el.style.getPropertyValue('--rise'), size: parseFloat(cs.fontSize) };
+      });
+      t.expect(!!pop && pop.staticCls && pop.anim === 'pop-fade' && pop.rise === '0%' && pop.size <= 26, 'only 0px static unscaled pop crossfade, no rising big pop');
       t.equal((await t.state()).sparks, 0, 'no sparks');
     },
   },

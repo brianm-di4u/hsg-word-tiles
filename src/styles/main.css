@@ -196,6 +196,7 @@ body.reduce .check input, body.reduce .check input::after { transition: none; }
 #preview.ok { box-shadow: inset 0 0 0 1.5px rgba(127, 211, 196, 0.6); }
 #preview.bad { box-shadow: inset 0 0 0 1.5px rgba(255, 138, 122, 0.8); color: #FFD9D2; }
 #preview.flash { color: #F6E3C0; }
+#preview.err-flash { box-shadow: inset 0 0 0 2.5px #FF8A7A, 0 0 0 2px rgba(154, 42, 28, 0.55); background: rgba(92, 22, 16, 0.9); color: #FFE6E0; }
 #preview.shake { animation: shake 0.35s; }
 @keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
 .thinking i { animation: dot 1.2s infinite; font-style: normal; }
@@ -260,6 +261,9 @@ body.theme-dark .plaque { background: linear-gradient(160deg, #4A3F2A, #2E2718 6
 .pcard .score { font: 600 1.6em var(--f-serif); font-variant-numeric: tabular-nums; }
 .score.bump { animation: bump 0.5s; }
 @keyframes bump { 40% { transform: scale(1.18); color: var(--gold); } }
+.pcard .score.score-updated { background: rgba(217, 162, 58, 0.28); color: #1F2A24; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px var(--brass); }
+body.theme-dark .pcard .score.score-updated { background: rgba(212, 175, 55, 0.24); color: #F3DD8B; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px var(--brass); }
+.chip .score.score-updated { background: rgba(240, 213, 122, 0.24); color: #F3DD8B; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px rgba(243, 221, 139, 0.75); }
 .chip { display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border-radius: 99px; background: rgba(255, 248, 230, 0.12); border: 1.5px solid transparent; color: #F6EFDF; }
 .chip.on { border-color: #F0D57A; background: rgba(240, 213, 122, 0.2); }
 .chip .score { font: 600 1.05em var(--f-serif); font-variant-numeric: tabular-nums; }
@@ -280,6 +284,8 @@ body.theme-dark .plaque { background: linear-gradient(160deg, #4A3F2A, #2E2718 6
 .pword b.fog { background: radial-gradient(circle at 40% 40%, #FFFFFF, #E9E6E0 55%, #CFCAC2); box-shadow: inset 0 0 4px rgba(255, 255, 255, 0.9), inset 0 1px 2px rgba(90, 60, 10, 0.25); }
 .plaque.claimed { background: linear-gradient(160deg, #D4F0E9, #9FD8CD 55%, #7BC3B7); border-color: #2A7468; color: #0B2622; }
 body.theme-dark .plaque.claimed { background: linear-gradient(160deg, #1F544D, #19433E 55%, #12332F); border-color: #6CC2B4; color: #E8F8F4; }
+.plaque.plaque-updated { box-shadow: 0 0 0 2.5px #F3DD8B, inset 0 0 0 2px rgba(255, 250, 220, 0.85), 0 2px 6px rgba(0, 0, 0, 0.4); }
+.plaque.claimed.plaque-updated { box-shadow: 0 0 0 2.5px #7FD3C4, inset 0 0 0 2px #FFFFFF, 0 2px 6px rgba(0, 0, 0, 0.4); }
 .pby { margin-left: auto; font: 700 0.8em var(--f-ui); }
 
 /* privacy */
@@ -290,7 +296,9 @@ body.theme-dark .plaque.claimed { background: linear-gradient(160deg, #1F544D, #
 /* score pop */
 .pop { position: absolute; z-index: 5; transform: translate(-50%, -50%); font: 800 1.6rem var(--f-serif); color: #F3DD8B; text-shadow: 0 2px 0 #4B2A0E, 0 0 12px rgba(0, 0, 0, 0.6); pointer-events: none; animation: pop 1.3s ease-out forwards; }
 .pop.themed { animation-duration: 1.6s; }
+.pop.static { padding: 2px 10px; border-radius: 999px; background: rgba(24, 16, 10, 0.88); border: 1.5px solid rgba(243, 221, 139, 0.78); color: #F3DD8B; text-shadow: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45); animation: pop-fade 0.95s ease-out forwards; }
 @keyframes pop { 0% { opacity: 0; transform: translate(-50%, -30%) scale(0.7); } 15% { opacity: 1; transform: translate(-50%, -60%) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, calc(-60% - var(--rise, 120%))) scale(1); } }
+@keyframes pop-fade { 0% { opacity: 0; } 14%, 72% { opacity: 1; } 100% { opacity: 0; } }
 
 /* last-resort notice for an uncaught error */
 #crash { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 70; display: flex; gap: 12px; align-items: center; max-width: calc(100vw - 32px); padding: 8px 12px; border-radius: 10px; border: 1.5px solid #6E4B1E; background: linear-gradient(160deg, #FBF3D9, #F0D57A 70%, #D9B85A); color: #2A1E0C; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
@@ -599,4 +607,55 @@ body.theme-dark #preview .bd { background: #0C0A16; }
 @media (max-width: 860px), (max-aspect-ratio: 1/1), (max-height: 520px) {
   /* while the Spring Guide's other plays are on offer the strip keeps to one row of chips; tapping the strip still opens how the play scores */
   #preview.hintlive .bdbtn:not([data-hintnext]) { display: none; }
+}
+
+/* ---------- reduced motion: disable animations/transitions across every animated selector, keeping restrained non-vestibular cues ---------- */
+body.reduce .check input,
+body.reduce .check input::after,
+body.reduce .rtile,
+body.reduce .stile { transition: none; }
+body.reduce .thinking i,
+body.reduce .rtile.deal,
+body.reduce .score.bump,
+body.reduce #preview.shake,
+body.reduce #toast.on,
+body.reduce .dialog,
+body.reduce .fact,
+body.reduce .coach-target,
+body.reduce #boardwrap.coach-target::after { animation: none; }
+body.reduce .thinking i { opacity: 1; }
+body.reduce .btn:active,
+body.reduce .stile[aria-pressed="true"] { transform: none; }
+body.reduce .stile[aria-pressed="true"] { box-shadow: inset 0 0 0 2.5px var(--primary), 0 2px 0 rgba(110, 75, 30, 0.4); }
+body.reduce #preview.shake { box-shadow: inset 0 0 0 2.5px #FF8A7A, 0 0 0 2px rgba(154, 42, 28, 0.55); background: rgba(92, 22, 16, 0.9); color: #FFE6E0; }
+body.reduce .pcard .score.bump { background: rgba(217, 162, 58, 0.28); color: #1F2A24; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px var(--brass); }
+body.reduce.theme-dark .pcard .score.bump { background: rgba(212, 175, 55, 0.24); color: #F3DD8B; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px var(--brass); }
+body.reduce .chip .score.bump { background: rgba(240, 213, 122, 0.24); color: #F3DD8B; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px rgba(243, 221, 139, 0.75); }
+body.reduce .pop,
+body.reduce .pop.themed { padding: 2px 10px; border-radius: 999px; background: rgba(24, 16, 10, 0.88); border: 1.5px solid rgba(243, 221, 139, 0.78); color: #F3DD8B; text-shadow: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45); animation: pop-fade 0.95s ease-out forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  body:not(.motion-full) .check input,
+  body:not(.motion-full) .check input::after,
+  body:not(.motion-full) .rtile,
+  body:not(.motion-full) .stile { transition: none; }
+  body:not(.motion-full) .thinking i,
+  body:not(.motion-full) .rtile.deal,
+  body:not(.motion-full) .score.bump,
+  body:not(.motion-full) #preview.shake,
+  body:not(.motion-full) #toast.on,
+  body:not(.motion-full) .dialog,
+  body:not(.motion-full) .fact,
+  body:not(.motion-full) .coach-target,
+  body:not(.motion-full) #boardwrap.coach-target::after { animation: none; }
+  body:not(.motion-full) .thinking i { opacity: 1; }
+  body:not(.motion-full) .btn:active,
+  body:not(.motion-full) .stile[aria-pressed="true"] { transform: none; }
+  body:not(.motion-full) .stile[aria-pressed="true"] { box-shadow: inset 0 0 0 2.5px var(--primary), 0 2px 0 rgba(110, 75, 30, 0.4); }
+  body:not(.motion-full) #preview.shake { box-shadow: inset 0 0 0 2.5px #FF8A7A, 0 0 0 2px rgba(154, 42, 28, 0.55); background: rgba(92, 22, 16, 0.9); color: #FFE6E0; }
+  body:not(.motion-full) .pcard .score.bump { background: rgba(217, 162, 58, 0.28); color: #1F2A24; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px var(--brass); }
+  body.theme-dark:not(.motion-full) .pcard .score.bump { background: rgba(212, 175, 55, 0.24); color: #F3DD8B; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px var(--brass); }
+  body:not(.motion-full) .chip .score.bump { background: rgba(240, 213, 122, 0.24); color: #F3DD8B; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px rgba(243, 221, 139, 0.75); }
+  body:not(.motion-full) .pop,
+  body:not(.motion-full) .pop.themed { padding: 2px 10px; border-radius: 999px; background: rgba(24, 16, 10, 0.88); border: 1.5px solid rgba(243, 221, 139, 0.78); color: #F3DD8B; text-shadow: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45); animation: pop-fade 0.95s ease-out forwards; }
 }

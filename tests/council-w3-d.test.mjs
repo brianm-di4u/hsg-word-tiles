@@ -79,7 +79,7 @@ export const tests = [
     },
   },
   {
-    name: 'S4-19 under reduced motion there is no sweep and no long pop, but the Register note stays',
+    name: 'S4-19 under reduced motion there is no sweep and no long rising pop, only a static 0px pop fade, and the Register note stays',
     viewports: ['desktop'],
     reducedMotion: true,
     initScript: quiet,
@@ -88,7 +88,14 @@ export const tests = [
       await t.game('act', 'stage', across('SPRING')); await t.game('act', 'play');
       const s = await t.state();
       t.equal(s.sweeps, 0, 'no sweep');
-      t.equal(await t.page.locator('.pop').count(), 0, 'no pop');
+      t.equal(await t.page.locator('.pop.themed').count(), 0, 'no long rising themed pop');
+      const pop = await t.page.evaluate(() => {
+        const el = document.querySelector('.pop');
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        return { staticCls: el.classList.contains('static'), anim: cs.animationName, rise: el.style.getPropertyValue('--rise') };
+      });
+      t.expect(!!pop && pop.staticCls && pop.anim === 'pop-fade' && pop.rise === '0%', 'static 0px espresso-pill pop crossfade replaces rising pop');
       t.expect(/New in your Register/.test(s.toast), 'the text is still there');
     },
   },

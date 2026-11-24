@@ -47,6 +47,7 @@ const G = {
   preview: null, hint: null, last: new Set(), lastPulse: null, anim: new Map(), animUntil: 0,
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, busyUntil: 0, lastHuman: -1,
+  errFlash: false, scoreHi: null, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0,
 };
 window.__G = G;
 
@@ -91,11 +92,20 @@ function applySettings() {
   syncAudio();
   document.documentElement.style.setProperty('--ts', st.text);
   document.body.classList.toggle('theme-dark', dark());
-  document.body.classList.toggle('reduce', reduced());
+  const red = reduced();
+  document.body.classList.toggle('reduce', red);
+  document.body.classList.toggle('motion-full', st.motion === 'full');
+  if (red) {
+    steam.parts.length = 0; steam.sweeps.length = 0; steam.on = false;
+    const fx = $('#fx'); if (fx) fx.getContext('2d').clearRect(0, 0, fx.width, fx.height);
+    G.anim.clear(); G.animUntil = 0; G.lastPulse = null; G.settle.clear(); G.settleUntil = 0;
+    if (G.viewAnim) { R.view.zoom = G.viewAnim.to.zoom; R.view.cx = G.viewAnim.to.cx; R.view.cy = G.viewAnim.to.cy; G.viewAnim = null; R.clampView(); }
+  }
   const sb = $('#b-sound'); if (sb) { sb.innerHTML = UI.ICON.sound(st.sound); sb.setAttribute('aria-label', st.sound ? 'Sound on (click to mute)' : 'Sound off (click to unmute)'); }
   R.invalidateBoardTexture();
   if (B3.B3.on) B3.setTheme(dark() ? 'dark' : 'light');
   layout();
+  if (!red && G.scene === 'game' && G.s) startSteam();
 }
 
 // ---------- boot ----------
@@ -401,6 +411,9 @@ function startDaily(date) {
 function resumeGame(record) { whenReady(() => beginGame(record.game, record)); }
 function beginGame(s, intent) {
   clearTimeout(G.overTimer); G.overTimer = 0;
+  clearTimeout(errFlashTimer); G.errFlash = false;
+  clearTimeout(scoreHiTimer); G.scoreHi = null;
+  clearTimeout(G.plaqueTimer); G.plaqueHi.clear(); G.plaqueSnap = null;
   if (G.turnWait) { clearTimeout(G.turnWait.id); G.turnWait = null; }
   if (!G.settings.tipsSeen) store.put(KEYS.settings, G.settings); // the newcomer flag is written before the first save, so a tab closed mid-tips still counts as a newcomer
   G.bark = null;
@@ -555,11 +568,11 @@ function afterAction(entry, fromAi) {
   if (cur().kind === 'human' && !fromAi) G.lastHuman = s.cur;
   if (s.over) persistEndgame(s);
   save(s);
-  rollScores();
   const wait = G.fast ? 0 : (fromAi && animOn() ? Math.max(0, G.animUntil - performance.now()) + 250 : 150);
   G.busyUntil = performance.now() + wait;
   G.turnWait = { fromAi, id: setTimeout(() => { G.turnWait = null; if (G.s === s) startTurn(); }, wait) };
   renderGame();
+  rollScores(entry);
 }
 
 // A game is finished once. More than one start-of-turn timer can still be pending when the last move lands (a move
@@ -637,6 +650,7 @@ function announce(e) {
 const stagedTiles = () => G.staged.map((t) => ({ i: t.i, l: t.l, blank: t.blank }));
 function updatePreview() {
   if (G.flash) { G.flash = null; clearTimeout(flashTimer); }
+  if (G.errFlash) { G.errFlash = false; clearTimeout(errFlashTimer); }
   if (!G.s || !G.staged.length) { G.preview = null; return; }
   // a Challenge game does not say whether the words are in the dictionary until they are played
   G.preview = E.evaluate(G.s, stagedTiles(), G.s.challenge ? { ...ctx(), skipDict: true } : ctx());
@@ -765,24 +779,49 @@ function renderStaging() {
   draw();
   startSteam();
 }
+function syncPlaqueSnap(s) {
+  const next = s.featured.map((f) => ({ by: f.by, shown: f.shown.length }));
+  const prev = G.plaqueSnap && G.plaqueSnap.s === s ? G.plaqueSnap.list : null;
+  G.plaqueSnap = { s, list: next };
+  if (!prev || G.fast || !reduced()) return;
+  const changed = [];
+  for (let k = 0; k < next.length; k++) {
+    if (prev[k] && (next[k].by !== prev[k].by || next[k].shown > prev[k].shown)) changed.push(k);
+  }
+  if (!changed.length) return;
+  for (const k of changed) G.plaqueHi.add(k);
+  clearTimeout(G.plaqueTimer);
+  G.plaqueTimer = setTimeout(() => {
+    G.plaqueHi.clear();
+    document.querySelectorAll('.plaque-updated').forEach((el) => el.classList.remove('plaque-updated'));
+  }, 750);
+}
 function renderGame() {
   if (G.scene !== 'game' || !G.s) return;
   const s = G.s;
   const mobile = isNarrow();
+  syncPlaqueSnap(s);
   $('#scores').innerHTML = mobile ? '' : UI.scoresHtml(s, false);
   $('#springs').innerHTML = UI.springsHtml(s, G.lex, mobile);
-  $('#springs').querySelectorAll('[data-plaque]').forEach((b) => b.addEventListener('click', () => {
-    const f = s.featured[+b.dataset.plaque];
-    if (G.coach && G.coach.phase === 'plaques') coachDismiss('plaques');
-    if (f.by != null) openFact(G.lex.entry(f.word).id, f.word);
-    else flash(`Featured Spring: ${f.word.length} letters, ${G.lex.categories[f.cat].name}. Form it to claim +${FEATURED_BONUS}.`);
-  }));
+  $('#springs').querySelectorAll('[data-plaque]').forEach((b) => {
+    if (G.plaqueHi.has(+b.dataset.plaque)) b.classList.add('plaque-updated');
+    b.addEventListener('click', () => {
+      const f = s.featured[+b.dataset.plaque];
+      if (G.coach && G.coach.phase === 'plaques') coachDismiss('plaques');
+      if (f.by != null) openFact(G.lex.entry(f.word).id, f.word);
+      else flash(`Featured Spring: ${f.word.length} letters, ${G.lex.categories[f.cat].name}. Form it to claim +${FEATURED_BONUS}.`);
+    });
+  });
   $('#log').innerHTML = UI.logHtml(s, G.lex) || '<li class="empty">Every play is written here: the words, the points, and any Hot Springs bonus.</li>';
   requestAnimationFrame(trimLedger);
   const bagLine = `${UI.plural(s.bag.length, 'tile')} in the bag${s.daily ? ` · turn ${E.DAILY_TURNS - s.daily.turns + 1} of ${E.DAILY_TURNS}` : ''}`;
   $('#turnline').innerHTML = mobile
     ? `<span class="chips">${UI.scoresHtml(s, true)}</span><span class="bag">${s.over ? 'Game over' : `${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'} · ${bagLine}`}</span>`
     : s.over ? 'Game over' : `<span class="who">${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'}</span><span class="bag">${bagLine}</span>`;
+  if (G.scoreHi != null) {
+    const sel = G.scoreHi === 'all' ? '[data-score]' : `[data-score="${G.scoreHi}"]`;
+    document.querySelectorAll(sel).forEach((el) => el.classList.add('score-updated'));
+  }
   renderActions(); renderRack(); renderPreview(); renderPrivacy();
   coachRender();
   draw();
@@ -899,7 +938,7 @@ function renderPreview() {
   const refocus = el.contains(document.activeElement)
     ? (document.activeElement.hasAttribute('data-hintnext') ? '[data-hintnext]' : '.bdbtn:not([data-hintnext])')
     : null;
-  el.className = cls; el.innerHTML = html;
+  el.className = cls + (G.errFlash ? ' err-flash' : ''); el.innerHTML = html;
   if (refocus) el.querySelector(refocus)?.focus({ preventScroll: true });
 }
 
@@ -911,36 +950,63 @@ function renderPrivacy() {
   el.querySelector('[data-reveal]').addEventListener('click', () => { unlock(); G.revealed = G.s.cur; G.privacy = false; restoreHint(G.s); updatePreview(); sfx('turn'); renderGame(); });
 }
 
-let flashTimer = 0;
+let flashTimer = 0, errFlashTimer = 0, scoreHiTimer = 0;
 function flash(text, ms = 2600) { G.flash = text; clearTimeout(flashTimer); renderPreview(); liveSay(text); flashTimer = setTimeout(() => { G.flash = null; renderPreview(); }, ms); }
-function shake() { const el = $('#preview'); el.classList.remove('shake'); void el.offsetWidth; if (animOn()) el.classList.add('shake'); }
-
-function rollScores() {
-  if (!animOn()) return;
-  document.querySelectorAll('[data-score]').forEach((el) => el.classList.add('bump'));
+function shake() {
+  const el = $('#preview');
+  if (!el) return;
+  el.classList.remove('shake', 'err-flash');
+  void el.offsetWidth;
+  if (animOn()) { el.classList.add('shake'); return; }
+  if (G.fast || !reduced()) return;
+  G.errFlash = true;
+  el.classList.add('err-flash');
+  clearTimeout(errFlashTimer);
+  errFlashTimer = setTimeout(() => { G.errFlash = false; $('#preview')?.classList.remove('err-flash'); }, 450);
 }
-const POP_MS = 1300, POP_THEMED_MS = 1600;   // how long a score pop lives; a Hot Springs word's stays 0.3 s longer
+
+function rollScores(entry) {
+  if (G.fast) return;
+  if (entry && (entry.kind !== 'play' || !entry.score)) return;
+  const sel = entry ? `[data-score="${entry.p}"]` : '[data-score]';
+  if (animOn()) {
+    document.querySelectorAll(sel).forEach((el) => el.classList.add('bump'));
+    return;
+  }
+  if (!reduced()) return;
+  G.scoreHi = entry ? entry.p : 'all';
+  document.querySelectorAll(sel).forEach((el) => el.classList.add('score-updated'));
+  clearTimeout(scoreHiTimer);
+  scoreHiTimer = setTimeout(() => {
+    G.scoreHi = null;
+    document.querySelectorAll('.score-updated').forEach((el) => el.classList.remove('score-updated'));
+  }, 650);
+}
+const POP_MS = 1300, POP_THEMED_MS = 1600, POP_STATIC_MS = 950;   // how long a score pop lives; a Hot Springs word's stays 0.3 s longer; reduced motion uses a 0 px fade
 // A bigger play has a bigger and longer pop: the plain size up to POP_FROM points, growing to POP_SCALE times that size and
 // POP_LONGER (30%) more time at POP_TOP points. A play worth SCORE_BIG or more that is not a Hot Springs word also throws brass sparks.
 const POP_SWELL = 1.1, POP_LIFT = 0.6, POP_RISE = 120;   // the pop swells to 1.1x at 15% of its life, sits 60% of its height above its cell then, and rises 120% more (main.css, @keyframes pop)
 const POP_FROM = 14, POP_TOP = 60, POP_SCALE = 1.6, POP_LONGER = 0.3, POP_REM = 1.6;
 const popWeight = (score) => Math.min(1, Math.max(0, (score - POP_FROM) / (POP_TOP - POP_FROM)));
 function scorePop(e, themed) {
-  if (!animOn() || !e.tiles.length) return;
+  if (G.fast || !e.tiles.length) return;
+  const red = reduced();
   const i = e.tiles[e.tiles.length - 1].i;
   const [x, y] = R.cellCenter(i);
-  const w = popWeight(e.score), ms = Math.round((themed ? POP_THEMED_MS : POP_MS) * (1 + POP_LONGER * w));
+  const w = red ? 0 : popWeight(e.score), ms = red ? POP_STATIC_MS : Math.round((themed ? POP_THEMED_MS : POP_MS) * (1 + POP_LONGER * w));
   const el = document.createElement('div');
-  el.className = themed ? 'pop themed' : 'pop'; el.textContent = `+${e.score}`;
+  el.className = red ? 'pop static' : (themed ? 'pop themed' : 'pop'); el.textContent = `+${e.score}`;
   el.style.left = x + 'px'; el.style.top = y + 'px';
-  el.style.fontSize = (POP_REM * (1 + (POP_SCALE - 1) * w)).toFixed(2) + 'rem'; el.style.animationDuration = ms + 'ms';
+  if (!red) el.style.fontSize = (POP_REM * (1 + (POP_SCALE - 1) * w)).toFixed(2) + 'rem';
+  el.style.animationDuration = ms + 'ms';
   const box = $('#boardwrap');
   box.append(el);
   // the box clips what leaves it: a pop near an edge starts far enough in to stay whole (its swell is 10% bigger) and rises only as far as there is room
-  const pw = el.offsetWidth * POP_SWELL / 2, ph = el.offsetHeight, top = ph * (POP_LIFT + (POP_SWELL - 1) / 2);
+  const swell = red ? 1 : POP_SWELL, lift = red ? 0.5 : POP_LIFT;
+  const pw = el.offsetWidth * swell / 2, ph = el.offsetHeight, top = ph * (lift + (swell - 1) / 2);
   const px = Math.min(Math.max(x, pw), Math.max(pw, box.clientWidth - pw)), py = Math.max(y, top);
   el.style.left = px + 'px'; el.style.top = py + 'px';
-  el.style.setProperty('--rise', Math.round(Math.min(POP_RISE, (py - top) / ph * 100)) + '%');
+  el.style.setProperty('--rise', red ? '0%' : Math.round(Math.min(POP_RISE, (py - top) / ph * 100)) + '%');
   setTimeout(() => el.remove(), ms + 100);
 }
 
@@ -1746,6 +1812,7 @@ function wireStatic() {
   window.addEventListener('keydown', (e) => { if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) G.input = 'key'; }, true);
   window.addEventListener('resize', () => { if (G.drag) G.drag.boxes = null; layout(); if (G.scene === 'game') renderGame(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySettings);
+  matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', applySettings);
   // no text selection, callouts or context menus on the game screen (phones)
   for (const ev of ['contextmenu', 'selectstart', 'dragstart']) $('#app').addEventListener(ev, (e) => { if (!/INPUT|TEXTAREA/.test(e.target.tagName)) e.preventDefault(); });
   $('#modal').addEventListener('click', (e) => { if (e.target === $('#modal') && G.dialog !== 'blank') closeDialog(); });
