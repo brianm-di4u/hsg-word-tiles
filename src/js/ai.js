@@ -200,6 +200,8 @@ function fallback(rack, bag) {
 
 // Equity points within which Spring Guide hints in Easy/Medium games prefer everyday/Hot Springs words over obscure ENABLE words (W1-S3-06).
 export const HINT_COMMON_GAP = 6;
+// Equity points within which Spring Guide 'Other plays' surfaces a competitive Hot Springs bonus word in the 3 choices (W1-S5-03).
+export const HINT_THEMED_GAP = 8;
 
 // Everyday SCOWL common words, the 25 everyday two-letter words (including OK), and all Hot Springs bonus forms.
 export function isTeachableWord(dict, lex, word) {
@@ -215,7 +217,9 @@ export function casualAudience(s) {
 
 // The hint: up to three different plays for a human seat, best Medium-strength play first (score plus half the value of the tiles kept),
 // each with the tiles it keeps. In Easy/Medium games, prefers SCOWL common words and Hot Springs bonus words whenever one sits within
-// HINT_COMMON_GAP equity points of the raw best (W1-S3-06). Two plays that make the same words count as one. Empty when nothing fits.
+// HINT_COMMON_GAP equity points of the raw best (W1-S3-06), and when n >= 2 surfaces a competitive Hot Springs bonus word (within
+// HINT_THEMED_GAP equity of the best choice) among the choices if none already made the top n (W1-S5-03). Two plays that make the
+// same words count as one. Empty when nothing fits.
 export function hintChoices(dict, lex, s, n = 3) {
   const p = s.players[s.cur];
   // W1-S3-02 / CD-WF1-06: Spring Guide hints never peek at hidden Featured Spring words.
@@ -225,13 +229,22 @@ export function hintChoices(dict, lex, s, n = 3) {
   const casual = casualAudience(s);
   const teachable = (m) => m.words.every((w) => isTeachableWord(dict, lex, w));
   const pool = moves.slice(0, 60);
+  const seenKey = new Set(pool.map((m) => m.key));
   if (casual) {
-    const seenKey = new Set(pool.map((m) => m.key));
     let added = 0;
     for (const m of moves) {
       if (!teachable(m)) continue;
       if (!seenKey.has(m.key)) { seenKey.add(m.key); pool.push(m); }
       if (++added >= 60) break;
+    }
+  }
+  if (lex) {
+    let added = 0;
+    for (const m of moves) {
+      if (!m.bonus) continue;
+      if (casual && !teachable(m)) continue;
+      if (!seenKey.has(m.key)) { seenKey.add(m.key); pool.push(m); }
+      if (++added >= 20) break;
     }
   }
   const ranked = pool
@@ -251,15 +264,20 @@ export function hintChoices(dict, lex, s, n = 3) {
   } else {
     ordered.push(...ranked);
   }
-  const out = [], seen = new Set();
-  for (const { m, keep } of ordered) {
-    const k = m.words.join(',');
+  const picked = [], seen = new Set();
+  for (const r of ordered) {
+    const k = r.m.words.join(',');
     if (seen.has(k)) continue;
     seen.add(k);
-    out.push({ tiles: m.tiles, score: m.score, words: m.words, keep });
-    if (out.length >= n) break;
+    picked.push(r);
+    if (picked.length >= n) break;
   }
-  return out;
+  if (n >= 2 && lex && picked.length >= 2 && !picked.some((r) => r.m.bonus > 0)) {
+    const topE = picked[0].e;
+    const themed = ordered.find((r) => r.m.bonus > 0 && (!casual || r.common) && !seen.has(r.m.words.join(',')) && topE - r.e <= HINT_THEMED_GAP);
+    if (themed) picked[picked.length - 1] = themed;
+  }
+  return picked.map(({ m, keep }) => ({ tiles: m.tiles, score: m.score, words: m.words, keep }));
 }
 // The best of them, or null.
 export function bestHint(dict, lex, s) {

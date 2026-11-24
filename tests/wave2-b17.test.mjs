@@ -2,7 +2,7 @@
 // and W1-S5-03 (mood-sync onboarding + competitive Hot Springs bonus word surfaced in Spring Guide hints).
 import { ctx } from './lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
-import { chooseAction, STYLES, styleBonus, premiumPoints, leaveValue, rackMinus, openedPremium, EASY_TWO } from '../src/js/ai.js';
+import { chooseAction, hintChoices, bestHint, HINT_THEMED_GAP, isTeachableWord, STYLES, styleBonus, premiumPoints, leaveValue, rackMinus, openedPremium, EASY_TWO } from '../src/js/ai.js';
 import { PERSONAS, LEVEL_BLURB } from '../src/js/personas.js';
 import { isCommon } from '../src/js/dict.js';
 import { SQUARE, N } from '../src/js/score.js';
@@ -163,6 +163,86 @@ export const tests = [
       t.equal(cr.fails.length, 0, `Setup passes WCAG contrast (${JSON.stringify(cr.fails)})`);
       await t.checkLayout({ allowScrollY: true });
       await t.shot('W1-S5-02-setup-personas');
+    },
+  },
+  {
+    name: 'W1-S5-03 hintChoices surfaces a competitive Hot Springs bonus word among the 3 choices without displacing bestHint or forcing uncompetitive plays',
+    node: true,
+    async run(t) {
+      const c = await ctx();
+      t.expect(HINT_THEMED_GAP >= 6 && HINT_THEMED_GAP <= 10, `HINT_THEMED_GAP is bounded (${HINT_THEMED_GAP})`);
+
+      // 1) Board with FOX on H8-J8 + rack IDAHARR: top 3 plain moves (HARD, HAIR, RADAR) outrank RADIO (+10 Hot Springs) by <= 5.3 eq.
+      // hintChoices(3) must keep HARD as Slot 1 (matching bestHint) and surface RADIO in Slot 3.
+      const s = createGame({ mode: 'play', seed: 4, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] }, c.lex);
+      s.board[112] = { l: 'F', blank: false };
+      s.board[113] = { l: 'O', blank: false };
+      s.board[114] = { l: 'X', blank: false };
+      s.players[0].rack = ['I', 'D', 'A', 'H', 'A', 'R', 'R'];
+      const choices = hintChoices(c.dict, c.lex, s, 3);
+      const best = bestHint(c.dict, c.lex, s);
+      t.equal(choices.length, 3, 'returns 3 distinct choices');
+      t.equal(choices[0].words[0], best.words[0], `Slot 1 matches bestHint (${choices[0].words[0]})`);
+      t.equal(choices[0].words[0], 'HARD', `Slot 1 remains strongest plain play HARD (got ${choices[0].words[0]})`);
+      t.expect(choices.some((m) => m.words.some((w) => !!c.lex.entry(w))), `surfaces competitive Hot Springs word RADIO among the 3 choices (${choices.map((m) => m.words.join('+')).join(' | ')})`);
+      t.equal(choices[2].words[0], 'RADIO', `Slot 3 surfaces RADIO (+10 Hot Springs bonus)`);
+      for (const m of choices) t.expect(m.words.every((w) => isTeachableWord(c.dict, c.lex, w)), `choice ${m.words.join('+')} stays teachable`);
+
+      // 2) Uncompetitive Hot Springs word (> HINT_THEMED_GAP behind a 7-tile Full Soak): must NOT force a weak play into top 3.
+      const sSoak = createGame({ mode: 'play', seed: 9, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] }, c.lex);
+      // Rack spells Full Soaks like RETAINS / RETINAS / NASTIER (~50+ pts) while also containing tiny SPA? Use R,E,T,A,I,N,S (no SPA) -> try S,P,A,I,N,E,R (SPANIEL? S,P,A,R,I,N,G -> SPARING 7-tile Full Soak ~52+ vs SPA 15!)
+      sSoak.players[0].rack = ['S', 'P', 'A', 'R', 'I', 'N', 'G'];
+      const soakChoices = hintChoices(c.dict, c.lex, sSoak, 3);
+      t.expect(soakChoices[0].score >= 45, `Full Soak leads (${soakChoices[0].words[0]} ${soakChoices[0].score} pts)`);
+      t.expect(!soakChoices.some((m) => m.words[0] === 'SPA'), `uncompetitive SPA (${soakChoices.map((m) => m.words[0] + ':' + m.score).join(', ')}) is not forced into Full Soak choices`);
+
+      // 3) CD-WF1-06: hidden Featured Spring does not change hintChoices
+      const sFeat = JSON.parse(JSON.stringify(s));
+      sFeat.featured = [{ id: 'radio', word: 'RADIO', cat: 'town', shown: [0], by: null, at: null }];
+      t.equal(JSON.stringify(hintChoices(c.dict, c.lex, sFeat, 3)), JSON.stringify(choices), 'hidden Featured Spring has zero effect on hintChoices');
+    },
+  },
+  {
+    name: 'W1-S5-03 newcomer mood-sync corridor: Easy Opal default + above-fold Start + AI worker Spring Guide surfaces competitive Hot Springs word in Other plays',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      // Verify newcomer Setup still holds sticky above-fold Start + Easy Opal default (52f031f, 7c4489e)
+      await t.page.click('#screen [data-go="setup"]');
+      const setup = await t.page.evaluate(() => {
+        const sr = document.querySelector('.setup [data-start]').getBoundingClientRect();
+        return {
+          persona: document.querySelector('[data-persona="1"][aria-checked="true"]').dataset.val,
+          startVisible: sr.top >= 0 && sr.bottom <= innerHeight + 0.5 && sr.height >= 44,
+        };
+      });
+      t.equal(setup.persona, 'opal', 'newcomer defaults to Easy Opal Vance');
+      t.equal(setup.startVisible, true, 'Start CTA sits above fold');
+
+      // Start match, set FOX + IDAHARR, ask Spring Guide (AI worker), and cycle Other plays to confirm RADIO (+10) surfaces
+      await t.page.click('#screen [data-start]');
+      await t.waitIdle(8000);
+      const g = (await t.state()).game;
+      g.board[112] = { l: 'F', blank: false };
+      g.board[113] = { l: 'O', blank: false };
+      g.board[114] = { l: 'X', blank: false };
+      g.players[0].rack = ['I', 'D', 'A', 'H', 'A', 'R', 'R'];
+      await t.game('setState', { game: g });
+      await t.waitIdle(5000);
+
+      await t.game('act', 'hint');
+      await t.page.waitForFunction(() => window.__game.getState().staged.length > 0 && !window.__G.hintBusy, null, { timeout: 10000 });
+      t.equal((await t.state()).ai, 'worker', 'hint ran through the AI worker');
+      const seenWords = [(await t.page.textContent('#preview .words')).trim()];
+      await t.page.click('#preview [data-hintnext]');
+      seenWords.push((await t.page.textContent('#preview .words')).trim());
+      await t.page.click('#preview [data-hintnext]');
+      seenWords.push((await t.page.textContent('#preview .words')).trim());
+      t.expect(seenWords.some((w) => /\bRADIO\b/.test(w)), `Other plays surfaces Hot Springs word RADIO (${seenWords.join(' | ')})`);
+      t.expect(/\+10/.test(await t.page.textContent('#preview')), 'surfaced RADIO shows its +10 Hot Springs badge in #preview');
+      await t.shot('W1-S5-03-hint-themed');
+      await t.checkLayout({ allowScrollY: true });
     },
   },
 ];
