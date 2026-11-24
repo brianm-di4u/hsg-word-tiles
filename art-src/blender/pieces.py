@@ -6,8 +6,8 @@
 #   tile    a glazed ceramic tile, 0.9 x 0.9 x 0.24 with a soft bevel; its top faces use material 'tiletop', which the
 #           game replaces with the letter texture (flat-crown [-0.38..+0.38] → [0..1] UVs are made in board3d.js)
 #   frame   a mitred walnut moulding with a brass bead that wraps the 16 x 16 board slab
-#   towels  three folded white bath towels with a teal stripe, as stacked on a bathhouse counter
-#   bell    a brass front-desk call bell on a black base
+#   towels  one modular folded bathhouse linen towel corner (clamped z >= 0, box UVs) cropped off the left counter border
+#   bell    a compact 1920s brass front-desk call bell (~2.1 cells diameter) on a chamfered warm-bronze plinth
 # Mesh export (positions int16 over the bounding box, normals int8, indices uint16, one group per material) follows
 # Bathhouse Barons' art-src/blender/pieces.py.
 import bpy, bmesh, math, os, sys, json
@@ -37,7 +37,7 @@ WALNUT = lambda: mat('walnut', '#6B4428', 0.0, 0.4, 0.45)
 BRASS = lambda: mat('brass', '#C9A14A', 1.0, 0.28)
 CLOTH = lambda: mat('cloth', '#F4F0E6', 0.0, 0.95)
 STRIPE = lambda: mat('stripe', '#2A9D8F', 0.0, 0.9)
-BLACK = lambda: mat('black', '#1F1A16', 0.2, 0.35, 0.5)
+BRONZE = lambda: mat('bronze', '#6B4C2E', 0.55, 0.34, 0.35)
 
 def link(ob):
     bpy.context.scene.collection.objects.link(ob); return ob
@@ -101,35 +101,67 @@ def frame():
     idx = [0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
     square_lathe(P, idx, 'frame', [WALNUT(), BRASS()])
 
-def towels():
-    for k, (dx, dy, rot) in enumerate(((0, 0, 0.0), (0.12, -0.08, 0.05), (-0.06, 0.1, -0.04))):
-        z = k * 0.42
-        bm = rounded_box(3.2, 2.0, 0.4, 0.16, 3, z0=z)
-        for v in bm.verts:  # soft folded edge: the front face bulges a little
-            if v.co.y < -0.9: v.co.y -= 0.05 * math.sin(math.pi * (v.co.z - z) / 0.4)
-        ob = mesh_from(bm, f'towel{k}', [CLOTH()], smooth=True)
-        ob.location = (dx, dy, 0); ob.rotation_euler = (0, 0, rot)
-        # the woven stripe band across the fold
-        sb = rounded_box(0.36, 2.04, 0.41, 0.06, 2, z0=z - 0.005, x0=0.9)
-        so = mesh_from(sb, f'stripe{k}', [STRIPE()], smooth=True)
-        so.location = (dx, dy, 0); so.rotation_euler = (0, 0, rot)
+def box_uvs(bm, scale=4.0):
+    """Assign box/triplanar UVs in [0, 1] so cloth textures wrap cleanly around folded vertical sides."""
+    uv_layer = bm.loops.layers.uv.new('UVMap')
+    xs = [v.co.x for v in bm.verts]
+    ys = [v.co.y for v in bm.verts]
+    zs = [v.co.z for v in bm.verts]
+    x0, y0, z0 = min(xs), min(ys), min(zs)
+    span = max(max(xs) - x0, max(ys) - y0, max(zs) - z0, scale)
+    for f in bm.faces:
+        ax, ay, az = abs(f.normal.x), abs(f.normal.y), abs(f.normal.z)
+        for lp in f.loops:
+            co = lp.vert.co
+            if az >= ax and az >= ay:
+                u, v = (co.x - x0) / span, (co.y - y0) / span
+            elif ax >= ay:
+                u, v = (co.y - y0) / span, (co.z - z0) / span
+            else:
+                u, v = (co.x - x0) / span, (co.z - z0) / span
+            lp[uv_layer].uv = (max(0.0, min(1.0, u)), max(0.0, min(1.0, v)))
 
-def lathe(profile, m, segs=48, name='lathe', smooth=True):
+def towels():
+    # W3-S3-01 / CD-WF3-04: single modular folded linen towel corner (<= 300 tris, clamped z >= 0, box UVs)
+    # scaled to true 1:1 human tabletop proportions (~12.3 x 17.6 cm folded corner, 1 cell = 2.2 cm) and
+    # positioned off the left viewport border in board3d.js so its folded corner drapes naturally onto the counter.
+    w, d, h = 5.6, 8.0, 0.56
+    bm = rounded_box(w, d, h, 0.18, segs=2, z0=0.0)
+    for v in bm.verts:
+        # soft folded-edge roll along the visible inner right edge (+x) and near end (-y)
+        if v.co.x > w * 0.42:
+            v.co.x += 0.06 * math.sin(math.pi * max(0.0, min(1.0, v.co.z / h)))
+        if v.co.z < 0.0:
+            v.co.z = 0.0
+    box_uvs(bm, scale=max(w, d))
+    mesh_from(bm, 'towel0', [CLOTH()], smooth=True)
+    # woven bathhouse stripe band near the far end (y0 = +2.25 in Blender, z0 strictly >= 0.0)
+    sb = rounded_box(w + 0.06, 0.52, h + 0.012, 0.06, segs=1, z0=0.0, y0=2.25)
+    for v in sb.verts:
+        if v.co.z < 0.0:
+            v.co.z = 0.0
+    box_uvs(sb, scale=max(w, d))
+    mesh_from(sb, 'stripe0', [STRIPE()], smooth=True)
+
+def lathe(profile, m, segs=20, name='lathe', smooth=True, cap_bottom=True, cap_top=True):
     bm = bmesh.new(); rings = []
     for r, z in profile:
         rings.append([bm.verts.new((r * math.cos(a), r * math.sin(a), z)) for a in [i * 2 * math.pi / segs for i in range(segs)]])
     for a, b in zip(rings, rings[1:]):
         for i in range(segs): bm.faces.new((a[i], a[(i + 1) % segs], b[(i + 1) % segs], b[i]))
-    if profile[0][0] > 0: bm.faces.new(rings[0][::-1])
-    if profile[-1][0] > 0: bm.faces.new(rings[-1])
+    if cap_bottom and profile[0][0] > 0: bm.faces.new(rings[0][::-1])
+    if cap_top and profile[-1][0] > 0: bm.faces.new(rings[-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     return mesh_from(bm, name, [m], smooth)
 
 def bell():
-    lathe([(0.95, 0.0), (0.95, 0.18), (0.9, 0.24), (0.0, 0.24)], BLACK(), name='bellbase')
-    dome = [(0.82 * math.cos(t), 0.26 + 0.62 * math.sin(t)) for t in [i * (math.pi / 2) / 16 for i in range(17)]]
-    lathe([(0.84, 0.24)] + dome, BRASS(), name='belldome')
-    lathe([(0.07, 0.86), (0.07, 1.06), (0.16, 1.08), (0.16, 1.14), (0.0, 1.16)], BRASS(), name='bellknob', segs=24)
+    # W3-S3-01 / CD-WF3-04: compact 1920s front-desk call bell (~2.10 cells diameter, <= 400 tris, z >= 0)
+    # on a chamfered warm-bronze plinth seated cleanly inside the right desktop counter margin.
+    lathe([(1.05, 0.0), (1.05, 0.13), (0.96, 0.24), (0.86, 0.26)], BRONZE(), segs=18, name='bellbase', cap_bottom=False, cap_top=False)
+    dome = [(0.88 * math.cos(t), 0.26 + 0.68 * math.sin(t)) for t in [i * (math.pi / 2) / 5 for i in range(5)]]
+    dome.append((0.09, 0.94))
+    lathe(dome, BRASS(), segs=18, name='belldome', cap_bottom=False, cap_top=False)
+    lathe([(0.08, 0.92), (0.08, 1.08), (0.19, 1.12), (0.18, 1.19), (0.0, 1.21)], BRASS(), segs=12, name='bellknob', cap_bottom=False, cap_top=False)
 
 # ---------- export ----------
 def material_params(m):

@@ -346,10 +346,11 @@ export function init(canvas, theme, hooks = {}) {
       B3.frameWalnut.push(o.material);
     }
   });
-  // set dressing on the counter, outside the board
-  // beside the board's far corners, where perspective leaves the most counter in view: towels and the desk bell
-  B3.towels = piece('towels'); clothTexture(B3.towels); B3.towels.scale.setScalar(0.8); B3.towels.position.set(-HALF - 2.15, 0, -HALF + 1.7); B3.towels.rotation.y = Math.PI / 2 - 0.08; scene.add(B3.towels);
-  B3.bell = piece('bell'); B3.bell.scale.setScalar(0.8); B3.bell.position.set(HALF + 1.75, 0, -HALF + 1.6); scene.add(B3.bell);
+  // set dressing on the counter, outside the board (W3-S3-01 / CD-WF2-06 / CD-WF3-04):
+  // left margin: one modular folded linen towel corner intentionally cropped off the left viewport border at 1:1 human scale;
+  // right margin: compact ~2.1-cell 1920s front-desk call bell on a chamfered warm-bronze plinth seated cleanly in frame.
+  B3.towels = piece('towels'); clothTexture(B3.towels); B3.towels.position.set(-HALF - 4.15, 0, -HALF + 3.25); B3.towels.rotation.y = -0.05; scene.add(B3.towels);
+  B3.bell = piece('bell'); B3.bell.position.set(FRAME_EXTENT + 1.24, 0, -HALF + 1.9); scene.add(B3.bell);
   // tile pool: body geometry shared, face material per letter
   B3.tileGeo = geometries('tile');
   B3.bodyMat = stdMaterial(B3.tileGeo.find((g) => g.mat.name === 'tilebody').mat);
@@ -457,7 +458,10 @@ export function setTheme(theme) {
 let TILT = 0.5, MARGIN = 0.02;
 // Portrait (phone) camera: solved directly at the rendered tilt (0.09 rad, within 0.08-0.10 rad) including the
 // full walnut frame bezel (FRAME_EXTENT), so Row 1-15 and all four walnut rails stay unobstructed inside #boardwrap.
+// Desktop camera (CD-WF2-06 / W3-S3-01): tightened to fit the full walnut bezel symmetrically (DESKTOP_SHIFT = 0.5),
+// prioritizing the 90% playable board while leaving ~2.5-2.6 cells of counter margin outside B3.frame on 1280x800.
 const PORTRAIT_TILT = 0.09, PORTRAIT_SHIFT = 0;
+const DESKTOP_TILT = 0.3, DESKTOP_SHIFT = 0.5;
 const FRAME_EXTENT = 8.92 * (U / 16);
 export function resize(w, h) {
   if (!B3.renderer) return;
@@ -466,7 +470,7 @@ export function resize(w, h) {
   B3.renderer.setPixelRatio(dpr); B3.renderer.setSize(w, h, false);
   B3.camera.aspect = w / h; B3.camera.updateProjectionMatrix();
   const tall = h > w * 0.98;
-  TILT = tall ? PORTRAIT_TILT : 0.3; MARGIN = tall ? 0.008 : 0.025;
+  TILT = tall ? PORTRAIT_TILT : DESKTOP_TILT; MARGIN = tall ? 0.008 : 0.022;
   // on phones the board fills the width and the props would only show as slivers
   B3.tall = tall; B3.towels.visible = B3.bell.visible = !tall;
   B3.fit = fitDistance();
@@ -476,14 +480,12 @@ function applyPose(tx, tz, dist) {
   c.position.set(tx, Math.cos(TILT) * dist, tz + Math.sin(TILT) * dist);
   c.lookAt(tx, 0, tz); c.updateMatrixWorld();
 }
-// the distance at which the board (with its frame) just fits the view
+// the distance at which the board (with its walnut frame) just fits the view
 function fitDistance() {
   const v = new THREE.Vector3();
-  const E = B3.tall ? FRAME_EXTENT : HALF * 16 / U * 1.12;
-  const tz = B3.tall ? PORTRAIT_SHIFT : 0.2;
-  const pts = B3.tall
-    ? [[-E, 0.56, -E], [E, 0.56, -E], [-E, 0, -E], [E, 0, -E], [-E, 0.56, E], [E, 0.56, E], [-E, 0, E], [E, 0, E]]
-    : [[-E, 0.6, -E], [E, 0.6, -E], [-E, 0, E], [E, 0, E]];
+  const E = FRAME_EXTENT;
+  const tz = B3.tall ? PORTRAIT_SHIFT : DESKTOP_SHIFT;
+  const pts = [[-E, 0.56, -E], [E, 0.56, -E], [-E, 0, -E], [E, 0, -E], [-E, 0.56, E], [E, 0.56, E], [-E, 0, E], [E, 0, E]];
   const fits = (dist) => {
     applyPose(0, tz, dist);
     for (const [x, y, z] of pts) { v.set(x, y, z).project(B3.camera); if (Math.abs(v.x) > 1 - MARGIN || Math.abs(v.y) > 1 - MARGIN) return false; }
@@ -507,9 +509,37 @@ function bezelBounds() {
   }
   return { minX, maxX, minY, maxY, W: B3.W, H: B3.H };
 }
+function propBounds(grp, meshName) {
+  if (!B3.on || !B3.camera || !grp) return null;
+  const d = MESHES[meshName];
+  if (!d) return null;
+  grp.updateMatrixWorld(true);
+  const tris = d.g.reduce((s, g) => s + Math.floor(b64(g.i, Uint16Array).length / 3), 0);
+  const v = new THREE.Vector3();
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  let worldMinX = Infinity, worldMaxX = -Infinity, worldMinY = Infinity, worldMaxY = -Infinity;
+  for (const bx of [d.lo[0], d.hi[0]]) for (const by of [d.lo[1], d.hi[1]]) for (const bz of [d.lo[2], d.hi[2]]) {
+    v.set(bx, bz, -by).applyMatrix4(grp.matrixWorld);
+    if (v.x < worldMinX) worldMinX = v.x; if (v.x > worldMaxX) worldMaxX = v.x;
+    if (v.y < worldMinY) worldMinY = v.y; if (v.y > worldMaxY) worldMaxY = v.y;
+    v.project(B3.camera);
+    const sx = (v.x + 1) / 2 * B3.W, sy = (1 - v.y) / 2 * B3.H;
+    if (sx < minX) minX = sx; if (sx > maxX) maxX = sx;
+    if (sy < minY) minY = sy; if (sy > maxY) maxY = sy;
+  }
+  return {
+    visible: !!grp.visible,
+    tris,
+    diameter: +(worldMaxX - worldMinX).toFixed(3),
+    worldMinX: +worldMinX.toFixed(3), worldMaxX: +worldMaxX.toFixed(3),
+    worldMinY: +worldMinY.toFixed(4), worldMaxY: +worldMaxY.toFixed(3),
+    minX: +minX.toFixed(1), maxX: +maxX.toFixed(1), minY: +minY.toFixed(1), maxY: +maxY.toFixed(1),
+    W: B3.W, H: B3.H,
+  };
+}
 function pose() {
   const v = R.view;
-  return { tx: v.cx - HALF, tz: v.cy - HALF + (v.zoom > 1.01 ? 0 : B3.tall ? PORTRAIT_SHIFT : 0.2), dist: B3.fit / v.zoom };
+  return { tx: v.cx - HALF, tz: v.cy - HALF + (v.zoom > 1.01 ? 0 : B3.tall ? PORTRAIT_SHIFT : DESKTOP_SHIFT), dist: B3.fit / v.zoom };
 }
 
 // ---------- per frame ----------
@@ -634,6 +664,7 @@ export function debug() {
     tiles: B3.tiles.filter((t) => t.visible).length, fit: B3.fit, tilt: TILT, tall: !!B3.tall,
     preDim: !!B3.preDimActive, dimOpacity: B3.dimOpacity || 0, dimOpenCount: B3.dimOpenCount || 0,
     bezel: B3.on ? bezelBounds() : null,
+    props: B3.on ? { bell: propBounds(B3.bell, 'bell'), towel: propBounds(B3.towels, 'towels') } : null,
     tileTopUv,
     faceCache: faceCache.size, tileCache: R.tileCacheSize(),
     boardCanvas: !!B3.boardCanvas, boardMode3d: !!B3.boardMode3d, tilePool: B3.tiles.length,
