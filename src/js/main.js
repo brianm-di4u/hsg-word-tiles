@@ -1308,10 +1308,10 @@ function toggleBreakdown() {
 }
 
 // ---------- first-run tips ----------
-// A newcomer's first game gets four short tips, one at a time, in the card that takes the ledger's place: where to start,
-// how to play it, what the coloured discs do and what the plaques are. Each goes when the player does the thing, taps
-// Got it, or after a wait; Skip tips ends them all. Shown once (settings.tipsSeen); Settings can bring them back.
-const COACH_WAIT = { start: 30000, play: 20000, discs: 14000, plaques: 12000 };
+// A newcomer's first game gets a concise, trigger-gated 4-beat sequence that never auto-expires unseen:
+// (1) Turn 1 center Display Spring + Play, (2) Turn 2 multiplier discs, (3) Turn 3 Hot Springs words & Bathhouse Row,
+// (4) Turn 4 Featured Springs plaques. Each advances on completing the turn or tapping Got it; Skip tips ends them all.
+const COACH_PHASES = ['start', 'discs', 'town', 'plaques'];
 let liveTimer = 0;
 const liveSay = (t) => { const live = $('#live'); clearTimeout(liveTimer); live.textContent = ''; liveTimer = setTimeout(() => { live.textContent = t; }, 30); };
 function coachTip() {
@@ -1322,22 +1322,21 @@ function coachTip() {
     if (G.staged.length) return { id: 'play', target: '#actions .play', text: ({ touch: 'Happy with it? Tap Play.', mouse: 'Happy with it? Click Play.', key: 'Happy with it? Press Enter.' })[input] };
     return { id: 'start', target: '#boardwrap', text: input === 'key' ? 'Score the most. Type letters to spell across the centre.' : 'Score the most. Drag tiles to the centre square.' };
   }
-  if (c.phase === 'discs') return { id: 'discs', target: '#boardwrap', text: 'Cream discs boost a letter. Dark discs boost the word.' };
+  if (c.phase === 'discs') return { id: 'discs', target: '#boardwrap', text: 'Cream 2L/3L discs boost a letter. Dark 2W/3W discs boost the word.' };
+  if (c.phase === 'town') return { id: 'town', target: '#boardwrap', text: 'Hot Springs words (SPA, STEAM, TUB) pay bonuses & cards; Row +20.' };
   if (c.phase === 'plaques') return { id: 'plaques', target: '#springs', text: `Plaques hide secret words. Form one for +${FEATURED_BONUS}.` };
   return null;
 }
 function coachRender() {
   if (!G.settings.tipsSeen && G.s && (!G.coach || G.coach.s !== G.s)) {
-    clearTimeout(G.coachTimer);
-    const played = G.s.log.some((e) => e.kind === 'play' && G.s.players[e.p].kind === 'human');
-    G.coach = { s: G.s, phase: played ? 'discs' : 'start', gone: new Set(), shown: null };
+    const played = G.s.log.filter((e) => e.kind === 'play' && G.s.players[e.p].kind === 'human').length;
+    G.coach = { s: G.s, phase: COACH_PHASES[Math.min(played, COACH_PHASES.length - 1)], gone: new Set(), shown: null };
   }
-  if (G.coach && G.coach.phase === 'discs' && G.staged.length) { G.coach.phase = 'plaques'; clearTimeout(G.coachTimer); G.coach.shown = null; }
   const tip = coachTip(), el = $('#coach');
   document.querySelectorAll('.coach-target').forEach((x) => x.classList.remove('coach-target'));
   if (!tip || G.coach.gone.has(tip.id)) {
     el.innerHTML = ''; $('#app').classList.remove('coaching');
-    if (!tip && G.coach) { G.coach.shown = null; clearTimeout(G.coachTimer); }
+    if (!tip && G.coach) G.coach.shown = null;
     return;
   }
   $('#app').classList.add('coaching');
@@ -1348,29 +1347,28 @@ function coachRender() {
     el.querySelector('[data-coach="got"]').addEventListener('click', () => coachDismiss(tip.id));
     el.querySelector('[data-coach="skip"]').addEventListener('click', coachEnd);
     liveSay(`Tip: ${tip.text}`);
-    clearTimeout(G.coachTimer);
-    G.coachTimer = setTimeout(() => coachDismiss(tip.id), COACH_WAIT[tip.id]);
   } else {
     const p = el.querySelector('p'); if (p && p.textContent !== tip.text) p.textContent = tip.text;
   }
 }
 function coachDismiss(id) {
   const c = G.coach; if (!c) return;
-  clearTimeout(G.coachTimer);
   if (id === 'plaques') { coachEnd(); return; }
-  if (id === 'discs') { c.phase = 'plaques'; c.shown = null; } else c.gone.add(id);
+  const next = { discs: 'town', town: 'plaques' }[id];
+  if (next) { c.phase = next; c.shown = null; } else c.gone.add(id);
   renderStaging();
 }
 function coachEnd() {
-  clearTimeout(G.coachTimer);
   G.coach = null; G.settings.tipsSeen = true; saveSettings();
   $('#coach').innerHTML = ''; $('#app').classList.remove('coaching');
   document.querySelectorAll('.coach-target').forEach((x) => x.classList.remove('coach-target'));
 }
-// the player's own play finishes the first tips
+// each completed human turn advances the 4-beat onboarding sequence
 function coachPlayed() {
-  const c = G.coach; if (!c || c.phase !== 'start') return;
-  c.phase = 'discs'; c.shown = null; c.gone.clear(); clearTimeout(G.coachTimer);
+  const c = G.coach; if (!c) return;
+  const next = { start: 'discs', discs: 'town', town: 'plaques' }[c.phase];
+  if (!next) { coachEnd(); return; }
+  c.phase = next; c.shown = null; c.gone.clear();
 }
 
 // ---------- dialogs ----------

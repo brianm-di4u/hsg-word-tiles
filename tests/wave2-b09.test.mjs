@@ -189,4 +189,86 @@ export const tests = [
       t.equal(retPersona, 'hollis', 'returning player with stats.games > 0 and no lastSetup defaults to Hollis Crane');
     },
   },
+  {
+    name: 'W2-S4-02 trigger-gated 4-beat newcomer coach persists through Turn-2 staging, never auto-expires, teaches Hot Springs & Row on Turn 3, and anchors below board on mobile',
+    viewports: ['desktop', 'mobile'],
+    initScript: () => {
+      window.__TEST_TIPS__ = true;
+      if (!localStorage.getItem('hs-letters-settings-v1')) {
+        localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false, tipsSeen: false }));
+      }
+    },
+    async run(t) {
+      await t.page.clock.install();
+      await t.reload();
+      await ready(t);
+      await t.seed(7);
+      await t.game('newGame', { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.page.clock.runFor(400);
+      await t.waitIdle(8000);
+
+      // On portrait mobile, #coach sits directly beneath #boardwrap and above #preview/#actions, keeping #ledger visible
+      if (t.viewport === 'mobile') {
+        const pos = await t.page.evaluate(() => {
+          const r = (sel) => document.querySelector(sel).getBoundingClientRect();
+          const b = r('#boardwrap'), c = r('#coach .coach-card'), p = r('#preview'), a = r('#actions'), l = r('#ledger');
+          const btns = [...document.querySelectorAll('#coach button')].map((x) => x.getBoundingClientRect().height);
+          return { bBot: b.bottom, cTop: c.top, cBot: c.bottom, pTop: p.top, aTop: a.top, lH: l.height, minBtnH: Math.min(...btns) };
+        });
+        t.expect(pos.cTop >= pos.bBot - 1, `mobile #coach sits beneath #boardwrap (${pos.cTop.toFixed(1)} >= ${pos.bBot.toFixed(1)})`);
+        t.expect(pos.cBot <= pos.pTop + 1, `mobile #coach sits directly above #preview (${pos.cBot.toFixed(1)} <= ${pos.pTop.toFixed(1)})`);
+        t.expect(pos.cBot < pos.aTop, `mobile #coach is anchored above #actions (${pos.cBot.toFixed(1)} < ${pos.aTop.toFixed(1)})`);
+        t.expect(pos.lH > 0, 'mobile #ledger stays visible instead of hidden while coaching');
+        t.expect(pos.minBtnH >= 44, `mobile #coach buttons >= 44 px (${pos.minBtnH.toFixed(1)} px)`);
+        const cr = await t.contrastReport({ selector: '#coach', min: 4.5, largeMin: 3 });
+        t.equal(cr.fails.length, 0, `mobile #coach passes WCAG contrast (${JSON.stringify(cr.fails)})`);
+        await t.shot('w2-b09-coach-mobile-turn1');
+      }
+
+      // Beat 1 (Turn 1): start -> stage -> play (advances to Turn 2 discs)
+      t.expect(/centre/i.test(await t.page.textContent('#coach p')), 'Turn 1 starts with center Display Spring beat');
+      const [m1] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m1.tiles);
+      t.expect(/Play|Enter/.test(await t.page.textContent('#coach p')), 'Turn 1 staging shows Play beat');
+      await t.game('act', 'play');
+      await t.page.clock.runFor(600);
+      await t.page.waitForFunction(() => { const g = window.__game.getState(); return g.game.players[g.game.cur].kind === 'human' && !g.aiThinking; }, null, { timeout: 15000 });
+
+      // Beat 2 (Turn 2): multiplier discs — must NOT skip when staging tiles AND must NOT auto-expire after 20s
+      const discText = await t.page.textContent('#coach p');
+      t.expect(/2L\/3L/.test(discText) && /2W\/3W/.test(discText) && /discs/i.test(discText), `Turn 2 shows multiplier discs beat (${discText})`);
+      const [m2] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m2.tiles);
+      t.expect(/discs/i.test(await t.page.textContent('#coach p')), 'Turn-2 staging does NOT silently skip the discs beat');
+      await t.page.clock.fastForward(20000);
+      t.expect(/discs/i.test(await t.page.textContent('#coach p')), 'discs beat never auto-expires after 20s');
+      await t.game('act', 'play');
+      await t.page.clock.fastForward(600);
+      await t.page.waitForFunction(() => { const g = window.__game.getState(); return g.game.players[g.game.cur].kind === 'human' && !g.aiThinking; }, null, { timeout: 15000 });
+
+      // Beat 3 (Turn 3): Hot Springs words & Bathhouse Row hook — persists through staging and never auto-expires
+      const townText = await t.page.textContent('#coach p');
+      t.expect(/Hot Springs words/.test(townText) && /SPA/.test(townText) && /STEAM/.test(townText) && /TUB/.test(townText) && /Row \+20/.test(townText), `Turn 3 teaches Hot Springs words & Bathhouse Row (${townText})`);
+      await t.shot('w2-b09-coach-turn3-town');
+      const [m3] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m3.tiles);
+      t.expect(/Hot Springs words/.test(await t.page.textContent('#coach p')), 'Turn-3 staging keeps the town/Row beat visible');
+      await t.page.clock.fastForward(20000);
+      t.expect(/Hot Springs words/.test(await t.page.textContent('#coach p')), 'town/Row beat never auto-expires after 20s');
+      await t.game('act', 'play');
+      await t.page.clock.fastForward(600);
+      await t.page.waitForFunction(() => { const g = window.__game.getState(); return g.game.players[g.game.cur].kind === 'human' && !g.aiThinking; }, null, { timeout: 15000 });
+
+      // Beat 4 (Turn 4): Featured Springs plaques — never auto-expires after 20s, completes on Got it
+      const plaqueText = await t.page.textContent('#coach p');
+      t.expect(/Plaques/.test(plaqueText) && /\+30/.test(plaqueText), `Turn 4 shows Featured Springs plaque beat (${plaqueText})`);
+      t.equal(await t.page.locator('#springs.coach-target').count(), 1, '#springs marked as coach target');
+      await t.page.clock.fastForward(20000);
+      t.expect(/Plaques/.test(await t.page.textContent('#coach p')), 'plaques beat never auto-expires after 20s (tipsSeen stays false)');
+      t.equal((await t.state()).settings.tipsSeen, false, 'tipsSeen stays false until player confirms or completes Turn 4');
+      await t.page.click('#coach [data-coach="got"]');
+      t.equal(await t.page.locator('#coach .coach-card').count(), 0, 'Got it finishes beat 4');
+      t.equal((await t.state()).settings.tipsSeen, true, 'tipsSeen saved after finishing beat 4');
+    },
+  },
 ];

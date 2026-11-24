@@ -247,6 +247,10 @@ export const tests = [
       t.expect(/discs/i.test(third) && words(third) <= 12, `tip three is about the discs: ${third}`);
       await t.shot('S2-01-tip-discs');
       await t.page.click('#coach [data-coach="got"]');
+      const town = await t.page.textContent('#coach p');
+      t.expect(/Hot Springs words/i.test(town) && /Row \+20/.test(town) && words(town) <= 12, `town beat teaches Hot Springs words & Bathhouse Row: ${town}`);
+      await t.shot('S2-01-tip-town');
+      await t.page.click('#coach [data-coach="got"]');
       const fourth = await t.page.textContent('#coach p');
       t.expect(/Plaques/.test(fourth) && words(fourth) <= 12, `tip four is about the plaques: ${fourth}`);
       t.expect(await t.page.locator('#springs.coach-target').count() === 1, 'the plaques are marked');
