@@ -317,4 +317,78 @@ export const tests = [
       t.expect(norm.busyRemain >= 700, 'Normal preserves full drop + hand-over beat (' + norm.busyRemain + ' ms)');
     },
   },
+
+  // ---------- W4-S2-04 ----------
+  {
+    name: 'W4-S2-04 pinch-zoom defers layout() to pinch end, preserves anchor without center-snap jump, and guards d0 >= 10',
+    viewports: ['mobile'],
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-settings-v1')) {
+        localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false }));
+      }
+    },
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 3, seats: SEATS });
+      await t.waitIdle(8000);
+
+      // Start zoomed at 1.4x so clamping does not constrain off-center pinch midpoints
+      await t.game('act', 'zoom', 1.4, 7.88, 7.88);
+      await t.waitFrames(2);
+
+      // Choose an off-center target cell (row 5, col 5 -> index 80) and pinch around its screen position
+      const anchorCell = 5 * N + 5;
+      const [ax, ay] = await t.game('act', 'screen', anchorCell);
+      const cdp = await t.page.context().newCDPSession(t.page);
+      const send = (type, pts) => cdp.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: pts.map(([id, x, y]) => ({ id, x, y, radiusX: 4, radiusY: 4, force: 1 })),
+      });
+
+      const layoutsBefore = await t.page.evaluate(() => window.__G.layoutCount || 0);
+      // 1) Off-center two-finger pinch spreading outward around (ax, ay) over 10 steps
+      const dx0 = 28;
+      await send('touchStart', [[1, ax - dx0, ay]]);
+      await send('touchStart', [[1, ax - dx0, ay], [2, ax + dx0, ay]]);
+      for (let k = 1; k <= 10; k++) {
+        const dx = dx0 + k * 4;
+        await send('touchMove', [[1, ax - dx, ay], [2, ax + dx, ay]]);
+      }
+      await t.waitFrames(2);
+
+      const midPinch = await t.page.evaluate((cell) => ({
+        layouts: window.__G.layoutCount || 0,
+        zoom: window.__game.getState().view.zoom,
+        zoomBtnMode: document.querySelector('#b-zoomin').dataset.mode,
+      }), anchorCell);
+      const [axAfter, ayAfter] = await t.game('act', 'screen', anchorCell);
+      const anchorDrift = Math.hypot(axAfter - ax, ayAfter - ay);
+
+      t.equal(midPinch.layouts, layoutsBefore, 'zero layout() calls during 10 pinch pointermove frames (' + midPinch.layouts + ' vs ' + layoutsBefore + ')');
+      t.expect(midPinch.zoom > 1.8 && midPinch.zoom <= 2.4, 'pinch zoomed smoothly (' + midPinch.zoom.toFixed(2) + ')');
+      t.equal(midPinch.zoomBtnMode, 'out', 'syncZoomBtn updated #b-zoomin during pinch');
+      t.expect(anchorDrift <= 4.0, 'anchor cell stayed pinned under two-finger midpoint (drift ' + anchorDrift.toFixed(2) + ' px, no center-snap jump)');
+
+      // Release fingers -> layout() runs once at pinch end
+      await send('touchEnd', []);
+      await t.waitFrames(2);
+      const layoutsAfter = await t.page.evaluate(() => window.__G.layoutCount || 0);
+      t.equal(layoutsAfter, layoutsBefore + 1, 'layout() deferred and called once at pinch end');
+
+      // 2) Zero-distance same-pixel pinch (d0 === 0 before clamping): must NOT produce NaN/Infinity
+      const [cx, cy] = await t.game('act', 'screen', 112);
+      await send('touchStart', [[3, cx, cy]]);
+      await send('touchStart', [[3, cx, cy], [4, cx, cy]]);
+      const d0Val = await t.page.evaluate(() => window.__G.pinch && window.__G.pinch.d0);
+      t.expect(d0Val >= 10, 'd0 clamped to >= 10 on zero-distance pinch (' + d0Val + ')');
+      await send('touchMove', [[3, cx - 15, cy], [4, cx + 15, cy]]);
+      await t.waitFrames(2);
+      const vZero = (await t.state()).view;
+      t.expect(Number.isFinite(vZero.zoom) && vZero.zoom >= 1 && vZero.zoom <= 2.4, 'zoom stays finite after zero-distance start (' + vZero.zoom + ')');
+      t.expect(Number.isFinite(vZero.cx) && Number.isFinite(vZero.cy), 'view center stays finite (' + vZero.cx + ', ' + vZero.cy + ')');
+      await send('touchEnd', []);
+      await cdp.detach();
+    },
+  },
 ];
