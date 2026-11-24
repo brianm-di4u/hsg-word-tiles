@@ -238,4 +238,83 @@ export const tests = [
       await t.page.clock.resume();
     },
   },
+
+  // ---------- W4-P-N02 ----------
+  {
+    name: 'W4-P-N02 Computer speed Instant bypasses AI flight/hand-over wait and Fast scales stagger/drop/beat ~0.45x',
+    viewports: ['desktop'],
+    initScript: normalSound,
+    async run(t) {
+      await ready(t);
+      await freezeClock(t);
+
+      const measureSpeed = async (speed) => {
+        await t.page.evaluate((sp) => { window.__G.settings.ai = sp; }, speed);
+        await t.seed(5);
+        await t.game('newGame', { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'hard' }] });
+        await t.waitIdle(8000);
+        const s0 = await t.state();
+        s0.game.players[1].rack = 'SPRINGX'.split('');
+        await t.game('setState', { game: s0.game });
+        await t.waitIdle(5000);
+        await stopClock(t);
+
+        const sfxBefore = await t.page.evaluate(() => window.__game.audioState().played.length);
+        await t.game('act', 'pass');
+        // Human pass sets 150 ms turnWait -> startTurn -> scheduleAi
+        await t.page.clock.runFor(200);
+        // Wait for worker reply to arrive
+        await t.page.waitForFunction(() => {
+          const g = window.__game.getState();
+          return g.game.move >= 2 || (g.aiThinking && g.aiWait.reply);
+        }, null, { timeout: 15000, polling: 50 });
+
+        // Advance past thinking delay (normal 700, fast 250, instant 0) so AI afterAction runs, but NOT past flight
+        const thinkAdvance = speed === 'normal' ? 750 : speed === 'fast' ? 280 : 10;
+        await t.page.clock.runFor(thinkAdvance);
+        await t.page.waitForFunction(() => window.__game.getState().game.move === 2, null, { timeout: 5000, polling: 50 });
+
+        const snap = await t.page.evaluate((prevLen) => {
+          const G = window.__G, now = performance.now();
+          const anims = [...G.anim.values()];
+          const stagger = anims.length >= 2 ? Math.round(anims[1].t0 - anims[0].t0) : 0;
+          const dur = anims.length ? anims[0].dur : 0;
+          const played = window.__game.audioState().played.slice(prevLen);
+          const aiEntry = G.s.log[G.s.log.length - 1];
+          return {
+            tiles: aiEntry.tiles ? aiEntry.tiles.length : 0,
+            animCount: G.anim.size,
+            stagger,
+            dur,
+            busyRemain: Math.max(0, Math.round(G.busyUntil - now)),
+            played,
+          };
+        }, sfxBefore);
+        await t.page.clock.resume();
+        return snap;
+      };
+
+      const inst = await measureSpeed('instant');
+      const fast = await measureSpeed('fast');
+      const norm = await measureSpeed('normal');
+
+      t.expect(inst.tiles >= 4, 'AI played a multi-tile word (' + inst.tiles + ' tiles)');
+      // Instant: 0 flying tiles, 0 ms hand-over lockout, single condensed settle clack
+      t.equal(inst.animCount, 0, 'Instant bypasses AI tile flight animation');
+      t.equal(inst.busyRemain, 0, 'Instant has 0 ms hand-over lockout (got ' + inst.busyRemain + ' ms)');
+      t.equal(inst.played.filter((x) => x === 'place').length, 1, 'Instant fires one crisp condensed settle clack');
+
+      // Fast: ~0.45x stagger (40 ms), drop (160 ms), and total hand-over lockout well under Normal
+      t.equal(fast.animCount, fast.tiles, 'Fast animates all AI tiles');
+      t.equal(fast.stagger, 40, 'Fast uses 40 ms stagger');
+      t.equal(fast.dur, 160, 'Fast uses 160 ms drop duration');
+      t.expect(fast.busyRemain > 0 && fast.busyRemain <= Math.round(norm.busyRemain * 0.55),
+        `Fast lockout (${fast.busyRemain} ms) scales to ~0.45x of Normal (${norm.busyRemain} ms)`);
+
+      // Normal: full 90 ms stagger, 320 ms drop, full lockout
+      t.equal(norm.stagger, 90, 'Normal preserves 90 ms stagger');
+      t.equal(norm.dur, 320, 'Normal preserves 320 ms drop duration');
+      t.expect(norm.busyRemain >= 700, 'Normal preserves full drop + hand-over beat (' + norm.busyRemain + ' ms)');
+    },
+  },
 ];

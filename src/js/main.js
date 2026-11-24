@@ -731,6 +731,13 @@ function cancelTurnTimers() {
 // run `fn` in `ms` milliseconds, as a sound that waits for the tiles to land; it is dropped if another game has begun, scene left, or the turn is cancelled
 const later = (g, ms, fn) => { if (ms <= 0) { if (G.s === g && G.scene === 'game') fn(); } else addTurnTimer(() => { if (G.s === g && G.scene === 'game') fn(); }, ms); };
 
+// W4-P-N02: scale AI drop flight, tile stagger, clack lag, and hand-over beat with Settings -> Computer speed.
+const AI_PACE = {
+  normal:  { stagger: 90, drop: 320, clack: 200, beat: 250, pulse: 900 },
+  fast:    { stagger: 40, drop: 160, clack: 100, beat: 100, pulse: 550 },
+  instant: { stagger: 0,  drop: 0,   clack: 0,   beat: 0,   pulse: 0 },
+};
+
 function afterAction(entry, fromAi) {
   const s = G.s;
   cancelTurnTimers();
@@ -744,31 +751,38 @@ function afterAction(entry, fromAi) {
   resetOrder(); G.preview = null; G.hint = null; G.breakdown = false; delete s.hintStaged;
   G.deal = !fromAi && entry.kind !== 'pass' && humans() === 1;
   if (!s.over && cur().kind === 'human') G.privacy = turnPrivacy();
-  // seconds until the computer's tiles have landed (nothing to wait for on a pass or swap, or with animation off)
-  const landed = fromAi && animOn() && entry.kind === 'play' ? (entry.tiles.length * 90 + 200) / 1000 : 0;
+  const aiPace = fromAi ? (AI_PACE[G.settings.ai] || AI_PACE.normal) : null;
+  const aiInstant = !!(fromAi && (G.fast || G.settings.ai === 'instant'));
+  const aiAnim = !!(fromAi && !aiInstant && animOn());
+  // seconds until the computer's tiles have landed (nothing to wait for on instant, pass/swap, or with animation off)
+  const landed = aiAnim && entry.kind === 'play' ? (entry.tiles.length * aiPace.stagger + aiPace.clack) / 1000 : 0;
   if (entry.kind === 'play') {
     G.last = new Set(entry.tiles.map((t) => t.i)); G.lastPulse = null;
-    if (fromAi && animOn()) {
+    const avgPan = colPan(Math.round(entry.tiles.reduce((a, t) => a + (t.i % N), 0) / entry.tiles.length));
+    if (aiAnim) {
       const t0 = performance.now();
-      entry.tiles.forEach((t, k) => G.anim.set(t.i, { t0: t0 + k * 90, dur: 320 }));
-      G.animUntil = t0 + entry.tiles.length * 90 + 340;
-      G.lastPulse = { t0: G.animUntil - 20, dur: 900 };
-      entry.tiles.forEach((t, k) => addTurnTimer(() => { if (G.s === s) sfx('place', { pan: colPan(t.i), step: k }); }, k * 90 + 200 + Math.floor(Math.random() * 24)));
+      entry.tiles.forEach((t, k) => G.anim.set(t.i, { t0: t0 + k * aiPace.stagger, dur: aiPace.drop }));
+      G.animUntil = t0 + entry.tiles.length * aiPace.stagger + aiPace.drop + 20;
+      G.lastPulse = { t0: G.animUntil - 20, dur: aiPace.pulse };
+      entry.tiles.forEach((t, k) => addTurnTimer(() => { if (G.s === s && G.scene === 'game') sfx('place', { pan: colPan(t.i), step: k }); }, k * aiPace.stagger + aiPace.clack + Math.floor(Math.random() * 24)));
       tick();
-    } else sfx('play', { pan: colPan(Math.round(entry.tiles.reduce((a, t) => a + (t.i % N), 0) / entry.tiles.length)) });
+    } else if (aiInstant) {
+      G.anim.clear(); G.animUntil = 0;
+      sfx('place', { pan: avgPan });
+    } else sfx('play', { pan: avgPan });
     celebrate(entry, G.bark, landed);
     emitPlaqueArcs(s, entry, prevPlaqueSnap);
     try { recordRegister(entry); } catch (e) { /* the register is a keepsake: a failed write never stops the game */ }
   } else {
     sfx(entry.kind === 'swap' ? 'swap' : 'turn');
   }
-  if (fromAi && !s.over && cur().kind === 'human') later(s, landed * 1000 + 300, () => { if (!s.over && cur().kind === 'human') sfx('yourturn'); });   // the hand-over, once the computer's move has landed
+  if (fromAi && !s.over && cur().kind === 'human') later(s, landed * 1000 + (aiInstant ? 120 : 300), () => { if (!s.over && cur().kind === 'human') sfx('yourturn'); });   // the hand-over, once the computer's move has landed
   announce(entry);
   moodUpdate();
   if (cur().kind === 'human' && !fromAi) G.lastHuman = s.cur;
   if (s.over) persistEndgame(s);
   save(s);
-  const wait = G.fast ? 0 : (fromAi && animOn() ? Math.max(0, G.animUntil - performance.now()) + 250 : 150);
+  const wait = G.fast || aiInstant ? 0 : (aiAnim ? Math.max(0, G.animUntil - performance.now()) + aiPace.beat : (fromAi && G.settings.ai === 'fast' ? 100 : 150));
   G.busyUntil = performance.now() + wait;
   const runTurn = () => {
     G.turnWait = null;
