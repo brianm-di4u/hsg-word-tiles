@@ -1174,7 +1174,6 @@ function renderGame() {
     });
   });
   $('#log').innerHTML = UI.logHtml(s, G.lex) || '<li class="empty">Every play is written here: the words, the points, and any Hot Springs bonus.</li>';
-  requestAnimationFrame(trimLedger);
   renderTurnline();
   if (G.scoreHi != null) {
     const sel = G.scoreHi === 'all' ? '[data-score]' : `[data-score="${G.scoreHi}"]`;
@@ -1227,16 +1226,6 @@ function renderTurnline() {
   tl.innerHTML = mobile
     ? `<span class="chips">${UI.scoresHtml(s, true)}${chalBadge}</span><span class="bag${phaseCls}">${mobileBag}</span>`
     : s.over ? `<span class="who turn-head"><span>Game over</span>${chalBadge}</span>` : `<span class="who turn-head"><span class="who-name">${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'}</span>${chalBadge}</span><span class="bag${phaseCls}">${bagLine}</span>`;
-}
-
-// The ledger shows whole entries only; the full ledger is in the menu.
-function trimLedger() {
-  const box = $('#ledger'), list = $('#log');
-  if (!box || !list) return;
-  for (const li of list.children) li.hidden = false;
-  const bottom = box.getBoundingClientRect().bottom - 12;
-  let hide = false;
-  for (const li of list.children) { if (!hide && li.getBoundingClientRect().bottom > bottom) hide = true; if (hide && li !== list.firstElementChild) li.hidden = true; }
 }
 
 function renderActions() {
@@ -2561,6 +2550,7 @@ function wireStatic() {
   // the strip under the board opens the breakdown of the staged play (its button is the keyboard's way in)
   $('#preview').addEventListener('click', (e) => { if (e.target.closest('[data-hintnext]')) hintNext(); else toggleBreakdown(); });
   // W2-S4-13: clickable Hot Springs word chips inside the inline Steam ledger open their sourced history card on demand.
+  $('#b-ledger').addEventListener('click', () => { unlock(); openDialog('ledger'); });
   $('#log').addEventListener('click', (e) => {
     const chip = e.target.closest('[data-fact]');
     if (!chip) return;
