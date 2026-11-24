@@ -273,10 +273,21 @@ export const VIGNETTE = {
   radio: 'vig-arlington', water: 'vig-watertax', fire: 'vig-waterco', spring: 'vig-fordyce',
 };
 
-export function swapHtml(rack) {
+export function swapHtml(rack, s = null) {
+  const bag = s && Array.isArray(s.bag) ? s.bag : null;
+  let bagNote = '';
+  if (bag) {
+    let v = 0, bl = 0;
+    for (const l of bag) { if ('AEIOU'.includes(l)) v++; else if (l === '?') bl++; }
+    const c = bag.length - v - bl;
+    bagNote = `<p class="swap-bag">In the bag (${bag.length}): <b>${plural(v, 'vowel')}</b>, <b>${plural(c, 'consonant')}</b>${bl ? `, <b>${plural(bl, 'blank')}</b>` : ''}.</p>`;
+  }
+  const stall = s ? stallNote(s, 'swap') : '';
   return `<div class="card dialog swap" role="dialog" aria-modal="true" aria-labelledby="swap-h">
     <h2 id="swap-h">Swap tiles</h2>
     <p>Choose the tiles to put back. You draw the same number, and your turn ends.</p>
+    ${bagNote}
+    ${stall ? `<p class="note warn swap-stall" role="alert">${esc(stall)}</p>` : ''}
     <div class="swap-tiles" role="group" aria-label="Your tiles">${rack.map((l, k) => `<button class="stile" data-sw="${k}" aria-pressed="false" aria-label="${l === '?' ? 'Blank' : l}">${l === '?' ? '' : l}</button>`).join('')}</div>
     <div class="dlg-btns"><button class="btn quiet" data-close>Cancel</button><button class="btn primary" data-swap-go disabled>Swap</button></div>
   </div>`;
@@ -430,7 +441,7 @@ export function helpHtml(tab, lex, twos = [], opts = {}) {
     keys: `<h2>Mouse and touch</h2>
       <ul class="legend plain"><li>Drag a tile from your rack to the board, or tap a tile and then tap a square.</li><li>Tap a tile you've placed to take it back, or drag it somewhere else.</li><li>On a phone the tile floats above your finger, and the square it will land on lights up. Pinch to zoom if you like.</li></ul>
       <h2>Keyboard</h2>
-      <ul class="keys"><li><kbd>←↑→↓</kbd> move the cursor</li><li><kbd>A</kbd>–<kbd>Z</kbd> place that letter from your rack (with none left, press it twice to use your blank)</li><li><kbd>Space</kbd> switch between across and down</li><li><kbd>Backspace</kbd> take back the last tile</li><li><kbd>Enter</kbd> place a selected rack tile at the cursor, or play (with a button focused, <kbd>Enter</kbd> or <kbd>Space</kbd> presses that button instead)</li><li><kbd>Alt</kbd>+<kbd>←→</kbd> on a focused rack tile: move it left or right on your rack</li><li><kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd> zoom in, zoom out, or show the whole board</li><li><kbd>Esc</kbd> take back all tiles</li><li><kbd>Shift</kbd>+<kbd>R</kbd> shuffle the tiles still on your rack</li><li><kbd>Shift</kbd>+<kbd>S</kbd> swap · <kbd>Shift</kbd>+<kbd>P</kbd> pass · <kbd>Shift</kbd>+<kbd>H</kbd> hint</li><li><kbd>Shift</kbd>+<kbd>B</kbd> how the placed tiles score (or tap the strip under the board)</li><li><kbd>Space</kbd> or <kbd>Enter</kbd>, or a tap on the board, while the computer is playing: let its move land at once</li><li><kbd>?</kbd> help · <kbd>Esc</kbd> menu (when nothing is placed)</li></ul>`,
+      <ul class="keys"><li><kbd>←↑→↓</kbd> move the cursor</li><li><kbd>A</kbd>–<kbd>Z</kbd> place that letter from your rack (with none left, press it twice to use your blank)</li><li><kbd>Space</kbd> switch between across and down</li><li><kbd>Backspace</kbd> take back the last tile</li><li><kbd>Enter</kbd> place a selected rack tile at the cursor, or play (with a button focused, <kbd>Enter</kbd> or <kbd>Space</kbd> presses that button instead)</li><li><kbd>Alt</kbd>+<kbd>←→</kbd> on a focused rack tile: move it left or right on your rack</li><li><kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd> zoom in, zoom out, or show the whole board</li><li><kbd>Esc</kbd> take back all tiles</li><li><kbd>Shift</kbd>+<kbd>R</kbd> shuffle the tiles still on your rack</li><li><kbd>Shift</kbd>+<kbd>S</kbd> swap · <kbd>Shift</kbd>+<kbd>P</kbd> pass · <kbd>Shift</kbd>+<kbd>H</kbd> hint · <kbd>Shift</kbd>+<kbd>U</kbd> unseen tiles</li><li><kbd>Shift</kbd>+<kbd>B</kbd> how the placed tiles score (or tap the strip under the board)</li><li><kbd>Space</kbd> or <kbd>Enter</kbd>, or a tap on the board, while the computer is playing: let its move land at once</li><li><kbd>?</kbd> help · <kbd>Esc</kbd> menu (when nothing is placed)</li></ul>`,
   }[tab];
   return `<div class="sheet help">
     ${band()}
@@ -581,7 +592,7 @@ export function stallNote(s, passing) {
   if (!s || s.over || s.mode === 'daily' || !s.players) return '';
   const n = s.players.length, left = 2 * n - (s.scoreless || 0);
   if (left > n) return '';
-  if (passing) return left <= 1 ? 'Passing now ends the game.' : `After this, ${left - 1} more ${left - 1 === 1 ? 'turn' : 'turns'} without a score would end the game.`;
+  if (passing) return left <= 1 ? (passing === 'swap' ? 'Swapping now ends the game.' : 'Passing now ends the game.') : `After this, ${left - 1} more ${left - 1 === 1 ? 'turn' : 'turns'} without a score would end the game.`;
   return left <= 1 ? 'A turn with no score now ends the game.' : `${left} more turns without a score end the game.`;
 }
 

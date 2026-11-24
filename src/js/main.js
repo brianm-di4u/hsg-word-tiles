@@ -1187,7 +1187,7 @@ function renderGame() {
 function renderTurnline() {
   const tl = $('#turnline');
   if (!tl || !G.s) return;
-  const s = G.s, mobile = isNarrow();
+  const s = G.s, mobile = isNarrow(), canTrack = !s.over && trackerSeat() >= 0;
   if (s.daily) {
     const turn = Math.min(E.DAILY_TURNS, E.DAILY_TURNS - s.daily.turns + 1);
     const par = cachedPar(s.daily.date);
@@ -1203,10 +1203,17 @@ function renderTurnline() {
     }
     const turnBadge = s.over ? '<span class="daily-turn">Daily complete</span>' : `<span class="daily-turn">Turn ${turn} / ${E.DAILY_TURNS}</span>`;
     const priorHtml = prior != null ? `<span class="daily-prior" title="Practice replay — official score already recorded">${mobile ? `Practice · ${prior}` : `Practice replay · ${prior}`}</span>` : '';
+    const bagTxt = `${UI.plural(s.bag.length, 'tile')} in the bag`;
+    const bagBtn = canTrack
+      ? `<button type="button" class="bag-link" data-open-tracker aria-label="${esc(bagTxt)} — open Unseen tiles" title="Unseen tiles (Shift+U)">${bagTxt}</button>`
+      : bagTxt;
     if (mobile) {
-      tl.innerHTML = `<span class="chips daily-row">${UI.scoresHtml(s, true)}${turnBadge}</span><span class="daily-sub">${parsHtml || `<span class="daily-bag">${UI.plural(s.bag.length, 'tile')} left</span>`}${priorHtml}</span>`;
+      const mobBag = canTrack
+        ? `<button type="button" class="daily-bag bag-link" data-open-tracker aria-label="${UI.plural(s.bag.length, 'tile')} left — open Unseen tiles" title="Unseen tiles (Shift+U)">${UI.plural(s.bag.length, 'tile')} left</button>`
+        : `<span class="daily-bag">${UI.plural(s.bag.length, 'tile')} left</span>`;
+      tl.innerHTML = `<span class="chips daily-row">${UI.scoresHtml(s, true)}${turnBadge}</span><span class="daily-sub">${parsHtml || mobBag}${priorHtml}</span>`;
     } else {
-      tl.innerHTML = `<span class="who daily-head">${turnBadge}${priorHtml}</span><span class="bag daily-sub">${parsHtml}${parsHtml ? ' · ' : ''}${UI.plural(s.bag.length, 'tile')} in the bag</span>`;
+      tl.innerHTML = `<span class="who daily-head">${turnBadge}${priorHtml}</span><span class="bag daily-sub">${parsHtml}${parsHtml ? ' · ' : ''}${bagBtn}</span>`;
     }
     return;
   }
@@ -1223,9 +1230,12 @@ function renderTurnline() {
     : left < RACK
       ? bagLine
       : `${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'} · ${bagLine}`;
+  const bagEl = (txt) => (canTrack
+    ? `<button type="button" class="bag bag-btn${phaseCls}" data-open-tracker aria-label="${esc(txt)} — open Unseen tiles" title="Unseen tiles (Shift+U)">${txt}</button>`
+    : `<span class="bag${phaseCls}">${txt}</span>`);
   tl.innerHTML = mobile
-    ? `<span class="chips">${UI.scoresHtml(s, true)}${chalBadge}</span><span class="bag${phaseCls}">${mobileBag}</span>`
-    : s.over ? `<span class="who turn-head"><span>Game over</span>${chalBadge}</span>` : `<span class="who turn-head"><span class="who-name">${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'}</span>${chalBadge}</span><span class="bag${phaseCls}">${bagLine}</span>`;
+    ? `<span class="chips">${UI.scoresHtml(s, true)}${chalBadge}</span>${bagEl(mobileBag)}`
+    : s.over ? `<span class="who turn-head"><span>Game over</span>${chalBadge}</span>` : `<span class="who turn-head"><span class="who-name">${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'}</span>${chalBadge}</span>${bagEl(bagLine)}`;
 }
 
 function renderActions() {
@@ -1599,7 +1609,7 @@ function openDialog(name, arg) {
   if (G.springsOpen) syncSpringsDrawer(false);
   G.dialog = name;
   let html = '';
-  if (name === 'swap') html = UI.swapHtml(cur().rack);
+  if (name === 'swap') html = UI.swapHtml(cur().rack, G.s);
   else if (name === 'blank') html = UI.blankHtml();
   else if (name === 'pause') html = UI.pauseHtml({ mobile: isNarrow(), tracker: trackerSeat() >= 0 });
   else if (name === 'tracker') html = UI.trackerHtml(G.s, trackerSeat());
@@ -2483,9 +2493,9 @@ function onKey(e) {
     zoomByKey(k);
     return;
   }
-  if (e.shiftKey && /^[RSPHB]$/.test(k.toUpperCase()) && k.length === 1) {
+  if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && /^[RSPHBU]$/.test(k.toUpperCase()) && k.length === 1) {
     e.preventDefault();
-    ({ R: shuffleRack, S: doSwap, P: doPass, H: doHint, B: toggleBreakdown })[k.toUpperCase()]?.();
+    ({ R: shuffleRack, S: doSwap, P: doPass, H: doHint, B: toggleBreakdown, U: () => { if (trackerSeat() >= 0) openDialog('tracker'); } })[k.toUpperCase()]?.();
     return;
   }
   if (G.springsOpen && k === 'Escape') { e.preventDefault(); syncSpringsDrawer(false); $('#springs [data-springs-toggle]')?.focus(); return; }
@@ -2546,6 +2556,11 @@ function ensureVisible(i) {
 // ---------- wiring ----------
 function wireStatic() {
   $('#b-menu').addEventListener('click', () => { unlock(); openDialog('pause'); });
+  $('#turnline').addEventListener('click', (e) => {
+    if (!e.target.closest('[data-open-tracker]') || trackerSeat() < 0) return;
+    unlock();
+    openDialog('tracker');
+  });
   $('#b-sound').addEventListener('click', () => { unlock(); G.settings.sound = !G.settings.sound; saveSettings(); if (G.settings.sound) sfx('place'); });
   // the strip under the board opens the breakdown of the staged play (its button is the keyboard's way in)
   $('#preview').addEventListener('click', (e) => { if (e.target.closest('[data-hintnext]')) hintNext(); else toggleBreakdown(); });
