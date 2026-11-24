@@ -15,10 +15,10 @@ function prng(seed) { let s = seed >>> 0 || 1; return () => { s = (s + 0x6d2b79f
 const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; };
 
 export const PREMIUM = {
-  w: { name: 'WARM', mult: '×2', unit: 'LETTER', glass: ['#7FC8B8', '#2A9D8F', '#1F6F6B'], lead: 6, rings: 0 },
-  h: { name: 'HOT', mult: '×3', unit: 'LETTER', glass: ['#8FB0E8', '#3D63B8', '#22397A'], lead: 8, rings: 1 },
-  s: { name: 'STEAM', mult: '×2', unit: 'WORD', glass: ['#F6DE97', '#D9A23A', '#9C6A18'], lead: 0, rings: 0, curls: true },
-  b: { name: 'BOILING', mult: '×3', unit: 'WORD', glass: ['#F0A27A', '#C4532F', '#7E2F1F'], lead: 0, rings: 3 },
+  w: { name: 'WARM', mult: '2L', unit: 'LETTER', glass: ['#7FC8B8', '#2A9D8F', '#1F6F6B'], lead: 6, rings: 0 },
+  h: { name: 'HOT', mult: '3L', unit: 'LETTER', glass: ['#8FB0E8', '#3D63B8', '#22397A'], lead: 8, rings: 1 },
+  s: { name: 'STEAM', mult: '2W', unit: 'WORD', glass: ['#F6DE97', '#D9A23A', '#9C6A18'], lead: 0, rings: 0, curls: true },
+  b: { name: 'BOILING', mult: '3W', unit: 'WORD', glass: ['#F0A27A', '#C4532F', '#7E2F1F'], lead: 0, rings: 3 },
 };
 
 function marble(ctx, x, y, w, h, rnd, light = true) {
@@ -81,19 +81,34 @@ function leadedGlass(ctx, cx, cy, r, p, rnd) {
   ctx.lineWidth = Math.max(0.6, r * 0.03); ctx.strokeStyle = 'rgba(255,240,190,0.7)'; ctx.beginPath(); ctx.arc(cx, cy, r * 0.96, Math.PI * 1.05, Math.PI * 1.7); ctx.stroke();
 }
 
-// The scoring disc in the plain centre of the glass. Letter premiums: a cream disc with dark ink. Word premiums:
-// an ink disc with gold figures and a double brass ring, so the two read apart at any size and in greyscale.
+// The scoring badge in the centre of each spring's leaded stained glass (W2-S2-02 / CD-WF2-04).
+// Letter premiums (2L / 3L): circular cream badge with dark ink.
+// Word premiums (2W / 3W): chamfered-octagonal dark-ink badge with gold figures and a double brass octagonal rim.
 function label(ctx, cx, cy, cell, p) {
+  ctx.save();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const word = p.unit === 'WORD', r = cell * 0.34;
+  const word = p.unit === 'WORD', r = cell * (word ? 0.36 : 0.34);
   const g = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.4, r * 0.1, cx, cy, r);
   if (word) { g.addColorStop(0, '#3A3326'); g.addColorStop(1, '#1A1712'); } else { g.addColorStop(0, '#FFFDF6'); g.addColorStop(1, '#EDE2C6'); }
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = word ? '#E9C766' : 'rgba(110,80,25,0.9)'; ctx.lineWidth = Math.max(1, cell * 0.022); ctx.stroke();
-  if (word) { ctx.lineWidth = Math.max(0.8, cell * 0.012); ctx.beginPath(); ctx.arc(cx, cy, r * 0.84, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.fillStyle = g;
+  if (word) {
+    octagonPath(ctx, cx - r, cy - r, r * 2, 0.28);
+    ctx.fill();
+    ctx.strokeStyle = '#E9C766'; ctx.lineWidth = Math.max(1.2, cell * 0.026); ctx.stroke();
+    const ir = r * 0.83;
+    octagonPath(ctx, cx - ir, cy - ir, ir * 2, 0.28);
+    ctx.lineWidth = Math.max(0.8, cell * 0.013); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(110,80,25,0.9)'; ctx.lineWidth = Math.max(1, cell * 0.022); ctx.stroke();
+  }
   ctx.fillStyle = word ? '#F3DD8B' : '#1F2A24';
-  ctx.font = `800 ${cell * 0.33}px ${FONT_TILE}`;
+  const basePx = cell * (word ? 0.295 : 0.31);
+  ctx.font = `800 ${basePx}px ${FONT_TILE}`;
+  const fit = Math.min(1, (r * 1.42) / ctx.measureText(p.mult).width);
+  if (fit < 1) ctx.font = `800 ${basePx * fit}px ${FONT_TILE}`;
   ctx.fillText(p.mult, cx, cy + cell * 0.015);
+  ctx.restore();
 }
 
 export function roundRect(ctx, x, y, w, h, r) {

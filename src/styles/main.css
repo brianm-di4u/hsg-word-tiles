@@ -466,8 +466,13 @@ body:not(.theme-dark) .fact-pts { color: #FFF; }
 .legend.plain li { display: block; }
 .sq { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 8px; font: 800 0.95rem var(--f-serif); color: #FFF; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); border: 2px solid var(--brass); }
 .sq { position: relative; width: 48px; height: 48px; background-size: cover; }
-.sq i { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #FFFDF6, #EDE2C6); color: #1F2A24; border: 1.5px solid rgba(110, 80, 25, 0.9); font: 800 0.9rem var(--f-serif); font-style: normal; text-shadow: none; }
-.sq.word i { background: radial-gradient(circle at 35% 30%, #3A3326, #1A1712); color: #F3DD8B; border: 1.5px solid #E9C766; box-shadow: inset 0 0 0 2px #1A1712, inset 0 0 0 3px #E9C766; }
+.sq i { display: grid; place-items: center; width: 31px; height: 31px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #FFFDF6, #EDE2C6); color: #1F2A24; border: 1.5px solid rgba(110, 80, 25, 0.9); font: 800 0.82rem / 1 var(--f-serif); font-style: normal; text-shadow: none; letter-spacing: -0.02em; }
+.sq.word i {
+  width: 34px; height: 34px; border-radius: 0; border: 0; box-shadow: none;
+  clip-path: polygon(28% 0%, 72% 0%, 100% 28%, 100% 72%, 72% 100%, 28% 100%, 0% 72%, 0% 28%);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Cpolygon points='9.8,1 24.2,1 33,9.8 33,24.2 24.2,33 9.8,33 1,24.2 1,9.8' fill='%231E1A14' stroke='%23E9C766' stroke-width='2'/%3E%3Cpolygon points='11.2,4 22.8,4 30,11.2 30,22.8 22.8,30 11.2,30 4,22.8 4,11.2' fill='none' stroke='%23E9C766' stroke-width='1'/%3E%3C/svg%3E") center / 100% 100% no-repeat, #1E1A14;
+  color: #F3DD8B; font: 800 0.78rem / 1 var(--f-serif);
+}
 .sq-w { background-image: url(assets/glass-w.webp), radial-gradient(#7FC8B8, #1F6F6B); } .sq-h { background-image: url(assets/glass-h.webp), radial-gradient(#8FB0E8, #22397A); }
 .sq-s { background-image: url(assets/glass-s.webp), radial-gradient(#F6DE97, #9C6A18); } .sq-b { background-image: url(assets/glass-b.webp), radial-gradient(#F0A27A, #7E2F1F); }
 .sq-B { background: #E8DEC6; overflow: visible; }

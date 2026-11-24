@@ -326,7 +326,7 @@ function workedExample() {
   const parts = cells.map(([l, q]) => TILES[l].value * (q === 'w' ? 2 : 1));
   const sum = parts.reduce((a, b) => a + b, 0), total = sum * 2;
   const label = `FIND laid across four squares: the I on a Warm square, the D on a Steam square. ${cells.map(([l, q]) => `${l} ${TILES[l].value}${q === 'w' ? ' doubled' : ''}`).join(', ')}, then the word doubled: ${total} points.`;
-  return `<div class="example"><div class="eg" role="img" aria-label="${label}">${cells.map(([l, q]) => `<span class="eg-cell"><span class="tchip"><b>${l}</b><i>${TILES[l].value}</i></span>${q ? `<span class="sq sq-${q}${q === 's' ? ' word' : ''}" aria-hidden="true"><i>×2</i></span>` : '<span class="sq-none" aria-hidden="true"></span>'}</span>`).join('')}</div>
+  return `<div class="example"><div class="eg" role="img" aria-label="${label}">${cells.map(([l, q]) => `<span class="eg-cell"><span class="tchip"><b>${l}</b><i>${TILES[l].value}</i></span>${q ? `<span class="sq sq-${q}${q === 's' ? ' word' : ''}" aria-hidden="true"><i>${q === 's' ? '2W' : '2L'}</i></span>` : '<span class="sq-none" aria-hidden="true"></span>'}</span>`).join('')}</div>
     <p><b>A worked play.</b> FIND scores ${parts.join(' + ')} = ${sum}. The Steam square then doubles the whole word: <b>${total} points</b>.</p></div>`;
 }
 
@@ -370,12 +370,12 @@ export function helpHtml(tab, lex, twos = []) {
       <p>The game ends when a player uses their last tile and the bag is empty, or when everyone has passed or swapped twice in a row. Tiles left on a rack count against their owner; whoever went out collects their value.</p>
       <p class="fine">Bathhouse Letters is an original game. Its board, tiles, bonuses and rules are game logic made for this town; the facts on its cards are history, with sources.</p>`,
     squares: `<h2>The springs</h2>
-      <p>The board has one square for each of the valley's 47 hot springs, as Wikipedia counts them: the <b>Display Spring</b> in the centre and 46 premium squares that swirl out from it. A premium counts only on the turn a tile first covers it. A <b>cream disc</b> multiplies a letter; a <b>dark disc</b> multiplies the whole word.</p>
+      <p>The board has one square for each of the valley's 47 hot springs, as Wikipedia counts them: the <b>Display Spring</b> in the centre and 46 premium squares that swirl out from it. A premium counts only on the turn a tile first covers it. A <b>cream circle (2L, 3L)</b> multiplies a letter; a <b>dark octagon (2W, 3W)</b> multiplies the whole word.</p>
       <ul class="legend">
-        <li><span class="sq sq-w"><i>×2</i></span><span><b>Warm</b> doubles the letter on it.</span></li>
-        <li><span class="sq sq-h"><i>×3</i></span><span><b>Hot</b> triples the letter on it.</span></li>
-        <li><span class="sq sq-s word"><i>×2</i></span><span><b>Steam</b> doubles the whole word.</span></li>
-        <li><span class="sq sq-b word"><i>×3</i></span><span><b>Boiling Spring</b> triples the whole word.</span></li>
+        <li><span class="sq sq-w"><i>2L</i></span><span><b>Warm (2L)</b> doubles the letter on it.</span></li>
+        <li><span class="sq sq-h"><i>3L</i></span><span><b>Hot (3L)</b> triples the letter on it.</span></li>
+        <li><span class="sq sq-s word"><i>2W</i></span><span><b>Steam (2W)</b> doubles the whole word.</span></li>
+        <li><span class="sq sq-b word"><i>3W</i></span><span><b>Boiling Spring (3W)</b> triples the whole word.</span></li>
         <li><span class="sq sq-B" aria-hidden="true">${bathMedallionHtml('Fordyce', true)}</span><span><b>Bathhouse Row</b>: eight squares named for the eight historic bathhouses. A Hot Springs word that covers one earns ${ROW_BONUS} more.</span></li>
       </ul>
       <h2>Bonuses</h2>
