@@ -205,8 +205,8 @@ export const tests = [
         apply(s, action, c);
       }
       t.expect(varied >= 3, 'in at least three of ' + positions + ' positions the answer depends on the stream (' + varied + ')');
-      // the Daily par is deterministic; W1-S2-07 fixed solo par math (no phantom opponent defense, Turn-10 leave taper -> 0)
-      const PAR = { '2026-01-15': { m: 411, h: 443 }, '2026-03-02': { m: 362, h: 433 }, '2026-07-04': { m: 297, h: 313 }, '2026-11-16': { m: 435, h: 435 }, '2026-12-25': { m: 398, h: 478 } };
+      // the Daily par is deterministic; W1-S2-07 fixed solo par math and W1-S2-08 scaled Medium bonus foresight to 50%
+      const PAR = { '2026-01-15': { m: 352, h: 443 }, '2026-03-02': { m: 387, h: 433 }, '2026-07-04': { m: 287, h: 313 }, '2026-11-16': { m: 340, h: 435 }, '2026-12-25': { m: 367, h: 478 } };
       for (const [date, want] of Object.entries(PAR)) t.equal(JSON.stringify(await dailyPar(c, date)), JSON.stringify(want), 'par for ' + date);
     },
   },

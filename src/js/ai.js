@@ -20,9 +20,9 @@ export const EASY_TWO = new Set([
 // best play by their own measure (equity); plays within TIE_WINDOW equity points of it count as tied and the
 // choice among them is drawn from state.rng.ai.
 export const LEVELS = {
-  easy: { commonOnly: true, freeLen: 0, allowTwo: EASY_TWO, maxLen: 6, leave: 0, pick: [0.35, 0.75], slip: 0.65, budget: 900000 },
-  medium: { commonOnly: true, freeLen: 5, leave: 0.5, budget: 900000 },  // freeLen was 4 before wave 2
-  hard: { leave: 1, defense: true, endgame: true, budget: 1500000 },
+  easy: { commonOnly: true, freeLen: 0, allowTwo: EASY_TWO, maxLen: 6, leave: 0, bonusWeight: 0, pick: [0.35, 0.75], slip: 0.65, budget: 900000 },
+  medium: { commonOnly: true, freeLen: 5, leave: 0.5, bonusWeight: 0.5, budget: 900000 },  // freeLen was 4 before wave 2
+  hard: { leave: 1, defense: true, endgame: true, bonusWeight: 1, budget: 1500000 },
 };
 
 // A character's own habit, laid over the level they play at. Lucky bets on the big squares: he counts
@@ -98,13 +98,15 @@ export function chooseAction(dict, lex, s, opts = {}) {
   const L = LEVELS[opts.level || p.level || 'medium'];
   const style = STYLES[opts.persona || p.persona] || null;
   // W1-S3-02 / CD-WF1-06: never score hidden Featured Springs (+30) during AI move search; AI earns them organically on word merit.
-  const { moves, nodes } = generateMoves(dict, s.board, p.rack, { lex, featured: [], commonOnly: L.commonOnly, freeLen: L.freeLen, allowTwo: L.allowTwo, maxLen: L.maxLen, budget: L.budget });
+  // W1-S2-08: scale Hot Springs lexicon-bonus foresight by tier (Easy 0%, Medium 50%, Hard 100%).
+  const bonusWeight = L.bonusWeight ?? 1;
+  const { moves, nodes } = generateMoves(dict, s.board, p.rack, { lex, featured: [], bonusWeight, commonOnly: L.commonOnly, freeLen: L.freeLen, allowTwo: L.allowTwo, maxLen: L.maxLen, budget: L.budget });
   const bag = s.bag.length;
   if (!moves.length) return { action: fallback(p.rack, bag), nodes };
 
   if (L.pick) {
     const top = moves.slice(0, 30);
-    if (style) top.sort((a, b) => b.score + style.premium * premiumPoints(b) - a.score - style.premium * premiumPoints(a));
+    if (style) top.sort((a, b) => (b.evalScore ?? b.score) + style.premium * premiumPoints(b) - (a.evalScore ?? a.score) - style.premium * premiumPoints(a));
     if (L.slip < 1 && rand(s, 'ai') >= L.slip) return { action: { type: 'play', tiles: top[0].tiles }, nodes, move: top[0] };
     const lo = Math.floor(top.length * L.pick[0]), hi = Math.max(lo + 1, Math.ceil(top.length * L.pick[1]));
     const m = top[lo + Math.floor(rand(s, 'ai') * (hi - lo))];
@@ -117,7 +119,7 @@ export function chooseAction(dict, lex, s, opts = {}) {
     : Math.min(1, bag / RACK);
   const equity = (m) => {
     const left = rackMinus(p.rack, m.tiles);
-    let e = m.score;
+    let e = m.evalScore ?? m.score;
     if (bag === 0) e -= 2 * rackScore(left);                       // going out matters, leave doesn't
     else e += L.leave * (style ? style.leaveScale : 1) * leaveValue(left) * leaveScale;
     if (style && bag > 0) e += style.premium * premiumPoints(m);
@@ -150,7 +152,7 @@ export function chooseAction(dict, lex, s, opts = {}) {
   const near = opts.exact ? [] : tiedWithBest(ranked);
   const pick = near.length > 1 ? near[Math.floor(rand(s, 'ai') * near.length)] : ranked[0];
   // a weak play with a bad rack: swap instead (Medium and Hard; never on the final turn of a Daily Soak)
-  if (bag >= RACK && (dailyTurns == null || dailyTurns > 1) && pick.m.score < 8 && leaveValue(p.rack) < -6) return { action: fallback(p.rack, bag), nodes };
+  if (bag >= RACK && (dailyTurns == null || dailyTurns > 1) && (pick.m.evalScore ?? pick.m.score) < 8 && leaveValue(p.rack) < -6) return { action: fallback(p.rack, bag), nodes };
   return { action: { type: 'play', tiles: pick.m.tiles }, nodes, move: pick.m };
 }
 

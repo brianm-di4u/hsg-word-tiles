@@ -374,9 +374,17 @@ export function helpHtml(tab, lex, twos = []) {
       <div class="tchips">${tileRow}</div>`,
     words: `<h2>Hot Springs words</h2>
       ${art.has('card-baths') ? `<img class="help-vig" src="${art.src('card-baths')}" alt="A bathhouse hall with a marble fountain, steam and a stained-glass dome">` : ''}
-      <p>${lex.data.words.length} groups of everyday words belong to the town: <b>spring</b>, <b>steam</b>, <b>bathhouse</b>, <b>tufa</b>, <b>novaculite</b>, <b>derby</b>, <b>magnolia</b> and more. Form one, across or down, and it pays a bonus and opens a card from the town's history, with its source.</p>
-      <ul class="legend plain">${Object.entries(lex.categories).map(([k, c]) => `<li><span class="cat-ic">${ICON.cat[c.icon]}</span><b>${esc(c.name)}</b></li>`).join('')}</ul>
-      <p>Every word you find goes into your <b>Bathhouse Register</b>, from the title screen.</p>`,
+      <p>${lex.data.words.length} groups of everyday words belong to the town: <b>spring</b>, <b>steam</b>, <b>bathhouse</b>, <b>tufa</b>, <b>novaculite</b>, <b>derby</b>, <b>magnolia</b> and more. Form one, across or down, and it pays a bonus (+${tierList}) and opens a card from the town's history, with its source.</p>
+      <p class="note">Browse the six themes below to see which word families earn bonuses. Plurals and common forms count too; each word's history card stays unspoiled until you play it.</p>
+      <div class="word-ref">${Object.entries(lex.categories).map(([k, c]) => {
+        const entries = lex.data.words.filter((w) => w.cat === k);
+        const byTier = [1, 2, 3].map((tr) => {
+          const list = entries.filter((e) => e.tier === tr).map((e) => e.forms[0]).sort();
+          return list.length ? `<div class="tier-row"><span class="tier-pts">+${lex.data.tiers[tr]}</span><span class="tier-words">${list.map((w) => esc(w)).join(' · ')}</span></div>` : '';
+        }).join('');
+        return `<details class="cat-ref" data-cat-ref="${esc(k)}"><summary><span class="cat-ic">${ICON.cat[c.icon]}</span><b>${esc(c.name)}</b><small>${entries.length} word families</small></summary><div class="cat-ref-body">${byTier}</div></details>`;
+      }).join('')}</div>
+      <p>Every word you find goes into your <b>Bathhouse Register</b>, from the title screen. You can toggle the subtle rack cue in <b>Settings</b>.</p>`,
     keys: `<h2>Mouse and touch</h2>
       <ul class="legend plain"><li>Drag a tile from your rack to the board, or tap a tile and then tap a square.</li><li>Tap a tile you've placed to take it back, or drag it somewhere else.</li><li>On a phone the tile floats above your finger, and the square it will land on lights up. Pinch to zoom if you like.</li></ul>
       <h2>Keyboard</h2>
@@ -409,6 +417,7 @@ export function settingsHtml(st, canVibrate = false) {
     ${seg('text', [[1, '100%'], [1.15, '115%'], [1.3, '130%']], 'Text size')}
     ${seg('board3d', [['auto', 'Auto'], ['on', '3D'], ['off', 'Flat']], 'Board')}
     ${seg('ai', [['normal', 'Normal'], ['fast', 'Fast'], ['instant', 'Instant']], 'Computer speed')}
+    ${seg('townCue', [[true, 'On'], [false, 'Off']], 'Hot Springs rack cue')}
     <div class="setrow"><span>Tips</span><button class="btn quiet" data-tips>${st.tipsSeen ? 'Show tips again' : 'Tips will show in a game'}</button></div>
   </div>`;
 }

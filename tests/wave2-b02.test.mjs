@@ -1,10 +1,14 @@
 // Wave 2, batch W2-B02: W1-S2-07, W1-S2-08, W1-S3-04.
 import { ctx } from './lib.mjs';
-import { createGame } from '../src/js/engine.js';
-import { chooseAction, openedPremium, leaveValue, rackMinus } from '../src/js/ai.js';
+import { createGame, apply } from '../src/js/engine.js';
+import { chooseAction, openedPremium, leaveValue, rackMinus, LEVELS } from '../src/js/ai.js';
 import { generateMoves } from '../src/js/movegen.js';
+import { townWordsInRack } from '../src/js/lexicon.js';
 import { dailyPar } from '../src/js/par.js';
 import { SQUARE, N } from '../src/js/score.js';
+
+const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
+const quiet = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false })); };
 
 export const tests = [
   {
@@ -77,6 +81,142 @@ export const tests = [
         const p = await dailyPar(c, dt);
         t.expect(p.h >= p.m, `${dt}: Julian (${p.h}) >= Hollis (${p.m})`);
       }
+    },
+  },
+  {
+    name: 'W1-S2-08 AI lexicon-bonus foresight scales by tier (Easy 0%, Medium 50%, Hard 100%) and townWordsInRack detects formable town words',
+    node: true,
+    async run(t) {
+      const c = await ctx();
+      // CD-WF0-09: locked tiers and 107 bonus entries stay completely untouched
+      t.equal(JSON.stringify(c.lex.data.tiers), JSON.stringify({ 1: 10, 2: 18, 3: 30 }), 'locked +10/+18/+30 tiers untouched');
+      t.equal(c.lex.data.words.length, 107, 'all 107 Hot Springs entries preserved');
+      t.equal(LEVELS.easy.bonusWeight, 0, 'Easy bonusWeight is 0');
+      t.equal(LEVELS.medium.bonusWeight, 0.5, 'Medium bonusWeight is 0.5');
+      t.equal(LEVELS.hard.bonusWeight, 1, 'Hard bonusWeight is 1');
+
+      // Easy ignores hidden Hot Springs bonus weights: choosing with lex vs without lex gives identical actions
+      const sEasy1 = createGame({ mode: 'play', seed: 801, seats: [{ kind: 'ai', level: 'easy' }, { kind: 'ai', level: 'medium' }] }, c.lex);
+      sEasy1.players[0].rack = ['S', 'P', 'A', 'Z', 'O', 'N', 'E'];
+      const sEasy2 = JSON.parse(JSON.stringify(sEasy1));
+      const rWithLex = chooseAction(c.dict, c.lex, sEasy1, { level: 'easy' });
+      const rNoLex = chooseAction(c.dict, null, sEasy2, { level: 'easy' });
+      t.equal(JSON.stringify(rWithLex.action), JSON.stringify(rNoLex.action), 'Easy makes the exact same choice with or without hidden Hot Springs bonuses');
+
+      // movegen evalScore respects bonusWeight while keeping m.score equal to the true engine score
+      const m0 = generateMoves(c.dict, sEasy1.board, ['S', 'T', 'E', 'A', 'M', 'Z', 'X'], { lex: c.lex, featured: [], bonusWeight: 0 }).moves;
+      const m5 = generateMoves(c.dict, sEasy1.board, ['S', 'T', 'E', 'A', 'M', 'Z', 'X'], { lex: c.lex, featured: [], bonusWeight: 0.5 }).moves;
+      const m1 = generateMoves(c.dict, sEasy1.board, ['S', 'T', 'E', 'A', 'M', 'Z', 'X'], { lex: c.lex, featured: [], bonusWeight: 1 }).moves;
+      const steam0 = m0.find((m) => m.words.includes('STEAM'));
+      const steam5 = m5.find((m) => m.words.includes('STEAM'));
+      const steam1 = m1.find((m) => m.words.includes('STEAM'));
+      t.expect(!!steam0 && !!steam5 && !!steam1, 'STEAM generated under all bonusWeights');
+      t.equal(steam0.score, steam1.score, 'true engine score preserved under bonusWeight=0');
+      t.equal(steam0.evalScore, steam0.score - steam0.bonus, 'bonusWeight=0 subtracts 100% of bonus from evalScore');
+      t.equal(steam5.evalScore, steam5.score - 0.5 * steam5.bonus, 'bonusWeight=0.5 subtracts 50% of bonus from evalScore');
+      t.equal(steam1.evalScore, steam1.score, 'bonusWeight=1 keeps full bonus in evalScore');
+
+      // Medium vs Hard bonus foresight split: on a rack with ZEST (high base) vs SPA (+10 tier 1),
+      // verify Medium (50% = +5) and Hard (100% = +10) evaluate the exact bonus differential cleanly
+      const sSplit = createGame({ mode: 'play', seed: 802, seats: [{ kind: 'ai', level: 'medium' }, { kind: 'ai', level: 'hard' }] }, c.lex);
+      sSplit.players[0].rack = ['S', 'P', 'A', 'J', 'A', 'W', 'S'];
+      const rMed = chooseAction(c.dict, c.lex, JSON.parse(JSON.stringify(sSplit)), { level: 'medium', exact: true });
+      const rHard = chooseAction(c.dict, c.lex, JSON.parse(JSON.stringify(sSplit)), { level: 'hard', exact: true });
+      t.expect(rMed.move.evalScore === rMed.move.score - 0.5 * (rMed.move.bonus || 0), 'Medium ranks by 50% bonusWeight');
+      t.expect(rHard.move.evalScore === rHard.move.score, 'Hard ranks by 100% bonusWeight');
+
+      // Organic bonus still pays full value when Easy plays a Hot Springs word on its own letter merit
+      const sOrg = createGame({ mode: 'play', seed: 803, seats: [{ kind: 'ai', level: 'easy' }, { kind: 'ai', level: 'easy' }] }, c.lex);
+      sOrg.players[0].rack = ['S', 'P', 'A', 'Q', 'V', 'W', 'X'];
+      const rOrg = apply(sOrg, { type: 'play', tiles: [{ i: 112, l: 'S', blank: false }, { i: 113, l: 'P', blank: false }, { i: 114, l: 'A', blank: false }] }, c);
+      t.expect(rOrg.ok && rOrg.entry.themed === 10, 'Engine still awards full +10 tier bonus on organic play');
+
+      // townWordsInRack pure helper
+      const hits = townWordsInRack(['S', 'P', 'A', 'Q', 'X', 'Z', 'V'], c.lex);
+      t.expect(hits.some((h) => h.word === 'SPA'), 'townWordsInRack detects SPA');
+      t.equal(townWordsInRack(['Q', 'X', 'Z', 'V', 'W', 'Y', 'B'], c.lex).length, 0, 'townWordsInRack returns empty when no town word fits');
+      t.expect(townWordsInRack(['S', 'P', '?', 'X', 'Z', 'V', 'W'], c.lex).some((h) => h.word === 'SPA'), 'townWordsInRack supports blank tiles');
+    },
+  },
+  {
+    name: 'W1-S2-08 Help Hot Springs words has browsable 6-category reference without fact spoilers, and rack cue is optional and zero-shift',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      // 1) Help -> Hot Springs words browsable category reference
+      await t.game('scene', 'help');
+      await t.page.click('[data-tab="words"]');
+      const ref = await t.page.evaluate(() => {
+        const items = [...document.querySelectorAll('.word-ref .cat-ref')];
+        return items.map((d) => {
+          const s = d.querySelector('summary');
+          return { cat: d.dataset.catRef, h: Math.round(s.getBoundingClientRect().height), text: s.textContent.trim() };
+        });
+      });
+      t.equal(ref.length, 6, 'all 6 Hot Springs categories are browsable in Help');
+      t.expect(ref.every((r) => r.h >= 44), 'every category summary meets >= 44 px touch floor: ' + JSON.stringify(ref));
+      await t.page.click('.cat-ref[data-cat-ref="springs"] summary');
+      const bodyText = await t.page.textContent('.cat-ref[data-cat-ref="springs"] .cat-ref-body');
+      t.expect(/\+10/.test(bodyText) && /\+18/.test(bodyText) && /\+30/.test(bodyText), 'tiers +10/+18/+30 shown');
+      t.expect(/SPRING/.test(bodyText) && /TUFA/.test(bodyText) && /COLD/.test(bodyText), 'word families listed cleanly');
+      t.expect(!/4,400 years|Fordyce basement|Source:/.test(bodyText), 'fact cards are NOT spoiled in Help');
+      const cDay = await t.contrastReport({ selector: '.word-ref', min: 4.5, largeMin: 3 });
+      t.equal(cDay.fails.length, 0, 'Help word-ref passes Day WCAG contrast (' + JSON.stringify(cDay.fails) + ')');
+      await t.checkLayout({ allowScrollY: true });
+      await t.shot('W1-S2-08-help-words');
+
+      // 2) Optional subtle rack cue: zero layout shift, hidden on non-town racks, Settings toggle, hidden in Challenge mode
+      await t.game('newGame', { seed: 9, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(6000);
+      const geom = () => t.page.evaluate(() => {
+        const r = (sel) => document.querySelector(sel).getBoundingClientRect();
+        const cue = document.querySelector('#rack-cue');
+        const bar = r('#rackbar');
+        const cr = cue && !cue.hidden ? cue.getBoundingClientRect() : null;
+        return {
+          rackTop: Math.round(r('#rack').top),
+          playTop: Math.round(r('#actions .play').top),
+          visible: !!cr && cr.width > 0 && cr.height > 0,
+          insideBar: !!cr && cr.left >= bar.left - 1 && cr.right <= bar.right + 1 && cr.top >= bar.top - 1 && cr.bottom <= bar.bottom + 1,
+        };
+      });
+      let st = (await t.state()).game;
+      st.players[0].rack = ['Q', 'X', 'Z', 'V', 'W', 'Y', 'B'];
+      await t.game('setState', { game: st });
+      const gOff = await geom();
+      t.equal(gOff.visible, false, 'rack cue hidden when rack cannot form a town word');
+
+      st = (await t.state()).game;
+      st.players[0].rack = ['S', 'P', 'A', 'Q', 'X', 'Z', 'V'];
+      await t.game('setState', { game: st });
+      const gOn = await geom();
+      t.equal(gOn.visible, true, 'rack cue appears when rack can form a town word');
+      t.equal(gOn.insideBar, true, 'rack cue sits strictly inside #rackbar');
+      t.equal(gOn.rackTop, gOff.rackTop, 'rack cue causes 0 px shift on #rack');
+      t.equal(gOn.playTop, gOff.playTop, 'rack cue causes 0 px shift on #actions .play');
+      const cueContrast = await t.contrastReport({ selector: '#rack-cue', min: 4.5, largeMin: 3 });
+      t.equal(cueContrast.fails.length, 0, 'rack cue passes WCAG contrast (' + JSON.stringify(cueContrast.fails) + ')');
+      await t.shot('W1-S2-08-rack-cue');
+
+      // Challenge mode suppresses the rack cue
+      await t.game('newGame', { seed: 9, challenge: true, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(6000);
+      st = (await t.state()).game;
+      st.players[0].rack = ['S', 'P', 'A', 'Q', 'X', 'Z', 'V'];
+      await t.game('setState', { game: st });
+      t.equal((await geom()).visible, false, 'rack cue stays hidden in Challenge mode');
+
+      // Settings toggle turns it off cleanly
+      await t.game('newGame', { seed: 9, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(6000);
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="townCue"][data-val="false"]');
+      await t.game('scene', 'game');
+      st = (await t.state()).game;
+      st.players[0].rack = ['S', 'P', 'A', 'Q', 'X', 'Z', 'V'];
+      await t.game('setState', { game: st });
+      t.equal((await geom()).visible, false, 'turning Hot Springs rack cue Off in Settings hides it');
     },
   },
 ];

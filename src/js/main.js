@@ -1,6 +1,6 @@
 // Controller: scenes, turn flow, staging and input, AI pacing, toasts and fact cards, saves and window.__game.
 import { loadDict, has } from './dict.js';
-import { makeLexicon } from './lexicon.js';
+import { makeLexicon, townWordsInRack } from './lexicon.js';
 import * as E from './engine.js';
 import { N, CENTER, RACK, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, SQUARE as SQUARES, BATHHOUSES as BATHS } from './score.js';
 import { seedState } from './rng.js';
@@ -40,7 +40,7 @@ function wordCheck(raw) {
 
 const G = {
   s: null, scene: 'title', back: 'title', dict: null, lex: makeLexicon(LEXICON), ready: false,
-  settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, fxVol: 1, musicVol: 1, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true, tipsSeen: true, vibrate: matchMedia('(pointer: coarse)').matches },
+  settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, fxVol: 1, musicVol: 1, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true, townCue: true, tipsSeen: true, vibrate: matchMedia('(pointer: coarse)').matches },
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
   preview: null, hint: null, last: new Set(), lastPulse: null, anim: new Map(), animUntil: 0,
@@ -65,7 +65,7 @@ const oops = () => { sfx('error'); buzz('error'); };
 const dark = () => G.settings.theme === 'dark' || (G.settings.theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
 // stored settings are trusted field by field: a value of the wrong type or range is dropped and the stored copy rewritten
 const SETTING_OK = {
-  sound: (v) => typeof v === 'boolean', tipsSeen: (v) => typeof v === 'boolean', fx: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean', amb: (v) => typeof v === 'boolean', hints: (v) => typeof v === 'boolean', vibrate: (v) => typeof v === 'boolean',
+  sound: (v) => typeof v === 'boolean', tipsSeen: (v) => typeof v === 'boolean', fx: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean', amb: (v) => typeof v === 'boolean', hints: (v) => typeof v === 'boolean', townCue: (v) => typeof v === 'boolean', vibrate: (v) => typeof v === 'boolean',
   vol: (v) => typeof v === 'number' && v >= 0 && v <= 1, fxVol: (v) => typeof v === 'number' && v >= 0 && v <= 1, musicVol: (v) => typeof v === 'number' && v >= 0 && v <= 1,
   theme: (v) => ['auto', 'light', 'dark'].includes(v), motion: (v) => ['system', 'full', 'reduce'].includes(v),
   text: (v) => [1, 1.15, 1.3].includes(v), board3d: (v) => ['auto', 'on', 'off'].includes(v), ai: (v) => ['normal', 'fast', 'instant'].includes(v),
@@ -1037,6 +1037,29 @@ function renderRack() {
   }
   if (keep && !keep.isConnected) el.append(keep);
   G.deal = false;
+  renderRackCue(show);
+}
+function renderRackCue(show) {
+  const bar = $('#rackbar');
+  if (!bar) return;
+  let cue = $('#rack-cue');
+  const active = !!show && !!G.settings.townCue && !!G.s && !G.s.over && !G.s.challenge && townWordsInRack(cur().rack, G.lex).length > 0;
+  if (!active) {
+    if (cue) { cue.hidden = true; cue.setAttribute('aria-hidden', 'true'); }
+    return;
+  }
+  if (!cue) {
+    cue = document.createElement('span');
+    cue.id = 'rack-cue';
+    cue.className = 'rack-cue';
+    cue.setAttribute('role', 'note');
+    bar.append(cue);
+  }
+  cue.innerHTML = `${UI.ICON.steam}<span>Hot Springs word in rack</span>`;
+  cue.title = 'Your tiles can spell a Hot Springs bonus word';
+  cue.setAttribute('aria-label', 'Your tiles can spell a Hot Springs bonus word');
+  cue.removeAttribute('aria-hidden');
+  cue.hidden = false;
 }
 
 function renderPreview() {
