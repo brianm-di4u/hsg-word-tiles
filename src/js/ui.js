@@ -2,7 +2,7 @@
 import { PERSONAS, persona, LEVEL_NAME, LEVEL_BLURB, seatLevel, HUMAN_COLORS } from './personas.js';
 import { SHORT } from './voices.js';
 import { TILES, BLANKS } from './tiles.js';
-import { N, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, explainWord } from './score.js';
+import { N, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, isBath, explainWord } from './score.js';
 import { DAILY_TURNS, unseen } from './engine.js';
 import { art } from './art.js';
 import { hintsUsed } from './stats.js';
@@ -155,6 +155,7 @@ export function breakdownHtml(p, board, staged) {
     return `<li><b>${esc(w.w)}</b> <span>${sum} = ${x.sum}${x.wm > 1 ? `, word ×${x.wm} = ${x.total}` : ''}</span></li>`;
   });
   for (const w of p.words) if (w.bonus) rows.push(`<li><b>Hot Springs</b> <span>${esc(w.w)} +${w.bonus}${w.bath ? ` (${w.bonus - ROW_BONUS} for the word, ${ROW_BONUS} for a Bathhouse Row square)` : ''}</span></li>`);
+  if (staged.some((t) => isBath(t.i))) rows.push(`<li><b>Bathhouse Row</b> <span>clears 1 fogged Featured Spring letter</span></li>`);
   for (const fw of featuredList(p)) rows.push(`<li><b>Featured Spring</b> <span>${esc(fw)} +${FEATURED_BONUS}</span></li>`);
   if (p.full) rows.push(`<li><b>Full Soak</b> <span>all seven tiles +${FULL_SOAK}</span></li>`);
   return `<div class="bd" role="region" aria-label="How this play scores"><ul>${rows.join('')}<li class="tot"><b>Total</b> <span>${p.score} points</span></li></ul></div>`;
@@ -236,7 +237,7 @@ export function logHtml(s, lex) {
         ? `<button type="button" class="themed-link" data-fact="${esc(w.themed)}" data-form="${esc(w.w)}" aria-label="${esc(w.w)}, Hot Springs word: read its history card">${ICON.steam}<span>${esc(w.w)}</span></button>`
         : `<span>${esc(w.w)}</span>`)).join(', ');
       const fCount = featuredList(e).length;
-      const extras = [e.full ? `Full Soak +${FULL_SOAK}` : '', e.themed ? `Hot Springs +${e.themed}` : '', fCount ? `Featured +${fCount * FEATURED_BONUS}` : ''].filter(Boolean).join(' · ');
+      const extras = [e.full ? `Full Soak +${FULL_SOAK}` : '', e.themed ? `Hot Springs +${e.themed}` : '', fCount ? `Featured +${fCount * FEATURED_BONUS}` : '', e.rowReveal ? 'Row reveal' : ''].filter(Boolean).join(' · ');
       return `<li><b class="who">${esc(p.name)}</b> ${ws} <em>${e.score}</em>${extras ? `<small>${extras}</small>` : ''}</li>`;
     }
     return `<li><b class="who">${esc(p.name)}</b> ${e.kind === 'swap' ? `swapped ${plural(e.count, 'tile')}` : 'passed'}${e.challenge ? ` <small>(${esc(e.challenge)} is not a word)</small>` : ''}</li>`;
@@ -402,13 +403,13 @@ export function helpHtml(tab, lex, twos = [], opts = {}) {
         <li><span class="sq sq-h"><i>3L</i></span><span><b>Hot (3L)</b> triples the letter on it.</span></li>
         <li><span class="sq sq-s word"><i>2W</i></span><span><b>Steam (2W)</b> doubles the whole word.</span></li>
         <li><span class="sq sq-b word"><i>3W</i></span><span><b>Boiling Spring (3W)</b> triples the whole word.</span></li>
-        <li><span class="sq sq-B" aria-hidden="true">${bathMedallionHtml('Fordyce', true)}</span><span><b>Bathhouse Row</b>: eight squares named for the eight historic bathhouses. A Hot Springs word that covers one earns ${ROW_BONUS} more.</span></li>
+        <li><span class="sq sq-B" aria-hidden="true">${bathMedallionHtml('Fordyce', true)}</span><span><b>Bathhouse Row</b>: eight squares named for the eight historic bathhouses. Covering one clears a fogged Featured Spring letter; a Hot Springs word that covers one earns ${ROW_BONUS} more.</span></li>
       </ul>
       <h2>Bonuses</h2>
       <ul class="legend plain">
         <li><b>Full Soak +${FULL_SOAK}</b>: use all seven tiles in one turn.</li>
         <li><b>Hot Springs word +${tierList}</b>: any word you form that belongs to the town (see the next tab).</li>
-        <li><b>Featured Spring +${FEATURED_BONUS}</b>: three secret words per game, hidden in steam on the plaques. Letters clear each round and when you play a Hot Springs word in that category; any form of the word claims it.</li>
+        <li><b>Featured Spring +${FEATURED_BONUS}</b>: three secret words per game, hidden in steam on the plaques. Letters clear each round, when you cover a Bathhouse Row square, and when you play a Hot Springs word in that category; any form of the word claims it.</li>
       </ul>
       <h2>The tiles</h2>
       <p>${TILES ? Object.values(TILES).reduce((a, t) => a + t.count, 0) : 0} lettered tiles and ${BLANKS} blank <b>Steam tiles</b>, which stand for any letter and score nothing. Counts and points were worked out from how often each letter appears in playable words.</p>

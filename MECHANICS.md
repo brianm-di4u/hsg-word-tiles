@@ -52,6 +52,9 @@ Racks are arrays of letters, `'?'` for a blank. A placed blank stores the letter
 - **Hot Springs bonus**: each formed word that is a form in `data/thermal-words.json` adds its tier
   bonus (+10 / +18 / +30). If that word covers a Bathhouse Row square with a tile from this play,
   it earns 20 more.
+- **Bathhouse Row cover**: first covering any uncovered Bathhouse Row square with any valid word (plain
+  or Hot Springs, non-scoring on plain words) immediately clears +1 fogged letter on an unclaimed Featured
+  Spring plaque (respecting the fog cap).
 - **Featured Spring**: forming any playable form sharing the featured entry's `id` adds +30 the first time anyone
   forms it in the game (a single play that matches two unclaimed Featured Springs credits both, +60).
   Each claimed plaque is then revealed and marked with the player's name.
@@ -75,11 +78,12 @@ Racks are arrays of letters, `'?'` for a blank. A placed blank stores the letter
 ### Featured Springs
 3 lexicon forms per game, chosen by `rng.bag` from tier ≥ 2 forms of 4–8 letters, from 3 different
 categories. Each plaque shows the category (icon + short label), the length and one letter; at the start
-of each full round one more letter clears, and playing any Hot Springs word in an unclaimed plaque's
-category immediately clears +1 extra fogged letter on that plaque. Fog clearing stops at `length − 2`
-early in the game, and clears down to `length − 1` once `bag <= 20` tiles (or Daily Turn 6+). Any playable
-form sharing the featured entry's `id` claims the plaque (+30 each; dual claims credit both). Once claimed,
-the whole word shows.
+of each full round one more letter clears, first covering any uncovered Bathhouse Row square clears +1
+fogged letter on an unclaimed plaque, and playing any Hot Springs word in an unclaimed plaque's category
+immediately clears +1 extra fogged letter on that plaque. Fog clearing stops at `length − 2` early in the
+game, and clears down to `length − 1` once `bag <= 20` tiles (or Daily Turn 6+). Any playable form sharing
+the featured entry's `id` claims the plaque (+30 each; dual claims credit both). Once claimed, the whole
+word shows.
 
 ## 4. Input
 - **Pointer (mouse and touch):** drag a rack tile onto a square; drag a staged tile to move it or back

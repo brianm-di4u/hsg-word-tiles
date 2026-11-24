@@ -3,7 +3,7 @@
 import { TILES, BLANKS } from './tiles.js';
 import { seedState, rand, shuffle, hashString } from './rng.js';
 import { has } from './dict.js';
-import { N, RACK, VALUE, findWords, connectError, scorePlay } from './score.js';
+import { N, RACK, VALUE, findWords, connectError, scorePlay, isBath } from './score.js';
 
 export const DAILY_TURNS = 10;
 
@@ -148,6 +148,7 @@ export function apply(s, action, ctx) {
     s.scoreless = ev.score > 0 ? 0 : s.scoreless + 1;
     draw(s, p);
     // W1-S4-01: playing any Hot Springs word in an unclaimed plaque's category immediately clears +1 fogged letter on that plaque.
+    const revealedThisPlay = new Set();
     if (ctx.lex && s.featured.length) {
       const cats = new Set();
       for (const w of ev.words) {
@@ -156,9 +157,23 @@ export function apply(s, action, ctx) {
         if (en && en.cat) cats.add(en.cat);
       }
       for (const f of s.featured) {
-        if (f.by == null && cats.has(f.cat)) revealOneLetter(s, f);
+        if (f.by == null && cats.has(f.cat) && revealOneLetter(s, f)) revealedThisPlay.add(f);
       }
     }
+    // W1-S2-11: covering an uncovered Bathhouse Row medallion with any valid word (non-scoring on plain words per CD-WF1-03;
+    // Hot Springs words keep their +20 ROW_BONUS per CD-WF0-09) clears +1 fogged letter on an unclaimed Featured Spring plaque.
+    let rowReveals = 0;
+    if (s.featured.length) {
+      const rowCovers = action.tiles.filter((t) => isBath(t.i)).length;
+      for (let k = 0; k < rowCovers; k++) {
+        const eligible = s.featured.filter((f) => f.by == null && f.shown.length < featuredRevealCap(s, f));
+        if (!eligible.length) break;
+        const fresh = eligible.filter((f) => !revealedThisPlay.has(f));
+        const pool = (fresh.length ? fresh : eligible).slice().sort((a, b) => (b.shown.length / b.word.length) - (a.shown.length / a.word.length));
+        if (revealOneLetter(s, pool[0])) { rowReveals++; revealedThisPlay.add(pool[0]); }
+      }
+    }
+    if (rowReveals > 0) entry.rowReveal = rowReveals;
   } else if (action.type === 'swap') {
     const letters = action.letters || [];
     if (!letters.length) return { ok: false, error: 'Choose tiles to swap.' };
