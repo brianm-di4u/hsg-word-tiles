@@ -733,7 +733,7 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   #ledger { min-height: 0; padding: 8px 12px; }
   #ledger .log li small { display: none; }
   #ledger .log { gap: 3px; } #ledger .log li { padding-bottom: 3px; }
-  #ledger h2 { font-size: 0.9rem; margin-bottom: 4px; }
+  #ledger h2 { font-size: 1rem; margin-bottom: 4px; }
   #ledger .ledger-all { min-height: 44px; min-width: 44px; padding: 0 12px; }
   #scores { display: none; }
   #topbar { gap: 6px; }
@@ -799,7 +799,7 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   .plaque { min-height: 44px; padding: 3px 8px; gap: 6px; }
   .pword b { width: 19px; height: 22px; font-size: 0.84em; }
   #ledger { padding: 6px 10px 10px; }
-  #ledger h2 { margin-bottom: 3px; font-size: 0.9rem; }
+  #ledger h2 { margin-bottom: 3px; font-size: 1rem; }
   #preview { min-height: 40px; padding: 4px 10px; font-size: 0.86em; }
   #rackbar { padding: 6px 14px 11px; }
   #rackbar::after { bottom: 4px; height: 4px; }

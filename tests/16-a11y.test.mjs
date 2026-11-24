@@ -99,6 +99,47 @@ export const tests = [
     },
   },
   {
+    name: 'W5-S5-05 at text size 130% every heading is at least as big as the body copy, and grows 1.3 times with it',
+    viewports: ['desktop', 'mobile'],
+    async run(t) {
+      await ready(t);
+      const size = (v) => t.page.evaluate((v) => { document.documentElement.style.setProperty('--ts', v); }, v);
+      // font sizes of the headings on screen, with the body copy's
+      const read = (sels) => t.page.evaluate((sels) => ({
+        body: parseFloat(getComputedStyle(document.body).fontSize),
+        heads: sels.flatMap((sel) => [...document.querySelectorAll(sel)].filter((e) => e.getClientRects().length).map((e) => [sel, parseFloat(getComputedStyle(e).fontSize)])),
+      }), sels);
+      const check = async (where, sels) => {
+        await size(1);
+        const a = await read(sels);
+        await size(1.3);
+        const b = await read(sels);
+        await size(1);
+        t.expect(Math.abs(b.body / a.body - 1.3) < 0.01, `${where}: body copy grows 1.3 times (${a.body} -> ${b.body})`);
+        t.expect(b.heads.length > 0 && b.heads.length === a.heads.length, `${where}: headings found (${b.heads.length})`);
+        b.heads.forEach(([sel, px], k) => {
+          t.expect(px >= b.body - 0.01, `${where}: ${sel} ${px} px is at least the body's ${b.body} px`);
+          t.expect(Math.abs(px / a.heads[k][1] - 1.3) < 0.02, `${where}: ${sel} grows 1.3 times (${a.heads[k][1]} -> ${px})`);
+        });
+      };
+      for (const sc of ['setup', 'help', 'settings', 'register', 'records', 'about']) {
+        await t.game('scene', sc);
+        await check(sc, ['.sheet h1', '.sheet h2', '.sheet h3']);
+      }
+      await t.game('newGame', { seed: 2 });
+      await t.waitIdle(5000);
+      await check('game', t.viewport === 'desktop' ? ['#ledger h2', '.springs-title'] : ['#ledger h2']);
+      for (const d of ['pause', 'swap', 'tracker', 'ledger']) {
+        await t.game('act', 'open', d);
+        await check(d, ['#modal h2']);
+        await t.game('act', 'close');
+      }
+      await t.game('act', 'fact', 'spring', 'SPRING');
+      await check('fact card', ['#modal h2']);
+      await t.game('act', 'close');
+    },
+  },
+  {
     name: 'W5-S5-02 claimed Featured Springs plaques pass >= 5.5:1 across all gradient stops in Day and Night',
     viewports: ['desktop', 'mobile'],
     async run(t) {
