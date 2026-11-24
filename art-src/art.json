@@ -160,6 +160,13 @@
    "src": "face-opal.png",
    "w": 192,
    "h": 192,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ],
+   "circleMask": 1.5,
    "quality": 0.8
   },
   {
@@ -167,6 +174,13 @@
    "src": "face-hollis.png",
    "w": 192,
    "h": 192,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ],
+   "circleMask": 1.5,
    "quality": 0.8
   },
   {
@@ -174,6 +188,13 @@
    "src": "face-lucky.png",
    "w": 192,
    "h": 192,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ],
+   "circleMask": 1.5,
    "quality": 0.8
   },
   {
@@ -181,6 +202,13 @@
    "src": "face-julian.png",
    "w": 192,
    "h": 192,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ],
+   "circleMask": 1.5,
    "quality": 0.8
   },
   {

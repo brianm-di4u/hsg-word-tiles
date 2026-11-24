@@ -170,4 +170,127 @@ export const tests = [
       }
     },
   },
+  // ---------- W3-S1-03 ----------
+  {
+    name: 'W3-S1-03 art.json uses geometric circleMask (zero keyWhite per CD-WF3-01) and shared initials() helper formats all 4 personas',
+    node: true,
+    async run(t) {
+      const spec = JSON.parse(fs.readFileSync(path.join(root, 'art-src/art.json'), 'utf8'));
+      const faces = spec.items.filter((it) => /^face-/.test(it.name));
+      t.equal(faces.length, 4, 'art.json defines all 4 face-* portraits');
+      for (const f of faces) {
+        t.equal(f.keyWhite, undefined, `${f.name}: zero keyWhite flood-fill (CD-WF3-01)`);
+        t.expect(typeof f.circleMask === 'number' && f.circleMask > 0, `${f.name}: geometric circleMask enabled (${f.circleMask})`);
+        t.expect(Array.isArray(f.crop) && f.crop.length === 4 && f.crop[2] < 1, `${f.name}: tight inner cameo crop configured (${JSON.stringify(f.crop)})`);
+      }
+      const { initials } = await import(new URL('../src/js/ui.js', import.meta.url).href);
+      t.equal(initials('Opal Vance'), 'OV', 'initials(Opal Vance) === OV');
+      t.equal(initials('Hollis Crane'), 'HC', 'initials(Hollis Crane) === HC');
+      t.equal(initials('"Lucky" Delmar'), 'LD', 'initials("Lucky" Delmar) === LD');
+      t.equal(initials('Maestro Julian Fitch'), 'MJ', 'initials(Maestro Julian Fitch) === MJ');
+      const uiSrc = fs.readFileSync(path.join(root, 'src/js/ui.js'), 'utf8');
+      t.equal(/\.match\(\/[\s\x08]\[A-Z\]\/g\)/.test(uiSrc), false, 'corrupted /\\x08[A-Z]/g / space-anchored regex typo removed from ui.js');
+    },
+  },
+  {
+    name: 'W3-S1-03 face-*.webp have transparent circular corners + opaque Opal interior, .badge i hidden on AI scorecards/toast, and claimed plaque prints Julian',
+    viewports: ['desktop', 'mobile'],
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false, theme: 'dark' }));
+    },
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 11, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'julian', level: 'hard' }] });
+      await t.waitIdle(6000);
+
+      // 1) Inspect all 4 face-*.webp alpha masks & perimeter cream-rim elimination
+      const faceAudit = await t.page.evaluate(async () => {
+        const load = (src) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+        const out = {};
+        for (const name of ['face-opal', 'face-hollis', 'face-lucky', 'face-julian']) {
+          const im = await load(`assets/${name}.webp`);
+          const w = im.naturalWidth, h = im.naturalHeight;
+          const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+          const ctx = cv.getContext('2d'); ctx.drawImage(im, 0, 0);
+          const d = ctx.getImageData(0, 0, w, h).data;
+          const alphaAt = (x, y) => d[(y * w + x) * 4 + 3];
+          const corners = [alphaAt(0, 0), alphaAt(w - 1, 0), alphaAt(0, h - 1), alphaAt(w - 1, h - 1)];
+          let minInteriorAlpha = 255, aaPx = 0, brightInteriorOpaque = 0, julianTopRimBlue = 0, julianTopRimRed = 0, rimN = 0;
+          const cx = w / 2, cy = h / 2;
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const o = (y * w + x) * 4, a = d[o + 3];
+              const r = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+              if (r <= 88) {
+                if (a < minInteriorAlpha) minInteriorAlpha = a;
+                if (d[o] > 205 && d[o + 1] > 200 && d[o + 2] > 190 && a === 255) brightInteriorOpaque++;
+              }
+              if (a > 0 && a < 255) aaPx++;
+              // Sample upper-right twilight-indigo backdrop rim on Julian (90 <= r <= 93.5, x > cx + 20, y < cy - 20)
+              if (name === 'face-julian' && r >= 90 && r <= 93.5 && x > cx + 20 && y < cy - 20) {
+                julianTopRimRed += d[o]; julianTopRimBlue += d[o + 2]; rimN++;
+              }
+            }
+          }
+          out[name] = { w, h, corners, minInteriorAlpha, aaPx, brightInteriorOpaque, rimRed: rimN ? Math.round(julianTopRimRed / rimN) : null, rimBlue: rimN ? Math.round(julianTopRimBlue / rimN) : null };
+        }
+        return out;
+      });
+      for (const [name, info] of Object.entries(faceAudit)) {
+        t.equal(JSON.stringify(info.corners), '[0,0,0,0]', `${name} corners are 100% transparent (got ${JSON.stringify(info.corners)})`);
+        t.equal(info.minInteriorAlpha, 255, `${name} interior (r <= 88) stays 100% opaque (minAlpha=${info.minInteriorAlpha}, CD-WF3-01)`);
+        t.expect(info.aaPx >= 200, `${name} has feathered circular AA edge (${info.aaPx} px)`);
+      }
+      t.expect(faceAudit['face-opal'].brightInteriorOpaque > 2000, `Opal white cap/collar/towel stays opaque (${faceAudit['face-opal'].brightInteriorOpaque} bright interior px)`);
+      t.expect(faceAudit['face-julian'].rimBlue > faceAudit['face-julian'].rimRed + 40, `Julian perimeter rim is clean twilight indigo, not cream halo (R=${faceAudit['face-julian'].rimRed}, B=${faceAudit['face-julian'].rimBlue})`);
+
+      // 2) Verify .badge i is hidden on Julian's scorecard & toast (baton unobstructed) and claimed plaque shows 'Julian'
+      await t.page.evaluate(() => {
+        const G = window.__G;
+        if (G.s.featured && G.s.featured[0]) G.s.featured[0].by = 1; // claimed by Maestro Julian Fitch
+      });
+      await t.game('act', 'reveal');
+      await t.page.evaluate(() => {
+        const G = window.__G;
+        window.__game.act('toast', { kind: 'bark', who: { p: G.s.players[1], k: 1 }, title: 'Maestro Julian Fitch: STEAM +38', sub: '“A fine crescendo!”' });
+      });
+      await t.waitFrames(2);
+      if (t.viewport === 'mobile') {
+        const bar = t.page.locator('[data-springs-toggle]');
+        if (await bar.isVisible()) await bar.click();
+        await t.waitFrames(2);
+      }
+
+      const uiCheck = await t.page.evaluate(() => {
+        const aiBadges = [...document.querySelectorAll('.badge.has-face i')].map((el) => getComputedStyle(el).display);
+        const toastBadgeI = document.querySelector('#toast .badge.has-face i');
+        const pby = document.querySelector('.plaque.claimed .pby');
+        return {
+          aiBadges,
+          toastPipDisplay: toastBadgeI ? getComputedStyle(toastBadgeI).display : null,
+          claimedOwner: pby ? pby.textContent.trim() : null,
+        };
+      });
+      t.expect(uiCheck.aiBadges.length >= 2 && uiCheck.aiBadges.every((d) => d === 'none'), `all AI .badge.has-face i pips hidden (${JSON.stringify(uiCheck.aiBadges)})`);
+      t.equal(uiCheck.toastPipDisplay, 'none', '#toast AI .badge i hidden so Julian baton is unobstructed');
+      t.equal(uiCheck.claimedOwner, 'Julian', `claimed Featured Spring plaque prints SHORT name 'Julian' (got ${uiCheck.claimedOwner})`);
+
+      if (t.viewport === 'desktop') await t.shot('w2-b12-night-julian-portrait');
+    },
+  },
+  {
+    name: 'W3-S1-03 ?art=0 Setup portrait() renders full two-letter initials OV/HC/LD/MJ via shared helper',
+    viewports: ['desktop'],
+    url: 'index.html?art=0',
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('scene', 'setup');
+      await t.waitFrames(2);
+      const got = await t.page.evaluate(() => [...document.querySelectorAll('.opps .opp .badge b')].map((el) => el.textContent));
+      t.equal(JSON.stringify(got), JSON.stringify(['OV', 'HC', 'LD', 'MJ']), `?art=0 Setup portrait monograms match OV/HC/LD/MJ (got ${JSON.stringify(got)})`);
+      await t.shot('w2-b12-noart-setup-initials');
+    },
+  },
 ];

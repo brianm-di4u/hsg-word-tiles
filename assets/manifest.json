@@ -105,25 +105,25 @@
   "file": "face-opal.webp",
   "w": 192,
   "h": 192,
-  "bytes": 6528
+  "bytes": 6692
  },
  "face-hollis": {
   "file": "face-hollis.webp",
   "w": 192,
   "h": 192,
-  "bytes": 6084
+  "bytes": 6116
  },
  "face-lucky": {
   "file": "face-lucky.webp",
   "w": 192,
   "h": 192,
-  "bytes": 8406
+  "bytes": 7996
  },
  "face-julian": {
   "file": "face-julian.webp",
   "w": 192,
   "h": 192,
-  "bytes": 7200
+  "bytes": 6894
  },
  "card-springs": {
   "file": "card-springs.webp",

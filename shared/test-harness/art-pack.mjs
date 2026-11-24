@@ -6,6 +6,7 @@
 // Reads games/<slug>/art-src/art.json:
 //   { "quality": 0.82, "items": [ { "name": "court-qh", "src": "court-qh.png", "w": 420, "h": 588,
 //       "fit": "cover"|"contain", "crop": [x, y, w, h] (0..1, optional), "keyWhite": 0..60 (optional),
+//       "circleMask": true|<featherPx> (optional, geometric radial circular alpha clip with feathered AA),
 //       "quality": 0.85 (optional) } ] }
 // Writes games/<slug>/assets/<name>.webp, games/<slug>/assets/manifest.json and a review contact
 // sheet at games/<slug>/art-src/sheet.png (open it with the Read tool).
@@ -94,6 +95,27 @@ for (const it of spec.items) {
     const k = fit === 'cover' ? Math.max(W / src.width, H / src.height) : Math.min(W / src.width, H / src.height);
     const dw = src.width * k, dh = src.height * k;
     g.drawImage(src, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    if (it.circleMask) {
+      // Geometric radial circular alpha clip with feathered AA (default 1.5 px) — preserves interior white rims (CD-WF3-01).
+      const feather = typeof it.circleMask === 'number' && it.circleMask > 0 ? it.circleMask : 1.5;
+      const d = g.getImageData(0, 0, W, H), p = d.data;
+      const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2;
+      for (let y = 0; y < H; y++) {
+        const dy = y + 0.5 - cy;
+        for (let x = 0; x < W; x++) {
+          const dx = x + 0.5 - cx;
+          const dist = Math.hypot(dx, dy);
+          if (dist >= R) {
+            p[(y * W + x) * 4 + 3] = 0;
+          } else if (dist > R - feather) {
+            const a = (R - dist) / feather;
+            const o = (y * W + x) * 4 + 3;
+            p[o] = Math.round(p[o] * a);
+          }
+        }
+      }
+      g.putImageData(d, 0, 0);
+    }
     return out.toDataURL('image/webp', q).split(',')[1];
   }, { url, it, q: it.quality || spec.quality || 0.82 });
   const buf = Buffer.from(b64, 'base64');

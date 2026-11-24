@@ -34,14 +34,19 @@ export const ICON = {
   },
 };
 
+// Shared monogram initials helper (W3-S1-03): strips quotes and captures word-start capitals for badge() and portrait().
+export function initials(name) {
+  return (String(name || '').replace(/["\u201C\u201D]/g, '').match(/\b[A-Z]/g) || ['?']).slice(0, 2).join('');
+}
+
 // A round monogram badge for a seat: persona colour or seat colour, initials, seat number.
 export function badge(p, k, size = 40) {
   const per = p.persona ? persona(p.persona) : null;
   const color = per ? per.color : HUMAN_COLORS[k % HUMAN_COLORS.length];
   const face = per && art.has('face-' + per.id) ? `<img src="${art.src('face-' + per.id)}" alt="" width="${size}" height="${size}">` : '';
   const pm = !per && /^Player\s+(\d+)$/i.exec((p.name || '').trim());
-  const initials = pm ? `P${pm[1]}` : (p.name.replace(/["“”]/g, '').match(/\b[A-Z]/g) || ['?']).slice(0, 2).join('');
-  return `<span class="badge${face ? ' has-face' : ''}" style="--c:${color};--s:${size}px" aria-hidden="true">${face || `<b>${esc(initials)}</b>`}<i>${k + 1}</i></span>`;
+  const mon = pm ? `P${pm[1]}` : initials(p.name);
+  return `<span class="badge${face ? ' has-face' : ''}" style="--c:${color};--s:${size}px" aria-hidden="true">${face || `<b>${esc(mon)}</b>`}<i>${k + 1}</i></span>`;
 }
 
 // shown where progress would be kept, when the browser will not store anything (a private window, blocked site data)
@@ -52,7 +57,7 @@ export const NEWER_SAVE = 'This visit is not being saved: your saved game comes 
 const band = () => (art.has('title') ? `<div class="sheet-art" style="background-image:url(${art.src('title')})" aria-hidden="true"></div>` : '');
 // a character's round portrait (the painted face, or the monogram when the painting is not there)
 function portrait(per, size) {
-  const face = art.has('face-' + per.id) ? `<img src="${art.src('face-' + per.id)}" alt="" width="${size}" height="${size}">` : `<b>${esc((per.name.replace(/["“”]/g, '').match(/[A-Z]/g) || ['?']).slice(0, 2).join(''))}</b>`;
+  const face = art.has('face-' + per.id) ? `<img src="${art.src('face-' + per.id)}" alt="" width="${size}" height="${size}">` : `<b>${esc(initials(per.name))}</b>`;
   return `<span class="badge" style="--c:${per.color};--s:${size}px" aria-hidden="true">${face}</span>`;
 }
 
