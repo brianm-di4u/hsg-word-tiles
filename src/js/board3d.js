@@ -31,7 +31,7 @@ export function probe(force) {
 
 // ---------- meshes ----------
 function b64(s, T) { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new T(u.buffer); }
-// Blender (z up, cells) → three (y up): (x, y, z) → (x, z, -y)
+// Blender (z up, cells) â†’ three (y up): (x, y, z) â†’ (x, z, -y)
 const TILE_CROWN_HALF = 0.38;
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 function geometries(name) {
@@ -48,7 +48,7 @@ function geometries(name) {
       pos[i] = bx; pos[i + 1] = bz; pos[i + 2] = -by;
       nor[i] = n[i] / 127; nor[i + 1] = n[i + 2] / 127; nor[i + 2] = -n[i + 1] / 127;
       // W3-S2-02: use exported Blender UVs (mitred along-rail UVs on frame) when present;
-      // W3-S1-01: map tiletop UVs cleanly to the flat ceramic crown [-0.38..+0.38] → [0..1].
+      // W3-S1-01: map tiletop UVs cleanly to the flat ceramic crown [-0.38..+0.38] â†’ [0..1].
       if (uq) {
         uv[j] = uq[j] / 65535;
         uv[j + 1] = uq[j + 1] / 65535;
@@ -83,29 +83,123 @@ function canvasTex(c, srgb = true) {
   return t;
 }
 
-// The tile's top face: glaze, letter and value, drawn once per letter, theme & art.version (W3-P-N01).
-const faceCache = new Map();
+// Shared 2048x1024 tile-face CanvasTexture atlas at crisp 256x256/glyph (W3-S4-01 / CD-WF3-05):
+// slots 0..25 = regular A..Z, slot 26 = unassigned blank, slots 27..31 = dynamic assigned blanks (5 slots vs BLANKS=2).
+// Uses one shared MeshPhysicalMaterial + lightweight UV-remapped BufferGeometries (zero onBeforeCompile shader hacks).
+const ATLAS_COLS = 8, ATLAS_ROWS = 4, ATLAS_CELL = 256, ATLAS_PAD = 1;
+const ATLAS_W = ATLAS_COLS * ATLAS_CELL, ATLAS_H = ATLAS_ROWS * ATLAS_CELL;
+const BLANK_SLOT_START = 27, BLANK_SLOT_COUNT = ATLAS_COLS * ATLAS_ROWS - BLANK_SLOT_START;
+const faceCache = new Map();       // glyph key -> slot index painted in current atlas
+const slotGeos = new Map();        // slot index -> UV-remapped BufferGeometry sharing tiletop pos/nor/idx
+const blankSlotMap = new Map();    // blank letter -> slot index in [27..31]
+const blankSlotOrder = [];         // LRU queue of blank letters in [27..31]
+const _tileMat4 = new THREE.Matrix4();
+
 export function invalidateFaceCache() {
-  for (const m of faceCache.values()) {
-    m.map?.dispose();
-    if (m.emissiveMap && m.emissiveMap !== m.map) m.emissiveMap.dispose();
-    m.dispose();
-  }
+  if (B3.faceAtlasTex) { B3.faceAtlasTex.dispose(); B3.faceAtlasTex = null; }
+  if (B3.faceAtlasMat) { B3.faceAtlasMat.dispose(); B3.faceAtlasMat = null; }
+  B3.faceAtlasCanvas = null;
+  B3.faceAtlasKey = '';
   faceCache.clear();
+  blankSlotMap.clear();
+  blankSlotOrder.length = 0;
   if (B3.bodyMat) {
-    for (const g of B3.tiles) if (g.userData && g.userData.face) g.userData.face.material = B3.bodyMat;
+    for (const mf of B3.tiles) mf.material = B3.bodyMat;
   }
 }
-function faceMaterial(l, blank, dark = false) {
-  const key = `${dark ? 'D' : 'L'}:${art.version}:${blank ? '?' : ''}${l}`;
-  if (faceCache.has(key)) return faceCache.get(key);
-  const c = R.tileSprite(l, blank, 512, 'face', dark ? 'dark' : 'light');
-  // a touch of self-light keeps the glazed faces crisp ivory in Day and warm #EDE5D4 ivory in Night
+
+function ensureFaceAtlas(dark) {
+  const aKey = `${dark ? 'D' : 'L'}:${art.version}`;
+  if (B3.faceAtlasMat && B3.faceAtlasKey === aKey) return;
+  invalidateFaceCache();
+  const c = document.createElement('canvas');
+  c.width = ATLAS_W; c.height = ATLAS_H;
+  const ctx = c.getContext('2d');
+  // Pre-fill unused atlas cells with matching ivory ground so mipmap filters never bleed dark pixels at cell borders
+  ctx.fillStyle = dark ? '#EDE5D4' : '#FAF3E3';
+  ctx.fillRect(0, 0, ATLAS_W, ATLAS_H);
   const prof = LIGHTING_PROFILES[dark ? 'night' : 'day'];
   const tex = canvasTex(c);
-  const m = new THREE.MeshPhysicalMaterial({ map: tex, emissiveMap: tex, emissive: prof.tile.emissive, emissiveIntensity: prof.tile.emissiveIntensity, roughness: 0.55, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.4 });
-  faceCache.set(key, m);
-  return m;
+  const mat = new THREE.MeshPhysicalMaterial({
+    map: tex, emissiveMap: tex,
+    emissive: prof.tile.emissive, emissiveIntensity: prof.tile.emissiveIntensity,
+    roughness: 0.55, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.4,
+  });
+  B3.faceAtlasCanvas = c;
+  B3.faceAtlasTex = tex;
+  B3.faceAtlasMat = mat;
+  B3.faceAtlasKey = aKey;
+}
+
+function slotGeometry(slot) {
+  let geo = slotGeos.get(slot);
+  if (geo) return geo;
+  const base = B3.tileTopGeo;
+  const baseUv = base.getAttribute('uv');
+  const uv = new Float32Array(baseUv.count * 2);
+  const col = slot % ATLAS_COLS, row = Math.floor(slot / ATLAS_COLS);
+  const u0 = (col * ATLAS_CELL + ATLAS_PAD) / ATLAS_W;
+  const u1 = ((col + 1) * ATLAS_CELL - ATLAS_PAD) / ATLAS_W;
+  // CanvasTexture uses flipY = true: canvas y=0 maps to v=1, canvas y=ATLAS_H maps to v=0
+  const v1 = 1 - (row * ATLAS_CELL + ATLAS_PAD) / ATLAS_H;
+  const v0 = 1 - ((row + 1) * ATLAS_CELL - ATLAS_PAD) / ATLAS_H;
+  for (let i = 0; i < baseUv.count; i++) {
+    uv[i * 2] = u0 + baseUv.getX(i) * (u1 - u0);
+    uv[i * 2 + 1] = v0 + baseUv.getY(i) * (v1 - v0);
+  }
+  geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', base.getAttribute('position'));
+  geo.setAttribute('normal', base.getAttribute('normal'));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setIndex(base.getIndex());
+  geo.boundingSphere = base.boundingSphere;
+  slotGeos.set(slot, geo);
+  return geo;
+}
+
+function atlasSlotFor(l, blank) {
+  if (!blank && l) {
+    const code = l.charCodeAt(0) - 65;
+    if (code >= 0 && code < 26) return code;
+  }
+  if (blank && !l) return 26;
+  if (blank && l) {
+    if (blankSlotMap.has(l)) return blankSlotMap.get(l);
+    let slot;
+    if (blankSlotOrder.length < BLANK_SLOT_COUNT) {
+      slot = BLANK_SLOT_START + blankSlotOrder.length;
+    } else {
+      const oldest = blankSlotOrder.shift();
+      slot = blankSlotMap.get(oldest);
+      blankSlotMap.delete(oldest);
+      for (const [k, s] of faceCache) if (s === slot) { faceCache.delete(k); break; }
+    }
+    blankSlotMap.set(l, slot);
+    blankSlotOrder.push(l);
+    return slot;
+  }
+  return 26;
+}
+
+function faceGeometry(l, blank, dark = false) {
+  ensureFaceAtlas(dark);
+  const key = `${dark ? 'D' : 'L'}:${art.version}:${blank ? '?' : ''}${l || ''}`;
+  let slot = faceCache.get(key);
+  if (slot == null) {
+    slot = atlasSlotFor(l, blank);
+    const col = slot % ATLAS_COLS, row = Math.floor(slot / ATLAS_COLS);
+    const ctx = B3.faceAtlasCanvas.getContext('2d');
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(col * ATLAS_CELL, row * ATLAS_CELL, ATLAS_CELL, ATLAS_CELL);
+    ctx.clip();
+    ctx.translate(col * ATLAS_CELL, row * ATLAS_CELL);
+    R.paintFace(ctx, l, blank, ATLAS_CELL, dark ? 'dark' : 'light');
+    ctx.restore();
+    B3.faceAtlasTex.needsUpdate = true;
+    faceCache.set(key, slot);
+  }
+  return slotGeometry(slot);
 }
 
 // Seeded horizontal walnut diffuse & roughness textures mapped along B3.frame's mitred along-rail UVs (W3-S2-02).
@@ -351,25 +445,37 @@ export function init(canvas, theme, hooks = {}) {
   // right margin: compact ~2.1-cell 1920s front-desk call bell on a chamfered warm-bronze plinth seated cleanly in frame.
   B3.towels = piece('towels'); clothTexture(B3.towels); B3.towels.position.set(-HALF - 4.15, 0, -HALF + 3.25); B3.towels.rotation.y = -0.05; scene.add(B3.towels);
   B3.bell = piece('bell'); B3.bell.position.set(FRAME_EXTENT + 1.24, 0, -HALF + 1.9); scene.add(B3.bell);
-  // tile pool: body geometry shared, face material per letter
+  // tile pool (W3-S4-01 / CD-WF3-05): static tilebody batched into 3 standard THREE.InstancedMesh pools (board/last/staged),
+  // flat tiletop crowns share one 2048x1024 256px-per-glyph atlas material with castShadow = false.
   B3.tileGeo = geometries('tile');
-  B3.bodyMat = stdMaterial(B3.tileGeo.find((g) => g.mat.name === 'tilebody').mat);
+  const bodyPart = B3.tileGeo.find((g) => g.mat.name === 'tilebody');
+  const topPart = B3.tileGeo.find((g) => g.mat.name === 'tiletop');
+  B3.tileBodyGeo = bodyPart.geo;
+  B3.tileTopGeo = topPart.geo;
+  B3.bodyMat = stdMaterial(bodyPart.mat);
   B3.stagedMat = B3.bodyMat.clone(); B3.stagedMat.emissive = new THREE.Color(0xd9a23a); B3.stagedMat.emissiveIntensity = 0.35;
   B3.lastMat = B3.bodyMat.clone(); B3.lastMat.color = new THREE.Color(0xF0D57A); B3.lastMat.emissive = new THREE.Color(0xD9A23A); B3.lastMat.emissiveIntensity = 0.3;
+  const makeBodyInst = (mat, cap) => {
+    const im = new THREE.InstancedMesh(B3.tileBodyGeo, mat, cap);
+    im.count = 0; im.visible = false; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
+    scene.add(im);
+    return im;
+  };
+  B3.bodyInst = makeBodyInst(B3.bodyMat, 112);
+  B3.lastInst = makeBodyInst(B3.lastMat, 112);
+  B3.stagedInst = makeBodyInst(B3.stagedMat, 16);
   B3.tiles = [];
   setTheme(theme);
   B3.on = true;
   R.proj.fn = (bx, by, lift = 0) => screenOf(bx, by, lift);
   return true;
 }
-function tileMesh() {
-  const g = new THREE.Group();
-  const body = B3.tileGeo.find((x) => x.mat.name === 'tilebody'), face = B3.tileGeo.find((x) => x.mat.name === 'tiletop');
-  const mb = new THREE.Mesh(body.geo, B3.bodyMat), mf = new THREE.Mesh(face.geo, B3.bodyMat);
-  for (const m of [mb, mf]) { m.castShadow = true; m.receiveShadow = true; g.add(m); }
-  g.userData = { body: mb, face: mf };
-  B3.scene.add(g);
-  return g;
+function tileFaceMesh() {
+  const mf = new THREE.Mesh(B3.tileTopGeo, B3.faceAtlasMat || B3.bodyMat);
+  mf.castShadow = false;   // W3-S4-01: omit redundant shadow-pass draw on flat tiletop (InstancedMesh tilebody casts full shadow)
+  mf.receiveShadow = true;
+  B3.scene.add(mf);
+  return mf;
 }
 
 const TEX_PROPS = ['map', 'emissiveMap', 'roughnessMap', 'metalnessMap', 'normalMap', 'aoMap', 'alphaMap', 'bumpMap', 'clearcoatMap', 'clearcoatRoughnessMap', 'envMap'];
@@ -392,14 +498,20 @@ export function destroy(opts = {}) {
     if (B3.scene.environment && typeof B3.scene.environment.dispose === 'function') texs.add(B3.scene.environment);
     B3.scene.environment = null;
   }
-  for (const m of faceCache.values()) collectMat(m);
+  collectMat(B3.faceAtlasMat);
+  if (B3.faceAtlasTex && typeof B3.faceAtlasTex.dispose === 'function') texs.add(B3.faceAtlasTex);
   faceCache.clear();
+  blankSlotMap.clear();
+  blankSlotOrder.length = 0;
+  for (const sg of slotGeos.values()) if (sg && typeof sg.dispose === 'function') geos.add(sg);
+  slotGeos.clear();
   for (const g of B3.tileGeo || []) if (g.geo && typeof g.geo.dispose === 'function') geos.add(g.geo);
   collectMat(B3.top);
   collectMat(B3.table && B3.table.material);
   collectMat(B3.bodyMat);
   collectMat(B3.stagedMat);
   collectMat(B3.lastMat);
+  for (const inst of [B3.bodyInst, B3.lastInst, B3.stagedInst]) if (inst && typeof inst.dispose === 'function') inst.dispose();
   for (const t of texs) t.dispose();
   if (B3.envRT && typeof B3.envRT.dispose === 'function') B3.envRT.dispose();
   for (const m of mats) if (typeof m.dispose === 'function') m.dispose();
@@ -411,7 +523,9 @@ export function destroy(opts = {}) {
   B3.hemi = null; B3.key = null; B3.fill = null;
   B3.table = null; B3.top = null; B3.board = null; B3.preDim = null; B3.dimIdx = null;
   B3.frame = null; B3.frameWalnut = null; B3.frameWalnutFromCounter = false; B3.towels = null; B3.bell = null; B3.towelCloth = null; B3.towelStripe = null;
-  B3.tileGeo = null; B3.bodyMat = null; B3.stagedMat = null; B3.lastMat = null; B3.envRT = null; B3.envTheme = ''; B3.envSwaps = 0;
+  B3.tileGeo = null; B3.tileBodyGeo = null; B3.tileTopGeo = null; B3.bodyInst = null; B3.lastInst = null; B3.stagedInst = null;
+  B3.faceAtlasCanvas = null; B3.faceAtlasTex = null; B3.faceAtlasMat = null; B3.faceAtlasKey = '';
+  B3.bodyMat = null; B3.stagedMat = null; B3.lastMat = null; B3.envRT = null; B3.envTheme = ''; B3.envSwaps = 0;
   B3.boardCanvas = null; B3.boardMode3d = false; B3.tiles = []; B3.frames.length = 0; B3.intervals.length = 0; B3.texKey = '';
   R.proj.fn = null;
 }
@@ -578,29 +692,44 @@ export function render(d) {
       B3.preDim.visible = false;
     }
   }
-  // tiles: placed, then staged; the dragged staged tile is hidden
+  // tiles: placed, then staged; the dragged staged tile is hidden.
+  // W3-S4-01: tilebody meshes are batched into 3 standard THREE.InstancedMesh pools (board/last/staged);
+  // flat tiletop crowns share one 2048x1024 256px-per-glyph atlas material with castShadow = false.
   const want = [];
   for (let i = 0; i < N * N; i++) if (d.board[i]) want.push({ i, t: d.board[i], kind: d.last && d.last.has(i) ? 'last' : 'board' });
   for (const t of d.staged || []) if (d.dragFrom !== t.i) want.push({ i: t.i, t, kind: 'staged' });
-  while (B3.tiles.length < want.length) B3.tiles.push(tileMesh());
-  B3.tiles.forEach((g, k) => {
+  while (B3.tiles.length < want.length) B3.tiles.push(tileFaceMesh());
+  let nBoard = 0, nLast = 0, nStaged = 0;
+  for (let k = 0; k < B3.tiles.length; k++) {
+    const mf = B3.tiles[k];
     const w = want[k];
-    g.visible = !!w;
-    if (!w) return;
+    if (!w) { mf.visible = false; continue; }
     const x = R.FRAME + (w.i % N) + 0.5 - HALF, z = R.FRAME + Math.floor(w.i / N) + 0.5 - HALF;
     let lift = w.kind === 'staged' ? 0.06 : 0, sc = 1;
     const a = d.anim && d.anim.get(w.i);
     if (a && w.kind !== 'staged') {
       const k2 = Math.min(1, Math.max(0, (d.now - a.t0) / a.dur));
-      if (k2 <= 0) { g.visible = false; return; }
+      if (k2 <= 0) { mf.visible = false; continue; }
       const e = 1 - Math.pow(1 - k2, 3); lift = (1 - e) * 2.2; sc = 1 + (1 - e) * 0.15;
     }
     const t0 = w.kind === 'staged' && d.settle ? d.settle.get(w.i) : null;
     if (t0 != null) sc = 1 + 0.12 * Math.pow(1 - Math.min(1, Math.max(0, (d.now - t0) / 120)), 3);   // a tile just placed settles into its square
-    g.position.set(x, TOP + lift, z); g.scale.setScalar(sc);
-    g.userData.face.material = faceMaterial(w.t.l, w.t.blank, B3.dark);
-    g.userData.body.material = w.kind === 'staged' ? B3.stagedMat : w.kind === 'last' ? B3.lastMat : B3.bodyMat;
-  });
+    _tileMat4.makeScale(sc, sc, sc);
+    _tileMat4.setPosition(x, TOP + lift, z);
+    if (w.kind === 'staged' && nStaged < 16) B3.stagedInst.setMatrixAt(nStaged++, _tileMat4);
+    else if (w.kind === 'last' && nLast < 112) B3.lastInst.setMatrixAt(nLast++, _tileMat4);
+    else if (nBoard < 112) B3.bodyInst.setMatrixAt(nBoard++, _tileMat4);
+    mf.visible = true;
+    mf.position.set(x, TOP + lift, z); mf.scale.setScalar(sc);
+    mf.geometry = faceGeometry(w.t.l, w.t.blank, B3.dark);
+    mf.material = B3.faceAtlasMat;
+  }
+  for (const [inst, n] of [[B3.bodyInst, nBoard], [B3.lastInst, nLast], [B3.stagedInst, nStaged]]) {
+    if (!inst) continue;
+    inst.count = n;
+    inst.visible = n > 0;
+    if (n > 0) inst.instanceMatrix.needsUpdate = true;
+  }
   const p = pose();
   applyPose(p.tx, p.tz, p.dist);
   B3.renderer.render(B3.scene, B3.camera);
@@ -618,7 +747,7 @@ export function slowFrames() {
   return B3.intervals.length >= 60 && median(B3.intervals) > FRAME_MS;
 }
 
-// board cells → screen px (for overlays), and screen px → square index (for input)
+// board cells â†’ screen px (for overlays), and screen px â†’ square index (for input)
 const tmp = new THREE.Vector3();
 export function screenOf(bx, by, lift = 0) {
   tmp.set(bx - HALF, TOP + lift, by - HALF).project(B3.camera);
@@ -667,6 +796,17 @@ export function debug() {
     props: B3.on ? { bell: propBounds(B3.bell, 'bell'), towel: propBounds(B3.towels, 'towels') } : null,
     tileTopUv,
     faceCache: faceCache.size, tileCache: R.tileCacheSize(),
+    faceAtlas: B3.faceAtlasCanvas ? {
+      w: B3.faceAtlasCanvas.width, h: B3.faceAtlasCanvas.height,
+      cell: ATLAS_CELL, slots: faceCache.size, textures: B3.faceAtlasTex ? 1 : 0,
+      sharedMaterial: !!(B3.faceAtlasMat && B3.tiles.every((m) => !m.visible || m.material === B3.faceAtlasMat)),
+    } : null,
+    bodyInstanced: !!(B3.bodyInst && B3.bodyInst.isInstancedMesh && B3.lastInst && B3.lastInst.isInstancedMesh && B3.stagedInst && B3.stagedInst.isInstancedMesh),
+    bodyDrawCalls: (B3.bodyInst?.visible ? 1 : 0) + (B3.lastInst?.visible ? 1 : 0) + (B3.stagedInst?.visible ? 1 : 0),
+    bodyCounts: { board: B3.bodyInst?.count || 0, last: B3.lastInst?.count || 0, staged: B3.stagedInst?.count || 0 },
+    tileTopCastShadow: B3.tiles.some((m) => m.castShadow),
+    drawCalls: B3.renderer ? B3.renderer.info.render.calls : 0,
+    gpuTextures: B3.renderer ? B3.renderer.info.memory.textures : 0,
     boardCanvas: !!B3.boardCanvas, boardMode3d: !!B3.boardMode3d, tilePool: B3.tiles.length,
     envTempDisposed: B3.envTempDisposed || 0, disposed: B3.lastDispose || null,
     envTheme: B3.envTheme || '', envSwaps: B3.envSwaps || 0,

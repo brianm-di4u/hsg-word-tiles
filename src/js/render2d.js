@@ -460,8 +460,8 @@ function drawTileValue(ctx, val, x, y, px, twoDigit) {
 }
 
 // The flat top of a 3D tile: board3d.js maps the flat ceramic crown [-0.38..+0.38] to [0..1] UVs (W3-S1-01),
-// so 100% of face texels sit cleanly inside the bevel.
-function paintFace(ctx, l, blank, w, theme = 'light') {
+// so 100% of face texels sit cleanly inside the bevel. Exported so board3d.js paints directly into its 2048x1024 atlas (W3-S4-01).
+export function paintFace(ctx, l, blank, w, theme = 'light') {
   const g = ctx.createLinearGradient(0, 0, w, w);
   if (theme === 'dark') { g.addColorStop(0, '#F2EADB'); g.addColorStop(0.6, '#EDE5D4'); g.addColorStop(1, '#DFD5BE'); }
   else { g.addColorStop(0, '#FFFDF5'); g.addColorStop(0.6, '#FAF3E3'); g.addColorStop(1, '#F0E6CE'); }

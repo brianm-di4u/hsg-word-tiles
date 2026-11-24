@@ -233,4 +233,139 @@ export const tests = [
       await t.shot('w2-b15-terrazzo-board', { timeout: 15000 });
     },
   },
+  // ---------- W3-S4-01 ----------
+  {
+    name: 'W3-S4-01 build-three exports InstancedMesh, board3d uses 256px atlas + InstancedMesh with zero onBeforeCompile (CD-WF3-05)',
+    node: true,
+    async run(t) {
+      const buildThree = fs.readFileSync(path.join(root, 'tools', 'build-three.mjs'), 'utf8');
+      t.expect(buildThree.includes("'InstancedMesh'"), 'tools/build-three.mjs exports InstancedMesh');
+      const { THREE } = await import(new URL('../src/js/three-lib.js', import.meta.url).href);
+      t.equal(typeof THREE.InstancedMesh, 'function', 'src/js/three-lib.js exposes THREE.InstancedMesh');
+      t.equal(typeof THREE.Matrix4, 'function', 'src/js/three-lib.js exposes THREE.Matrix4');
+
+      const b3Src = fs.readFileSync(path.join(root, 'src', 'js', 'board3d.js'), 'utf8');
+      const b3Code = b3Src.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+      t.equal(b3Code.includes('onBeforeCompile'), false, 'zero brittle onBeforeCompile shader hacks in code (CD-WF3-05)');
+      t.expect(b3Src.includes('new THREE.InstancedMesh'), 'board3d.js batches tilebody via standard THREE.InstancedMesh');
+      t.expect(b3Src.includes('ATLAS_CELL = 256'), 'board3d.js keeps crisp 256x256 per glyph (never 128px per CD-WF3-05)');
+      t.expect(b3Src.includes('mf.castShadow = false'), 'flat tiletop meshes disable redundant castShadow');
+    },
+  },
+  {
+    name: 'W3-S4-01 3D board uses single 2048x1024 256px-per-glyph atlas, InstancedMesh tilebody (<= 3 draw calls), castShadow=false on tiletop, crisp 256px Q10, and clean GPU disposal',
+    viewports: ['desktop'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 41, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'julian' }] });
+      await t.waitIdle(8000);
+      await t.game('act', 'autoplay', 10);
+      await t.waitIdle(10000);
+
+      // Add Q (10-pt), assigned blanks, and a staged tile so all 3 instanced body pools + blank atlas slots are exercised
+      await t.page.evaluate(() => {
+        const G = window.__G;
+        const s = G.s;
+        const row = 7;
+        const word = 'QUARTZ';
+        for (let k = 0; k < word.length; k++) s.board[row * 15 + 4 + k] = { l: word[k], blank: k === 3 };
+        s.board[(row + 1) * 15 + 4] = { l: 'I', blank: true };
+        s.board[(row + 1) * 15 + 5] = { l: 'X', blank: false };
+        s.board[(row + 1) * 15 + 6] = { l: 'J', blank: false };
+        s.players[0].rack = ['Q', 'A', 'E', 'I', 'O', 'U', '?'];
+        G.order = [0, 1, 2, 3, 4, 5, 6];
+      });
+      await t.game('act', 'reveal');
+      await t.game('act', 'stage', [{ i: 15 * 0 + 0, l: 'Q' }, { i: 15 * 0 + 1, l: 'I', blank: true }]);
+      await t.game('act', 'freezeFx', 0);
+      await t.waitFrames(4);
+
+      // Verify 256x256 paintFace Q10 still separates Q, 1, 0 into 3 disjoint components
+      const q256 = await t.page.evaluate(async () => {
+        await document.fonts.ready;
+        const R = await import(new URL('src/js/render2d.js', location.href).href);
+        const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
+        R.paintFace(cv.getContext('2d'), 'Q', false, 256, 'light');
+        const { data } = cv.getContext('2d').getImageData(0, 0, 256, 256);
+        const mask = new Uint8Array(256 * 256);
+        for (let i = 0; i < 256 * 256; i++) {
+          const o = i * 4;
+          if (0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2] < 145) mask[i] = 1;
+        }
+        const seen = new Uint8Array(256 * 256);
+        let comps = 0;
+        for (let i = 0; i < 256 * 256; i++) {
+          if (!mask[i] || seen[i]) continue;
+          const st = [i]; seen[i] = 1; let cnt = 0;
+          while (st.length) {
+            const p = st.pop(), x = p % 256, y = (p / 256) | 0; cnt++;
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+              const nx = x + dx, ny = y + dy;
+              if (nx < 0 || nx >= 256 || ny < 0 || ny >= 256) continue;
+              const ni = ny * 256 + nx;
+              if (mask[ni] && !seen[ni]) { seen[ni] = 1; st.push(ni); }
+            }
+          }
+          if (cnt >= 10) comps++;
+        }
+        return { comps };
+      });
+      t.equal(q256.comps, 3, `256px atlas paintFace('Q') keeps 3 disjoint ink components [Q,1,0] (got ${q256.comps})`);
+
+      const b3 = await t.game('act', 'b3');
+      if (!t.gpu || !b3 || !b3.on) {
+        t.log('software GL active; skipping live 3D atlas/instancing assertions');
+        return;
+      }
+
+      t.expect(!!b3.faceAtlas, 'B3.debug() reports shared faceAtlas');
+      t.equal(b3.faceAtlas.w, 2048, `faceAtlas width=2048 (got ${b3.faceAtlas.w})`);
+      t.equal(b3.faceAtlas.h, 1024, `faceAtlas height=1024 (got ${b3.faceAtlas.h})`);
+      t.equal(b3.faceAtlas.cell, 256, `faceAtlas cell=256 (CD-WF3-05, got ${b3.faceAtlas.cell})`);
+      t.equal(b3.faceAtlas.textures, 1, `single shared GPU CanvasTexture for all tile faces (got ${b3.faceAtlas.textures})`);
+      t.equal(b3.faceAtlas.sharedMaterial, true, 'all visible tiletop meshes share one MeshPhysicalMaterial');
+      t.expect(b3.faceAtlas.slots >= 12, `faceAtlas populated multiple regular+blank glyphs (${b3.faceAtlas.slots})`);
+
+      t.equal(b3.bodyInstanced, true, 'tilebody pools use standard THREE.InstancedMesh');
+      t.expect(b3.bodyDrawCalls >= 1 && b3.bodyDrawCalls <= 3, `tilebody renders in <= 3 instanced draw calls (got ${b3.bodyDrawCalls})`);
+      const instTotal = b3.bodyCounts.board + b3.bodyCounts.last + b3.bodyCounts.staged;
+      t.equal(instTotal, b3.tiles, `instanced tilebody count (${instTotal}) matches visible tile count (${b3.tiles})`);
+      t.expect(b3.bodyCounts.staged >= 2, `staged instanced pool active (staged=${b3.bodyCounts.staged})`);
+      t.equal(b3.tileTopCastShadow, false, 'zero flat tiletop meshes cast redundant shadows');
+      t.expect(b3.gpuTextures <= 12, `total renderer GPU textures stayed <= 12 via shared atlas (got ${b3.gpuTextures} vs ~35+ before)`);
+      t.log(`W3-S4-01 GPU stats: tiles=${b3.tiles}, bodyDrawCalls=${b3.bodyDrawCalls}, atlas=${b3.faceAtlas.w}x${b3.faceAtlas.h} (${b3.faceAtlas.slots} slots, 1 tex), gpuTextures=${b3.gpuTextures}, renderCalls=${b3.drawCalls}`);
+
+      await t.shot('w2-b15-atlas-3d-midgame', { timeout: 15000 });
+      await t.game('act', 'zoom', 2.4, 7.2, 7.6);
+      await t.waitFrames(3);
+      await t.shot('w2-b15-atlas-3d-zoom', { timeout: 15000 });
+      await t.game('act', 'zoom', 1);
+
+      // Live Day -> Night toggle rebuilds atlas cleanly with zero texture leak
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="theme"][data-val="dark"]');
+      await t.game('scene', 'game');
+      await t.waitIdle(6000);
+      await t.waitFrames(3);
+      const b3Night = await t.game('act', 'b3');
+      t.equal(b3Night.dark, true, '3D switched to Night');
+      t.equal(b3Night.faceAtlas.textures, 1, 'Night mode keeps single shared atlas texture');
+      t.expect(b3Night.gpuTextures <= 12, `Night toggle leaked zero GPU textures (gpuTextures=${b3Night.gpuTextures})`);
+
+      // Verify B3.destroy() disposes atlas + instanced pools cleanly and webglcontextrestored recovers
+      await t.page.evaluate(() => document.getElementById('gl').dispatchEvent(new Event('webglcontextlost', { cancelable: true })));
+      await t.waitFrames(3);
+      const afterLoss = await t.game('act', 'b3');
+      t.equal(afterLoss.on, false, 'context loss destroys 3D cleanly');
+      t.equal(afterLoss.faceAtlas, null, 'B3.destroy() clears faceAtlas');
+      t.equal(afterLoss.bodyInstanced, false, 'B3.destroy() clears InstancedMesh pools');
+      await t.page.evaluate(() => document.getElementById('gl').dispatchEvent(new Event('webglcontextrestored')));
+      await t.waitFrames(4);
+      const afterRestore = await t.game('act', 'b3');
+      t.equal(afterRestore.on, true, 'context restore recovers 3D cleanly');
+      t.equal(afterRestore.bodyInstanced, true, 'InstancedMesh pools restored after context restore');
+      t.equal(afterRestore.faceAtlas.textures, 1, 'shared atlas restored after context restore');
+    },
+  },
 ];

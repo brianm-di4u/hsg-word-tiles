@@ -14,11 +14,11 @@ const game = path.join(here, '..');
 const require = createRequire(path.join(here, 'dev', 'package.json'));
 const esbuild = require('esbuild');
 const NAMES = [
-  'WebGLRenderer', 'Scene', 'PerspectiveCamera', 'Group', 'Mesh',
+  'WebGLRenderer', 'Scene', 'PerspectiveCamera', 'Group', 'Mesh', 'InstancedMesh',
   'BufferGeometry', 'BufferAttribute', 'PlaneGeometry', 'BoxGeometry', 'SphereGeometry',
   'MeshStandardMaterial', 'MeshBasicMaterial', 'MeshPhysicalMaterial',
   'CanvasTexture', 'HemisphereLight', 'DirectionalLight', 'SpotLight',
-  'Color', 'Vector2', 'Vector3', 'Raycaster', 'Plane',
+  'Color', 'Vector2', 'Vector3', 'Matrix4', 'Raycaster', 'Plane',
   'SRGBColorSpace', 'NeutralToneMapping', 'PCFShadowMap', 'PMREMGenerator', 'BackSide', 'DoubleSide',
   'RepeatWrapping', 'MirroredRepeatWrapping', 'LinearMipmapLinearFilter', 'REVISION',
 ];
