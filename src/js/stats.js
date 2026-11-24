@@ -78,8 +78,10 @@ export function applyGame(prev, s) {
 }
 
 // The Daily Soak: one line, fed from the daily record's own totals.
-export function applyDaily(prev, score, streak) {
+// W1-P-N02: post-completion Practice replays leave official daily games and best untouched.
+export function applyDaily(prev, score, streak, opts = {}) {
   const st = cleanStats(prev);
+  if (opts && opts.replay) return st;
   st.daily.games++; st.daily.best = Math.max(st.daily.best, score); st.daily.bestStreak = Math.max(st.daily.bestStreak, streak);
   return st;
 }

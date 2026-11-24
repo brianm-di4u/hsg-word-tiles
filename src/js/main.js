@@ -209,26 +209,41 @@ function recordRegister(entry) {
   }
   store.put(KEYS.register, reg);
 }
-const dailyDone = new WeakSet();
+const dailyDone = new WeakMap();
 function recordDaily(s = G.s) {
-  if (!s || !s.daily) return { score: 0, streak: 0 };
-  if (dailyDone.has(s)) return { score: s.players[0].score, streak: G.dailyStreak || 0 };
-  dailyDone.add(s);
+  if (!s || !s.daily) return { score: 0, official: 0, streak: 0, isReplay: false };
+  if (dailyDone.has(s)) return dailyDone.get(s);
   const d = store.json(KEYS.daily, { days: {}, streak: 0, last: null }, validDaily);
   const date = s.daily.date, score = s.players[0].score;
   const prev = d.days[date];
-  // `first` is the score of the first try on the day (absent on days saved before it was kept); `par` is what Hollis and Maestro Fitch score on the same tiles
-  d.days[date] = { score: prev ? Math.max(prev.score, score) : score, plays: (prev ? prev.plays : 0) + 1 };
-  if (prev && prev.first != null) d.days[date].first = prev.first; else if (!prev) d.days[date].first = score;
-  if (prev && prev.par) d.days[date].par = prev.par;
-  else if (G.parCache[date]) d.days[date].par = G.parCache[date];
-  if (d.last !== date) {
-    const n = nextStreak(d, date);
-    d.streak = n.streak; d.rest = n.rest; d.last = date;
+  const isReplay = !!prev;
+  let official = score;
+  if (!prev) {
+    // W1-P-N02: official Daily score locks strictly to the first completed run (`first` and `score`).
+    d.days[date] = { score, first: score, plays: 1 };
+    if (G.parCache[date]) d.days[date].par = G.parCache[date];
+    if (d.last !== date) {
+      const n = nextStreak(d, date);
+      d.streak = n.streak; d.rest = n.rest; d.last = date;
+    }
+  } else {
+    // Post-completion replays are Practice replays: keep official score untouched and track `replayBest` separately.
+    official = prev.first != null ? prev.first : prev.score;
+    const prevReplay = prev.replayBest != null ? prev.replayBest : 0;
+    d.days[date] = {
+      ...prev,
+      score: official,
+      first: official,
+      plays: (prev.plays || 1) + 1,
+      replayBest: Math.max(prevReplay, score),
+    };
+    if (!d.days[date].par && G.parCache[date]) d.days[date].par = G.parCache[date];
   }
   d.days = pruneDays(d.days, undefined, date);
   store.put(KEYS.daily, d);
-  return { score, streak: d.streak };
+  const res = { score, official, streak: d.streak || 1, isReplay };
+  dailyDone.set(s, res);
+  return res;
 }
 // The player's records: read field by field (a damaged number never costs the others), written when a game ends.
 const plainObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -237,8 +252,11 @@ const statsDone = new WeakSet();
 function recordStats(s) {
   if (statsDone.has(s)) return;
   statsDone.add(s);
-  const r = s.mode === 'daily' ? { stats: applyDaily(stats(), s.players[0].score, G.dailyStreak || 0), pb: null } : applyGame(stats(), s);
-  if (s.mode === 'daily' || r.pb) store.put(KEYS.stats, r.stats);
+  const dr = s.mode === 'daily' ? dailyDone.get(s) : null;
+  const r = s.mode === 'daily'
+    ? { stats: applyDaily(stats(), dr ? dr.official : s.players[0].score, dr ? dr.streak : (G.dailyStreak || 0), { replay: !!(dr && dr.isReplay) }), pb: null }
+    : applyGame(stats(), s);
+  if ((s.mode === 'daily' && !(dr && dr.isReplay)) || r.pb) store.put(KEYS.stats, r.stats);
   G.pb = { s, pb: r.pb };
 }
 function persistEndgame(s) {
@@ -316,8 +334,11 @@ function screenHtml(name) {
     case 'over': {
       if (G.s.mode !== 'daily') return UI.overHtml(G.s, lex, null, { pb: pbLines(), review: reviewSeat(G.s) != null, barks: G.s.players.map((p, k) => (p.kind === 'ai' ? endBark(G.s, k) : null)) });
       const d = store.json(KEYS.daily, { days: {}, streak: 0 }, validDaily), date = G.s.daily.date, day = d.days[date];
+      const dr = dailyDone.get(G.s);
+      const official = day ? (day.first != null ? day.first : day.score) : G.s.players[0].score;
+      const isReplay = dr ? dr.isReplay : !!(day && day.plays > 1);
       const label = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      return UI.overHtml(G.s, lex, { label, best: day ? day.score : G.s.players[0].score, streak: d.streak || 1, rested: d.rest === date, first: day ? day.first : null, plays: day ? day.plays : 1, par: (day && day.par) || cachedPar(date) || null }, { review: reviewSeat(G.s) != null });
+      return UI.overHtml(G.s, lex, { label, best: official, official, isReplay, replayBest: day && day.replayBest != null ? day.replayBest : null, streak: d.streak || 1, rested: d.rest === date, first: day ? (day.first != null ? day.first : day.score) : null, plays: day ? day.plays : 1, par: (day && day.par) || cachedPar(date) || null }, { review: reviewSeat(G.s) != null });
     }
   }
   return '';
@@ -402,7 +423,24 @@ function go(where) {
   unlock();
   if (where === 'continue') { const record = gameSaves.read(); if (record.game) resumeGame(record); return; }
   if (where === 'setup') { G.setup = defaultSetup(); showScene('setup'); return; }
-  if (where === 'daily') { replaceSave(() => startDaily()); return; }
+  if (where === 'daily') {
+    const launch = () => {
+      const di = dailyInfo();
+      if (di.today) {
+        const official = di.today.first != null ? di.today.first : di.today.score;
+        confirmDialog(
+          'Practice replay?',
+          `Today's official Daily Soak score (${official} points) is already recorded. Replaying uses the same tiles for practice and will not change your official score or Records.`,
+          'Practice replay',
+          () => startDaily(),
+        );
+        return;
+      }
+      startDaily();
+    };
+    replaceSave(launch);
+    return;
+  }
   if (where === 'title' && G.scene === 'game' && !save().ok) {
     confirmDialog('Leave without saving?', 'This tab could not save its game. Stay here to keep playing, or leave without saving this game.', 'Leave', () => showScene('title'));
     return;
@@ -903,7 +941,7 @@ function renderTurnline() {
       parsHtml = `<span class="daily-pars" aria-label="Star targets: 1 star over ${lo}, 2 stars over ${hi}${stars ? `, ${UI.plural(stars, 'star')} reached` : ''}"><span class="par-pip${score > lo ? ' met' : ''}" title="1 star: beat ${lo}">★ ${lo}</span><span class="par-pip${score > hi ? ' met' : ''}" title="2 stars: beat ${hi}">★★ ${hi}</span></span>`;
     }
     const turnBadge = s.over ? '<span class="daily-turn">Daily complete</span>' : `<span class="daily-turn">Turn ${turn} / ${E.DAILY_TURNS}</span>`;
-    const priorHtml = prior != null ? `<span class="daily-prior" title="Your earlier score today">Today ${prior}</span>` : '';
+    const priorHtml = prior != null ? `<span class="daily-prior" title="Practice replay — official score already recorded">${mobile ? `Practice · ${prior}` : `Practice replay · ${prior}`}</span>` : '';
     if (mobile) {
       tl.innerHTML = `<span class="chips daily-row">${UI.scoresHtml(s, true)}${turnBadge}</span><span class="daily-sub">${parsHtml || `<span class="daily-bag">${UI.plural(s.bag.length, 'tile')} left</span>`}${priorHtml}</span>`;
     } else {

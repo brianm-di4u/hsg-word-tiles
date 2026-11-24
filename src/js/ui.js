@@ -462,7 +462,7 @@ export function recordsHtml(st, o) {
       return `<tr><th scope="row">${esc(persona(pid).name)} <small>${LEVEL_NAME[lv]}</small></th><td>${r.games}</td><td>${r.wins}</td><td>${r.best}</td></tr>`;
     }).join('')}</tbody></table><p class="note">A win counts when your score beats that opponent's.</p>` : '<p class="note">Each opponent and difficulty you play gets a line here.</p>'}
     <h2>Daily Soak</h2>
-    <div class="stats cols4">${stat(days.length, 'days played')}${stat(days.length ? Math.max(...days.map((d) => d.score)) : '-', 'best day')}${stat(day.streak || 0, 'day streak')}${stat(Math.max(day.streak || 0, st.daily.bestStreak), 'best streak')}</div>
+    <div class="stats cols4">${stat(days.length, 'days played')}${stat(days.length ? Math.max(...days.map((d) => (d.first != null ? d.first : d.score))) : '-', 'best day')}${stat(day.streak || 0, 'day streak')}${stat(Math.max(day.streak || 0, st.daily.bestStreak), 'best streak')}</div>
     ${dailyStrip(day.days || {}, o.today)}
     <p class="note">Miss a single day and a rest day keeps your streak going, once in any seven days.</p>
     <h2>Bathhouse Register</h2>
@@ -563,10 +563,12 @@ export function overHtml(s, lex, dinfo, extra = {}) {
   const say = (k) => (extra.barks && extra.barks[k] ? `<small class="bark"><b>${esc(SHORT[s.players[k].persona] || '')}:</b> “${esc(extra.barks[k].text)}”</small>` : '');
   const pbs = extra.pb && extra.pb.length ? `<ul class="pbs" aria-label="Personal bests">${extra.pb.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '';
   const oc = outcome(s), why2 = daily ? '' : decisiveLine(s);
+  const dOfficial = dinfo ? (dinfo.official != null ? dinfo.official : (dinfo.first != null ? dinfo.first : dinfo.best)) : 0;
+  const dReplay = !!(dinfo && dinfo.isReplay);
   return `<div class="sheet over over-${oc}">
     ${art.has('title') ? `<div class="over-art" style="background-image:url(${art.src('title')})" aria-hidden="true"></div>` : ''}
-    <header class="masthead"><p class="mast-kicker">${daily ? 'The Steam Ledger' : KICKER[oc]}</p><h1 tabindex="-1">${daily ? 'Daily Soak' : 'Final Soak'}</h1><p class="mast-sub">${esc(why)}</p>${why2 ? `<p class="decisive">${why2}</p>` : ''}</header>
-    ${dinfo ? `<div class="daily-box"><p class="daily-date">${esc(dinfo.label)}</p><div class="daily-stats"><div><b>${s.players[0].score}</b><small>this soak</small></div><div><b>${dinfo.best}</b><small>best today</small></div><div><b>${dinfo.streak}</b><small>day streak</small></div></div><p class="note">Everyone gets the same tiles today. Come back tomorrow for a new soak.</p>${dinfo.par ? `<p class="par" data-par-line="1">${esc(persona('hollis').name)} scored ${dinfo.par.m} and ${esc(persona('julian').name)} ${dinfo.par.h} on these tiles.</p>` : ''}${dinfo.plays > 1 && dinfo.first != null ? `<p class="par">Your first try today: ${dinfo.first}.</p>` : ''}${dinfo.rested ? '<p class="note rest-note">You missed a day, and a rest day kept your streak going. You get one in any seven days.</p>' : ''}</div>` : ''}
+    <header class="masthead"><p class="mast-kicker">${daily ? (dReplay ? 'Practice replay' : 'The Steam Ledger') : KICKER[oc]}</p><h1 tabindex="-1">${daily ? 'Daily Soak' : 'Final Soak'}</h1><p class="mast-sub">${esc(why)}</p>${why2 ? `<p class="decisive">${why2}</p>` : ''}</header>
+    ${dinfo ? `<div class="daily-box"><p class="daily-date">${esc(dinfo.label)}${dReplay ? ' · <strong>Practice replay</strong>' : ''}</p><div class="daily-stats"><div><b>${s.players[0].score}</b><small>${dReplay ? 'practice replay' : 'this soak'}</small></div><div><b>${dOfficial}</b><small>official today</small></div><div><b>${dinfo.streak}</b><small>day streak</small></div></div><p class="note">${dReplay ? "Today's official score is already locked to your first run. Practice replays do not change Records." : 'Everyone gets the same tiles today. Come back tomorrow for a new soak.'}</p>${dinfo.par ? `<p class="par" data-par-line="1">${esc(persona('hollis').name)} scored ${dinfo.par.m} and ${esc(persona('julian').name)} ${dinfo.par.h} on these tiles.</p>` : ''}${dinfo.plays > 1 && dinfo.first != null ? `<p class="par">Your first try today: ${dinfo.first}.</p>` : ''}${dReplay && dinfo.replayBest != null ? `<p class="par">Best practice replay today: ${dinfo.replayBest}.</p>` : ''}${dinfo.rested ? '<p class="note rest-note">You missed a day, and a rest day kept your streak going. You get one in any seven days.</p>' : ''}</div>` : ''}
     ${daily ? '' : `<div class="winner">${badge(top.p, top.k, 92)}<div class="wmeta"><span class="ribbon">${win.length > 1 ? 'Tied for first' : 'Winner'}</span><b>${win.map((k) => esc(s.players[k].name)).join(' &amp; ')}</b><small class="wlines">${line(top.p, top.k)}</small>${say(top.k)}</div><b class="wscore">${top.p.score}</b></div>`}
     ${pbs}
     <ol class="final">${order.slice(daily ? 0 : 1).map(({ p, k }) => `<li>${badge(p, k, 40)}<div><b>${esc(p.name)}</b><small class="wlines">${line(p, k)}</small>${say(k)}</div><b class="fscore">${p.score}</b></li>`).join('')}</ol>
@@ -611,6 +613,9 @@ export function dailyStrip(days, today) {
 }
 
 export function dailyLine(d) {
-  if (d.today) return `Today: ${d.today.score} pts · streak ${d.streak}`;
+  if (d.today) {
+    const official = d.today.first != null ? d.today.first : d.today.score;
+    return `Today: ${official} pts · streak ${d.streak}`;
+  }
   return d.streak ? `${DAILY_TURNS} turns · streak ${d.streak}` : `${DAILY_TURNS} turns, the same tiles for everyone`;
 }

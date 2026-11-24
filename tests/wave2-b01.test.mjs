@@ -1,8 +1,11 @@
-// Wave 2, batch W2-B01: W1-S3-01, W1-S3-02, W1-S3-03.
+// Wave 2, batch W2-B01: W1-S3-01, W1-S3-02, W1-S3-03, W1-P-N02.
 import { ctx } from './lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
 import { chooseAction, hintChoices, LEVELS, EASY_TWO } from '../src/js/ai.js';
 import { reviewSteps } from '../src/js/review.js';
+import { emptyStats, applyDaily } from '../src/js/stats.js';
+import { pruneDays } from '../src/js/storage.js';
+import { dailyLine } from '../src/js/ui.js';
 import { isCommon } from '../src/js/dict.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
@@ -210,6 +213,106 @@ export const tests = [
       // Verify .par-pip.met lights up when score exceeds par threshold
       const stHigh = await checkTurn(1, 999);
       t.equal(stHigh.met, 2, 'Both par pips highlight when score exceeds both thresholds');
+    },
+  },
+  {
+    name: 'W1-P-N02 applyDaily, dailyLine, and pruneDays lock official Daily progress to e.first (Node)',
+    node: true,
+    async run(t) {
+      const s1 = applyDaily(emptyStats(), 120, 1);
+      t.equal(s1.daily.games, 1, 'first run increments daily.games');
+      t.equal(s1.daily.best, 120, 'first run sets daily.best');
+      const s2 = applyDaily(s1, 450, 1, { replay: true });
+      t.equal(s2.daily.games, 1, 'practice replay does not increment daily.games');
+      t.equal(s2.daily.best, 120, 'practice replay does not overwrite daily.best');
+      t.equal(dailyLine({ today: { score: 450, first: 120, plays: 2 }, streak: 3 }), 'Today: 120 pts · streak 3', 'Title dailyLine uses e.first');
+      // pruneDays preserves the day with the highest official `first` score (not a spoiled replay score)
+      const days = {};
+      for (let k = 0; k < 410; k++) {
+        const dt = new Date(Date.UTC(2025, 0, 1 + k, 12)).toISOString().slice(0, 10);
+        days[dt] = { score: 100, first: 100, plays: 1 };
+      }
+      days['2025-01-02'] = { score: 900, first: 150, plays: 2 };
+      days['2025-01-03'] = { score: 300, first: 300, plays: 1 };
+      const kept = pruneDays(days, 400);
+      t.expect(!!kept['2025-01-03'], 'highest official first day (300) is kept');
+      t.expect(!kept['2025-01-02'], 'spoiled replay score (900 with first 150) does not displace official best day');
+    },
+  },
+  {
+    name: 'W1-P-N02 Daily Soak locks official score to first run and labels replays as Practice replay with pre-launch confirmation',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      // 1. Official first run: play Turn 1 then pass 9 turns so first score is modest (>0)
+      await t.page.click('[data-go="daily"]');
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'game', null, { timeout: 10000 });
+      await t.waitIdle(5000);
+      const date = (await t.state()).game.daily.date;
+      const [m0] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', m0.tiles);
+      await t.game('act', 'play');
+      await t.waitIdle(5000);
+      for (let k = 0; k < 9; k++) { await t.game('act', 'pass'); await t.waitIdle(5000); }
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 10000 });
+      const firstScore = (await t.state()).game.players[0].score;
+      t.expect(firstScore > 0, `first official run scored ${firstScore}`);
+
+      let dailyRec = await t.page.evaluate(() => JSON.parse(localStorage.getItem('hs-letters-daily-v1')));
+      let statRec = await t.page.evaluate(() => JSON.parse(localStorage.getItem('hs-letters-stats-v1')));
+      t.equal(dailyRec.days[date].first, firstScore, 'first run stored in days[date].first');
+      t.equal(dailyRec.days[date].score, firstScore, 'first run stored in days[date].score');
+      t.equal(statRec.daily.games, 1, 'stats.daily.games is 1');
+      t.equal(statRec.daily.best, firstScore, 'stats.daily.best matches firstScore');
+
+      // 2. Return to Title and click Daily Soak again: must confirm Practice replay before launching
+      await t.page.click('[data-go="title"]');
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'title', null, { timeout: 5000 });
+      t.equal((await t.page.textContent('[data-go="daily"] small')).trim(), `Today: ${firstScore} pts · streak 1`, 'Title shows official first score');
+      await t.page.click('[data-go="daily"]');
+      await t.page.waitForSelector('#modal .dialog', { timeout: 5000 });
+      const dlgText = await t.page.textContent('#modal .dialog');
+      t.expect(/Practice replay\?/.test(dlgText) && dlgText.includes(`${firstScore} points`), 'Confirmation dialog warns official score is recorded (' + dlgText + ')');
+      await t.page.click('#modal [data-ok]');
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'game', null, { timeout: 10000 });
+      await t.waitIdle(5000);
+      t.expect(/Practice/.test(await t.page.textContent('#turnline')), 'HUD labels the replay as Practice');
+
+      // 3. Complete Practice replay with a HIGHER score via autoplay
+      await t.game('act', 'autoplay');
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 20000 });
+      const replayScore = (await t.state()).game.players[0].score;
+      t.expect(replayScore > firstScore, `Practice replay outscored first run (${replayScore} > ${firstScore})`);
+
+      const boxText = await t.page.textContent('.sheet.over');
+      t.expect(/Practice replay/i.test(boxText), 'Results screen clearly labels Practice replay');
+      t.expect(boxText.includes(`Your first try today: ${firstScore}.`), 'Results screen still displays first try');
+      t.expect(boxText.includes(`Best practice replay today: ${replayScore}.`), 'Results screen displays separate replayBest');
+      await t.checkLayout({ allowScrollY: true });
+      await t.shot('W1-P-N02-practice-replay');
+
+      // 4. Verify official Daily record, career stats, Title, and Records were NOT corrupted by the higher replay score
+      dailyRec = await t.page.evaluate(() => JSON.parse(localStorage.getItem('hs-letters-daily-v1')));
+      statRec = await t.page.evaluate(() => JSON.parse(localStorage.getItem('hs-letters-stats-v1')));
+      t.equal(dailyRec.days[date].first, firstScore, 'days[date].first stays locked to firstScore');
+      t.equal(dailyRec.days[date].score, firstScore, 'days[date].score stays locked to firstScore');
+      t.equal(dailyRec.days[date].replayBest, replayScore, 'days[date].replayBest tracks replay separately');
+      t.equal(dailyRec.days[date].plays, 2, 'days[date].plays is 2');
+      t.equal(statRec.daily.games, 1, 'stats.daily.games did not increment on replay');
+      t.equal(statRec.daily.best, firstScore, 'stats.daily.best was not overwritten by replayScore');
+
+      await t.page.click('[data-go="title"]');
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'title', null, { timeout: 5000 });
+      t.equal((await t.page.textContent('[data-go="daily"] small')).trim(), `Today: ${firstScore} pts · streak 1`, 'Title Today stays locked to official firstScore');
+      await t.page.click('[data-go="records"]');
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'records', null, { timeout: 5000 });
+      const bestDayText = await t.page.evaluate(() => {
+        const stats = [...document.querySelectorAll('.sheet.records .stat')];
+        const cell = stats.find((el) => /best day/i.test(el.textContent));
+        return cell ? cell.querySelector('b').textContent.trim() : null;
+      });
+      t.equal(bestDayText, String(firstScore), 'Records best day matches official firstScore, not replayScore');
     },
   },
 ];
