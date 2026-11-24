@@ -25,7 +25,7 @@ Every prompt carried the same constraints:
 | `glass-s` | amber and honey: wavy S-curved lead lines rising like steam |
 | `glass-b` | copper, terracotta and red: three bold rings and scattered round bubble panes |
 | `glass-c` | the Display Spring from above: a turquoise pool with ripples, grey-cream tufa terraces, emerald algae, steam |
-| `marble`, `terrazzo`, `counter` | frameless, evenly lit: Carrara marble; cream terrazzo with terracotta, sage, cobalt and brass chips; dark walnut counter |
+| `marble`, `terrazzo`, `counter` | frameless, evenly lit: Carrara marble; cream terrazzo with terracotta, sage, cobalt and brass chips (2026-11-24 W3-S4-03: replaced 768x768 full-board bitmap with seamless 256x256 tileable terrazzo swatch tiled along the 4 outer border strips via `createPattern`; generated with OpenAI image fallback after Gemini 503 capacity error); dark walnut counter |
 
 ## Bathhouse Row medallions and portraits (styled after `title`)
 | File | Prompt summary |

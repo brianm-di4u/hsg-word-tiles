@@ -147,7 +147,7 @@ function rowEmblem(ctx, cx, cy, r) {
   ctx.restore();
 }
 
-// The static board face, size × size px. theme: 'light' | 'dark'. mode3d: omit baked 2D lamp pool & frame shadows (W3-S2-04).
+// The static board face, size Ã— size px. theme: 'light' | 'dark'. mode3d: omit baked 2D lamp pool & frame shadows (W3-S2-04).
 export function paintBoard(size, theme = 'light', mode3d = false) {
   const cv = mk(size, size), ctx = cv.getContext('2d');
   const cell = size / U, f = FRAME * cell, rnd = prng(47);
@@ -156,9 +156,24 @@ export function paintBoard(size, theme = 'light', mode3d = false) {
   wood.addColorStop(0, '#5A3A22'); wood.addColorStop(1, '#3A2414');
   ctx.fillStyle = wood; ctx.fillRect(0, 0, size, size);
   const band = f * 0.78;
-  ctx.fillStyle = '#E9E0CC'; ctx.fillRect(band * 0.18, band * 0.18, size - band * 0.36, size - band * 0.36);
+  const tOut = band * 0.18, tSpan = size - tOut * 2, tStrip = Math.max(1, f - tOut), tMid = Math.max(0, size - f * 2);
+  const fillBorderStrips = () => {
+    ctx.fillRect(tOut, tOut, tSpan, tStrip);
+    ctx.fillRect(tOut, size - f, tSpan, tStrip);
+    ctx.fillRect(tOut, f, tStrip, tMid);
+    ctx.fillRect(size - f, f, tStrip, tMid);
+  };
+  ctx.fillStyle = '#E9E0CC';
+  fillBorderStrips();
   if (art.ready('terrazzo')) {
-    ctx.save(); ctx.globalAlpha = 0.9; ctx.drawImage(art.img('terrazzo'), band * 0.18, band * 0.18, size - band * 0.36, size - band * 0.36); ctx.restore();
+    // W3-S4-03: tile the seamless 256x256 terrazzo swatch strictly along the 4 perimeter border strips (zero interior overpaint).
+    const pat = ctx.createPattern(art.img('terrazzo'), 'repeat');
+    if (pat) {
+      if (size !== 2048 && typeof DOMMatrix === 'function' && pat.setTransform) {
+        pat.setTransform(new DOMMatrix().scale(size / 2048));
+      }
+      ctx.save(); ctx.globalAlpha = 0.9; ctx.fillStyle = pat; fillBorderStrips(); ctx.restore();
+    }
   } else {
     for (let k = 0; k < size * 3; k++) {
       const x = rnd() * size, y = rnd() * size;
@@ -520,7 +535,7 @@ export function tileSprite(l, blank, w, kind = 'board', theme = 'light') {
 }
 
 // ---------------------------------------------------------------------------------------------
-// View: the board in a W×H css-px canvas, scaled by zoom about a centre (cx, cy) in board cells.
+// View: the board in a WÃ—H css-px canvas, scaled by zoom about a centre (cx, cy) in board cells.
 export const view = { W: 0, H: 0, dpr: 1, zoom: 1, cx: U / 2, cy: U / 2, target: null };
 export const fit = () => Math.min(view.W, view.H) / U;
 export const scale = () => fit() * view.zoom;
@@ -537,7 +552,7 @@ export function cellAt(x, y) {
   const c = Math.floor(bx - FRAME), r = Math.floor(by - FRAME);
   return r >= 0 && r < N && c >= 0 && c < N ? r * N + c : -1;
 }
-// In 3D, board3d.js sets proj.fn(bx, by, lift) → [x, y] so overlays, pops and steam follow the camera and sit flush on raised tile tops.
+// In 3D, board3d.js sets proj.fn(bx, by, lift) â†’ [x, y] so overlays, pops and steam follow the camera and sit flush on raised tile tops.
 export const TILE_LIFT = 0.24, STAGED_LIFT = 0.30;
 export const proj = { fn: null };
 const project = (bx, by, lift = 0) => (proj.fn ? proj.fn(bx, by, lift) : toScreen(bx, by));
@@ -595,7 +610,7 @@ export function drawFrame(ctx, d) {
     }
   }
   // W2-S5-01: focused, reduced-motion-safe concentric brass/aqua spotlight halo directly on H8 (CENTER) on Turn 1.
-  // Confined strictly around H8 — zero interior marble pinwheel lines (CD-WF2-03).
+  // Confined strictly around H8 â€” zero interior marble pinwheel lines (CD-WF2-03).
   if (openCenter) {
     const [hx, hy] = cellCenter(CENTER);
     const cp = d.cellPx || s;

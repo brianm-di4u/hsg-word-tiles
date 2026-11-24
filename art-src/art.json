@@ -54,9 +54,9 @@
   {
    "name": "terrazzo",
    "src": "terrazzo.png",
-   "w": 768,
-   "h": 768,
-   "quality": 0.78,
+   "w": 256,
+   "h": 256,
+   "quality": 0.76,
    "canvas": true
   },
   {
