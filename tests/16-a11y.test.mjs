@@ -255,4 +255,118 @@ export const tests = [
       await t.shot('16-cursor-halo');
     },
   },
+  {
+    name: 'W5-S5-03 #preview/#toast ARIA visibility and .bdbtn keyboard focus + aria-expanded',
+    viewports: ['desktop', 'mobile'],
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 3 });
+      await t.waitIdle(5000);
+      const s = await t.state();
+      s.game.players[0].rack = 'STEAMXQ'.split('');
+      await t.game('setState', { game: s.game });
+      await t.waitIdle(5000);
+      t.expect((await t.page.getAttribute('#preview', 'aria-hidden')) !== 'true', '#preview is not aria-hidden');
+      t.equal(await t.page.getAttribute('#toast', 'aria-hidden'), 'true', '#toast starts aria-hidden=true when idle');
+      // stage a legal play so .bdbtn appears in #preview
+      await t.game('act', 'stage', [...'STEAM'].map((l, k) => ({ i: CENTER - 2 + k, l })));
+      const bdInfo = await t.page.evaluate(() => {
+        const b = document.querySelector('#preview .bdbtn:not([data-hintnext])');
+        return b ? { tabIndex: b.tabIndex, attrTab: b.getAttribute('tabindex'), expanded: b.getAttribute('aria-expanded'), hiddenAnc: !!b.closest('[aria-hidden="true"]') } : null;
+      });
+      t.expect(!!bdInfo, '.bdbtn rendered');
+      t.equal(bdInfo.tabIndex, 0, '.bdbtn is keyboard focusable (tabIndex 0)');
+      t.equal(bdInfo.attrTab, null, '.bdbtn does not carry tabindex=-1');
+      t.equal(bdInfo.expanded, 'false', '.bdbtn starts with aria-expanded=false');
+      t.equal(bdInfo.hiddenAnc, false, '.bdbtn has no aria-hidden=true ancestor');
+      // activate .bdbtn via keyboard Enter and verify aria-expanded flips and focus stays on .bdbtn
+      await t.page.focus('#preview .bdbtn:not([data-hintnext])');
+      await t.page.keyboard.press('Enter');
+      const bdOpen = await t.page.evaluate(() => {
+        const b = document.querySelector('#preview .bdbtn:not([data-hintnext])');
+        return { expanded: b && b.getAttribute('aria-expanded'), panel: !!document.querySelector('#preview .bd'), focused: document.activeElement === b };
+      });
+      t.equal(bdOpen.expanded, 'true', '.bdbtn flips to aria-expanded=true on keyboard Enter');
+      t.equal(bdOpen.panel, true, 'breakdown panel opened');
+      t.equal(bdOpen.focused, true, 'focus stays on .bdbtn after toggling');
+      // play STEAM to trigger a fact toast and verify #toast aria-hidden syncs with .on
+      await t.game('act', 'play');
+      await t.page.waitForSelector('#toast.on [data-fact]', { timeout: 3000 });
+      const toastOn = await t.page.evaluate(() => {
+        const el = document.querySelector('#toast');
+        const btn = el.querySelector('[data-fact]');
+        return { ariaHidden: el.getAttribute('aria-hidden'), hasOn: el.classList.contains('on'), hiddenAnc: !!btn.closest('[aria-hidden="true"]') };
+      });
+      t.equal(toastOn.hasOn, true, '#toast has .on');
+      t.equal(toastOn.ariaHidden, 'false', '#toast sets aria-hidden=false while visible');
+      t.equal(toastOn.hiddenAnc, false, '#toast [data-fact] is not trapped inside aria-hidden=true');
+      await t.page.click('#toast [data-fact]');
+      await t.page.waitForFunction(() => !document.querySelector('#toast').classList.contains('on'), null, { timeout: 3000 });
+      const toastOff = await t.page.evaluate(() => {
+        const el = document.querySelector('#toast');
+        return { ariaHidden: el.getAttribute('aria-hidden'), btns: el.querySelectorAll('button').length };
+      });
+      t.equal(toastOff.ariaHidden, 'true', '#toast restores aria-hidden=true when closed');
+      t.equal(toastOff.btns, 0, '#toast clears focusable buttons when closed');
+      await t.game('act', 'close');
+    },
+  },
+  {
+    name: 'W5-S5-03 keyboard rack select->Enter stage, Alt+Arrow reorder, Space/flash liveSay, and +/-/0 zoom',
+    viewports: ['desktop'],
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 3 });
+      await t.waitIdle(5000);
+      const s = await t.state();
+      s.game.players[0].rack = 'STEAMXQ'.split('');
+      await t.game('setState', { game: s.game });
+      await t.waitIdle(5000);
+      // 1. Alt+ArrowRight / Alt+ArrowLeft on focused .rtile reorders the rack
+      await t.page.focus('#rack .rtile[data-pos="0"]');
+      const beforeOrder = (await t.state()).order.slice();
+      await t.page.keyboard.press('Alt+ArrowRight');
+      const afterRight = (await t.state()).order.slice();
+      t.equal(afterRight[1], beforeOrder[0], 'Alt+ArrowRight moved first rack tile right');
+      t.equal(afterRight[0], beforeOrder[1], 'second tile shifted left');
+      t.equal(await t.page.evaluate(() => +document.activeElement.dataset.k), beforeOrder[0], 'focus stayed on moved tile');
+      await t.page.waitForFunction(() => /moved to position 2 of 7/.test(document.querySelector('#live').textContent), null, { timeout: 2000 });
+      await t.page.keyboard.press('Alt+ArrowLeft');
+      const afterLeft = (await t.state()).order.slice();
+      t.equal(afterLeft[0], beforeOrder[0], 'Alt+ArrowLeft moved tile back to slot 0');
+      // 2. Keyboard select .rtile -> Enter on #board stages G.selected at G.cursor.i
+      await t.page.keyboard.press('Enter');
+      t.equal(await t.page.getAttribute(`#rack .rtile[data-k="${beforeOrder[0]}"]`, 'aria-pressed'), 'true', 'Enter on .rtile selects it (aria-pressed=true)');
+      await t.page.focus('#board');
+      await t.page.keyboard.press('Enter');
+      let st = await t.state();
+      t.equal(st.staged.length, 1, 'Enter on #board staged the selected tile');
+      t.equal(st.staged[0].i, CENTER, 'staged at cursor square (CENTER)');
+      t.equal(st.staged[0].l, 'S', 'staged the selected letter S');
+      // 3. Space flips direction and speaks to #live
+      await t.page.keyboard.press('Space');
+      await t.page.waitForFunction(() => /Direction: down/.test(document.querySelector('#live').textContent), null, { timeout: 2000 });
+      await t.page.keyboard.press('Space');
+      await t.page.waitForFunction(() => /Direction: across/.test(document.querySelector('#live').textContent), null, { timeout: 2000 });
+      // 4. flash() errors speak to #live (typing a letter not on rack)
+      await t.page.keyboard.press('z');
+      await t.page.waitForFunction(() => /No Z on your rack/.test(document.querySelector('#live').textContent), null, { timeout: 2000 });
+      // 5. + / - / 0 keyboard zoom on #board
+      await t.page.keyboard.press('+');
+      await t.waitIdle(3000);
+      t.expect((await t.state()).view.zoom > 1.5, '+ zoomed in on #board');
+      await t.page.waitForFunction(() => /Board zoomed to/.test(document.querySelector('#live').textContent), null, { timeout: 2000 });
+      const z1 = (await t.state()).view.zoom;
+      await t.page.keyboard.press('=');
+      await t.waitIdle(3000);
+      t.expect((await t.state()).view.zoom > z1, '= stepped zoom further');
+      await t.page.keyboard.press('-');
+      await t.waitIdle(3000);
+      t.expect((await t.state()).view.zoom < 2.0, '- zoomed back out a step');
+      await t.page.keyboard.press('0');
+      await t.waitIdle(3000);
+      t.equal((await t.state()).view.zoom, 1, '0 reset zoom to whole board');
+      await t.page.waitForFunction(() => /Whole board shown/.test(document.querySelector('#live').textContent), null, { timeout: 2000 });
+    },
+  },
 ];

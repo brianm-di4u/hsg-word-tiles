@@ -614,7 +614,7 @@ function announce(e) {
   if (e.kind === 'play') t = `${p.name} played ${e.words.map((w) => w.w).join(' and ')} for ${e.score}${e.themed ? `, including a Hot Springs bonus of ${e.themed}` : ''}${e.full ? ', with a Full Soak' : ''}.`;
   else if (e.challenge) t = `${p.name} played ${e.challenge}, which is not in the dictionary, and lost the turn.`;
   else t = e.kind === 'swap' ? `${p.name} swapped ${UI.plural(e.count, 'tile')}.` : `${p.name} passed.`;
-  const live = $('#live'); live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30);
+  liveSay(t);
   G.lastLine = t;
 }
 
@@ -870,8 +870,8 @@ function renderPreview() {
     const p = G.preview;
     if (p.ok) {
       html = `<span class="words">${p.words.map((w) => `<b class="${w.themed ? 'themed' : ''}">${w.w}</b>`).join(' ')}</span><span class="pts">${p.score}<small> pts</small></span>${p.themed ? `<span class="extra">${UI.ICON.steam} +${p.themed}</span>` : ''}${p.full ? `<span class="extra">Full Soak +${FULL_SOAK}</span>` : ''}${p.featured ? `<span class="extra">Featured +${FEATURED_BONUS}</span>` : ''}${G.s.challenge ? '<span class="extra">words checked when you play</span>' : ''}`;
-      if (hintLive()) html += `<span class="extra">keeps ${G.hintAlts[G.hintIx].keep.length ? G.hintAlts[G.hintIx].keep.map((l) => (l === '?' ? 'blank' : l)).join('') : 'nothing'}</span><button class="bdbtn" data-hintnext aria-label="Show another Spring Guide play, ${G.hintIx + 1} of ${G.hintAlts.length} shown">Other plays ${G.hintIx + 1}/${G.hintAlts.length}</button>`;
-      html += `<button class="bdbtn" tabindex="-1">${G.breakdown ? 'Hide' : 'How it scores'}</button>`;
+      if (hintLive()) html += `<span class="extra">keeps ${G.hintAlts[G.hintIx].keep.length ? G.hintAlts[G.hintIx].keep.map((l) => (l === '?' ? 'blank' : l)).join('') : 'nothing'}</span><button type="button" class="bdbtn" data-hintnext aria-label="Show another Spring Guide play, ${G.hintIx + 1} of ${G.hintAlts.length} shown">Other plays ${G.hintIx + 1}/${G.hintAlts.length}</button>`;
+      html += `<button type="button" class="bdbtn" aria-expanded="${G.breakdown}">${G.breakdown ? 'Hide' : 'How it scores'}</button>`;
       if (G.breakdown) html += UI.breakdownHtml(p, G.s.board, G.staged);
       cls = hintLive() ? 'ok hintlive' : 'ok';
     } else { html = esc(p.error); cls = 'bad'; }
@@ -881,7 +881,11 @@ function renderPreview() {
   else html = cur().kind === 'human' ? (G.s.move === 0 ? (isNarrow() ? 'Start on the centre square.' : 'Start on the Display Spring in the centre.') : (isNarrow() ? 'Drag tiles to the board.' : 'Drag tiles to the board to make a word.')) : '';
   const stall = !G.s.over && !G.aiBusy && !G.hintBusy && !G.flash && !G.preview && !G.hoverInfo && cur().kind === 'human' ? UI.stallNote(G.s) : '';
   if (stall) html += `<span class="said stall">${esc(stall)}</span>`;
+  const refocus = el.contains(document.activeElement)
+    ? (document.activeElement.hasAttribute('data-hintnext') ? '[data-hintnext]' : '.bdbtn:not([data-hintnext])')
+    : null;
   el.className = cls; el.innerHTML = html;
+  if (refocus) el.querySelector(refocus)?.focus({ preventScroll: true });
 }
 
 function renderPrivacy() {
@@ -893,7 +897,7 @@ function renderPrivacy() {
 }
 
 let flashTimer = 0;
-function flash(text, ms = 2600) { G.flash = text; clearTimeout(flashTimer); renderPreview(); flashTimer = setTimeout(() => { G.flash = null; renderPreview(); }, ms); }
+function flash(text, ms = 2600) { G.flash = text; clearTimeout(flashTimer); renderPreview(); liveSay(text); flashTimer = setTimeout(() => { G.flash = null; renderPreview(); }, ms); }
 function shake() { const el = $('#preview'); el.classList.remove('shake'); void el.offsetWidth; if (animOn()) el.classList.add('shake'); }
 
 function rollScores() {
@@ -934,13 +938,14 @@ function toast(t) {
 let toastTimer = 0;
 function showToast() {
   const el = $('#toast');
-  if (!G.toastQ.length) { el.className = ''; el.innerHTML = ''; return; }
+  if (!G.toastQ.length) { el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); return; }
   if (el.dataset.busy === '1') return;
   const t = G.toastNow = G.toastQ.shift();
   el.dataset.busy = '1';
   el.className = `on ${t.kind}`;
+  el.setAttribute('aria-hidden', 'false');
   $('#app').classList.add('toasting');
-  el.innerHTML = `<button ${t.fact ? `data-fact="${t.fact}" data-form="${t.form || ''}"` : 'tabindex="-1"'}><span class="ti">${t.who ? UI.badge(t.who.p, t.who.k, 34) : t.kind === 'soak' ? UI.ICON.play : UI.ICON.steam}</span><span class="tt"><b>${esc(t.title)}</b><small>${esc(t.sub || '')}</small></span>${t.fact ? '<em>Read the card ›</em>' : ''}</button>`;
+  el.innerHTML = `<button type="button" ${t.fact ? `data-fact="${t.fact}" data-form="${t.form || ''}"` : 'tabindex="-1"'}><span class="ti">${t.who ? UI.badge(t.who.p, t.who.k, 34) : t.kind === 'soak' ? UI.ICON.play : UI.ICON.steam}</span><span class="tt"><b>${esc(t.title)}</b><small>${esc(t.sub || '')}</small></span>${t.fact ? '<em>Read the card ›</em>' : ''}</button>`;
   const b = el.querySelector('[data-fact]');
   if (b) b.addEventListener('click', () => { openFact(b.dataset.fact, b.dataset.form); hideToast(); });
   clearTimeout(toastTimer);
@@ -952,8 +957,13 @@ function clearToasts() {
   G.toastQ = G.toastQ.filter((t) => t.keep);
   if ($('#toast').classList.contains('on') && !(G.toastNow && G.toastNow.keep)) { hideToastNow(); showToast(); }
 }
-function hideToastNow() { const el = $('#toast'); clearTimeout(toastTimer); el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; $('#app').classList.remove('toasting'); }
-function hideToast() { const el = $('#toast'); el.dataset.busy = '0'; el.className = ''; $('#app').classList.remove('toasting'); setTimeout(showToast, 200); }
+function blurToastFocus(el) {
+  if (!el.contains(document.activeElement)) return;
+  if (!G.dialog && G.scene === 'game') { const b = $('#board'); if (b) { b.focus({ preventScroll: true }); return; } }
+  document.activeElement.blur();
+}
+function hideToastNow() { const el = $('#toast'); clearTimeout(toastTimer); blurToastFocus(el); el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); }
+function hideToast() { const el = $('#toast'); blurToastFocus(el); el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); setTimeout(showToast, 200); }
 
 // The strip under the board (or Shift+B) opens how the staged play adds up; the words are read out for a screen reader.
 function toggleBreakdown() {
@@ -967,7 +977,8 @@ function toggleBreakdown() {
 // how to play it, what the coloured discs do and what the plaques are. Each goes when the player does the thing, taps
 // Got it, or after a wait; Skip tips ends them all. Shown once (settings.tipsSeen); Settings can bring them back.
 const COACH_WAIT = { start: 30000, play: 20000, discs: 14000, plaques: 12000 };
-const liveSay = (t) => { const live = $('#live'); live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30); };
+let liveTimer = 0;
+const liveSay = (t) => { const live = $('#live'); clearTimeout(liveTimer); live.textContent = ''; liveTimer = setTimeout(() => { live.textContent = t; }, 30); };
 function coachTip() {
   const c = G.coach;
   if (!c || G.scene !== 'game' || !G.s || G.s.over || cur().kind !== 'human' || G.privacy || G.dialog) return null;
@@ -1217,7 +1228,26 @@ function drawData(now) {
 function tick() { draw(); }
 
 // On a phone, where the squares are small, the button in the top bar zooms in and, once zoomed, shows the whole board again (the one in the board's corner does the same, but only when zoomed).
-const ZOOM_IN = 1.7;   // how far Zoom in goes: the squares grow from about 23 px to about 39 px on a 360 px phone
+const ZOOM_IN = 1.7, ZOOM_MAX = 2.4, ZOOM_STEP = 0.35;   // how far Zoom in goes: the squares grow from about 23 px to about 39 px on a 360 px phone
+function zoomByKey(k) {
+  if (k === '0') { animateView(1, R.U / 2, R.U / 2); liveSay('Whole board shown.'); return; }
+  if (k === '+' || k === '=') {
+    const nextZ = R.view.zoom < 1.05 ? ZOOM_IN : Math.min(ZOOM_MAX, +(R.view.zoom + ZOOM_STEP).toFixed(2));
+    let cx = R.view.cx, cy = R.view.cy;
+    if (R.view.zoom <= 1.01) {
+      const i = G.cursor.on ? G.cursor.i : (G.staged.length ? G.staged[G.staged.length - 1].i : CENTER);
+      cx = R.FRAME + (i % N) + 0.5; cy = R.FRAME + Math.floor(i / N) + 0.5;
+    }
+    animateView(nextZ, cx, cy);
+    liveSay(`Board zoomed to ${Math.round(nextZ * 100)} percent.`);
+    return;
+  }
+  if (k === '-') {
+    const nextZ = R.view.zoom <= ZOOM_IN + 0.05 ? 1 : Math.max(1, +(R.view.zoom - ZOOM_STEP).toFixed(2));
+    animateView(nextZ, nextZ <= 1.01 ? R.U / 2 : R.view.cx, nextZ <= 1.01 ? R.U / 2 : R.view.cy);
+    liveSay(nextZ <= 1.01 ? 'Whole board shown.' : `Board zoomed to ${Math.round(nextZ * 100)} percent.`);
+  }
+}
 function syncZoomBtn() {
   const out = R.view.zoom > 1.01, b = $('#b-zoomin');
   $('#b-zoom').hidden = !out;
@@ -1578,12 +1608,32 @@ function onKey(e) {
   }
   if (G.scene !== 'game') { if (e.key === 'Escape' && G.scene !== 'title') { e.preventDefault(); back(); } return; }
   if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  const tileBtn = e.target && e.target.closest && e.target.closest('#rack .rtile');
+  if (tileBtn && e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    e.preventDefault();
+    if (!(humanCanAct() || waiting())) return;
+    const tileK = +tileBtn.dataset.k, pos = G.order.indexOf(tileK), next = pos + (e.key === 'ArrowLeft' ? -1 : 1);
+    if (pos >= 0 && next >= 0 && next < G.order.length) {
+      [G.order[pos], G.order[next]] = [G.order[next], G.order[pos]];
+      sfx('pick'); renderRack();
+      const moved = document.querySelector(`#rack .rtile[data-k="${tileK}"]`);
+      if (moved) moved.focus();
+      const l = (waitSeat() || cur()).rack[tileK];
+      liveSay(`${l === '?' ? 'Blank tile' : l} moved to position ${next + 1} of ${G.order.length}.`);
+    }
+    return;
+  }
   // Enter and Space on a focused button or link press it (Swap, Pass, Hint, Menu...); on the board or the page they play and turn the cursor
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.closest && e.target.closest('button, a')) return;
   if ((e.key === 'Enter' || e.key === ' ') && !e.repeat && !G.staged.length && skipComputerWait()) { e.preventDefault(); return; }
   if (G.privacy && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('#privacy [data-reveal]')?.click(); return; }
   const k = e.key;
   if (k === '?') { e.preventDefault(); go('help'); return; }
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && !G.privacy && (k === '+' || k === '=' || k === '-' || k === '0')) {
+    e.preventDefault();
+    zoomByKey(k);
+    return;
+  }
   if (e.shiftKey && /^[RSPHB]$/.test(k.toUpperCase()) && k.length === 1) {
     e.preventDefault();
     ({ R: shuffleRack, S: doSwap, P: doPass, H: doHint, B: toggleBreakdown })[k.toUpperCase()]?.();
@@ -1592,12 +1642,21 @@ function onKey(e) {
   if (!humanCanAct()) { if (k === 'Escape') { e.preventDefault(); openDialog('pause'); } return; }
   const c = G.cursor;
   const move = (dr, dc) => { const r = Math.floor(c.i / N) + dr, col = (c.i % N) + dc; if (r >= 0 && r < N && col >= 0 && col < N) c.i = r * N + col; c.on = true; ensureVisible(c.i); draw(); sayCursor(c.i); };
-  if (k === 'ArrowLeft') { e.preventDefault(); move(0, -1); }
-  else if (k === 'ArrowRight') { e.preventDefault(); move(0, 1); }
-  else if (k === 'ArrowUp') { e.preventDefault(); move(-1, 0); }
-  else if (k === 'ArrowDown') { e.preventDefault(); move(1, 0); }
-  else if (k === ' ') { e.preventDefault(); c.dir = c.dir === 1 ? N : 1; c.on = true; draw(); }
-  else if (k === 'Enter') { e.preventDefault(); doPlay(); }
+  if (k === 'ArrowLeft' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(0, -1); }
+  else if (k === 'ArrowRight' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(0, 1); }
+  else if (k === 'ArrowUp' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(-1, 0); }
+  else if (k === 'ArrowDown' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(1, 0); }
+  else if (k === ' ') { e.preventDefault(); c.dir = c.dir === 1 ? N : 1; c.on = true; draw(); liveSay(`Direction: ${c.dir === 1 ? 'across' : 'down'}.`); }
+  else if (k === 'Enter') {
+    e.preventDefault();
+    if (G.selected != null && G.order.includes(G.selected)) {
+      c.on = true;
+      const sel = G.selected, cell = c.i, isBlank = cur().rack[sel] === '?';
+      if (stage(sel, cell)) {
+        if (!isBlank) { const nx = nextCell(cell, c.dir); if (nx >= 0) c.i = nx; ensureVisible(c.i); draw(); }
+      } else { flash('That square already has a tile.'); oops(); }
+    } else doPlay();
+  }
   else if (k === 'Escape') { e.preventDefault(); if (G.staged.length) recallAll(); else openDialog('pause'); }
   else if (k === 'Backspace') {
     e.preventDefault();
