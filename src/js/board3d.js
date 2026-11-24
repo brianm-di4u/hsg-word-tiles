@@ -705,22 +705,24 @@ export function render(d) {
     const w = want[k];
     if (!w) { mf.visible = false; continue; }
     const x = R.FRAME + (w.i % N) + 0.5 - HALF, z = R.FRAME + Math.floor(w.i / N) + 0.5 - HALF;
-    let lift = w.kind === 'staged' ? 0.06 : 0, sc = 1;
+    let lift = w.kind === 'staged' ? 0.06 : 0, sc = 1, roll = 0;
     const a = d.anim && d.anim.get(w.i);
     if (a && w.kind !== 'staged') {
       const k2 = Math.min(1, Math.max(0, (d.now - a.t0) / a.dur));
       if (k2 <= 0) { mf.visible = false; continue; }
-      const e = 1 - Math.pow(1 - k2, 3); lift = (1 - e) * 2.2; sc = 1 + (1 - e) * 0.15;
+      const e = 1 - Math.pow(1 - k2, 3), liftMax = a.lift != null ? a.lift : 2.2;
+      lift = (1 - e) * liftMax; sc = 1 + (1 - e) * 0.15;
+      roll = a.roll && lift > 0.28 ? a.roll * Math.min(1, (lift - 0.28) / Math.max(0.4, liftMax - 0.28)) : 0;
     }
     const t0 = w.kind === 'staged' && d.settle ? d.settle.get(w.i) : null;
     if (t0 != null) sc = 1 + 0.12 * Math.pow(1 - Math.min(1, Math.max(0, (d.now - t0) / 120)), 3);   // a tile just placed settles into its square
-    _tileMat4.makeScale(sc, sc, sc);
-    _tileMat4.setPosition(x, TOP + lift, z);
+    const cr = roll ? Math.cos(roll) : 1, sr = roll ? Math.sin(roll) : 0;
+    _tileMat4.set(cr * sc, -sr * sc, 0, x, sr * sc, cr * sc, 0, TOP + lift, 0, 0, sc, z, 0, 0, 0, 1);
     if (w.kind === 'staged' && nStaged < 16) B3.stagedInst.setMatrixAt(nStaged++, _tileMat4);
     else if (w.kind === 'last' && nLast < 112) B3.lastInst.setMatrixAt(nLast++, _tileMat4);
     else if (nBoard < 112) B3.bodyInst.setMatrixAt(nBoard++, _tileMat4);
     mf.visible = true;
-    mf.position.set(x, TOP + lift, z); mf.scale.setScalar(sc);
+    mf.position.set(x, TOP + lift, z); mf.rotation.set(0, 0, roll); mf.scale.setScalar(sc);
     mf.geometry = faceGeometry(w.t.l, w.t.blank, B3.dark);
     mf.material = B3.faceAtlasMat;
   }

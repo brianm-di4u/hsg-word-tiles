@@ -648,7 +648,7 @@ export function drawFrame(ctx, d) {
   }
   const cellPx = s, tilePx = cellPx * dpr;
   const at = (i) => toScreen(FRAME + (i % N), FRAME + Math.floor(i / N));
-  const drawTile = (i, t, kind, alpha = 1, lift = 0, sc = 1) => {
+  const drawTile = (i, t, kind, alpha = 1, lift = 0, sc = 1, rot = 0) => {
     const [x, y] = at(i);
     const spr = tileSprite(t.l, t.blank, tilePx * sc, kind, d.theme || 'light');
     ctx.globalAlpha = alpha;
@@ -656,8 +656,17 @@ export function drawFrame(ctx, d) {
       ctx.fillStyle = 'rgba(22,13,5,0.24)'; roundRect(ctx, x + cellPx * 0.07, y + cellPx * 0.14 + lift * 0.5, cellPx * 0.91, cellPx * 0.91, cellPx * 0.15); ctx.fill();
       ctx.fillStyle = 'rgba(18,10,4,0.38)'; roundRect(ctx, x + cellPx * 0.06, y + cellPx * 0.09 + lift * 0.3, cellPx * 0.9, cellPx * 0.9, cellPx * 0.14); ctx.fill();
     }
-    const off = (cellPx - cellPx * sc) / 2;
-    ctx.drawImage(spr, x + off, y + off - lift, cellPx * sc, cellPx * sc);
+    const w = cellPx * sc;
+    if (rot) {
+      ctx.save();
+      ctx.translate(x + cellPx / 2, y + cellPx / 2 - lift);
+      ctx.rotate(rot);
+      ctx.drawImage(spr, -w / 2, -w / 2, w, w);
+      ctx.restore();
+    } else {
+      const off = (cellPx - w) / 2;
+      ctx.drawImage(spr, x + off, y + off - lift, w, w);
+    }
     ctx.globalAlpha = 1;
   };
   const now = d.now || 0;
@@ -669,8 +678,9 @@ export function drawFrame(ctx, d) {
       if (a) {
         const k = Math.min(1, Math.max(0, (now - a.t0) / a.dur));
         if (k <= 0) continue;
-        const e = 1 - Math.pow(1 - k, 3);
-        drawTile(i, t, 'board', Math.min(1, k * 1.6), (1 - e) * cellPx * 0.9, 1 + (1 - e) * 0.25);
+        const e = 1 - Math.pow(1 - k, 3), liftMax = a.lift != null ? a.lift : 2.2, liftU = (1 - e) * liftMax;
+        const rot = a.roll && liftU > 0.28 ? a.roll * Math.min(1, (liftU - 0.28) / Math.max(0.4, liftMax - 0.28)) : 0;
+        drawTile(i, t, 'board', Math.min(1, k * 1.6), liftU * cellPx * 0.42, 1 + (1 - e) * 0.25, rot);
       } else drawTile(i, t, 'board');
     }
   }

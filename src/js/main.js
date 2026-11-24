@@ -9,7 +9,7 @@ import { audio, unlock, sfx, pauseAudio, resumeAudio, setTune, holdAudio, releas
 import { art, loadArt } from './art.js';
 import { store, KEYS, createGameSaves, validRegister, validDaily, pruneDays } from './storage.js';
 import { startAi, aiMove, aiHint, aiDailyPar, aiClient } from './aiclient.js';
-import { PERSONAS, persona, LEVEL_NAME, seatLevel } from './personas.js';
+import { PERSONAS, PERSONA_MOTION, persona, personaMotion, LEVEL_NAME, seatLevel } from './personas.js';
 import { barkFor, endBark, SHORT } from './voices.js';
 import { cleanStats, applyGame, applyDaily, nextStreak, dayNumber } from './stats.js';
 import * as B3 from './board3d.js';
@@ -768,12 +768,22 @@ function cancelTurnTimers() {
 // run `fn` in `ms` milliseconds, as a sound that waits for the tiles to land; it is dropped if another game has begun, scene left, or the turn is cancelled
 const later = (g, ms, fn) => { if (ms <= 0) { if (G.s === g && G.scene === 'game') fn(); } else addTurnTimer(() => { if (G.s === g && G.scene === 'game') fn(); }, ms); };
 
-// W4-P-N02: scale AI drop flight, tile stagger, clack lag, and hand-over beat with Settings -> Computer speed.
+// W4-P-N02 & W4-S1-02: scale per-persona AI drop choreography and hand-over beat with Settings -> Computer speed.
 const AI_PACE = {
-  normal:  { stagger: 90, drop: 320, clack: 200, beat: 250, pulse: 900 },
-  fast:    { stagger: 40, drop: 160, clack: 100, beat: 100, pulse: 550 },
-  instant: { stagger: 0,  drop: 0,   clack: 0,   beat: 0,   pulse: 0 },
+  normal:  { scale: 1,    drop: 320, clack: 200, beat: 250, pulse: 900 },
+  fast:    { scale: 0.45, drop: 160, clack: 100, beat: 100, pulse: 550 },
+  instant: { scale: 0,    drop: 0,   clack: 0,   beat: 0,   pulse: 0 },
 };
+function aiTileSchedule(tiles, personaId, scale) {
+  const pm = personaMotion(personaId);
+  const step = Math.round(pm.stagger * scale);
+  const cresc = pm.crescendo > 0 && tiles.length >= 5 ? Math.round((tiles.length >= 7 ? pm.crescendo + 30 : pm.crescendo) * scale) : 0;
+  return tiles.map((t, k) => ({
+    offset: k * step + (cresc && k === tiles.length - 1 ? cresc : 0),
+    lift: pm.lift,
+    roll: pm.roll && SQUARES[t.i] && SQUARES[t.i] !== '.' ? (k % 2 === 0 ? pm.roll : -pm.roll) : 0,
+  }));
+}
 
 function afterAction(entry, fromAi) {
   const s = G.s;
@@ -795,17 +805,23 @@ function afterAction(entry, fromAi) {
   const aiPace = fromAi ? (AI_PACE[G.settings.ai] || AI_PACE.normal) : null;
   const aiInstant = !!(fromAi && (G.fast || G.settings.ai === 'instant'));
   const aiAnim = !!(fromAi && !aiInstant && animOn());
+  const perId = fromAi ? s.players[entry.p].persona : null;
+  const aiSched = aiAnim && entry.kind === 'play' ? aiTileSchedule(entry.tiles, perId, aiPace.scale) : null;
+  const lastOff = aiSched && aiSched.length ? aiSched[aiSched.length - 1].offset : 0;
   // seconds until the computer's tiles have landed (nothing to wait for on instant, pass/swap, or with animation off)
-  const landed = aiAnim && entry.kind === 'play' ? (entry.tiles.length * aiPace.stagger + aiPace.clack) / 1000 : 0;
+  const landed = aiAnim && entry.kind === 'play' ? (lastOff + aiPace.clack) / 1000 : 0;
   if (entry.kind === 'play') {
     G.last = new Set(entry.tiles.map((t) => t.i)); G.lastPulse = null;
     const avgPan = colPan(Math.round(entry.tiles.reduce((a, t) => a + (t.i % N), 0) / entry.tiles.length));
     if (aiAnim) {
       const t0 = performance.now();
-      entry.tiles.forEach((t, k) => G.anim.set(t.i, { t0: t0 + k * aiPace.stagger, dur: aiPace.drop }));
-      G.animUntil = t0 + entry.tiles.length * aiPace.stagger + aiPace.drop + 20;
+      entry.tiles.forEach((t, k) => {
+        const sch = aiSched[k];
+        G.anim.set(t.i, { t0: t0 + sch.offset, dur: aiPace.drop, kind: 'ai', lift: sch.lift, roll: sch.roll, persona: perId });
+      });
+      G.animUntil = t0 + lastOff + aiPace.drop + 20;
       G.lastPulse = { t0: G.animUntil - 20, dur: aiPace.pulse };
-      entry.tiles.forEach((t, k) => addTurnTimer(() => { if (G.s === s && G.scene === 'game') sfx('place', { pan: colPan(t.i), step: k }); }, k * aiPace.stagger + aiPace.clack + Math.floor(Math.random() * 24)));
+      entry.tiles.forEach((t, k) => addTurnTimer(() => { if (G.s === s && G.scene === 'game') sfx('place', { pan: colPan(t.i), step: k }); }, aiSched[k].offset + aiPace.clack + Math.floor(Math.random() * 24)));
       tick();
     } else if (aiInstant) {
       G.anim.clear(); G.animUntil = 0;

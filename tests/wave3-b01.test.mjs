@@ -304,15 +304,15 @@ export const tests = [
       t.equal(inst.busyRemain, 0, 'Instant has 0 ms hand-over lockout (got ' + inst.busyRemain + ' ms)');
       t.equal(inst.played.filter((x) => x === 'place').length, 1, 'Instant fires one crisp condensed settle clack');
 
-      // Fast: ~0.45x stagger (40 ms), drop (160 ms), and total hand-over lockout well under Normal
+      // Fast: ~0.45x stagger (Opal 105*0.45 = 47 ms under W4-S1-02 PERSONA_MOTION), drop (160 ms), and total hand-over lockout well under Normal
       t.equal(fast.animCount, fast.tiles, 'Fast animates all AI tiles');
-      t.equal(fast.stagger, 40, 'Fast uses 40 ms stagger');
+      t.equal(fast.stagger, 47, 'Fast scales Opal 105 ms stagger by 0.45x to 47 ms');
       t.equal(fast.dur, 160, 'Fast uses 160 ms drop duration');
       t.expect(fast.busyRemain > 0 && fast.busyRemain <= Math.round(norm.busyRemain * 0.55),
         `Fast lockout (${fast.busyRemain} ms) scales to ~0.45x of Normal (${norm.busyRemain} ms)`);
 
-      // Normal: full 90 ms stagger, 320 ms drop, full lockout
-      t.equal(norm.stagger, 90, 'Normal preserves 90 ms stagger');
+      // Normal: full Opal 105 ms stagger, 320 ms drop, full lockout
+      t.equal(norm.stagger, 105, 'Normal uses Opal 105 ms stagger');
       t.equal(norm.dur, 320, 'Normal preserves 320 ms drop duration');
       t.expect(norm.busyRemain >= 700, 'Normal preserves full drop + hand-over beat (' + norm.busyRemain + ' ms)');
     },
