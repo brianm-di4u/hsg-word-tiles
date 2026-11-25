@@ -14,7 +14,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
   const lowpass = (f, to, type = 'lowpass', q = 0.7) => { const n = ctx.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q; if (to) n.connect(to); return n; };
   const noiseBuf = ctx.createBuffer(1, sr * 2, sr);
   { const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1; }
-  const noise = (t, dur) => { const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true; s.start(t, rr(0, 1.9)); if (dur) s.stop(t + dur); return s; };
+  const noise = (t, dur, from = rr(0, 1.9)) => { const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true; s.start(t, from); if (dur) s.stop(t + dur); return s; };
 
   let mLevel = opt.music ?? 0.5, aLevel = opt.ambience ?? 0.5, inten = 0, held = false, running = false, timer = 0, cleanTimer = 0, duckUntil = 0;
   const musicBus = gain(mLevel, out), ambBus = gain(aLevel, out);
@@ -31,6 +31,8 @@ export function makeAudioKit(ctx, out, opt = {}) {
     pad:    { waves: ['triangle', 'sine'], det: 6, sus: true, a: 0.9, r: 1.8, lp: 1500 },
     organ:  { waves: ['sine'], parts: [[2, 0.4], [3, 0.15]], sus: true, a: 0.04, r: 0.25 },
     flute:  { waves: ['sine'], parts: [[2, 0.07]], sus: true, a: 0.06, r: 0.3, vib: 5 },
+    clarinet: { waves: ['sine'], parts: [[2, 0.04], [3, 0.3], [5, 0.09], [7, 0.03]], sus: true, a: 0.05, r: 0.22, lp: 1700 },   // odd partials, no vibrato
+    vibes:  { waves: ['sine'], parts: [[4, 0.09]], a: 0.008, decay: 1.4, lp: 2200 },   // a soft mallet, longer and rounder than `mallet`
     brass:  { waves: ['sawtooth', 'square'], det: 5, sus: true, a: 0.03, r: 0.12, lp: 1900 },
     mallet: { waves: ['sine'], parts: [[3, 0.16], [4.2, 0.05]], a: 0.004, decay: 1.1 },
     piano:  { waves: ['triangle'], parts: [[2, 0.22], [3, 0.07]], a: 0.004, decay: 0.75 },
@@ -58,7 +60,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
     k: (m, t, v) => { const o = ctx.createOscillator(), e = gain(0.0001, m.lp); o.frequency.setValueAtTime(115, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.11); e.gain.setValueAtTime(v, t); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.16); o.connect(e); o.start(t); o.stop(t + 0.2); },
     s: (m, t, v) => { const e = gain(0.0001, lowpass(1900, m.inp, 'bandpass', 0.8)); e.gain.setValueAtTime(v * 0.9, t); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.13); noise(t, 0.15).connect(e); },
     h: (m, t, v) => { const e = gain(0.0001, lowpass(6500, m.lp, 'highpass')); e.gain.setValueAtTime(v * 0.35, t); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.04); noise(t, 0.06).connect(e); },
-    b: (m, t, v) => { const e = gain(0.0001, lowpass(3200, m.inp, 'bandpass', 0.5)); e.gain.setValueAtTime(0.0001, t); e.gain.linearRampToValueAtTime(v * 0.4, t + 0.03); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.2); noise(t, 0.22).connect(e); },   // brush
+    b: (m, t, v) => { const e = gain(0.0001, lowpass(3200, m.inp, 'bandpass', 0.5)); e.gain.setValueAtTime(0.0001, t); e.gain.linearRampToValueAtTime(v * 0.4, t + 0.03); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.2); noise(t, 0.22, (t * 7.3) % 1.9).connect(e); },   // brush (takes no random number: it joins the tune without changing it)
   };
 
   // ------------------------------------------------------------------------------------------------- music
@@ -69,9 +71,10 @@ export function makeAudioKit(ctx, out, opt = {}) {
   //                                                               // ([degree, bars] holds a chord for longer),
   //     pad:  { inst: 'pad', gain: 0.05 },
   //     bass: { inst: 'bass', pattern: 'root' | 'two' | 'walk', gain: 0.12 },
-  //     comp: { inst: 'piano', at: [1, 3] (beats), gain: 0.04 },
+  //     comp: { inst: 'piano', at: [1, 3] (beats), gain: 0.04, on: 'B' (only in the sections named; all when left out) },
   //     lead: { inst: 'mallet', gain: 0.09, oct: 1, lo: -2, hi: 9, classes: [0,1,2,4,5], vary: 0.3, rest: 0.15,
-  //             rhythms: [[0,3,4,6], ...] (steps in the bar) },
+  //             wide: 0.5 (chance that a note on the beat reaches for a chord tone not heard yet, so no tune stays on five
+  //             pitches), rhythms: [[0,3,4,6], ...] (steps in the bar) },
   //     perc: { k: [0, 2], s: [1, 3], h: [0.5, 1.5, 2.5, 3.5], gain: 0.5 }, perc2: {...} (added at high intensity),
   //     lp: 4200, delay: 0.18 (echo level, 0 for none), delayBeats: 0.75 }
   // The lead is composed once per section bar and remembered, so A sounds like A each time it returns; on
@@ -98,7 +101,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
       const fb = gain(0.3, d), wet = gain(score.delay ?? 0.18, lp); inp.connect(d); d.connect(fb); d.connect(wet); nodes.push(d, fb, wet);
     }
     bus.gain.setValueAtTime(0.0001, at); bus.gain.linearRampToValueAtTime(1, at + Math.max(fade, 0.02));
-    return { score, bus, lp, inp, nodes, bars: buildBars(score), t: at, bar: 0, mem: {}, rh: {}, prev: 4, dir: 1, sigs: new Set(), pitches: new Set(), notes: 0 };
+    return { score, bus, lp, inp, nodes, bars: buildBars(score), t: at, bar: 0, mem: {}, rh: {}, prev: 4, dir: 1, heard: new Set(), sigs: new Set(), pitches: new Set(), notes: 0 };
   }
   function genMotif(m, B, spbar, spb) {
     const s = m.score, L = s.lead, classes = L.classes || [0, 1, 2, 4, 5], lo = L.lo ?? -2, hi = L.hi ?? 9;
@@ -118,7 +121,8 @@ export function makeAudioKit(ctx, out, opt = {}) {
       if (st % spb === 0 || B.end) {   // on the beat: a chord tone near the last note, preferring to move
         const near = (B.end ? strong.filter((k) => cls(k) !== tones[2]) : strong).slice().sort((x, y) => Math.abs(x - m.prev) - Math.abs(y - m.prev));
         const moved = near.filter((k) => k !== m.prev), c = moved.length ? moved : near;
-        d = c[rnd() < 0.65 || c.length < 2 ? 0 : 1];
+        const fresh = L.wide ? c.filter((k) => !m.heard.has(k) && Math.abs(k - m.prev) <= 5) : [];
+        d = fresh.length && rnd() < L.wide ? fresh[0] : c[rnd() < 0.65 || c.length < 2 ? 0 : 1];
       } else {                         // off the beat: step along the scale, mostly keeping direction
         if (m.prev >= hi - 1) m.dir = -1; else if (m.prev <= lo + 1) m.dir = 1; else if (rnd() < 0.35) m.dir = -m.dir;
         const i = ladder.reduce((best, k, ix) => (Math.abs(k - m.prev) < Math.abs(ladder[best] - m.prev) ? ix : best), 0);
@@ -126,7 +130,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
       }
       const next = j + 1 < rh.length ? rh[j + 1] : spbar;
       mot.push({ st, d, len: B.end ? Math.min(spbar, spb * 3) : Math.max(1, next - st) });
-      m.prev = d;
+      m.prev = d; m.heard.add(d);
     });
     return mot;
   }
@@ -158,7 +162,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
         for (let b = 0; b < beats; b++) voice(m, at(b * spb), line[b % 4], beat * 0.9, ins, g * (b ? 0.85 : 1), 0, true);
       }
     }
-    if (s.comp) for (const b of s.comp.at || [1, 3]) { const st = Math.round(b * spb); for (const d of chord) voice(m, at(st), fold(deg(d), s.key + 12 * (s.comp.oct || 0)), beat * (s.comp.len || 0.4), INST[s.comp.inst || 'piano'], (s.comp.gain ?? 0.04), s.comp.pan || 0, false); }
+    if (s.comp && (!s.comp.on || s.comp.on.includes(B.label))) for (const b of s.comp.at || [1, 3]) { const st = Math.round(b * spb); for (const d of chord) voice(m, at(st), fold(deg(d), s.key + 12 * (s.comp.oct || 0)), beat * (s.comp.len || 0.4), INST[s.comp.inst || 'piano'], (s.comp.gain ?? 0.04), s.comp.pan || 0, false); }
     for (const P of [s.perc, inten >= 0.5 ? s.perc2 : null]) if (P) for (const key of Object.keys(DRUM)) for (const b of P[key] || []) DRUM[key](m, at(Math.round(b * spb)), (P.gain ?? 0.5) * 0.3);
     if (s.lead) {
       const L = s.lead, key = B.label + ':' + B.i; let mot = m.mem[key];
@@ -337,21 +341,24 @@ export async function measureAudio(build, seconds, o = {}) {
 // ------------------------------------------------------------------------------------------------ this game's pieces
 // Chord roots are scale degrees: 0 = I, 1 = ii, 2 = iii, 3 = IV, 4 = V, 5 = vi (6 = VII in the modes below).
 export const SCORES = {
-  // The title and the sheets: a lobby radio playing a soft piano tune over a held pad.
-  // 16 bars at 62 bpm, about 62 s, key of G.
+  // The title and the sheets: a hotel lobby at dusk, a soft mallet over a held pad, lightly swung; the piano comes in
+  // under the middle section only. 16 bars at 62 bpm, about 62 s, key of G.
   lobby: {
-    bpm: 62, key: 67, sevenths: [4, 1], form: 'AABA', sections: { A: [0, 5, 3, 4], B: [5, 3, 1, 4] },
-    pad: { inst: 'pad', gain: 0.021 }, bass: { inst: 'bass', pattern: 'root', gain: 0.049 },
-    lead: { inst: 'piano', gain: 0.042, vary: 0.5, rest: 0.1, oct: 1 },
+    bpm: 62, swing: 0.13, key: 67, sevenths: [4, 1], form: 'AABA', sections: { A: [0, 5, 3, 4], B: [5, 3, 1, 4] },
+    pad: { inst: 'pad', gain: 0.02 }, bass: { inst: 'bass', pattern: 'root', gain: 0.049 },
+    comp: { inst: 'piano', on: 'B', at: [1, 3], gain: 0.006, len: 0.6, oct: -1 },
+    lead: { inst: 'vibes', gain: 0.032, pan: -0.1, vary: 0.5, rest: 0.06, oct: 1, classes: [0, 1, 2, 3, 4, 5, 6], lo: -4, hi: 6, wide: 0.9 },
     lp: 3000, delay: 0.14, delayBeats: 1,
   },
-  // Play: unhurried and open, a flute over a pad in F mixolydian (a flat seventh keeps it from sounding like a hymn).
-  // 32 bars at 72 bpm, about 107 s.
+  // Play: unhurried and open, a clarinet over a pad in F mixolydian (a flat seventh keeps it from sounding like a hymn),
+  // lightly swung. The A sections leave room to think; a whisper of piano under the B section. The brush (perc2) and the
+  // octave lift are for the end of a game only: see moodUpdate in main.js. 32 bars at 72 bpm, about 107 s.
   table: {
-    bpm: 72, key: 65, scale: [0, 2, 4, 5, 7, 9, 10], form: 'AABA',
+    bpm: 72, swing: 0.13, key: 65, scale: [0, 2, 4, 5, 7, 9, 10], form: 'AABA',
     sections: { A: [0, 5, 3, 6, 0, 5, 3, 0], B: [3, 1, 5, 2, 3, 6, 4, 0] },
     pad: { inst: 'pad', gain: 0.018 }, bass: { inst: 'bass', pattern: 'root', gain: 0.042 },
-    lead: { inst: 'flute', gain: 0.042, vary: 0.35, rest: 0.22, oct: 1, lift: true },
+    comp: { inst: 'piano', on: 'B', at: [1, 3], gain: 0.007, len: 0.6, oct: -1 },
+    lead: { inst: 'clarinet', gain: 0.036, vary: 0.35, rest: 0.22, oct: 0, lo: 3, hi: 12, lift: true },
     perc2: { b: [0.5, 1.5, 2.5, 3.5], gain: 0.26 },
     lp: 3200, delay: 0.22, delayBeats: 0.75,
   },
