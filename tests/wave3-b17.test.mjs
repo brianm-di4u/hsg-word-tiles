@@ -1,4 +1,5 @@
-// Wave 3, batch W3-B17: W6-S4-03 (poked tile crown, default-name plaque owners), W6-S4-01 (3D figure-ground and ink).
+// Wave 3, batch W3-B17: W6-S4-03 (poked tile crown, default-name plaque owners), W6-S4-01 (3D figure-ground and ink),
+// W6-S4-02 (spring labels and Row paintings readable under the 3D lamp).
 import { SQUARE } from '../src/js/score.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
@@ -140,6 +141,24 @@ export const tests = [
       t.expect(bare > 0, `the halo reaches that square while it is empty (${bare} px)`);
       t.equal(await read(), 0, 'and none of it is drawn over the staged tile');
       await t.shot('w3-b17-halo-beside', { timeout: 15000 });
+    },
+  },
+  // ---------- W6-S4-02 ----------
+  {
+    name: 'W6-S4-02 every spring label on the 3D board reads under the lamp, Day and Night',
+    url: 'index.html?gl=3d',
+    initScript: quiet,
+    async run(t) {
+      await midgame(t);
+      t.equal((await t.state()).view.mode3d, true, '3D board on');
+      for (const theme of ['day', 'night']) {
+        if (theme === 'night') await dark(t);
+        const m = await measure(t);
+        t.log(theme + ': ' + said(m));
+        t.equal(m.labels, 42, 'the 42 labels not under a tile are measured');
+        t.expect(m.label >= 3.2, `${theme}: the faintest label holds 3.2:1 with the squares dimmed as far as they go (square ${m.labelAt}, ${m.label.toFixed(2)}; it was 1.01 to 1.09)`);
+        t.expect(m.labelMid >= 3.6, `${theme}: the middle label holds 3.6:1 (${m.labelMid.toFixed(2)})`);
+      }
     },
   },
 ];

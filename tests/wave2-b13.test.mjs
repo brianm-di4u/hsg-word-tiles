@@ -233,7 +233,7 @@ export const tests = [
     },
   },
   {
-    name: 'W3-S2-02 board 512x512 roughnessMap (grout 0.85, travertine 0.62, glass/brass 0.22) binds to B3.top (roughness=1) and walnut diffuse+roughness textures bind to B3.frame',
+    name: 'W3-S2-02 board 512x512 roughnessMap (grout 0.85, travertine 0.62, satin glass 0.55, matte labels 0.85, brass 0.22) binds to B3.top (roughness=1) and walnut diffuse+roughness textures bind to B3.frame',
     viewports: ['desktop'],
     initScript: quiet,
     async run(t) {
@@ -259,23 +259,25 @@ export const tests = [
         const neutralIdx = SQUARE.findIndex((k, i) => k === '.' && i > 30 && i < 120);
         const nr = Math.floor(neutralIdx / N), nc = neutralIdx % N;
         const travertine = sampleAt(f + (nc + 0.5) * cell, f + (nr + 0.5) * cell);
-        // Sample glossy stained-glass square
+        // Sample a stained-glass square: its glass between the label and the rim, and the label in its middle
         const glassIdx = SQUARE.findIndex((k) => k === 'h');
         const gr = Math.floor(glassIdx / N), gc = glassIdx % N;
-        const glass = sampleAt(f + (gc + 0.5) * cell, f + (gr + 0.5) * cell);
+        const glass = sampleAt(f + (gc + 0.18) * cell, f + (gr + 0.18) * cell), glassLabel = sampleAt(f + (gc + 0.5) * cell, f + (gr + 0.5) * cell);
         // Sample Display Spring center pool
         const cr = Math.floor(CENTER / N), cc = CENTER % N;
         const centerPool = sampleAt(f + (cc + 0.5) * cell, f + (cr + 0.5) * cell);
         // Sample brass inner rail
         const brassRail = sampleAt(f - cell * 0.06, cv.height * 0.5);
-        return { w: cv.width, h: cv.height, grout, travertine, glass, centerPool, brassRail };
+        return { w: cv.width, h: cv.height, grout, travertine, glass, glassLabel, centerPool, brassRail };
       });
       t.equal(roughAudit.w, 512, 'board roughnessMap is 512 px wide');
       t.equal(roughAudit.h, 512, 'board roughnessMap is 512 px tall');
       t.expect(roughAudit.grout >= 0.80 && roughAudit.grout <= 0.90, `matte grout roughness ~0.85 (got ${roughAudit.grout.toFixed(2)})`);
       t.expect(roughAudit.travertine >= 0.56 && roughAudit.travertine <= 0.68, `honed travertine roughness ~0.62 (got ${roughAudit.travertine.toFixed(2)})`);
-      t.expect(roughAudit.glass >= 0.18 && roughAudit.glass <= 0.28, `glossy stained-glass roughness ~0.22 (got ${roughAudit.glass.toFixed(2)})`);
-      t.expect(roughAudit.centerPool >= 0.18 && roughAudit.centerPool <= 0.28, `glossy Display Spring roughness ~0.22 (got ${roughAudit.centerPool.toFixed(2)})`);
+      // W6-S4-02: the glass was 0.22, which mirrored the lamp and washed the labels out (wave3-b17 measures them)
+      t.expect(roughAudit.glass >= 0.50 && roughAudit.glass <= 0.60, `satin stained-glass roughness ~0.55 (got ${roughAudit.glass.toFixed(2)})`);
+      t.expect(roughAudit.glassLabel >= 0.80 && roughAudit.glassLabel <= 0.90, `matte label roughness ~0.85 (got ${roughAudit.glassLabel.toFixed(2)})`);
+      t.expect(roughAudit.centerPool >= 0.50 && roughAudit.centerPool <= 0.60, `satin Display Spring roughness ~0.55 (got ${roughAudit.centerPool.toFixed(2)})`);
       t.expect(roughAudit.brassRail >= 0.18 && roughAudit.brassRail <= 0.28, `glossy brass rail roughness ~0.22 (got ${roughAudit.brassRail.toFixed(2)})`);
 
       // 2) Verify 3D B3.top and B3.frame material bindings on GPU

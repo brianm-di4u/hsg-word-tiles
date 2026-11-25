@@ -391,7 +391,9 @@ export function paintBoard(size, theme = 'light', mode3d = false) {
 }
 
 // Matching 512x512 linear roughnessMap for 3D B3.top (W3-S2-02):
-// matte 0.85 grout, honed 0.62 travertine marble, 0.58 terrazzo border, glossy 0.22 stained-glass pools, medallions & brass rails.
+// matte 0.85 grout and spring labels, honed 0.62 travertine marble, 0.58 terrazzo border, satin 0.55 stained glass, pool & medallions,
+// glossy 0.22 brass rails. Glass at 0.22 mirrored the lamp: in 3D up to nine of the 46 labels washed out, the worst to 1.01:1 (W6-S4-02).
+const GLASS_ROUGH = 0.55, LABEL_ROUGH = 0.85;
 export function paintBoardRoughness(size = 512) {
   const cv = mk(size, size), ctx = cv.getContext('2d');
   const cell = size / U, f = FRAME * cell, band = f * 0.78, rnd = prng(147);
@@ -421,16 +423,18 @@ export function paintBoardRoughness(size = 512) {
     ctx.fillRect(x, y, w, w);
     const cx = x + w / 2, cy = y + w / 2;
     if (PREMIUM[k]) {
-      // glossy stained-glass pool & brass rim (0.22)
-      ctx.fillStyle = gray(0.22);
+      // satin stained glass, with its enamel label matte
+      ctx.fillStyle = gray(GLASS_ROUGH);
       ctx.fillRect(x + w * 0.035, y + w * 0.035, w * 0.93, w * 0.93);
+      ctx.fillStyle = gray(LABEL_ROUGH);
+      ctx.beginPath(); ctx.arc(cx, cy, cell * 0.37, 0, Math.PI * 2); ctx.fill();
     } else if (k === '*') {
-      // glossy Display Spring pool & brass rim (0.22)
-      ctx.fillStyle = gray(0.22);
+      // satin Display Spring pool
+      ctx.fillStyle = gray(GLASS_ROUGH);
       ctx.beginPath(); ctx.arc(cx, cy, w * 0.47, 0, Math.PI * 2); ctx.fill();
     } else if (k === 'B') {
-      // glossy glazed Bathhouse Row medallion & brass bezel (0.22)
-      ctx.fillStyle = gray(0.22);
+      // satin glazed Bathhouse Row medallion
+      ctx.fillStyle = gray(GLASS_ROUGH);
       octagonPath(ctx, x + w * 0.04, y + w * 0.04, w * 0.92, 0.28);
       ctx.fill();
     }
