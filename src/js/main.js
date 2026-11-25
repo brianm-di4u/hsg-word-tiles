@@ -1079,13 +1079,16 @@ function recallAll() { G.breakdown = false; if (!G.staged.length) return; endRet
 function endFlip() {
   clearTimeout(G.flipTimer); G.flipTimer = 0;
   document.querySelectorAll('#rack .rtile').forEach((el) => {
-    if (el.dataset.flip) { delete el.dataset.flip; el.style.transition = ''; el.style.transform = ''; }
+    if (el.dataset.flip) { delete el.dataset.flip; const c = el.firstChild; c.style.transition = 'none'; c.style.transform = ''; }   // 'none' stops a slide under way; '' would let it run on
   });
 }
 function shuffleRack() {
-  endReturn(); endFlip();
+  endReturn();
   const o = G.order;
-  const before = animOn() ? new Map([...document.querySelectorAll('#rack .rtile')].map((el) => [el.dataset.k, el.getBoundingClientRect().left])) : null;
+  // Only the drawn face (the button's canvas) slides: each button is in its new place, to press or drag, from the first frame.
+  // A shuffle in the middle of a shuffle goes on from where the faces are.
+  const before = animOn() ? new Map([...document.querySelectorAll('#rack .rtile')].map((el) => [el.dataset.k, el.firstChild.getBoundingClientRect().left])) : null;
+  endFlip();
   const snap = o.slice();
   for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; }
   if (o.length > 1 && o.every((v, idx) => v === snap[idx])) [o[0], o[1]] = [o[1], o[0]];
@@ -1096,16 +1099,16 @@ function shuffleRack() {
     document.querySelectorAll('#rack .rtile').forEach((el) => {
       const prevL = before.get(el.dataset.k);
       if (prevL == null) return;
-      const dx = prevL - el.getBoundingClientRect().left;
+      const c = el.firstChild, dx = prevL - c.getBoundingClientRect().left;
       if (Math.abs(dx) < 0.5) return;
       el.dataset.flip = '1';
-      el.style.transition = 'none';
-      el.style.transform = `translateX(${dx.toFixed(1)}px)${el.classList.contains('sel') ? ' translateY(-8px)' : ''}`;
-      moved.push(el);
+      c.style.transition = 'none';
+      c.style.transform = `translateX(${dx.toFixed(1)}px)`;
+      moved.push(c);
     });
     if (moved.length && rk) {
       void rk.offsetWidth;
-      for (const el of moved) { el.style.transition = 'transform 160ms cubic-bezier(0.22, 1, 0.36, 1)'; el.style.transform = ''; }
+      for (const c of moved) { c.style.transition = 'transform 160ms cubic-bezier(0.22, 1, 0.36, 1)'; c.style.transform = ''; }
       G.flipTimer = setTimeout(endFlip, 175);
     }
   }

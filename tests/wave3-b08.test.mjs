@@ -311,7 +311,7 @@ export const tests = [
       await t.page.click('[data-act="shuffle"]');
       const flipStart = await t.page.evaluate(() => {
         const tiles = [...document.querySelectorAll('#rack .rtile')];
-        const flipped = tiles.filter((el) => el.dataset.flip === '1' && /160ms/.test(el.style.transition));
+        const flipped = tiles.filter((el) => el.dataset.flip === '1' && /160ms/.test(el.firstChild.style.transition));
         return { total: tiles.length, flipped: flipped.length };
       });
       t.expect(flipStart.flipped >= 2, `shuffleRack started 160 ms FLIP slide on ${flipStart.flipped} tiles`);
