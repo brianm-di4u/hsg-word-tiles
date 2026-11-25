@@ -752,7 +752,12 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   #turnline { align-items: center; }
   #turnline .chips { display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap; }
   #turnline .bag { font-size: 0.78em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  #turnline .bag:not(.phase-final):not(.phase-empty) { display: flex; justify-content: center; }
+  #turnline .bag-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #turnline .bag-n { flex: none; white-space: pre; }
   #turnline .bag-btn { align-self: center; text-align: center; }
+  #turnline .bag-btn:not(.phase-final):not(.phase-empty), #turnline .daily-bag.bag-link { padding: 6px 8px; margin: -6px -8px; max-width: calc(100% + 16px); }   /* a larger tap area in the same space */
+  #turnline .daily-bag { white-space: nowrap; }
   #turnline .bag.phase-final, #turnline .bag.phase-empty { align-self: center; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; padding: 1px 7px; }
   #turnline .daily-turn { font-size: 0.78rem; padding: 2px 8px; }
   #turnline .daily-sub { justify-content: center; font-size: 0.76em; }

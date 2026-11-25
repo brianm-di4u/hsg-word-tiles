@@ -153,7 +153,7 @@ export const tests = [
         const b = document.querySelector('#turnline button.bag[data-open-tracker]');
         return b ? { text: b.textContent.trim(), label: b.getAttribute('aria-label') } : null;
       });
-      t.expect(!!bagBtn && /tiles in the bag/.test(bagBtn.text), `Play #turnline .bag is a clickable button (${JSON.stringify(bagBtn)})`);
+      t.expect(!!bagBtn && /tiles in the bag|\d+ bag$/.test(bagBtn.text) && /tiles in the bag/.test(bagBtn.label), `Play #turnline .bag is a clickable button (${JSON.stringify(bagBtn)})`);
       await t.page.click('#turnline [data-open-tracker]');
       t.equal((await t.state()).dialog, 'tracker', 'clicking #turnline .bag opens Unseen tiles');
       t.expect(/tiles you cannot see/.test(await t.page.textContent('#modal .tracker')), 'Unseen tiles content rendered');

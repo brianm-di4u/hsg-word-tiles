@@ -1351,9 +1351,9 @@ function renderTurnline() {
       : bagTxt;
     if (mobile) {
       const mobBag = canTrack
-        ? `<button type="button" class="daily-bag bag-link" data-open-tracker aria-label="${UI.plural(s.bag.length, 'tile')} left — open Unseen tiles" title="Unseen tiles (Shift+U)">${UI.plural(s.bag.length, 'tile')} left</button>`
-        : `<span class="daily-bag">${UI.plural(s.bag.length, 'tile')} left</span>`;
-      tl.innerHTML = `<span class="chips daily-row">${UI.scoresHtml(s, true)}${turnBadge}</span><span class="daily-sub">${parsHtml || mobBag}${priorHtml}</span>`;
+        ? `<button type="button" class="daily-bag bag-link" data-open-tracker aria-label="${esc(bagTxt)} — open Unseen tiles" title="Unseen tiles (Shift+U)">${s.bag.length} bag</button>`
+        : `<span class="daily-bag">${s.bag.length} bag</span>`;
+      tl.innerHTML = `<span class="chips daily-row">${turnBadge}${UI.scoresHtml(s, true)}</span><span class="daily-sub">${mobBag}${parsHtml}${priorHtml}</span>`;
     } else {
       tl.innerHTML = `<span class="who daily-head">${turnBadge}${priorHtml}</span><span class="bag daily-sub">${parsHtml}${parsHtml ? ' · ' : ''}${bagBtn}</span>`;
     }
@@ -1367,23 +1367,23 @@ function renderTurnline() {
       ? `${UI.plural(left, 'tile')} ${mobile ? 'left' : 'in the bag'} · Final stretch · swaps closed`
       : `${UI.plural(left, 'tile')} in the bag`;
   const chalBadge = s.challenge ? '<span class="mode-badge" title="Challenge mode: invalid words cost your turn">Challenge</span>' : '';
-  const mobileBag = s.over
-    ? 'Game over'
-    : left < RACK
-      ? bagLine
-      : `${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'} · ${bagLine}`;
-  const bagEl = (txt) => (canTrack
-    ? `<button type="button" class="bag bag-btn${phaseCls}" data-open-tracker aria-label="${esc(txt)} — open Unseen tiles" title="Unseen tiles (Shift+U)">${txt}</button>`
+  // phones: whose turn and the bag as two short tokens; only a long name may give way
+  const short = !s.over && left >= RACK;
+  const whose = cur().kind === 'ai' ? (SHORT[cur().persona] || cur().name) : humans() === 1 ? 'Your turn' : cur().name;
+  const mobileBag = s.over ? 'Game over' : short ? `<span class="bag-who">${esc(whose)}</span><span class="bag-n"> · ${left} bag</span>` : bagLine;
+  const bagEl = (txt, label = txt) => (canTrack
+    ? `<button type="button" class="bag bag-btn${phaseCls}" data-open-tracker aria-label="${esc(label)} — open Unseen tiles" title="Unseen tiles (Shift+U)">${txt}</button>`
     : `<span class="bag${phaseCls}">${txt}</span>`);
   tl.innerHTML = mobile
-    ? `<span class="chips">${UI.scoresHtml(s, true)}${chalBadge}</span>${bagEl(mobileBag)}`
+    ? `<span class="chips">${UI.scoresHtml(s, true)}${chalBadge}</span>${bagEl(mobileBag, short ? `${cur().name}${cur().kind === 'ai' ? '' : ' to play'} · ${bagLine}` : mobileBag)}`
     : s.over ? `<span class="who turn-head"><span>Game over</span>${chalBadge}</span>` : `<span class="who turn-head"><span class="who-name">${esc(cur().name)}${cur().kind === 'ai' ? '' : ' to play'}</span>${chalBadge}</span>${bagEl(bagLine)}`;
 }
 
 function renderActions() {
   const s = G.s, p = cur(), human = p.kind === 'human' && !G.privacy;
   const el = $('#actions'), keyFocus = el.querySelector(':focus-visible');
-  el.innerHTML = UI.actionsHtml({ mobile: isNarrow(), staged: G.staged.length > 0, canSwap: s.bag.length >= RACK, canPlay: G.staged.length > 0 && G.preview && G.preview.ok, playScore: G.staged.length > 0 && G.preview && G.preview.ok ? G.preview.score : null, hints: !s.challenge && p.hints != null && p.kind === 'human' ? p.hints : null, unlimited: !s.challenge && !!p.unl });
+  const hp = p.kind === 'human' ? p : s.players.slice(s.cur + 1).concat(s.players).find((x) => x.kind === 'human');   // Hint keeps its slot (disabled) while a computer plays, so nothing shifts
+  el.innerHTML = UI.actionsHtml({ mobile: isNarrow(), staged: G.staged.length > 0, canSwap: s.bag.length >= RACK, canPlay: G.staged.length > 0 && G.preview && G.preview.ok, playScore: G.staged.length > 0 && G.preview && G.preview.ok ? G.preview.score : null, hints: !s.challenge && hp && hp.hints != null ? hp.hints : null, unlimited: !s.challenge && !!(hp && hp.unl) });
   el.classList.toggle('waiting', !human || s.over);
   el.querySelectorAll('[data-act]').forEach((b) => {
     if ((!human || s.over) && !(b.dataset.act === 'shuffle' && waitSeat())) b.disabled = true;

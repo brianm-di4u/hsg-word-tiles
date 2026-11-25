@@ -117,4 +117,115 @@ export const tests = [
       t.equal(Math.round((await box(t, ['#rackbar']))['#rackbar'].t - a['#rackbar'].t), 0, 'Challenge: the rack stays put');
     },
   },
+  {
+    name: 'W5-S3-04 the action buttons never move: same slots with no tile, with tiles, and while the computer plays, and Shift+R still shuffles',
+    viewports: ['desktop', 'mobile'],
+    initScript: noTips,
+    async run(t) {
+      await ready(t);
+      const mobile = t.viewport === 'mobile';
+      const slots = () => t.page.evaluate(() => [...document.querySelectorAll('#actions .abtn')].map((b) => { const r = b.getBoundingClientRect(); return { act: b.dataset.act, at: `${r.left.toFixed(1)}+${r.width.toFixed(1)}`, off: b.disabled, text: b.textContent.trim() }; }));
+      const sizes = mobile ? [[390, 844], [320, 568], [844, 390], [568, 320]] : [[1280, 800], [1024, 600]];
+      for (const [w, h] of sizes) {
+        await size(t, w, h);
+        for (const challenge of [false, true]) {
+          const what = `${w}x${h}${challenge ? ' Challenge' : ''}`, n = (mobile ? 5 : 6) - (challenge ? 1 : 0);
+          await t.game('newGame', { seed: 5, challenge });
+          await t.waitIdle(6000);
+          const a = await slots();
+          t.equal(a.length, n, `${what}: ${n} slots`);
+          t.equal(a[0].act, 'shuffle', `${what}: Shuffle first`);
+          if (!mobile) t.equal(`${a[1].act} ${a[1].off}`, 'recall true', `${what}: Recall waits in slot 2`);
+          const [mv] = await t.game('act', 'moves', 1);
+          await t.game('act', 'stage', mv.tiles);
+          await t.waitIdle(6000);
+          const b = await slots();
+          t.equal(b.map((x) => x.at).join(' '), a.map((x) => x.at).join(' '), `${what}: tiles placed, nothing moved`);
+          t.equal(mobile ? b[0].act : `${b[0].act} ${b[1].act} ${b[1].off}`, mobile ? 'recall' : 'shuffle recall false', `${what}: Recall is on`);
+          // Shift+R, with two tiles still on the rack
+          const orders = new Set();
+          for (let k = 0; k < 12; k++) { await t.page.keyboard.press('Shift+R'); orders.add((await t.state()).order.join()); }
+          t.expect(orders.size > 1, `${what}: Shift+R shuffles with tiles placed (${[...orders].join(' / ')})`);
+          t.equal((await t.state()).staged.length, mv.tiles.length, `${what}: and takes none back`);
+          await t.game('act', 'recall');
+          await t.waitIdle(6000);
+          // the computer's turn, read before it can play
+          const c = await t.page.evaluate(() => {
+            const g = window.__game.getState().game; g.cur = 1;
+            window.__game.setState({ game: g });
+            const at = [...document.querySelectorAll('#actions .abtn')].map((b) => { const r = b.getBoundingClientRect(); return { act: b.dataset.act, at: `${r.left.toFixed(1)}+${r.width.toFixed(1)}`, off: b.disabled, text: b.textContent.trim() }; });
+            return { at, turn: window.__G.s.cur };
+          });
+          t.equal(c.turn, 1, `${what}: it is the computer's turn`);
+          t.equal(c.at.map((x) => `${x.act} ${x.at}`).join(', '), a.map((x) => `${x.act} ${x.at}`).join(', '), `${what}: the computer's turn, nothing moved`);
+          if (!challenge) { const hint = c.at.find((x) => x.act === 'hint'); t.expect(hint && hint.off && /3/.test(hint.text), `${what}: Hint waits, off, with its count (${JSON.stringify(hint)})`); }
+          await t.waitIdle(8000);
+        }
+      }
+      // no hints in this game, and the Daily Soak: no Hint button at all, on either turn
+      await t.game('newGame', { seed: 5, hints: false });
+      await t.waitIdle(6000);
+      t.equal((await slots()).some((x) => x.act === 'hint'), false, 'hints off: no Hint');
+      await t.page.evaluate(() => { const g = window.__game.getState().game; g.cur = 1; window.__game.setState({ game: g }); });
+      t.equal((await slots()).some((x) => x.act === 'hint'), false, 'hints off, the computer: no Hint');
+    },
+  },
+  {
+    name: 'W5-S3-04 the phone turn line is short whole tokens at 100% and 130% text: whose turn and the bag, the Daily turn first',
+    viewports: ['mobile'],
+    initScript: noTips,
+    async run(t) {
+      await ready(t);
+      const read = () => t.page.evaluate(() => {
+        const tl = document.querySelector('#turnline'), bar = tl.getBoundingClientRect();
+        const shown = [...tl.querySelectorAll('*')].filter((e) => !e.closest('.sr-only, .badge') && e.getBoundingClientRect().width > 0);
+        return {
+          first: tl.firstElementChild.firstElementChild.textContent.trim(),
+          text: (tl.querySelector('.bag, .daily-bag') || tl).textContent.trim(), label: tl.querySelector('[data-open-tracker]')?.getAttribute('aria-label') || '',
+          cut: shown.filter((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).display !== 'inline' && getComputedStyle(e).overflowX !== 'visible').map((e) => e.className),
+          out: shown.filter((e) => { const r = e.getBoundingClientRect(), c = e.matches('[data-open-tracker]') ? 9 : 0.5; return r.left < bar.left - c || r.right > bar.right + c; }).map((e) => e.className),
+          n: (() => { const e = tl.querySelector('.bag-n'); return e ? e.textContent.trim() : ''; })(),
+        };
+      });
+      const SIZES = [[390, 844], [320, 568], [844, 390], [568, 320]];
+      for (const text of [1, 1.3]) {
+        await textSize(t, text);
+        for (const [w, h] of SIZES) {
+          await size(t, w, h);
+          const what = `${w}x${h} ${text * 100}%`;
+          await t.game('newGame', { seed: 5, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }, { kind: 'ai', persona: 'hollis', level: 'medium' }, { kind: 'ai', persona: 'julian', level: 'hard' }] });
+          await t.waitIdle(6000);
+          let m = await read();
+          t.equal(`${m.text} | ${m.label} | ${m.cut} | ${m.out}`, 'Your turn · 70 bag | You to play · 70 tiles in the bag — open Unseen tiles |  | ', `${what}: your turn`);
+          m = await t.page.evaluate(() => { const g = window.__game.getState().game; g.cur = 3; window.__game.setState({ game: g }); const e = document.querySelector('#turnline .bag'); return { text: e.textContent.trim(), cut: e.querySelector('.bag-who').scrollWidth > e.querySelector('.bag-who').clientWidth + 1 }; });
+          t.equal(`${m.text} ${m.cut}`, 'Julian · 70 bag false', `${what}: the computer with the longest name`);
+          await t.waitIdle(8000);
+          // two people with the longest names the game takes: the name gives way, never the bag
+          await t.game('newGame', { seed: 5, seats: [{ kind: 'human', name: 'Maximilianotter1' }, { kind: 'human', name: 'Wilhelminaaaaaaa' }] });
+          await t.game('act', 'reveal');
+          m = await read();
+          t.expect(m.n === '· 84 bag' && m.out.length === 0 && m.cut.every((c) => c === 'bag-who') && /^Maximilianotter1 to play · 84 tiles in the bag/.test(m.label), `${what}: pass and play ${JSON.stringify(m)}`);
+          // the Daily Soak: its turn first, then the bag and the star targets together
+          await t.game('newGame', { mode: 'daily', date: '2026-11-20' });
+          await t.waitIdle(6000);
+          await t.page.waitForFunction(() => document.querySelectorAll('#turnline .par-pip').length === 2, null, { timeout: 15000 });
+          m = await read();
+          t.equal(`${m.first} | ${m.text} | ${m.label} | ${m.cut} | ${m.out}`, 'Turn 1 / 10 | 91 bag | 91 tiles in the bag — open Unseen tiles |  | ', `${what}: Daily Soak`);
+          t.equal((await t.contrastReport({ selector: '#turnline', min: 4.5, largeMin: 3 })).fails.length, 0, `${what}: contrast`);
+        }
+        await size(t, 390, 844);
+        await t.waitFrames(2);
+        await t.shot(`w3-b13-daily-${text * 100}`);
+        await t.page.click('#turnline .daily-bag');
+        t.equal((await t.state()).dialog, 'tracker', 'the Daily bag opens Unseen tiles');
+        await t.page.click('#modal [data-close]');
+        await t.game('newGame', { seed: 5 });
+        await t.waitIdle(6000);
+        await t.shot(`w3-b13-turn-${text * 100}`);
+        await t.page.click('#turnline .bag-btn');
+        t.equal((await t.state()).dialog, 'tracker', 'the bag opens Unseen tiles');
+        await t.page.click('#modal [data-close]');
+      }
+    },
+  },
 ];
