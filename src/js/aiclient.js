@@ -3,6 +3,7 @@
 import { WORKER_SRC } from './worker-src.js';
 import { chooseAction, hintChoices } from './ai.js';
 import { dailyPar } from './par.js';
+import { bestOf, REVIEW_NODES_MAIN } from './review.js';
 import { deducibleFeatured } from './lexicon.js';
 
 export const aiClient = { mode: 'none', worker: null, pending: new Map(), seq: 0, ready: null, dict: null, lex: null };
@@ -74,6 +75,17 @@ export async function aiHint(s) {
     if (r.type !== 'retry') return r.moves;
   }
   return hintChoices(aiClient.dict, aiClient.lex, slim(s));
+}
+
+// Resolves one turn of the look back over a game (review.js reviewTurns) with its best play: in the worker, else here with a shorter search.
+export async function aiReview(turn) {
+  await aiClient.ready;
+  if (aiClient.mode === 'worker') {
+    const r = await call({ type: 'review', turn });
+    if (r.type !== 'retry') return { ...turn.did, best: r.best, ...(r.partial ? { partial: true } : {}) };
+  }
+  await new Promise((res) => setTimeout(res, 0)); // a turn at a time, so the page stays awake
+  return { ...turn.did, ...bestOf(aiClient.dict, aiClient.lex, turn, REVIEW_NODES_MAIN) };
 }
 
 // Resolves { m, h } par scores for a Daily Soak date, off the main thread when the Worker is running.

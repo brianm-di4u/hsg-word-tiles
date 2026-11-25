@@ -8,14 +8,14 @@ import * as R from './render2d.js';
 import { audio, unlock, sfx, pauseAudio, resumeAudio, setTune, holdAudio, releaseAudio, syncAudio, audioList, audioRender, renderCue, tuneName } from './audio.js';
 import { art, loadArt } from './art.js';
 import { store, KEYS, createGameSaves, validRegister, validDaily, pruneDays } from './storage.js';
-import { startAi, aiMove, aiHint, aiDailyPar, aiClient } from './aiclient.js';
+import { startAi, aiMove, aiHint, aiReview, aiDailyPar, aiClient } from './aiclient.js';
 import { PERSONAS, PERSONA_MOTION, persona, personaMotion, LEVEL_NAME, seatLevel } from './personas.js';
 import { barkFor, endBark, SHORT } from './voices.js';
 import { cleanStats, applyGame, applyDaily, nextStreak, dayNumber } from './stats.js';
 import * as B3 from './board3d.js';
 import * as UI from './ui.js';
 import { generateMoves } from './movegen.js';
-import { reviewSeat, reviewSteps, summarize } from './review.js';
+import { reviewSeat, reviewTurns, summarize } from './review.js';
 
 const { qs: $, esc } = UI;
 const META = { words: 168271, added: 0 };
@@ -1873,7 +1873,7 @@ function openFact(id, form) {
   openDialog('fact', { entry, form });
 }
 
-// What you missed: the finished game looked back over, one turn at a time so the page stays awake while it works.
+// What you missed: the finished game looked back over in the worker, one turn at a time.
 let reviewing = 0;
 async function openReview() {
   const s = G.s, seat = s && reviewSeat(s);
@@ -1881,9 +1881,8 @@ async function openReview() {
   const mine = ++reviewing;
   openDialog('review', { review: null });
   const steps = [];
-  for (const step of reviewSteps(s, seat, G.dict, G.lex)) {
-    steps.push(step);
-    await new Promise((res) => setTimeout(res, 0));
+  for (const turn of reviewTurns(s, seat)) {
+    steps.push(turn.skipped ? turn : await aiReview(turn));
     if (mine !== reviewing || G.dialog !== 'review' || G.s !== s) return;   // closed, or another game, meanwhile
   }
   openDialog('review', { review: summarize(steps) });

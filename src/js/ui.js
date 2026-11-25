@@ -686,11 +686,15 @@ export function overHtml(s, lex, dinfo, extra = {}) {
 
 // The look back over a finished game (review.js): how often the best-scoring play was found, and the biggest misses. r is null while it is worked out.
 export function reviewHtml(r) {
+  const did = (m) => (m.kind === 'play' ? `You played <em>${esc(m.word)}</em> for ${m.score}.`
+    : m.kind === 'swap' ? 'You swapped tiles.'
+      : m.challenge ? `You tried <em>${esc(m.challenge)}</em>, not in the dictionary, and lost the turn.` : 'You passed.');
+  const where = (b) => (b.at == null ? '' : `, ${b.dir} from ${squareName(b.at)}`);
   const body = !r ? '<p role="status">Looking back over your turns…</p>'
     : !r.total ? '<p>There is nothing to look back over.</p>'
-    : `<p class="rv-rate"><b>${r.found} of ${r.total}</b> ${r.total === 1 ? 'turn' : 'turns'}: you made the highest-scoring play your tiles allowed.</p>
-      ${r.misses.length ? `<ol class="rv-list">${r.misses.map((m) => `<li><b>Turn ${m.turn}</b> ${m.kind === 'play' ? `You played <em>${esc(m.word)}</em> for ${m.score}.` : m.kind === 'swap' ? 'You swapped tiles.' : 'You passed.'} <em>${esc(m.best.word)}</em> would have scored ${m.best.score}.</li>`).join('')}</ol>` : '<p>No play left more than a few points behind the best one on offer.</p>'}
-      <p class="note">This counts points only. A smaller play that keeps good tiles can be the better one.${r.skipped ? ` ${plural(r.skipped, 'turn')} from before this was kept could not be looked at.` : ''}</p>`;
+    : `<p class="rv-rate"><b>${r.found} of ${r.total}</b> ${r.total === 1 ? 'turn' : 'turns'}: you made the highest-scoring play ${r.casual ? 'in everyday and Hot Springs words, or a better one' : 'your tiles allowed'}.</p>
+      ${r.misses.length ? `<ol class="rv-list">${r.misses.map((m) => `<li><b>Turn ${m.turn}</b> ${did(m)} <em>${esc(m.best.word)}</em> would have scored ${m.best.score}${where(m.best)}.</li>`).join('')}</ol>` : '<p>No play left more than a few points behind the best one on offer.</p>'}
+      <p class="note">${r.misses.length ? 'Columns run A to O and rows 1 to 15, so H8 is the centre square. ' : ''}This counts points only. A smaller play that keeps good tiles can be the better one.${r.cut ? ` ${plural(r.cut, 'turn')} had too many plays to look through here.` : ''}${r.skipped ? ` ${plural(r.skipped, 'turn')} from before this was kept could not be looked at.` : ''}</p>`;
   return `<div class="card dialog review" role="dialog" aria-modal="true" aria-labelledby="rv-h"><h2 id="rv-h">What you missed</h2>${body}<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div></div>`;
 }
 
