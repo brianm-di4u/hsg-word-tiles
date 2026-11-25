@@ -1,4 +1,6 @@
-// Wave 3, batch W3-B15: W6-S3-02 (Featured Springs count only when the plaque gives them away: computers, hint, review, look-ahead).
+// Wave 3, batch W3-B15: W6-S3-02 (Featured Springs count only when the plaque gives them away: computers, hint, review, look-ahead) and
+// W6-S3-04 (a better later try of an older Daily record is kept as practice; the rest was built by 810a42a, 5d83edc and a4969fc, tests: wave2-b01,
+// wave2-b02, wave3-b11).
 // W6-S3-01 was built by 31b7f5a, fda7f2b and 9d2314a (tests: wave2-b01, wave2-b02) and W6-S3-05 by 6e9920d, 355be8e and a4969fc
 // (tests: wave2-b05, wave3-b11).
 import { ctx } from './lib.mjs';
@@ -192,6 +194,51 @@ export const tests = [
       t.equal(JSON.stringify(log[0].known), '["CASINO"]', 'the log keeps what could be read'); t.equal(log[0].featured, 'CASINO', 'and the claim');
       const after = (await posted()).filter((p) => p.type === 'move');
       t.expect(after.length >= 1 && after.every((p) => p.featured.length === 0), 'the computer is told of no plaque after the claim');
+    },
+  },
+  // ---------- W6-S3-04 ----------
+  {
+    name: 'W6-S3-04 a record from before the first-run lock keeps its better later try as practice when the Daily is replayed, and the official score stays the first run',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      const DAILY = 'hs-letters-daily-v1', STATS = 'hs-letters-stats-v1';
+      const read = (k) => t.page.evaluate((key) => JSON.parse(localStorage.getItem(key)), k);
+      const passDaily = async () => {
+        await t.game('newGame', { mode: 'daily' });
+        await t.waitIdle(5000);
+        for (let k = 0; k < 10; k++) { await t.game('act', 'pass'); await t.waitIdle(5000); }
+        await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 10000 });
+      };
+      // three tries in the live game: the first 300, the best 420, kept as the day's score
+      const date = await t.page.evaluate(({ DAILY, STATS }) => {
+        const d = new Date(), date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        localStorage.setItem(DAILY, JSON.stringify({ days: { [date]: { score: 420, first: 300, plays: 3, par: { m: 250, h: 350 } } }, streak: 4, last: date }));
+        localStorage.setItem(STATS, JSON.stringify({ v: 1, daily: { games: 9, best: 420, bestStreak: 6 } }));
+        return date;
+      }, { DAILY, STATS });
+      await t.reload(); await ready(t);
+      t.expect(/Today: 300 pts/.test(await t.page.textContent('[data-go="daily"] small')), 'the title shows the first run');
+      await passDaily();
+      const day = (await read(DAILY)).days[date];
+      t.equal(day.first, 300, 'the first run stands'); t.equal(day.score, 300, 'as the official score');
+      t.equal(day.replayBest, 420, 'and the 420 is kept, as the best practice replay');
+      t.equal(day.plays, 4, 'the replay is counted'); t.equal(JSON.stringify(day.par), '{"m":250,"h":350}', 'a saved par is untouched');
+      const box = await t.page.textContent('.daily-box');
+      t.expect(/Practice replay/.test(box) && /Best practice replay today: 420\./.test(box) && /Your first try today: 300\./.test(box), 'the results say so (' + box.slice(0, 160) + ')');
+      t.equal(JSON.stringify((await read(STATS)).daily), '{"games":9,"best":420,"bestStreak":6}', "the record's Daily line is neither raised nor lowered");
+      await t.page.waitForFunction(() => !document.querySelector('.sheet.over').getAnimations({ subtree: true }).some((x) => x.playState === 'running' && x.effect.getTiming().iterations !== Infinity), null, { timeout: 5000 });
+      await t.checkLayout({ allowScrollY: true });
+      await t.shot('W6-S3-04-old-record-replay');
+      await passDaily();
+      t.equal((await read(DAILY)).days[date].replayBest, 420, 'a second replay keeps it');
+      // a day from before first tries were kept: its one score is the official one, and nothing is made up
+      await t.page.evaluate(({ DAILY, date }) => localStorage.setItem(DAILY, JSON.stringify({ days: { [date]: { score: 250, plays: 1 } }, streak: 1, last: date })), { DAILY, date });
+      await t.reload(); await ready(t);
+      await passDaily();
+      const old = (await read(DAILY)).days[date];
+      t.equal(`${old.first}/${old.score}/${old.replayBest}`, '250/250/0', 'official 250, practice 0');
     },
   },
 ];

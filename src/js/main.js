@@ -248,7 +248,8 @@ function recordDaily(s = G.s) {
   } else {
     // Post-completion replays are Practice replays: keep official score untouched and track `replayBest` separately.
     official = prev.first != null ? prev.first : prev.score;
-    const prevReplay = prev.replayBest != null ? prev.replayBest : 0;
+    // a record from before that lock holds the best of every try as its score: what it has over the first run is the best replay so far
+    const prevReplay = prev.replayBest != null ? prev.replayBest : prev.first != null && prev.score > prev.first ? prev.score : 0;
     d.days[date] = {
       ...prev,
       score: official,
