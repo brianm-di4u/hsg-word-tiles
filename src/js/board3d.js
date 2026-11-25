@@ -1,6 +1,6 @@
 // The 3D board (adapted from Bathhouse Barons' board3d.js): the marble board face that render2d.js paints into a
 // 2048-px canvas becomes the top of a slab in a mitred walnut-and-brass frame on a bathhouse counter, under a warm
-// lamp, with Blender-modelled ceramic tiles (letter faces drawn in code), a stack of bath towels and a desk bell.
+// lamp, with Blender-modelled ceramic tiles (letter faces drawn in code), a folded towel corner and a desk bell.
 // The camera follows render2d's view (zoom and pan in board cells), so input, overlays and hit-testing are shared
 // with the 2D board: overlays are projected through this camera (render2d proj.fn).
 // Falls back to the 2D board when there is no WebGL, on software GL (unless forced), with ?gl=0, or on slow frames.
@@ -588,6 +588,7 @@ export function resize(w, h) {
   // on phones the board fills the width and the props would only show as slivers
   B3.tall = tall; B3.towels.visible = B3.bell.visible = !tall;
   B3.fit = fitDistance();
+  if (!tall) B3.bell.visible = bellFits();
 }
 function applyPose(tx, tz, dist) {
   const c = B3.camera;
@@ -608,6 +609,18 @@ function fitDistance() {
   let lo = 5, hi = 200;
   for (let k = 0; k < 32; k++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
   return hi;
+}
+// W6-S4-05: the bell shows only where its whole plinth is inside the fitted view: in a squarer window (1024x768) the
+// right margin is narrower than the bell, and the board is not pulled back for it (CD-WF2-06), so the edge would cut it
+function bellFits() {
+  const v = new THREE.Vector3(), p = B3.bell.position, rad = MESHES.bell.hi[0], rim = 0.13;
+  applyPose(0, DESKTOP_SHIFT, B3.fit);
+  for (let k = 0; k < 24; k++) {
+    const a = k * Math.PI / 12;
+    v.set(p.x + rad * Math.cos(a), rim, p.z + rad * Math.sin(a)).project(B3.camera);
+    if (Math.abs(v.x) > 1 || Math.abs(v.y) > 1) return false;
+  }
+  return true;
 }
 function bezelBounds() {
   if (!B3.on || !B3.camera) return null;
