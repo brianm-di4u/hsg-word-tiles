@@ -55,7 +55,7 @@ export function styleBonus(style, move, left, s, lex, opts = {}) {
     for (const t of move.tiles) if (SQUARE[t.i] === 'B') delta += style.rowSquare;
   }
   if (style.crossWord && move.words.length > 1) delta += Math.min(move.words.length - 1, 3) * style.crossWord;
-  if (style.defenseExtra && bag > 0 && s.players.length > 1) delta -= style.defenseExtra * openedPremium(s.board, move.tiles);
+  if (style.defenseExtra && bag > 0 && s.players.length > 1) delta -= style.defenseExtra * openedPremium(s.board, move.tiles, 0);   // his care is for the springs, not the Row
   if (style.longBonus && move.words[0] && move.words[0].length >= style.longLen) delta += style.longBonus;
   if (style.fullBonus && move.full) delta += style.fullBonus;
   if (opts.easy && style.tidyLeave && bag > 0) delta += style.tidyLeave * leaveValue(left) * Math.min(1, bag / RACK);
@@ -97,7 +97,9 @@ export const rackMinus = (rack, tiles) => {
 
 // What Hard takes off a play for each empty word-multiplier square it puts within reach of the opponent: a Boiling Spring
 // (triple word) and, since wave 3, a Steam square (double word). Before wave 3 only the Boiling Springs counted (steam was 0).
-export const DEFENSE = { boiling: 4, steam: 1.5 };
+// An open Bathhouse Row square counts half a Steam square (W1-S4-08): its +20 needs a Hot Springs word, so in Hard's own games one in
+// reach was worth only about 0.5 points more a turn (and a letter of a plaque).
+export const DEFENSE = { boiling: 4, steam: 1.5, row: 0.75 };
 
 // Equity points within which Medium and Hard treat two plays as tied and choose between them with the seeded stream (0 = the old rule).
 export const TIE_WINDOW = 1.5;
@@ -105,13 +107,14 @@ export const TIE_WINDOW = 1.5;
 // The plays tied with the best one: `ranked` is sorted by equity, best first.
 export const tiedWithBest = (ranked) => ranked.filter((r) => r.e >= ranked[0].e - TIE_WINDOW);
 
-// Empty Boiling Spring and Steam squares a move puts within reach of the opponent (same line, ≤ 3 away, or adjacent),
-// weighted by DEFENSE.
-export function openedPremium(board, tiles) {
+// Empty Boiling Spring, Steam and Bathhouse Row squares a move puts within reach of the opponent (same line, ≤ 3 away, or
+// adjacent), weighted by DEFENSE. `row` overrides the Row's weight.
+export function openedPremium(board, tiles, row = DEFENSE.row) {
   let n = 0;
   for (let i = 0; i < N * N; i++) {
-    const w = SQUARE[i] === 'b' ? DEFENSE.boiling : SQUARE[i] === 's' ? DEFENSE.steam : 0;
+    const w = SQUARE[i] === 'b' ? DEFENSE.boiling : SQUARE[i] === 's' ? DEFENSE.steam : SQUARE[i] === 'B' ? row : 0;
     if (!w || board[i]) continue;
+    if (SQUARE[i] === 'B' && tiles.some((t) => t.i === i)) continue;   // covered by the play itself: closed, not opened
     const r = Math.floor(i / N), c = i % N;
     for (const t of tiles) {
       const tr = Math.floor(t.i / N), tc = t.i % N;

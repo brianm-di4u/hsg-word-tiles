@@ -6,6 +6,8 @@ import path from 'node:path';
 import { ctx, root } from './lib.mjs';
 import { createGame, apply, DAILY_TURNS } from '../src/js/engine.js';
 import { dailyPar } from '../src/js/par.js';
+import { chooseAction, openedPremium, styleBonus, DEFENSE, STYLES } from '../src/js/ai.js';
+import { SQUARE } from '../src/js/score.js';
 import { SUPPLEMENT } from '../src/js/supplement.js';
 
 const doc = (f) => fs.readFileSync(path.join(root, f), 'utf8').replace(/\s+/g, ' ');
@@ -126,6 +128,61 @@ export const tests = [
       await t.page.click('#screen [data-go="continue"]');
       await t.waitIdle(8000);
       t.equal(json((await t.state()).game.bag), json(now.bag), 'the bag is kept over a reload');
+    },
+  },
+  // ---------- W1-S4-08 ----------
+  {
+    name: 'W1-S4-08 Hard counts the open Bathhouse Row squares a play puts in reach, for less than a Steam square; Hollis\'s spring habit does not (Node)',
+    node: true,
+    async run(t) {
+      const c = await ctx();
+      t.expect(DEFENSE.row > 0 && DEFENSE.row < DEFENSE.steam && DEFENSE.boiling === 4 && DEFENSE.steam === 1.5, `the weights ${json(DEFENSE)}`);
+      t.equal(SQUARE[8], 'B', 'layout: the Superior at row 1, column I');
+      const board = new Array(225).fill(null), tiles = [{ i: 10, l: 'A' }], taken = board.slice();
+      taken[8] = { l: 'Z' };
+      t.equal(openedPremium(board, tiles), DEFENSE.row, 'a tile two squares from an open Row square opens it');
+      t.equal(openedPremium(taken, tiles), 0, 'a covered one is not counted');
+      t.equal(openedPremium(board, [{ i: 8, l: 'A' }, { i: 10, l: 'A' }]), 0, 'nor one the play itself covers');
+      t.equal(openedPremium(board, tiles, 0), 0, 'and it can be left out');
+      // Hollis (any level): the same habit whether the Row square beside his play is open or covered, as before
+      const move = { tiles, words: ['AX'] }, s = (b) => ({ board: b, bag: ['E'], players: [{}, {}] });
+      t.equal(styleBonus(STYLES.hollis, move, [], s(board), c.lex), styleBonus(STYLES.hollis, move, [], s(taken), c.lex), 'Hollis has no Row habit');
+      // the choice itself: positions from seeded games, Hard with the Row's weight against Hard without it
+      const was = DEFENSE.row, row = (b, ts) => (openedPremium(b, ts, 1) - openedPremium(b, ts, 0));
+      let positions = 0, differ = 0, fewer = 0, more = 0, medium = 0, daily = 0;
+      try {
+        for (let seed = 1; seed <= 30; seed++) {
+          const seats = [{ kind: 'ai', level: 'hard' }, { kind: 'ai', level: 'hard' }];
+          const g = createGame({ mode: 'play', seats, seed }, c.lex);
+          for (let k = 0; !g.over && k < 24; k++) {
+            const ask = (w, level, st) => { DEFENSE.row = w; return chooseAction(c.dict, c.lex, JSON.parse(json(st)), { level, exact: true }).action; };
+            const on = ask(was, 'hard', g), off = ask(0, 'hard', g);
+            positions++;
+            if (json(on) !== json(off)) {
+              differ++;
+              const d = row(g.board, on.tiles || []) - row(g.board, off.tiles || []);
+              if (d < 0) fewer++; else if (d > 0) more++;
+            }
+            if (k < 8) {
+              if (json(ask(5, 'medium', g)) !== json(ask(0, 'medium', g))) medium++;
+              const solo = { ...g, players: [g.players[g.cur]], cur: 0, mode: 'daily', daily: { date: '2026-01-01', turns: 5 } };
+              if (json(ask(5, 'hard', solo)) !== json(ask(0, 'hard', solo))) daily++;
+            }
+            DEFENSE.row = was;
+            apply(g, off, c);
+          }
+        }
+      } finally { DEFENSE.row = was; }
+      t.log(`${differ} of ${positions} positions answered another way: ${fewer} open fewer Row squares, ${more} more`);
+      t.expect(fewer >= 5 && more === 0, `Hard gives up fewer Row squares (${fewer} of ${differ} other choices) and never more (${more})`);
+      t.equal(medium + daily, 0, 'Medium, and Hard alone at the Daily, play as they did');
+    },
+  },
+  {
+    name: 'W1-S4-08 MECHANICS.md gives the Row\'s weight that ai.js uses (Node)',
+    node: true,
+    run(t) {
+      t.expect(doc('MECHANICS.md').includes(`(and ${DEFENSE.steam} per empty Steam square), and ${DEFENSE.row} per empty Bathhouse Row square`), 'the document gives ' + DEFENSE.row);
     },
   },
 ];

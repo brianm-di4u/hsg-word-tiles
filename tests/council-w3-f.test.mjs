@@ -269,7 +269,7 @@ export const tests = [
       t.equal(ROWS[1][9], 's', 'layout: a Steam square at row 2, column J'); t.equal(ROWS[0][4], 'b', 'layout: a Boiling Spring at row 1, column E');
       const near = (i) => [{ i, l: 'A' }];
       t.equal(openedPremium(board, near(steamAt + 2)), DEFENSE.steam, 'a tile two squares from a Steam square opens it');
-      t.equal(openedPremium(board, near(boilAt + 2)), DEFENSE.boiling, 'a tile two squares from a Boiling Spring opens it');
+      t.equal(openedPremium(board, near(boilAt - 2)), DEFENSE.boiling,   /* boilAt + 2 is also two squares from a Bathhouse Row square, which counts since W1-S4-08 */ 'a tile two squares from a Boiling Spring opens it');
       t.equal(openedPremium(board, near(CENTER)), 0, 'a tile far from both opens nothing');
       const taken = board.slice(); taken[steamAt] = { l: 'Z' };
       t.equal(openedPremium(taken, near(steamAt + 2)), 0, 'a Steam square that is already covered is not counted');

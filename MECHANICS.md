@@ -134,8 +134,8 @@ word shows.
     about three turns in five (`slip` 0.60), when it picks at random from the 5th–35th percentile of its 30 best plays
     (`pick: [0.05, 0.35]` in `ai.js`).
   - **Medium:** common words plus every word of 2–4 letters (`freeLen` 5); maximises score + 0.65 × leave value.
-  - **Hard:** the whole dictionary; maximises score + leave value − 4 per empty Boiling Spring (and 1.5 per empty Steam square) its
-    play leaves within reach (`DEFENSE` in `ai.js`); with the bag empty in a 2-player game it looks one reply ahead (the
+  - **Hard:** the whole dictionary; maximises score + leave value − 4 per empty Boiling Spring (and 1.5 per empty Steam square), and
+    0.75 per empty Bathhouse Row square, its play leaves within reach (`DEFENSE` in `ai.js`); with the bag empty in a 2-player game it looks one reply ahead (the
     opponent's rack is known by then).
 - Featured Springs (`deducibleFeatured` in `lexicon.js`): Medium, Hard, the Spring Guide and the review count a plaque's +30 only once
   anyone could work it out: at most `READABLE_FOG` (2) letters hidden, and the category, length and clear letters leaving one lexicon
