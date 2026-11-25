@@ -677,7 +677,7 @@ export function overHtml(s, lex, dinfo, extra = {}) {
       <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}">${t.w} <small>+${t.pts}</small></button>`).join('')}</div>` : '<p class="note">None this game. A word like SPA, STEAM or ROCK pays a bonus and opens a card of local history.</p>'}</section>
       ${s.featured.length ? `<section><h2>Featured Springs</h2><ul class="feat-list">${s.featured.map((f) => { const id = lex.entry(f.word)?.id, inner = `<b>${f.word}</b><small>${f.by != null ? `found by ${esc(s.players[f.by].name)}` : 'stayed hidden'}${id ? ' · read the card' : ''}</small>`; return `<li class="${f.by != null ? 'got' : ''}">${id ? `<button type="button" class="fchip" data-fact="${id}" data-form="${f.word}">${inner}</button>` : inner}</li>`; }).join('')}</ul></section>` : ''}
     </div>
-    <div class="dlg-btns">${daily ? '' : '<button class="btn primary" data-again>Play again</button>'}${nextBtn}${extra.review ? '<button class="btn" data-review>What you missed</button>' : ''}<button class="btn ${daily ? 'primary' : ''}" data-go="title">Title screen</button></div>
+    <div class="dlg-btns">${daily ? '' : '<button class="btn primary" data-again>Play again</button>'}${nextBtn}<button class="btn mini" data-go="setup">${daily || !s.players.some((p) => p.kind === 'ai') ? 'New game' : 'Change opponent'}</button><button class="btn mini" data-go="register">Bathhouse Register</button>${extra.review ? '<button class="btn mini" data-review>What you missed</button>' : ''}<button class="btn mini${daily ? ' primary' : ''}" data-go="title">Title screen</button></div>
   </div>`;
 }
 

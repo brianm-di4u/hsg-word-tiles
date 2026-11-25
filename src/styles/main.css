@@ -211,7 +211,8 @@ body.reduce .house-rules summary::after { transition: none; }
 @media (max-width: 560px) { .setup .sheet-foot { flex-wrap: wrap; } .setup .foot-note { flex: 1 0 100%; text-align: center; } }
 .setup .sheet-foot [data-start] { flex: 1; min-width: 0; min-height: 48px; }
 .setup .sheet-foot [data-go="help"] { flex: none; padding: 8px 12px; }
-.over .dlg-btns .btn { min-height: 44px; padding: 8px 14px; }
+.over .dlg-btns .btn { min-height: 44px; min-width: min-content; flex: 1 1 auto; padding: 8px 12px; font-size: 0.92rem; }
+@media (min-width: 561px) and (min-height: 701px) { .over .dlg-btns:has(.btn:nth-child(5)) .btn { flex-basis: 30%; } }
 
 /* badges */
 .badge { position: relative; flex: none; width: var(--s); height: var(--s); border-radius: 50%; display: grid; place-items: center; background: var(--c); color: #FFF; border: 2px solid var(--brass-hi); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
@@ -783,9 +784,17 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   .wmeta b { font-size: 1.2rem; line-height: 1.15; }
   .dlg-btns { justify-content: center; }
   .setup .sheet-foot, .over .dlg-btns { margin: 10px -7px -13px; padding: 8px 10px max(10px, env(safe-area-inset-bottom)); gap: 8px; }
-  .over .dlg-btns .btn { min-width: 0; flex: 1 1 auto; padding: 8px 10px; font-size: 0.92rem; }
 }
+/* short screens: one row of two-line buttons; phones: Play again and the next opponent or Daily above a row of small ones */
+@media (max-width: 560px), (max-height: 700px) {
+  .over .dlg-btns { gap: 6px; }
+  .over .dlg-btns .btn { flex: 1 1 88px; min-width: min-content; padding: 4px 8px; line-height: 1.15; text-align: center; }
+  .over .dlg-btns .btn.mini { flex: 1 1 68px; padding: 4px; font-size: 0.8rem; letter-spacing: 0; }
+  .over .dlg-btns .btn:not(.mini):not([data-again]) { flex: 2 1 140px; }
+}
+@media (max-width: 560px) { .over .dlg-btns .btn[data-again] { flex-basis: 30%; } .over .dlg-btns .btn:not(.mini):not([data-again]) { flex-basis: 50%; } }
 @media (max-width: 380px) {
+  .over .dlg-btns .btn:not(.mini) { padding: 4px 6px; font-size: 0.84rem; letter-spacing: 0; }
   #rack { --rack-gap: 3px; }
   .springs-bar { padding: 6px 8px; gap: 6px; }
   .springs-drawer .plaque { padding: 6px 8px; gap: 6px; }

@@ -230,4 +230,87 @@ export const tests = [
       t.equal(await look(), 'none 1 open', 'an ordinary game saved');
     },
   },
+  {
+    name: 'W5-S1-01 the Final Soak and Daily results offer a new opponent or game and the Register in the sticky footer, whole and in view on every size',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 2 });
+      await t.waitIdle(6000);
+      const base = (await t.state()).game;
+      // a finished game whose footer is as full as it gets: the next opponent with the longest name, and a turn to look back over
+      const done = (over) => ({ ...base, over: true, bag: [], featured: [], result: { why: 'out', out: 0, adjust: [0, 0], winners: [0] }, ...over });
+      const me = { ...base.players[0], score: 320, rack: [] };
+      const bot = (persona, name) => ({ ...base.players[1], persona, name, score: 210, rack: [] });
+      const log = [{ p: 0, kind: 'play', n: 0, score: 42, full: 0, themed: 10, words: [{ w: 'SPRING', score: 32, bonus: 10, themed: 'spring' }], tiles: [...'SPRING'].map((l, k) => ({ i: 110 + k, l })), rack: 'SPRINGE' }];
+      const WIN = done({ players: [me, bot('lucky', '"Lucky" Delmar')], log });
+      const PASS = done({ players: [me, { ...me, name: 'Player 2', score: 100 }], log });
+      const DAILY = done({ mode: 'daily', daily: { date: '2026-11-20', turns: 0 }, players: [me], log, result: { why: 'daily', out: null, adjust: [0], winners: [0] } });
+      const show = async (g) => { await t.game('setState', { game: g, scene: 'over' }); await t.waitFrames(2); };
+      const labels = () => t.page.$$eval('.over .dlg-btns button', (els) => els.map((e) => e.textContent.trim()));
+      const REVIEW = 'What you missed';
+      await show(WIN);
+      const win = await labels();
+      t.equal(win.filter((x) => x !== REVIEW).join(' | '), 'Play again | Challenge Maestro Julian Fitch | Change opponent | Bathhouse Register | Title screen', 'a win against the computer');
+      t.expect(win.includes(REVIEW), 'with the look back, six buttons');
+      await show(PASS);
+      t.equal((await labels()).filter((x) => x !== REVIEW && !/Daily/.test(x)).join(' | '), 'Play again | New game | Bathhouse Register | Title screen', 'pass and play has no opponent to change');
+      await show(DAILY);
+      t.equal((await labels()).filter((x) => x !== REVIEW).join(' | '), 'New game | Bathhouse Register | Title screen', 'the Daily Soak');
+
+      const sizes = t.viewport === 'desktop' ? [[1280, 800, 1], [1024, 600, 1], [1280, 800, 1.3]] : [[390, 844, 1], [320, 568, 1], [844, 390, 1], [390, 844, 1.3]];
+      for (const [width, height, text] of sizes) {
+        await t.page.setViewportSize({ width, height });
+        await t.page.evaluate((k) => { window.__G.settings.text = k; }, text);
+        await t.game('scene', 'settings');
+        await t.page.click(`[data-set="text"][data-val="${text}"]`);
+        for (const [kind, g] of [['win', WIN], ['daily', DAILY]]) {
+          await show(g);
+          const what = `${kind} ${width}x${height} ${text * 100}%`;
+          const m = await t.page.evaluate(() => {
+            const f = document.querySelector('.over .dlg-btns'), fr = f.getBoundingClientRect(), scr = document.querySelector('#screen');
+            const bs = [...f.querySelectorAll('button')].map((b) => {
+              const r = b.getBoundingClientRect();
+              return { t: b.textContent.trim(), w: r.width, h: r.height, in: r.top >= fr.top && r.bottom <= innerHeight + 0.5 && r.left >= fr.left && r.right <= fr.right, hit: b.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)), clip: b.scrollWidth > b.clientWidth || b.scrollHeight > b.clientHeight };
+            });
+            return { bs, part: fr.height / innerHeight, pos: getComputedStyle(f).position, ox: scr.scrollWidth - scr.clientWidth };
+          });
+          t.equal(m.pos, 'sticky', `${what}: sticky`);
+          t.equal(Math.max(0, m.ox), 0, `${what}: no sideways scroll`);
+          for (const b of m.bs) t.expect(b.w >= 44 && b.h >= 43.5 && b.in && b.hit && !b.clip, `${what}: in view, whole and at least 44 px: ${JSON.stringify(b)}`);
+          const most = height < 600 ? 0.3 : 0.24;
+          t.expect(m.part <= most, `${what}: the footer takes ${(m.part * 100).toFixed(0)}% of the height, at most ${most * 100}%`);
+          if (text === 1) await t.shot(`w3-b11-over-${kind}-${width}x${height}`);
+        }
+      }
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="text"][data-val="1"]');
+      await t.page.setViewportSize({ width: t.vp.width, height: t.vp.height });
+      for (const theme of ['light', 'dark']) {
+        await t.page.evaluate((th) => { document.body.classList.toggle('theme-dark', th === 'dark'); }, theme);
+        await show(WIN);
+        t.equal((await t.contrastReport({ selector: '.over .dlg-btns *', min: 4.5, largeMin: 4.5 })).fails.length, 0, `contrast, ${theme}`);
+      }
+
+      // where they lead
+      await show(WIN);
+      await t.page.click('.over [data-go="register"]');
+      t.equal((await t.state()).scene, 'register', 'the Register');
+      await t.page.click('#screen [data-back]');
+      t.equal((await t.state()).scene, 'over', 'closing it comes back to the results');
+      for (const g of [WIN, DAILY]) {
+        await show(g);
+        await t.page.click('.over [data-go="setup"]');
+        t.equal((await t.state()).scene, 'setup', 'Change opponent or New game: the Setup sheet');
+        t.equal(await t.page.locator('[data-start]').isVisible(), true, 'with Start');
+      }
+      await t.page.evaluate(() => localStorage.removeItem('hs-letters-save-v1'));   // the game this test began; a finished one leaves no save
+      await t.page.click('[data-persona][data-val="hollis"]');
+      await t.page.click('[data-start]');
+      await t.waitIdle(8000);
+      const next = await t.state();
+      t.equal(`${next.scene} ${next.game.mode} ${next.game.players[1].persona} ${next.dialog}`, 'game play hollis null', 'one tap on a portrait and one on Start: a game against someone else, with nothing to confirm');
+    },
+  },
 ];
