@@ -37,7 +37,7 @@ WALNUT = lambda: mat('walnut', '#6B4428', 0.0, 0.4, 0.45)
 BRASS = lambda: mat('brass', '#C9A14A', 1.0, 0.28)
 CLOTH = lambda: mat('cloth', '#F4F0E6', 0.0, 0.95)
 STRIPE = lambda: mat('stripe', '#2A9D8F', 0.0, 0.9)
-BRONZE = lambda: mat('bronze', '#6B4C2E', 0.55, 0.34, 0.35)
+BRONZE = lambda: mat('bronze', '#6B4C2E', 0.55, 0.34)   # no coat: the bell base is a MeshStandardMaterial (CD-WF6-01)
 
 def link(ob):
     bpy.context.scene.collection.objects.link(ob); return ob

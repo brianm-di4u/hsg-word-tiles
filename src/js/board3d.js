@@ -494,6 +494,7 @@ export function destroy(opts = {}) {
     B3.scene.traverse((o) => {
       if (o.geometry && typeof o.geometry.dispose === 'function') geos.add(o.geometry);
       if (o.material) collectMat(o.material);
+      if (o.isLight) o.dispose();   // the lamp's shadow map
     });
     if (B3.scene.environment && typeof B3.scene.environment.dispose === 'function') texs.add(B3.scene.environment);
     B3.scene.environment = null;
@@ -506,6 +507,8 @@ export function destroy(opts = {}) {
   for (const sg of slotGeos.values()) if (sg && typeof sg.dispose === 'function') geos.add(sg);
   slotGeos.clear();
   for (const g of B3.tileGeo || []) if (g.geo && typeof g.geo.dispose === 'function') geos.add(g.geo);
+  const lut = B3.top && B3.renderer.properties.get(B3.top).uniforms?.dfgLUT?.value;   // three's shared lookup table: kept, it would hold on to every renderer it was drawn with
+  if (lut) texs.add(lut);
   collectMat(B3.top);
   collectMat(B3.table && B3.table.material);
   collectMat(B3.bodyMat);
@@ -516,7 +519,7 @@ export function destroy(opts = {}) {
   if (B3.envRT && typeof B3.envRT.dispose === 'function') B3.envRT.dispose();
   for (const m of mats) if (typeof m.dispose === 'function') m.dispose();
   for (const g of geos) g.dispose();
-  B3.lastDispose = { geometries: geos.size, materials: mats.size, textures: texs.size };
+  B3.lastDispose = { geometries: geos.size, materials: mats.size, textures: texs.size, left: { ...B3.renderer.info.memory } };
   B3.renderer.dispose();
   if (!fromLoss) B3.renderer.forceContextLoss?.();
   B3.on = false; B3.renderer = null; B3.canvas = null; B3.scene = null; B3.camera = null;
@@ -832,6 +835,7 @@ export function debug() {
     envIntensity: B3.scene ? B3.scene.environmentIntensity : 0,
     tileCoatRoughness: B3.bodyMat && B3.bodyMat.clearcoatRoughness != null ? B3.bodyMat.clearcoatRoughness : null,
     topMat: B3.top ? B3.top.type : null, tableMat: B3.table && B3.table.material ? B3.table.material.type : null,
+    bellMats: B3.bell ? B3.bell.children.map((m) => `${m.name}:${m.material.type}`) : null,
     topRoughness: B3.top ? B3.top.roughness : null,
     topRoughnessMap: !!(B3.top && B3.top.roughnessMap),
     frameWalnutMap: !!(B3.frameWalnut && B3.frameWalnut[0] && B3.frameWalnut[0].map),

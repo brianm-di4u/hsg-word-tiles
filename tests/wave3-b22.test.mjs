@@ -125,4 +125,59 @@ export const tests = [
       t.equal(await t.page.textContent('.daily-box [data-par-line]'), m.text, 'and so does the sheet drawn again');
     },
   })),
+
+  // ---------- W6-S6-03 ----------
+  {
+    name: 'W6-S6-03 the 3D board leaves nothing on the GPU when it is turned off, and comes back after a real context loss (real GPU)',
+    viewports: ['desktop'],
+    url: 'index.html?gl=3d',
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      if (!t.gpu) return;
+      await t.game('newGame', { seed: 41, seats: SEATS });
+      await t.waitIdle(8000);
+      await t.game('act', 'autoplay', 6);
+      await t.waitIdle(10000);
+      const on = await b3(t);
+      t.expect(on.on && on.tiles > 0, 'the 3D board is drawn');
+      t.equal(on.bellMats.slice().sort(), ['brass:MeshStandardMaterial', 'bronze:MeshStandardMaterial'], 'the bell and its base are standard materials');
+      t.equal([on.topMat, on.tableMat, on.keyType], ['MeshStandardMaterial', 'MeshStandardMaterial', 'SpotLight'], 'so are board and table, under the lamp');
+      t.expect(on.tileCoatRoughness != null, 'the tiles keep their glaze');
+      const setting = async (k, v) => {
+        await t.page.evaluate(([k, v]) => {
+          window.__game.scene('settings');
+          document.querySelector(`#screen [data-set="${k}"][data-val="${v}"]`).click();
+          window.__game.scene('game');
+        }, [k, v]);
+        await t.waitFrames(3);
+      };
+      // off and on, three times, each after a Night and a Day
+      for (let k = 0; k < 3; k++) {
+        await setting('theme', 'dark');
+        await setting('theme', 'light');
+        await setting('board3d', 'off');
+        const off = await b3(t);
+        t.equal(off.on, false, 'off');
+        t.equal({ geometries: off.disposed.left.geometries, textures: off.disposed.left.textures }, { geometries: 0, textures: 0 }, `nothing is left on the GPU (${JSON.stringify(off.disposed)})`);
+        await setting('board3d', 'on');
+        await until(t, () => window.__game.getState().view.mode3d);
+      }
+      // a real loss: the flat board at once, the 3D one when the context is given back
+      await t.page.evaluate(() => { const c = document.querySelector('#gl'); window.__ext = (c.getContext('webgl2') || c.getContext('webgl')).getExtension('WEBGL_lose_context'); window.__ext.loseContext(); });
+      await until(t, () => !window.__game.getState().view.mode3d);
+      await t.waitFrames(3);
+      const lost = await t.page.evaluate(() => {
+        const cv = document.querySelector('#board'), d = cv.getContext('2d').getImageData(cv.width >> 1, cv.height >> 1, 1, 1).data;
+        return { alpha: d[3], hidden: document.querySelector('#gl').hidden, reason: window.__game.getState().view.reason3d };
+      });
+      t.equal(lost, { alpha: 255, hidden: true, reason: 'context-lost' }, 'the flat board is drawn');
+      await t.page.evaluate(() => window.__ext.restoreContext());
+      await until(t, () => window.__game.getState().view.mode3d);
+      await t.waitFrames(3);
+      const back = await b3(t);
+      t.expect(back.on && back.tiles > 0 && back.drawCalls > 10, `the 3D board is back (${back.tiles} tiles, ${back.drawCalls} calls)`);
+      await t.shot('w3-b22-3d-restored', { timeout: 15000 });
+    },
+  },
 ];

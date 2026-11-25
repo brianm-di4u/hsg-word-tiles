@@ -113,6 +113,10 @@ VISUAL-REPORT.md refer to the previous art.
 - The Easy opponent is calibrated for beginners and casual play (~243–254 points against Hard/Medium, ~285 points in Easy mirror, using everyday common words plus 25 everyday two-letter words and no 7-letter Full Soaks).
 - The Daily Soak resets at each player's local midnight, so two players in different time zones can be on different
   deals at the same moment.
+- On Windows, Chrome logs one shader message when the 3D board starts ("Program Info Log ... warning X4122: sum of
+  0.996094 and -2.98545e-017 cannot be represented accurately"). It is the Direct3D compiler's note on a constant in
+  three.js r186's own shader code, the same before and after the board, counter and bell became standard materials
+  (measured on a real GPU, 25 Nov 2026). Nothing is drawn wrongly, so it is left as it is: no shader is patched for it.
 - ENABLE lacks some newer short words (QI, ZA); the help says which list is used.
 
 ## Harness requests
