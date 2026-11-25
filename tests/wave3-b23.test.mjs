@@ -146,4 +146,44 @@ export const tests = [
       }
     },
   },
+  // ---------- W4-S4-03, W4-S4-02 ----------
+  {
+    name: 'W4-S4-03 the ceiling after the limiter leaves everything under 0.88 alone and lets nothing reach 0.95',
+    node: true,
+    async run(t) {
+      const { CEILING: c } = await import('../src/js/audio.js');
+      const at = (i) => i / 2048 - 1;
+      t.expect(c.every((y, i) => Math.abs(at(i)) > 0.88 || y === Math.fround(at(i))), 'the same wave under 0.88');
+      t.expect(c.every((y, i) => Math.abs(y) < 0.945 && Math.abs(y) <= Math.abs(at(i)) + 1e-6 && (!i || y >= c[i - 1])), `never louder, always rising, under 0.945 (${c[4096]})`);
+      t.expect(c.every((y, i) => y === -c[4096 - i] || y === 0), 'the same both ways');
+    },
+  },
+  {
+    name: 'W4-S4-03 W4-S4-02 yourturn is back at its wave-2 level, bagempty is softer, and nothing they are heard with reaches 0.95 at full volume',
+    viewports: ['desktop'],
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false }));
+      let a = 23; Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let x = a; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+    },
+    async run(t) {
+      await ready(t);
+      const peaks = (name, vol, n = 16) => t.page.evaluate(async ([c, v, k]) => { const p = []; for (let i = 0; i < k; i++) p.push((await window.__game.act('renderSfx', c, v, { tiles: 7 })).peak); return p; }, [name, vol, n]);
+      const span = (p) => `${Math.min(...p)} to ${Math.max(...p)}`;
+      // alone (wave 2: yourturn 0.203 to 0.232 at the shipped volume, 0.402 to 0.464 at full; bagempty is new in wave 3, where it was 0.27 to 0.32)
+      for (const [cue, vol, lo, hi] of [['yourturn', 0.35, 0.195, 0.245], ['yourturn', 1, 0.39, 0.49], ['bagempty', 0.35, 0.1, 0.23], ['bagempty', 1, 0.2, 0.45]]) {
+        const p = await peaks(cue, vol);
+        t.log(`${cue} at ${vol}: ${span(p)}`);
+        t.expect(Math.min(...p) >= lo && Math.max(...p) <= hi, `${cue} at volume ${vol} peaks between ${lo} and ${hi} (${span(p)})`);
+      }
+      // the mixes a person's play and the computer's play make at the end of the bag, at their real start times (Normal, then Instant)
+      const own = ['steam+chime@0.28', 'steam+discover@0.28', 'big@0.28', 'steam+fanfare@0.28', 'featured+chime@0.28', 'featured'].map((x) => `play+${x}+reveal@0.14+bagempty@0.22`);
+      const theirs = ['steam+chime@0.28+reveal@0.14+bagempty@0.22', 'featured+chime@0.28+reveal@0.14+bagempty@0.22', 'steam+big@0.28', 'reveal@0.14+bagempty@0.22+big@0.28', 'steam+chime@0.28', 'featured+chime@0.28', 'featured+reveal@0.14+bagempty@0.22'];
+      for (const mix of [...own, ...[0.3, 0.12].flatMap((at) => theirs.map((x) => `place+${x}+yourturn@${at}`))]) {
+        const p = await peaks(mix, 1);
+        t.log(`${mix}: ${span(p)}`);
+        t.expect(Math.max(...p) < 0.95, `${mix} stays under 0.95 with the volume at full (${Math.max(...p)})`);
+      }
+    },
+  },
 ];

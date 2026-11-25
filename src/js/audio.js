@@ -11,18 +11,25 @@ const DEFAULT_VOL = 0.35;
 const CUE_GAIN = 6;
 // bells and steam are the loudest cues: a little less so they do not outrun the tile sounds (featured was 0.6: a play
 // that finds a Featured Spring peaked at up to 0.98 with the volume at full, so the bell is 3 dB quieter)
-const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 0.9, hint: 0.6, yourturn: 2, good: 1.8, big: 0.57, discover: 0.6, defeat: 0.9, prompt: 1.2, reveal: 0.85, bagempty: 0.75 };
+const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 0.9, hint: 0.6, yourturn: 1.3, good: 1.8, big: 0.57, discover: 0.6, defeat: 0.9, prompt: 1.2, reveal: 0.85, bagempty: 0.5 };
 const musicGain = (vol = audio.vol, level = audio.musicVol) => Math.min(1.5, vol / DEFAULT_VOL) * level;   // the Volume slider moves the music with the cues
 // Above the shipped volume the cues rise more gently than the slider: to about twice the shipped level at full, not
 // 2.9 times. With the slider at full the loudest repeats of steam and place overshot the limiter and clipped (peaks
 // of 1.03 in 60 renders). The music is held back above the shipped volume in the same way (musicGain).
 const cueVol = (vol = audio.vol) => (vol <= DEFAULT_VOL ? vol : DEFAULT_VOL + (vol - DEFAULT_VOL) * 0.55);
 
+// The limiter lets the first milliseconds of a loud cue past, so with the volume at full a bell on top of a tile's clack could
+// still peak over 1. After it the wave is bent towards CEIL_TOP above CEIL_KNEE, and never reaches it; below the knee, which is
+// everything at the shipped volume (0.7 at most), this changes nothing.
+const CEIL_KNEE = 0.88, CEIL_TOP = 0.95;
+export const CEILING = Float32Array.from({ length: 4097 }, (_, i) => { const x = i / 2048 - 1, over = Math.abs(x) - CEIL_KNEE, room = CEIL_TOP - CEIL_KNEE; return over <= 0 ? x : Math.sign(x) * (CEIL_KNEE + room * (1 - Math.exp(-over / room))); });
+
 // one master bus: cues, music and ambience all pass a limiter so the loudest cue on top of both never clips
 function graph(ctx, dest, seed) {
   const lim = ctx.createDynamicsCompressor();
   lim.threshold.value = -3; lim.knee.value = 3; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.2;
-  lim.connect(dest);
+  const ceil = ctx.createWaveShaper(); ceil.curve = CEILING;
+  lim.connect(ceil); ceil.connect(dest);
   const sfx = ctx.createGain(); sfx.connect(lim);
   const mus = ctx.createGain(); mus.gain.value = musicGain(DEFAULT_VOL, 1); mus.connect(lim);
   return { lim, sfx, mus, kit: makeAudioKit(ctx, mus, { seed, music: 1, ambience: 1 }) };
