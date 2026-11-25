@@ -27,12 +27,18 @@ const twoLetterWords = () => {
   return twoLetters;
 };
 
+// a Challenge game in play, or saved and waiting under Continue (after a reload G.s is empty)
+function challengeLive() {
+  const s = G.s && !G.s.over ? G.s : loadSave();
+  return !!(s && s.challenge && !s.over);
+}
+
 // The Help sheet's word check: the same dictionary that judges a play, and a nod to the town's own words.
 function wordCheck(raw) {
   const w = String(raw).toUpperCase().replace(/[^A-Z]/g, '');
   if (w.length < 2) return 'Type a word of two letters or more.';
   if (!G.dict) return 'The dictionary is still loading. Try again in a moment.';
-  if (G.s && G.s.challenge && !G.s.over) return 'The word check is off while a Challenge game is in progress.';
+  if (challengeLive()) return 'The word check is off while a Challenge game is in progress.';
   if (!has(G.dict, w)) return `${w} is not in the dictionary, so a play that makes it is handed back.`;
   const e = G.lex.entry(w);
   return `${w} is in the dictionary and can be played.${e ? ` It is also a Hot Springs word: it pays +${G.lex.bonusOf(e)}.` : ''}`;
@@ -374,11 +380,11 @@ function screenHtml(name) {
       const found = lex.data.words.filter((e) => e.forms.some((f) => reg[f])).length;
       const di = dailyInfo();
       const rec = stats();
-      return UI.titleHtml({ records: rec.games ? `${UI.plural(rec.games, 'game')} · ${UI.plural(rec.wins, 'win')}` : 'Your wins and bests', noSave: G.noSave, newerSave: G.newerSave, canContinue: !!sv, continueLine: sv ? (sv.mode === 'daily' ? 'Daily Soak in progress' : `${sv.players.map((p) => p.name).join(' vs ')} · move ${sv.move + 1}${sv.challenge ? ' · Challenge' : ''}`) : '', dailyLine: UI.dailyLine(di), found, total: lex.data.words.length, loading: !G.ready });
+      return UI.titleHtml({ records: rec.games ? `${UI.plural(rec.games, 'game')} · ${UI.plural(rec.wins, 'win')}` : 'Your wins and bests', noSave: G.noSave, newerSave: G.newerSave, canContinue: !!sv, continueLine: sv ? (sv.mode === 'daily' ? (sv.daily && di.days[sv.daily.date] ? 'Daily Soak practice replay in progress' : 'Daily Soak in progress') : `${sv.players.map((p) => p.name).join(' vs ')} · move ${sv.move + 1}${sv.challenge ? ' · Challenge' : ''}`) : '', dailyLine: UI.dailyLine(di), dailyDone: !!di.today, found, total: lex.data.words.length, loading: !G.ready });
     }
     case 'setup': return UI.setupHtml(G.setup, { houseOpen: !!G.houseOpen });
     case 'help': {
-      const challengeOn = !!(G.s && G.s.challenge && !G.s.over);
+      const challengeOn = challengeLive();
       return UI.helpHtml(G.helpTab, lex, challengeOn ? [] : twoLetterWords(), { challengeOn });
     }
     case 'settings': return UI.settingsHtml(G.settings, typeof navigator.vibrate === 'function');

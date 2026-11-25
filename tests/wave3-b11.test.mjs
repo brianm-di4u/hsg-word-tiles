@@ -123,4 +123,111 @@ export const tests = [
       t.expect(/Esc close the score breakdown if it is open, else take back all tiles/.test(await t.page.textContent('.help-body')), 'Help says so');
     },
   },
+  {
+    name: 'W5-S1-04 Setup says before Start, on every size, that a hint sets no personal best, and stops saying so with hints off or in Challenge',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      await t.page.click('#screen [data-go="setup"]');
+      // a notice counts only if it is on screen and nothing lies over it
+      const seen = (sel) => t.page.evaluate((s) => {
+        const e = document.querySelector(s), r = e && e.getClientRects().length ? e.getBoundingClientRect() : null;
+        return !!r && r.top >= 0 && r.bottom <= innerHeight && [r.top + 2, r.bottom - 2].every((y) => e.contains(document.elementFromPoint(r.left + r.width / 2, y)));
+      }, sel);
+      const check = async (what) => {
+        t.expect((await seen('.setup .foot-note')) || (await seen('[data-hints-note]')), `${what}: a hint notice is in view without scrolling`);
+        t.expect(await seen('[data-start]'), `${what}: with Start`);
+        t.equal(await t.page.evaluate(() => { const s = document.querySelector('#screen'); return Math.max(0, s.scrollWidth - s.clientWidth); }), 0, `${what}: no sideways scroll`);
+      };
+      const sizes = t.viewport === 'desktop' ? [[1280, 800], [1024, 600]] : [[390, 844], [320, 568], [844, 390]];
+      for (const [width, height] of sizes) {
+        await t.page.setViewportSize({ width, height });
+        await t.waitFrames(2);
+        await check(`${width}x${height}`);
+        await t.shot(`w3-b11-setup-${width}x${height}`);
+      }
+      const last = sizes[sizes.length - 1];
+      t.expect(await seen('.setup .foot-note'), `${last.join('x')}: it is the line in the foot`);
+      for (const theme of ['light', 'dark']) {
+        await t.page.evaluate((th) => { window.__G.settings.theme = th; document.body.classList.toggle('theme-dark', th === 'dark'); }, theme);
+        const cr = await t.page.evaluate(() => {
+          const lum = (c) => { const v = c.match(/[0-9.]+/g).slice(0, 3).map((x) => { const f = x / 255; return f <= 0.03928 ? f / 12.92 : ((f + 0.055) / 1.055) ** 2.4; }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+          const a = lum(getComputedStyle(document.querySelector('.foot-note')).color), b = lum(getComputedStyle(document.querySelector('.sheet-foot')).backgroundColor);
+          return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+        });
+        t.expect(cr >= 4.5, `${theme}: foot note contrast ${cr.toFixed(2)} >= 4.5`);
+      }
+      const foot = () => t.page.locator('.setup .foot-note').isVisible();
+      await t.page.evaluate(() => document.querySelector('[data-hints]').click());
+      t.equal(await foot(), false, 'hints off: no line');
+      await t.page.evaluate(() => document.querySelector('[data-hints]').click());
+      t.equal(await foot(), true, 'hints on again');
+      await t.page.evaluate(() => { document.querySelector('.house-rules').open = true; document.querySelector('[data-challenge]').click(); });
+      t.equal(await foot(), false, 'Challenge on (no hints): no line');
+    },
+  },
+  {
+    name: 'W5-S1-04 after today\'s Daily Soak the title calls the next one a Practice replay, and Continue says which kind is in progress',
+    viewports: ['desktop', 'mobile'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      const daily = async () => (await t.page.textContent('#screen [data-go="daily"]')).replace(/\s+/g, ' ').trim();
+      const cont = () => t.page.textContent('#screen [data-go="continue"] small');
+      t.equal(await daily(), 'Daily Soak 10 turns, the same tiles for everyone', 'not played yet: no label');
+      await t.page.click('#screen [data-go="daily"]');
+      await t.waitIdle(8000);
+      await t.game('scene', 'title');
+      t.equal(await cont(), 'Daily Soak in progress', 'the official run');
+      t.expect(!/Practice/.test(await daily()), 'still no label while it is in progress');
+      await t.page.click('#screen [data-go="continue"]');
+      await t.waitIdle(8000);
+      await t.page.evaluate(() => { const s = window.__G.s; s.players[0].score = 123; });
+      for (let k = 0; k < 10 && !(await t.state()).game.over; k++) { await t.game('act', 'pass'); await t.waitIdle(4000); }
+      await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 15000 });
+      await t.game('scene', 'title');
+      const score = await t.page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('hs-letters-daily-v1')).days)[0].first);
+      t.equal(await daily(), `Daily Soak Practice replay Today: ${score} pts · streak 1`, 'played: labelled, with the official score');
+      const fit = await t.page.evaluate(() => {
+        const b = document.querySelector('#screen [data-go="daily"]'), g = b.querySelector('.btn-tag').getBoundingClientRect(), r = b.getBoundingClientRect(), reg = document.querySelector('#screen [data-go="register"]').getBoundingClientRect();
+        return { inside: g.left >= r.left && g.right <= r.right, tall: r.height - reg.height, small: document.querySelector('#screen [data-go="daily"] small').textContent };
+      });
+      t.expect(fit.inside && fit.tall <= 3, `the label fits on the button\'s own line (${JSON.stringify(fit)})`);
+      await t.shot('w3-b11-title-practice');
+      t.equal((await t.contrastReport({ selector: '#screen [data-go="daily"] *', min: 4.5, largeMin: 4.5 })).fails.length, 0, 'contrast, Day');
+      await t.page.click('#screen [data-go="daily"]');
+      await t.page.click('#modal [data-ok]');
+      await t.waitIdle(8000);
+      await t.game('scene', 'title');
+      t.equal(await cont(), 'Daily Soak practice replay in progress', 'the replay is named');
+      await t.reload();
+      await ready(t);
+      t.equal(await cont(), 'Daily Soak practice replay in progress', 'after a reload too');
+    },
+  },
+  {
+    name: 'W5-S1-04 a saved Challenge game keeps Help\'s two-letter list and Check a word shut after a reload; an ordinary one does not',
+    viewports: ['desktop'],
+    initScript: instant,
+    async run(t) {
+      await ready(t);
+      const look = async () => {
+        await t.reload();
+        await ready(t);
+        t.equal(await t.page.evaluate(() => window.__G.s), null, 'no game in memory');
+        const line = await t.page.textContent('#screen [data-go="continue"] small');
+        await t.page.click('#screen [data-go="help"]');
+        await t.page.fill('#wc-in', 'CAT');
+        await t.page.click('[data-wordcheck] button');
+        return `${/Challenge/.test(line) ? 'badge' : 'none'} ${await t.page.locator('.twos').count()} ${/word check is off/.test(await t.page.textContent('.wc-out')) ? 'shut' : 'open'}`;
+      };
+      await t.game('newGame', { seed: 5, challenge: true });
+      await t.waitIdle(6000);
+      t.equal(await look(), 'badge 0 shut', 'Challenge saved');
+      await t.game('newGame', { seed: 5 });
+      await t.waitIdle(6000);
+      t.equal(await look(), 'none 1 open', 'an ordinary game saved');
+    },
+  },
 ];

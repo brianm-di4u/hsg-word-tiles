@@ -77,7 +77,7 @@ export function titleHtml(o) {
     <nav class="menu" aria-label="Main menu">
       ${o.canContinue ? `<button class="btn primary" data-go="continue">Continue <small>${esc(o.continueLine)}</small></button>` : ''}
       <button class="btn ${o.canContinue ? '' : 'primary'}" data-go="setup">New game</button>
-      <button class="btn" data-go="daily">Daily Soak <small>${esc(o.dailyLine)}</small></button>
+      <button class="btn" data-go="daily">${o.dailyDone ? '<span>Daily Soak <span class="btn-tag">Practice replay</span></span>' : 'Daily Soak'} <small>${esc(o.dailyLine)}</small></button>
       <button class="btn" data-go="register">Bathhouse Register <small>${o.found} of ${o.total} words found</small></button>
       <button class="btn" data-go="records">Records <small>${esc(o.records)}</small></button>
       <div class="row2"><button class="btn quiet" data-go="help">How to play</button><button class="btn quiet" data-go="settings">Settings</button></div>
@@ -136,6 +136,7 @@ export function setupHtml(setup, opts = {}) {
     </details>
     <p class="goal"><b>The goal:</b> score more than the others by building words. <span class="goal-mode">${humans >= 2 ? 'Pass and play: each person\'s tiles stay hidden until they tap to take their turn.' : humans === 1 ? 'You against the computer.' : 'Computers only: sit back and watch.'}</span></p>
     <div class="sheet-foot">
+      <p class="foot-note" aria-hidden="true">Taking a hint sets no personal best.</p>
       <button class="btn primary big" data-start>Start</button>
       <button class="btn link" data-go="help">How to play</button>
     </div>
