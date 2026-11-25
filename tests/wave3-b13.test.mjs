@@ -284,4 +284,46 @@ export const tests = [
       }
     },
   },
+  {
+    name: 'W5-S3-03 four players at 100% and 130% text: every action button whole on the screen with its label and +points inside, board and two columns kept',
+    viewports: ['desktop'],
+    initScript: noTips,
+    async run(t) {
+      await ready(t);
+      const seats = [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }, { kind: 'ai', persona: 'hollis', level: 'medium' }, { kind: 'ai', persona: 'julian', level: 'hard' }];
+      for (const text of [1, 1.3]) {
+        await textSize(t, text);
+        for (const n of [2, 4]) {
+          await t.game('newGame', { seed: 5, seats: seats.slice(0, n) });
+          await t.waitIdle(6000);
+          const [mv] = await t.game('act', 'moves', 1);
+          await t.game('act', 'stage', mv.tiles);
+          await t.waitIdle(6000);
+          for (const [w, h] of [[1024, 600], [1024, 701], [1024, 768], [1280, 720], [1366, 768], [1280, 800], [1920, 1080]]) {
+            await t.page.setViewportSize({ width: w, height: h });
+            await t.page.evaluate(() => { window.__G.preview.score = 104; dispatchEvent(new Event('resize')); });   // a three-figure play, the widest the badge gets
+            await t.waitFrames(3);
+            const what = `${w}x${h} ${n}P ${text * 100}%`;
+            const m = await t.page.evaluate(() => {
+              const R = (s) => document.querySelector(s).getBoundingClientRect(), app = document.querySelector('#app');
+              return {
+                acts: [...document.querySelectorAll('#actions .abtn')].map((b) => { const r = b.getBoundingClientRect(); return { act: b.dataset.act, h: r.height, b: r.bottom, r: r.right, spill: Math.max(...[...b.querySelectorAll('span, em, kbd')].map((e) => { const x = e.getBoundingClientRect(), g = document.createRange(); g.selectNodeContents(e); const y = g.getBoundingClientRect(); return Math.max(r.left - Math.min(x.left, y.left), Math.max(x.right, y.right) - r.right, x.bottom - r.bottom); })) }; }),
+                pts: document.querySelector('#actions .play .play-pts').textContent, boardH: R('#boardwrap').height, boardR: R('#boardwrap').right, sideL: Math.min(R('#preview').left, R('#actions').left), over: `${app.scrollHeight - app.clientHeight} ${app.scrollWidth - app.clientWidth}`, oy: getComputedStyle(app).overflowY,
+                cols: getComputedStyle(document.querySelector('#scores')).gridTemplateColumns.split(' ').length, grid: getComputedStyle(document.querySelector('#scores')).display,
+              };
+            });
+            t.equal(m.pts, '+104', `${what}: the points are on Play`);
+            for (const a of m.acts) t.expect(a.h >= 44 && a.b <= h + 0.5 && a.r <= w + 0.5 && a.spill <= 0.5, `${what}: ${JSON.stringify(a)}`);
+            t.equal(`${m.over} ${m.oy}`, '0 0 auto', `${what}: nothing overflows, and a taller sidebar could scroll`);
+            t.expect(m.boardR <= m.sideL + 1 && m.boardH >= 0.8 * h, `${what}: the board keeps the left column and its height (${m.boardH})`);
+            if (n === 4 || h <= 700) t.equal(`${m.grid} ${m.cols}`, 'grid 2', `${what}: the scores in two columns`);
+          }
+          await t.page.setViewportSize({ width: 1024, height: 768 });
+          await t.waitFrames(3);
+          if (n === 4) await t.shot(`w3-b13-1024x768-4p-${text * 100}`);
+          await t.game('act', 'recall');
+        }
+      }
+    },
+  },
 ];
