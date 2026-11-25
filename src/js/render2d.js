@@ -663,6 +663,12 @@ export function drawFrame(ctx, d) {
     const [hx, hy] = cellCenter(CENTER);
     const cp = d.cellPx || s;
     ctx.save();
+    // over the 3D board this canvas is in front of the tiles, so the halo is cut out around any staged beside the open spring
+    if (d.flatOnly && d.staged && d.staged.length) {
+      ctx.beginPath(); ctx.rect(0, 0, W, H);
+      for (const t of d.staged) { quad(t.i, 0.05, STAGED_LIFT).forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); }
+      ctx.clip('evenodd');
+    }
     const glow = ctx.createRadialGradient(hx, hy, cp * 0.47, hx, hy, cp * 1.08);
     glow.addColorStop(0, 'rgba(127, 211, 196, 0)');
     glow.addColorStop(0.18, 'rgba(127, 211, 196, 0.38)');

@@ -123,7 +123,7 @@ function ensureFaceAtlas(dark) {
   const mat = new THREE.MeshPhysicalMaterial({
     map: tex, emissiveMap: tex,
     emissive: prof.tile.emissive, emissiveIntensity: prof.tile.emissiveIntensity,
-    roughness: 0.55, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.4,
+    roughness: 0.55, metalness: 0, specularIntensity: 0.25, clearcoat: 0.25, clearcoatRoughness: 0.4,   // the glaze is the clearcoat; a second full highlight under it veiled the letters
   });
   B3.faceAtlasCanvas = c;
   B3.faceAtlasTex = tex;
@@ -282,7 +282,7 @@ function clothTexture(grp) {
 // Unified declarative Day / Night 3D lighting & PMREM environment profiles (W3-S2-01 / CD-WF3-02).
 export const LIGHTING_PROFILES = {
   day: {
-    key: { color: 0xfff0d8, intensity: 900 },
+    key: { color: 0xfff0d8, intensity: 600 },   // W6-S4-01: at 900 the marble rendered within 16 of the tiles (218 against 233) and greyed their ink
     hemi: { sky: 0xfff1dc, ground: 0x6a4a2c, intensity: 0.6 },
     fill: { color: 0xcfe0ff, intensity: 0.5 },
     envIntensity: 0.5,
@@ -316,7 +316,7 @@ export const LIGHTING_PROFILES = {
     },
     tile: { emissive: 0xffe4be, emissiveIntensity: 0.11, bodyColor: 0xd8cdb6 },
     towel: { cloth: 0x524b61, stripe: 0x26444a },
-    top: { emissive: 0x302c44, emissiveIntensity: 0.68 },
+    top: { emissive: 0xcabfd2, emissiveIntensity: 0.9 },   // through the board's own picture (emissiveMap), so dark ink stays dark
     preDimColor: 0x14121f,
   },
 };
@@ -662,7 +662,7 @@ export function render(d) {
   const t0 = performance.now();
   // board face: W3-S2-04 requests mode3d=true so baked 2D lamp pool & inner frame shadows are omitted under real-time SpotLight + PCF shadows
   const tex = R.boardTexture(d.theme, true);
-  if (tex !== B3.boardCanvas) { B3.top.map?.dispose(); B3.top.map = canvasTex(tex); B3.top.map.minFilter = THREE.LinearMipmapLinearFilter; B3.top.needsUpdate = true; B3.boardCanvas = tex; B3.boardMode3d = true; }
+  if (tex !== B3.boardCanvas) { B3.top.map?.dispose(); B3.top.map = B3.top.emissiveMap = canvasTex(tex); B3.top.map.minFilter = THREE.LinearMipmapLinearFilter; B3.top.needsUpdate = true; B3.boardCanvas = tex; B3.boardMode3d = true; }
   const openCenter = !d.board[CENTER] && !(d.staged && d.staged.some((t) => t.i === CENTER));
   const down = d.board.reduce((n, t) => n + (t ? 1 : 0), 0);
   const preActive = openCenter && down === 0;
