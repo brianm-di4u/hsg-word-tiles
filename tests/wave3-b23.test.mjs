@@ -9,6 +9,7 @@ const heldWorker = () => {
   Worker.prototype.postMessage = function (...a) { if (window.__hold) kept.push(() => post.apply(this, a)); else post.apply(this, a); };
   window.__release = () => { window.__hold = false; for (const f of kept.splice(0)) f(); };
 };
+const quiet = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false, theme: 'light' })); };
 const SEATS = [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }];
 const until = (t, f) => t.page.waitForFunction(f, null, { timeout: 15000, polling: 50 });
 
@@ -87,6 +88,62 @@ export const tests = [
         t.equal(`${s.game.move} ${s.game.cur} ${s.aiHeld} ${s.aiThinking}`, `${move + 1} 0 false false`, `${where}: back in the game the computer plays and the turn comes back`);
       }
       await t.page.clock.resume();
+    },
+  },
+  // ---------- W6-S2-04, W5-S1-02 ----------
+  {
+    name: 'W6-S2-04 W5-S1-02 the bag on the turn line takes taps over at least 44 px on phones, and nothing moves or loses its own taps for it',
+    viewports: ['mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      const ai = (persona, level) => ({ kind: 'ai', persona, level }), you = { kind: 'human', name: 'You' };
+      const GAMES = {
+        'two players': { seed: 5, seats: [you, ai('opal', 'easy')] },
+        'four players': { seed: 5, seats: [you, ai('opal', 'easy'), ai('hollis', 'medium'), ai('julian', 'hard')] },
+        'the final stretch': { seed: 5, seats: [you, ai('opal', 'easy')], bag: ['A', 'B', 'C'] },
+        'an empty bag': { seed: 5, seats: [you, ai('opal', 'easy')], bag: [] },
+        'the Daily Soak': { mode: 'daily', date: '2026-11-20' },
+      };
+      for (const text of [1, 1.3]) {
+        await t.page.evaluate((v) => { const k = 'hs-letters-settings-v1', s = JSON.parse(localStorage.getItem(k)); s.text = v; localStorage.setItem(k, JSON.stringify(s)); }, text);
+        await t.reload();
+        await ready(t);
+        for (const [w, h] of [[390, 844], [360, 640], [320, 568], [844, 390], [568, 320]]) {
+          await t.page.setViewportSize({ width: w, height: h });
+          await t.waitFrames(3);
+          for (const [what, { bag, ...game }] of Object.entries(GAMES)) {
+            const where = `${w}x${h} ${text * 100}% ${what}`;
+            await t.game('newGame', game);
+            await t.waitIdle(8000);
+            if (game.mode === 'daily') await t.page.waitForFunction(() => document.querySelectorAll('#turnline .par-pip').length === 2, null, { timeout: 15000 });
+            if (bag) { const g = (await t.state()).game; g.bag = bag; await t.game('setState', { game: g }); await t.waitFrames(2); }
+            const m = await t.page.evaluate(() => {
+              const btn = document.querySelector('#turnline [data-open-tracker]'), r = btn.getBoundingClientRect(), cx = r.left + r.width / 2;
+              // the run of points on a line, through the button, that press it
+              const span = (at, from, n) => { let lo = from, hi = from; while (lo > 0 && btn.contains(at(lo - 0.5))) lo -= 0.5; while (hi < n && btn.contains(at(hi + 0.5))) hi += 0.5; return [lo, hi]; };
+              const [top, low] = span((y) => document.elementFromPoint(cx, y), r.top + 4, innerHeight), [left, right] = span((x) => document.elementFromPoint(x, r.top + 4), cx, innerWidth);
+              const rects = () => JSON.stringify(['#topbar', '#turnline', '#turnline .chips', '#turnline [data-open-tracker]', '#b-menu', '#springs', '#boardwrap', '#rackbar', '#actions'].map((q) => { const b = document.querySelector(q).getBoundingClientRect(); return [b.left, b.top, b.width, b.height]; }));
+              const others = () => { const o = {}; for (let y = 1; y < innerHeight; y += 4) for (let x = 1; x < innerWidth; x += 4) { const e = document.elementFromPoint(x, y)?.closest('button, a, input, canvas, [tabindex]'); if (e && e !== btn) o[x + ',' + y] = e; } return o; };
+              const withIt = rects(), taps = others();
+              const st = document.createElement('style'); st.textContent = '#turnline .bag-btn::after, #turnline .bag-link::after { display: none !important; }'; document.head.append(st);
+              const without = rects(), base = others();
+              st.remove();
+              return { h: low - top, w: right - left, top, cx, moved: withIt !== without, lost: Object.keys(base).filter((k) => taps[k] !== base[k]).map((k) => `${base[k].id || base[k].className} at ${k}`), name: btn.getAttribute('aria-label') };
+            });
+            t.expect(m.h >= 44 && m.w >= 44, `${where}: the bag takes taps over ${m.w} x ${m.h} px`);
+            t.equal(`${m.moved} ${m.lost}`, 'false ', `${where}: nothing has moved, and no other control lost a tap`);
+            t.expect(/open Unseen tiles$/.test(m.name), `${where}: ${m.name}`);
+            if (text === 1 && w === 390) {   // a real tap near the top of it, above the button's own box
+              await t.tap([m.cx, m.top + 2]);
+              await t.page.waitForFunction(() => window.__game.getState().dialog === 'tracker', null, { timeout: 5000 });
+              await t.game('act', 'close');
+              await t.waitFrames(2);
+              await t.shot('w3-b23-bag-' + what.split(' ').pop());
+            }
+          }
+        }
+      }
     },
   },
 ];

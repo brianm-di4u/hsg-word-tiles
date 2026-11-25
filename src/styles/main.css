@@ -762,6 +762,10 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   #turnline .bag-n { flex: none; white-space: pre; }
   #turnline .bag-btn { align-self: center; text-align: center; }
   #turnline .bag-btn:not(.phase-final):not(.phase-empty), #turnline .daily-bag.bag-link { padding: 6px 8px; margin: -6px -8px; max-width: calc(100% + 16px); }   /* a larger tap area in the same space */
+  /* ...and 44 px of it: up over the scores, which take no taps, so the line and the board stay where they are and the Featured Springs bar below keeps its own taps */
+  #turnline .bag-btn, #turnline .bag-link { position: relative; }
+  #turnline .bag-btn { overflow: visible; }
+  #turnline .bag-btn::after, #turnline .bag-link::after { content: ""; position: absolute; left: 50%; bottom: 6px; width: max(100%, 44px); height: 44px; transform: translateX(-50%); }
   #turnline .daily-bag { white-space: nowrap; }
   #turnline .bag.phase-final, #turnline .bag.phase-empty { align-self: center; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; padding: 1px 7px; }
   #turnline .daily-turn { font-size: 0.78rem; padding: 2px 8px; }
