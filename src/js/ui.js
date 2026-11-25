@@ -191,6 +191,17 @@ const ownerShort = (p) => (p && p.persona && SHORT[p.persona]) || (p ? seatMono(
 // when a letter clears by itself (engine.js fogStep)
 const fogPace = (s) => (s.mode === 'daily' ? 'a letter clears every turn' : 'fog lifts as the bag empties');
 
+// Turn 1 of the Daily Soak (W1-S4-10): the kinds of word on its plaques (three kinds, engine.js pickFeatured), and what a Hot Springs word
+// of such a kind does. `say` is the same for the live region.
+export const dailyOpening = (s) => !!s.daily && !s.over && !s.log.length && s.featured.length > 0;
+export function todaysSprings(s, lex, compact, isToday) {
+  const title = isToday ? "Today's Springs" : 'Springs of the day', how = 'Hot Springs words of these kinds clear';
+  return {
+    html: `<span class="day"><b>${title}</b>${s.featured.map((f) => `<span class="extra">${ICON.cat[lex.categories[f.cat].icon]}${CAT_SHORT[f.cat]}</span>`).join('')}<span class="said">${how} ${compact ? 'letters.' : 'plaque letters; so does covering a Bathhouse Row square.'}</span><span class="said">Start on the ${compact ? 'centre square.' : 'Display Spring in the centre.'}</span></span>`,
+    say: `${title}: ${s.featured.map((f) => lex.categories[f.cat].name).join(', ')}. ${how} plaque letters; so does covering a Bathhouse Row square.`,
+  };
+}
+
 export function springsHtml(s, lex, compact, open = false) {
   const renderPlaque = (f, k) => {
     const cat = lex.categories[f.cat];

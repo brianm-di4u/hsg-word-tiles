@@ -20,6 +20,8 @@ Casual word-game players (12+), families, local-history fans, daily-puzzle playe
 - **Play:** 2–4 seats, each Human or AI (persona and level). One human with AI = solo. Two or more
   humans = pass-and-play with a privacy screen.
 - **Daily Soak:** one player, 10 turns, the same tiles for everyone on a date; best score and streak.
+  Turn 1 names "Today's Springs", the kinds of word on the day's three plaques, so the ten turns have Hot Springs
+  words to hunt.
 - Options: AI speed (Normal / Fast / Instant), hints on/off (3 "Spring Guide" hints per game in Play).
 
 ## 4. Rules

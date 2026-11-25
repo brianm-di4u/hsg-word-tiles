@@ -631,6 +631,7 @@ function beginGame(s, intent) {
   saveNotice(s, gameSaves.status(handle));
   if (s.mode === 'daily') findPar(s.daily.date, s);
   startTurn();
+  if (UI.dailyOpening(s)) { const tip = $('#coach p'); liveSay(`${UI.todaysSprings(s, G.lex, false, s.daily.date === today()).say}${tip ? ` Tip: ${tip.textContent}` : ''}`); }
 }
 // A hint taken this turn comes back after a reload, put on the board as it was (only if it still fits: the rack, the board and the turn).
 function restoreHint(s) {
@@ -1519,7 +1520,8 @@ function renderPreview() {
     const said = G.lastLine || (cur().kind !== 'human' ? '' : G.s.move === 0 ? (isNarrow() ? 'Start on the centre square.' : 'Start on the Display Spring in the centre.') : (isNarrow() ? 'Drag tiles to the board.' : 'Drag tiles to the board to make a word.'));
     const hello = G.lastLine ? null : greeting(G.s), b = G.lastLine ? G.bark : hello;   // the table greets a person's opening play
     cls = hello ? 'idle greet' : 'idle';
-    html = b ? `<span class="bark"><b>${esc(SHORT[b.persona] || '')}:</b> “${esc(b.text)}”</span><span class="said">${esc(said)}</span>` : esc(said);
+    if (UI.dailyOpening(G.s)) { html = UI.todaysSprings(G.s, G.lex, isNarrow(), G.s.daily.date === today()).html; cls = 'idle greet'; }
+    else html = b ? `<span class="bark"><b>${esc(SHORT[b.persona] || '')}:</b> “${esc(b.text)}”</span><span class="said">${esc(said)}</span>` : esc(said);
   }
   const stall = !G.s.over && !G.aiBusy && !G.hintBusy && !G.flash && !G.preview && !G.hoverInfo && cur().kind === 'human' ? UI.stallNote(G.s) : '';
   if (stall) { cls = ''; html += `<span class="said stall">${esc(stall)}</span>`; }

@@ -205,7 +205,8 @@ export const tests = [
       await t.game('newGame', { mode: 'daily', date: '2026-11-25' });
       await t.waitIdle(8000);
       const first = (await t.page.textContent('#preview')).trim();
-      t.expect(/^Start on the/.test(first), `the next game does not open on the last one (${first})`);
+      // a Daily's Turn 1 now opens on Today's Springs (W1-S4-10, wave4-b04); this test was written when it opened on 'Start on the'
+      t.expect(/^Today's Springs/.test(first) && !first.includes('“'), `the next game does not open on the last one (${first})`);
     },
   },
 ];
