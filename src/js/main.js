@@ -337,6 +337,7 @@ function showScene(name, arg) {
     if (SHEETS.includes(name)) {
       if (G.aiFire) { clearTimeout(G.aiTimer); G.aiTimer = 0; G.aiHeld = G.aiFire; G.aiFire = null; }
       if (G.turnWait) { const run = G.turnWait.run; clearTimeout(G.turnWait.id); G.turnWait = null; if (!G.aiHeld && run) G.aiHeld = run; G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; }
+      if (G.overTimer) G.aiHeld = G.overRun;
       G.badPulse = null; G.pendingVfx = null;
       cancelTurnTimers();
     } else {
@@ -892,7 +893,13 @@ function finishGame() {
   const oc = UI.outcome(s);
   sfx(s.mode === 'daily' || oc === 'win' || oc === 'tie' ? 'fanfare' : oc === 'loss' ? 'defeat' : 'turn');
   clearTimeout(G.overTimer);
-  G.overTimer = setTimeout(() => { G.overTimer = 0; if (G.s === s && G.scene === 'game') showScene('over'); }, G.fast ? 0 : 900);
+  // the menu, a card or a sheet opened meanwhile holds the results until it is closed, as it does a computer's reply
+  G.overRun = () => {
+    G.overTimer = 0;
+    if (G.s !== s || G.scene !== 'game') return;
+    if (G.dialog) G.aiHeld = G.overRun; else showScene('over');
+  };
+  G.overTimer = setTimeout(G.overRun, G.fast ? 0 : 900);
 }
 
 // What the finished game set, for the results screen ("new personal best").
