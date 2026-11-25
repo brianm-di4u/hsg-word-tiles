@@ -168,11 +168,11 @@ export const tests = [
     async run(t) {
       await ready(t);
       const med = (p) => [...p].sort((x, y) => x - y)[p.length >> 1];
-      const render = async (n, vol) => { const p = []; for (let k = 0; k < 20; k++) p.push((await t.game('act', 'renderSfx', n, vol)).peak); return p; };
+      const render = async (n, vol, read = 'peak') => { const p = []; for (let k = 0; k < 20; k++) p.push((await t.game('act', 'renderSfx', n, vol))[read]); return p; };
       const typical = await render('fanfare', 0.35);
       t.log('fanfare typical median ' + med(typical));
       t.expect(med(typical) >= 0.2 && med(typical) <= 0.45, 'it is typically between 0.2 and 0.45 (median ' + med(typical) + ')');
-      const full = await render('play+fanfare@0.28', 1);
+      const full = await render('play+fanfare@0.28', 1, 'prePeak');   // before the ceiling, which would hide a cue that is too loud
       t.log('play+fanfare full-volume most ' + Math.max(...full));
       t.expect(Math.max(...full) < 0.95, 'it stays under 0.95 with the volume at full (' + Math.max(...full) + ')');
     },

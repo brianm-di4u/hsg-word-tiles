@@ -44,13 +44,13 @@ export const tests = [
       t.expect(names.includes('featured') && names.includes('chime'), 'the play made the bell and the chime (' + names.join(',') + ')');
       // what the game schedules is what is measured: each cue with its own delay
       const mix = r.cues.filter((c) => ['play', 'featured', 'chime'].includes(c.name)).map((c) => c.name + '@' + c.delay).join('+');
-      const render = async (n) => { const p = []; for (let k = 0; k < 20; k++) p.push((await t.game('act', 'renderSfx', n, 1)).peak); return p; };
+      const render = async (n, read = 'prePeak') => { const p = []; for (let k = 0; k < 20; k++) p.push((await t.game('act', 'renderSfx', n, 1))[read]); return p; };   // before the ceiling, which would hide a cue that is too loud
       for (const n of [mix, 'play+featured']) {
         const p = await render(n);
         t.log(n + ' at full volume: ' + Math.min(...p) + '..' + Math.max(...p));
         t.expect(Math.max(...p) < 0.95, n + ' stays under 0.95 with the volume at full (' + Math.max(...p) + ')');
       }
-      const typical = await render('featured');
+      const typical = await render('featured', 'peak');
       t.expect([...typical].sort((x, y) => x - y)[10] > 0.3, 'the bell is still heard at full volume (median ' + [...typical].sort((x, y) => x - y)[10] + ')');
     },
   },
@@ -70,7 +70,7 @@ export const tests = [
       const chime = r.cues.find((c) => c.name === 'chime');
       t.expect(chime && chime.delay > 0.2, 'the chime is scheduled after the play, not on it (delay ' + (chime && chime.delay) + ')');
       const mix = r.cues.filter((c) => ['play', 'chime'].includes(c.name)).map((c) => c.name + '@' + c.delay).join('+');
-      const p = []; for (let k = 0; k < 40; k++) p.push((await t.game('act', 'renderSfx', mix, 1)).peak);
+      const p = []; for (let k = 0; k < 40; k++) p.push((await t.game('act', 'renderSfx', mix, 1)).prePeak);
       t.log(mix + ' at full volume: ' + Math.min(...p) + '..' + Math.max(...p));
       t.expect(Math.max(...p) < 0.95, mix + ' stays under 0.95 with the volume at full (' + Math.max(...p) + ')');
     },

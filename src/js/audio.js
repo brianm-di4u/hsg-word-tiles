@@ -265,11 +265,15 @@ export function audioRender(name, seconds, wantWav, opts = {}) {
 // made a quarter of a second in, as it would be in a running game (a limiter that has only just started eats the
 // first few milliseconds of whatever it is given).
 export async function renderCue(name, vol, opts) {
-  const off = new OfflineAudioContext(1, 44100 * 2, 44100);
+  // two channels: what is heard, and the same wave as it leaves the limiter, before the ceiling (prePeak). The ceiling never lets
+  // the first reach 0.95, so only the second can show a cue that is too loud.
+  const off = new OfflineAudioContext(2, 44100 * 2, 44100), both = off.createChannelMerger(2);
   // opts.hp: measure only what lies above that many Hz (the cue is heard through a high-pass filter)
-  let dest = off.destination;
-  if (opts && opts.hp) { dest = off.createBiquadFilter(); dest.type = 'highpass'; dest.frequency.value = opts.hp; dest.Q.value = 0.7; dest.connect(off.destination); }
-  const g = graph(off, dest, 1);
+  let end = off.destination;
+  if (opts && opts.hp) { end = off.createBiquadFilter(); end.type = 'highpass'; end.frequency.value = opts.hp; end.Q.value = 0.7; end.connect(off.destination); }
+  both.connect(end);
+  const g = graph(off, both, 1);
+  g.lim.connect(both, 0, 1);
   // the stop is asked for before rendering starts: on a machine that renders fast, asking once it has begun can come too late
   // ("suspend failed ... earlier than the current frame") and the cue is never measured
   const stopped = off.suspend(0.25), done = off.startRendering();
@@ -278,8 +282,9 @@ export async function renderCue(name, vol, opts) {
   audio.ctx = off; audio.on = true; audio.fx = true; audio.sfxOut = g.sfx; audio.vol = vol;
   try { for (const n of name.split('+')) { const [cue, d] = n.split('@'); sfx(cue, { ...opts, delay: d ? +d : 0, _offline: true }); } } finally { Object.assign(audio, prev); }
   off.resume();
-  const d = (await done).getChannelData(0);
+  const buf = await done, d = buf.getChannelData(0);
+  const prePeak = buf.getChannelData(1).reduce((m, v) => Math.max(m, Math.abs(v)), 0);
   let peak = 0, sum = 0, last = 0, zc = 0;
   for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; sum += d[i] * d[i]; if (v > 0.001) last = i; if (i && d[i] * d[i - 1] < 0) zc++; }
-  return { peak: +peak.toFixed(3), rms: +Math.sqrt(sum / d.length).toFixed(4), ms: Math.round((last - 11025) / 44.1), zc, sig: Math.round(sum * 1e6) };
+  return { peak: +peak.toFixed(3), prePeak: +prePeak.toFixed(3), rms: +Math.sqrt(sum / d.length).toFixed(4), ms: Math.round((last - 11025) / 44.1), zc, sig: Math.round(sum * 1e6) };
 }

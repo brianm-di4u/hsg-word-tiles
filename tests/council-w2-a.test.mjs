@@ -72,9 +72,9 @@ export const tests = [
       }
       for (const n of Object.keys(peaks)) t.expect(med(peaks[n]) <= 0.45 && Math.max(...peaks[n]) <= 0.45 * SPREAD, `${n} is typically under 0.45 and never more than 1.5 dB over it (median ${med(peaks[n])}, most ${Math.max(...peaks[n])})`);
       // With the Volume slider at full the loudest cues must still clear the limiter: before the cue volume was tapered
-      // above the shipped setting, steam and place reached 1.03 in 60 repeats.
+      // above the shipped setting, steam and place reached 1.03 in 60 repeats. (Measured before the ceiling, which would hide it.)
       for (const n of ['steam', 'place', 'pick', 'swap', 'play', 'featured']) {
-        const full = []; for (let k = 0; k < 20; k++) full.push((await t.game('act', 'renderSfx', n, 1)).peak);
+        const full = []; for (let k = 0; k < 20; k++) full.push((await t.game('act', 'renderSfx', n, 1)).prePeak);
         t.expect(Math.max(...full) < 0.95, `${n} stays under 0.95 with the volume at full, over 20 repeats (${Math.max(...full)})`);
       }
       const loudest = Math.max(...Object.values(peaks).map((p) => Math.max(...p)));

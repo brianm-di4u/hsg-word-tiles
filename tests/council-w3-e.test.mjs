@@ -104,16 +104,16 @@ export const tests = [
     async run(t) {
       await ready(t);
       const med = (p) => [...p].sort((x, y) => x - y)[p.length >> 1], SPREAD = 10 ** (1.5 / 20);
-      const render = async (n, vol) => { const p = []; for (let k = 0; k < 20; k++) p.push((await t.game('act', 'renderSfx', n, vol)).peak); return p; };
+      const render = async (n, vol, read = 'peak') => { const p = []; for (let k = 0; k < 20; k++) p.push((await t.game('act', 'renderSfx', n, vol))[read]); return p; };
       for (const n of ['good', 'big', 'discover', 'yourturn']) {
         const p = await render(n, 0.35);
         t.log(n + ' median ' + med(p));
         t.expect(med(p) >= 0.2 && med(p) <= 0.45, n + ' is typically between 0.2 and 0.45 (median ' + med(p) + ')');
         t.expect(Math.min(...p) >= 0.2 / SPREAD && Math.max(...p) <= 0.45 * SPREAD, n + ' never strays more than 1.5 dB outside it');
       }
-      // what each is heard with: the tiles, and the steam of a Hot Springs word
+      // what each is heard with: the tiles, and the steam of a Hot Springs word (before the ceiling, which would hide a cue that is too loud)
       for (const n of ['play+good@0.28', 'play+big@0.28+steam', 'play+steam+discover@0.28']) {
-        const p = await render(n, 1);
+        const p = await render(n, 1, 'prePeak');
         t.log(n + ' full-volume most ' + Math.max(...p));
         t.expect(Math.max(...p) < 0.95, n + ' stays under 0.95 with the volume at full (' + Math.max(...p) + ')');
       }
@@ -229,7 +229,7 @@ export const tests = [
         const p = []; for (let k = 0; k < 15; k++) p.push((await t.game('act', 'renderSfx', n, 0.35)).peak);
         t.log(n + ' median ' + med(p) + ', most ' + Math.max(...p));
         t.expect(med(p) >= 0.06 && med(p) <= 0.2, n + ' is soft at the shipped volume (median ' + med(p) + ')');
-        const full = []; for (let k = 0; k < 15; k++) full.push((await t.game('act', 'renderSfx', n, 1)).peak);
+        const full = []; for (let k = 0; k < 15; k++) full.push((await t.game('act', 'renderSfx', n, 1)).prePeak);
         t.expect(Math.max(...full) < 0.95, n + ' stays under 0.95 with the volume at full (' + Math.max(...full) + ')');
       }
       const heard = async (f) => { const before = (await t.game('audioState')).total; await f(); const a = await t.game('audioState'); return a.played.slice(a.played.length - (a.total - before)); };
