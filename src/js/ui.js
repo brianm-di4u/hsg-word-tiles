@@ -39,13 +39,18 @@ export function initials(name) {
   return (String(name || '').replace(/["\u201C\u201D]/g, '').match(/\b[A-Z]/g) || ['?']).slice(0, 2).join('');
 }
 
+// 'P1', 'P2'… for a seat left on its default name, so no two of them read alike
+function seatMono(name) {
+  const m = /^Player\s+(\d+)$/i.exec(String(name || '').trim());
+  return m ? `P${m[1]}` : '';
+}
+
 // A round monogram badge for a seat: persona colour or seat colour, initials, seat number.
 export function badge(p, k, size = 40) {
   const per = p.persona ? persona(p.persona) : null;
   const color = per ? per.color : HUMAN_COLORS[k % HUMAN_COLORS.length];
   const face = per && art.has('face-' + per.id) ? `<img src="${art.src('face-' + per.id)}" alt="" width="${size}" height="${size}">` : '';
-  const pm = !per && /^Player\s+(\d+)$/i.exec((p.name || '').trim());
-  const mon = pm ? `P${pm[1]}` : initials(p.name);
+  const mon = (!per && seatMono(p.name)) || initials(p.name);
   return `<span class="badge${face ? ' has-face' : ''}" style="--c:${color};--s:${size}px" aria-hidden="true">${face || `<b>${esc(mon)}</b>`}<i>${k + 1}</i></span>`;
 }
 
@@ -178,7 +183,7 @@ export function scoresHtml(s, compact) {
 }
 
 const CAT_SHORT = { baths: 'Row', springs: 'Springs', park: 'Park', track: 'Track', club: 'Club', town: 'Town' };
-const ownerShort = (p) => (p && p.persona && SHORT[p.persona]) || (p ? p.name.split(' ')[0] : '');
+const ownerShort = (p) => (p && p.persona && SHORT[p.persona]) || (p ? seatMono(p.name) || p.name.split(' ')[0] : '');
 
 // when a letter clears by itself (engine.js fogStep)
 const fogPace = (s) => (s.mode === 'daily' ? 'a letter clears every turn' : 'fog lifts as the bag empties');

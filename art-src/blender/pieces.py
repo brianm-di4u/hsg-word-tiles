@@ -60,9 +60,10 @@ def rounded_box(w, d, h, r, segs=3, z0=0.0, x0=0.0, y0=0.0):
 
 def tile():
     bm = rounded_box(0.9, 0.9, 0.24, 0.07, 4)
-    # a faint crown on the glazed top: lift the centre of the top face a hair
-    for v in bm.verts:
-        if v.co.z > 0.239: v.co.z += 0.012 * max(0.0, 1 - (abs(v.co.x) / 0.38) ** 2) * max(0.0, 1 - (abs(v.co.y) / 0.38) ** 2)
+    # a faint crown on the glazed top: poke the flat top face so it has a centre vertex, and lift that a hair
+    top = [f for f in bm.faces if f.normal.z > 0.99 and f.calc_center_median().z > 0.2]
+    for v in bmesh.ops.poke(bm, faces=top)['verts']: v.co.z += 0.010
+    bm.normal_update()
     for f in bm.faces: f.material_index = 0 if f.normal.z > 0.92 and f.calc_center_median().z > 0.2 else 1
     mesh_from(bm, 'tile', [TILETOP(), TILEBODY()], smooth=True)
 
