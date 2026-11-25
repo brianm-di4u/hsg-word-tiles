@@ -125,6 +125,7 @@ export function evaluate(s, tiles, ctx) {
 export function apply(s, action, ctx) {
   if (s.over) return { ok: false, error: 'The game is over.' };
   const p = s.players[s.cur];
+  const fogWas = fogStep(s);
   const rack = p.rack.join('');   // kept in the log so the game can be looked back over (review.js)
   // the Featured Springs a person could work out on this turn, also for review.js (only written when there is one)
   const known = p.kind === 'human' ? deducibleFeatured(s.featured, ctx.lex).map((f) => f.word) : [];
@@ -205,7 +206,8 @@ export function apply(s, action, ctx) {
   else if (s.scoreless >= 2 * s.players.length) finish(s, null, 'stalled');
   if (!s.over) {
     s.cur = (s.cur + 1) % s.players.length;
-    if (s.cur === 0) { s.round++; revealRound(s); }
+    if (s.cur === 0) s.round++;
+    for (let k = fogStep(s); k > fogWas; k--) clearFog(s);
   }
   return { ok: true, entry };
 }
@@ -225,8 +227,21 @@ function revealOneLetter(s, f) {
   return true;
 }
 
-// One more letter of each unclaimed Featured Spring clears at each new round (up to featuredRevealCap).
-function revealRound(s) {
+// How far the fog has lifted by itself (W6-S3-03). In a game of two to four it follows the bag: one step for every twelfth of the tiles
+// that were left in it after the deal, whoever draws them, so a plaque has cleared as far by the middle of the bag with four players
+// as with two. (It used to be a letter a round, and four players have about half the rounds.) The Daily has one player and ten
+// turns: one step a turn, as it always was, so a date clears the same letters on everyone's board. Read from the bag, so nothing is
+// stored and a game saved before this goes on from where its plaques are.
+export const FOG_STEPS = 12;
+const ALL_TILES = fullBag().length;
+export function fogStep(s) {
+  if (s.mode === 'daily') return s.daily ? DAILY_TURNS - s.daily.turns : 0;
+  const start = ALL_TILES - RACK * s.players.length;
+  return Math.max(0, Math.floor((FOG_STEPS * (start - s.bag.length)) / start));
+}
+
+// One more letter of each unclaimed Featured Spring clears at each step (up to featuredRevealCap).
+function clearFog(s) {
   for (const f of s.featured) revealOneLetter(s, f);
 }
 

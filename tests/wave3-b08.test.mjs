@@ -418,7 +418,7 @@ export const tests = [
       t.equal(dealInfo.count, 7, 'Pass-and-Play reveal dealt all 7 rack tiles with .deal stagger');
       t.equal(dealInfo.delays.join(','), '0,1,2,3,4,5,6', 'Pass-and-Play .deal tiles carry 0..6 stagger indices');
 
-      // 2) Featured Springs diff: force a fog-letter clear and a claim across plays -> verify .fog-clear & .just-claimed (240 ms)
+      // 2) Featured Springs diff: force a claim and a fog-letter clear across plays -> verify .fog-clear & .just-claimed (240 ms)
       const st = await t.state();
       let fIdx = st.game.featured.findIndex((f) => f.word.length <= 7);
       if (fIdx < 0) { fIdx = 0; st.game.featured[0] = { word: 'SPRING', id: 'spring', cat: 'springs', shown: [0], by: null }; }
@@ -428,23 +428,7 @@ export const tests = [
       st.game.players[0].rack = (targetWord + 'AAAAAAA').slice(0, 7).split('');
       await t.game('setState', { game: st.game });
       await t.game('act', 'reveal');
-      // First pass both seats so round clears a fogged letter on Featured Springs -> .fog-clear on newly cleared cell only
-      await t.game('act', 'pass');
-      await t.page.clock.runFor(200);
-      await t.game('act', 'reveal');
-      await t.game('act', 'pass');
-      const fogInfo = await t.page.evaluate(() => {
-        const els = [...document.querySelectorAll('.pword b.fog-clear')];
-        return { count: els.length, anim: els[0] ? getComputedStyle(els[0]).animationName : null };
-      });
-      t.expect(fogInfo.count >= 1, `round fog reveal applied .fog-clear to newly revealed plaque letters (${fogInfo.count})`);
-      t.equal(fogInfo.anim, 'fog-clear', '.fog-clear runs 240 ms fog-clear CSS transition');
-      await t.game('act', 'reveal');
-      await t.shot('w3-b08-plaque-fog-clear', { wait: false });
-      await t.page.clock.runFor(300);
-      t.equal(await t.page.evaluate(() => document.querySelectorAll('.pword b.fog-clear').length), 0, '.fog-clear cleaned up after 260 ms');
-
-      // Now claim Featured Spring fIdx by playing targetWord across row 7 -> .just-claimed on plaque fIdx only
+      // First claim Featured Spring fIdx by playing targetWord across row 7 -> .just-claimed on plaque fIdx only
       const tiles = [...targetWord].map((l, k) => ({ i: 7 * 15 + startCol + k, l }));
       await t.game('act', 'stage', tiles);
       t.expect((await t.game('act', 'play')).ok, `claimed Featured Spring ${targetWord}`);
@@ -464,6 +448,26 @@ export const tests = [
       await t.shot('w3-b08-plaque-just-claimed', { wait: false });
       await t.page.clock.runFor(300);
       t.equal(await t.page.evaluate(() => document.querySelectorAll('.just-claimed').length), 0, '.just-claimed cleaned up after 260 ms');
+
+      // Then a play by seat 1 that draws the seventh tile of 84 clears a letter -> .fog-clear on newly cleared cells only. (W6-S3-03: the fog
+      // follows the bag; before, the second pass of a round cleared it.)
+      const st2 = await t.state();
+      st2.game.bag = [...st2.game.bag, ...'AEIORSTLNDAEIORSTLND'].slice(0, 78);
+      await t.game('setState', { game: st2.game });
+      await t.game('act', 'reveal');
+      const [mv] = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', mv.tiles);
+      t.expect((await t.game('act', 'play')).ok, `seat 1 played ${mv.words[0]}`);
+      const fogInfo = await t.page.evaluate(() => {
+        const els = [...document.querySelectorAll('.pword b.fog-clear')];
+        return { count: els.length, anim: els[0] ? getComputedStyle(els[0]).animationName : null };
+      });
+      t.expect(fogInfo.count >= 1, `the fog reveal applied .fog-clear to newly revealed plaque letters (${fogInfo.count})`);
+      t.equal(fogInfo.anim, 'fog-clear', '.fog-clear runs 240 ms fog-clear CSS transition');
+      await t.game('act', 'reveal');
+      await t.shot('w3-b08-plaque-fog-clear', { wait: false });
+      await t.page.clock.runFor(300);
+      t.equal(await t.page.evaluate(() => document.querySelectorAll('.pword b.fog-clear').length), 0, '.fog-clear cleaned up after 260 ms');
       await t.page.clock.resume();
     },
   },

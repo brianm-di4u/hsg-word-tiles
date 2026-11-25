@@ -77,8 +77,9 @@ Racks are arrays of letters, `'?'` for a blank. A placed blank stores the letter
 
 ### Featured Springs
 3 lexicon forms per game, chosen by `rng.bag` from tier ≥ 2 forms of 4–8 letters, from 3 different
-categories. Each plaque shows the category (icon + short label), the length and one letter; at the start
-of each full round one more letter clears, first covering any uncovered Bathhouse Row square clears +1
+categories. Each plaque shows the category (icon + short label), the length and one letter. One more letter
+clears each time another twelfth of the bag (as it stood after the deal) has been drawn, by whichever seat, so two, three and
+four players see the fog lift at the same pace; in the Daily one clears each turn. First covering any uncovered Bathhouse Row square clears +1
 fogged letter on an unclaimed plaque, and playing any Hot Springs word in an unclaimed plaque's category
 immediately clears +1 extra fogged letter on that plaque. Fog clearing stops at `length − 2` early in the
 game, and clears down to `length − 1` once `bag <= 20` tiles (or Daily Turn 6+). Any playable form sharing

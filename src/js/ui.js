@@ -180,6 +180,9 @@ export function scoresHtml(s, compact) {
 const CAT_SHORT = { baths: 'Row', springs: 'Springs', park: 'Park', track: 'Track', club: 'Club', town: 'Town' };
 const ownerShort = (p) => (p && p.persona && SHORT[p.persona]) || (p ? p.name.split(' ')[0] : '');
 
+// when a letter clears by itself (engine.js fogStep)
+const fogPace = (s) => (s.mode === 'daily' ? 'a letter clears every turn' : 'fog lifts as the bag empties');
+
 export function springsHtml(s, lex, compact, open = false) {
   const renderPlaque = (f, k) => {
     const cat = lex.categories[f.cat];
@@ -192,7 +195,7 @@ export function springsHtml(s, lex, compact, open = false) {
   };
   const list = s.featured.map(renderPlaque).join('');
   if (!compact) {
-    return `<h2 class="springs-title"><span>Featured Springs</span> <small>+${FEATURED_BONUS} each · a letter clears every round</small></h2><div class="plaques">${list}</div>`;
+    return `<h2 class="springs-title"><span>Featured Springs</span> <small>+${FEATURED_BONUS} each · ${fogPace(s)}</small></h2><div class="plaques">${list}</div>`;
   }
   const claimedCount = s.featured.filter((f) => f.by != null).length;
   const active = s.featured.filter((f) => f.by == null);
@@ -210,7 +213,7 @@ export function springsHtml(s, lex, compact, open = false) {
   const summary = `Featured Springs, ${claimedCount} of ${s.featured.length} found, +${FEATURED_BONUS} each. ${open ? 'Hide plaques.' : 'Show all three plaques.'}`;
   return `<button type="button" class="springs-bar" data-springs-toggle aria-expanded="${!!open}" aria-controls="springs-tray" aria-label="${esc(summary)}">
     <span class="sbar-meta"><b>Featured</b><small>${claimedCount}/${s.featured.length} · +${FEATURED_BONUS}</small></span>${preview}<span class="sbar-chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-  </button><div id="springs-tray" class="plaques springs-drawer"${open ? '' : ' hidden'}><p class="springs-title"><span>Featured Springs</span> <small>+${FEATURED_BONUS} each · a letter clears every round</small></p>${list}</div>`;
+  </button><div id="springs-tray" class="plaques springs-drawer"${open ? '' : ' hidden'}><p class="springs-title"><span>Featured Springs</span> <small>+${FEATURED_BONUS} each · ${fogPace(s)}</small></p>${list}</div>`;
 }
 
 export function actionsHtml(o) {
@@ -421,7 +424,7 @@ export function helpHtml(tab, lex, twos = [], opts = {}) {
       <ul class="legend plain">
         <li><b>Full Soak +${FULL_SOAK}</b>: use all seven tiles in one turn.</li>
         <li><b>Hot Springs word +${tierList}</b>: any word you form that belongs to the town (see the next tab).</li>
-        <li><b>Featured Spring +${FEATURED_BONUS}</b>: three secret words per game, hidden in steam on the plaques. Letters clear each round, when you cover a Bathhouse Row square, and when you play a Hot Springs word in that category; any form of the word claims it.</li>
+        <li><b>Featured Spring +${FEATURED_BONUS}</b>: three secret words per game, hidden in steam on the plaques. Letters clear as the bag empties (every turn in the Daily Soak), when you cover a Bathhouse Row square, and when you play a Hot Springs word in that category; any form of the word claims it.</li>
       </ul>
       <h2>The tiles</h2>
       <p>${TILES ? Object.values(TILES).reduce((a, t) => a + t.count, 0) : 0} lettered tiles and ${BLANKS} blank <b>Steam tiles</b>, which stand for any letter and score nothing. Counts and points were worked out from how often each letter appears in playable words.</p>

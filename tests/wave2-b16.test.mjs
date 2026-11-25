@@ -148,15 +148,18 @@ export const tests = [
       t.equal(sEarly.featured[0].shown.length, 3, 'bag > 20 does not reveal past length - 2');
 
       // 3) Late Play (bag <= 20): cap opens to length - 1 (4 of 5), never to length (5 of 5)
+      // (W6-S3-03: the fog follows the bag, so each step below is a play that draws the tile that reaches it; before, a pass that ended the round.)
       sEarly.bag = sEarly.bag.slice(0, 20);
       t.equal(featuredRevealCap(sEarly, sEarly.featured[0]), 4, 'cap rises to length - 1 at bag === 20');
+      sEarly.bag = sEarly.bag.slice(0, 15);
       sEarly.cur = 1;
-      apply(sEarly, { type: 'pass' }, c); // wraps round -> revealRound runs
+      sEarly.players[1].rack = 'SOXXXXX'.split('');
+      t.expect(apply(sEarly, { type: 'play', tiles: across(7, 11, 'S') }, c).ok, 'SPRINGS'); // 15 -> 14 left of 84: a step
       t.equal(sEarly.featured[0].shown.length, 4, 'at bag <= 20, fog clears down to length - 1 (4 of 5)');
-      // Another round cannot expose the 5th (final) letter while unclaimed
+      // Another step cannot expose the 5th (final) letter while unclaimed
+      sEarly.bag = sEarly.bag.slice(0, 8);
       sEarly.cur = 1;
-      sEarly.scoreless = 0;
-      apply(sEarly, { type: 'pass' }, c);
+      t.expect(apply(sEarly, { type: 'play', tiles: across(8, 11, 'O') }, c).ok, 'SO'); // 8 -> 7 left: the next step
       t.equal(sEarly.featured[0].shown.length, 4, 'never reveals full word (stays <= length - 1 while unclaimed)');
 
       // 4) Daily Soak Turn 1..5 keeps length - 2, Turn 6+ (s.daily.turns <= 5) opens length - 1

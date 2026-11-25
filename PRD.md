@@ -107,7 +107,7 @@ and ≤ 1.2 s (Hard) at 4× throttle.
 
 ### Hot Springs content
 25. Every bonus word opens a fact card with its source; every card passes `check-facts`.
-26. Featured Spring plaques show category, length and one letter, and clear one more letter each round.
+26. Featured Spring plaques show category, length and one letter, and clear one more letter each time another twelfth of the bag has been drawn (each turn in the Daily).
 27. The Bathhouse Register lists every bonus word played, with date, best score and the card.
 28. All bonus forms are dictionary words; no blocklisted word is playable.
 
