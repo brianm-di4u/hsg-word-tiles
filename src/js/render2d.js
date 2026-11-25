@@ -751,7 +751,7 @@ export function drawFrame(ctx, d) {
     for (const i of d.last) {
       if (!d.board[i]) continue;
       const a = d.anim && d.anim.get(i);
-      if (a && now < a.t0 + a.dur) continue;   // still flying in
+      if (a && a.kind !== 'commit' && now < a.t0 + a.dur) continue;   // still flying in (a person's own tiles are down already while they press home)
       const q = quad(i, 0.04, TILE_LIFT), q2 = quad(i, 0.1, TILE_LIFT), pip = (a, b) => [a[0] + (b[0] - a[0]) * 0.3, a[1] + (b[1] - a[1]) * 0.3];
       if (pulsing) {
         const glowA = 0.72 * Math.pow(1 - k, 1.7);

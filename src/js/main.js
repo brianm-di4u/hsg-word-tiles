@@ -969,7 +969,7 @@ function celebrate(e, bark, wait = 0, prevPlaqueSnap = null, extra = {}) {
     } else if (claimedFeats.length) {
       // Tier 3 Climax: Featured Spring (+30) claim with rising sightline arc + board origin star flash.
       steam.lastTier = 3; steam.lastEvent = 'featured';
-      if (themedCells.length) { steamBurst(themedCells); goldSweep(themedCells); }
+      if (themedCells.length) goldSweep(themedCells);   // the claim outranks the steam, as a Full Soak does; its cue already replaces the steam's
       fxFlash([tileCells[Math.floor(tileCells.length / 2)]], FX_SHAPES.score, { dur: 220, color: '#FFE06E' });
     } else if (themedCells.length) {
       // Tier 2: Hot Springs themed word (bevel goldSweep + restrained <=0.22 perimeter steam + optional 160ms 2W/3W/Row glint).
@@ -978,15 +978,14 @@ function celebrate(e, bark, wait = 0, prevPlaqueSnap = null, extra = {}) {
       goldSweep(themedCells);
       if (rimCells.length) fxFlash(rimCells, FX_SHAPES.row, { dur: 160, color: '#FFE06E' });
     } else {
-      // Tier 2 Standard: routine 2L/3L stay quiet on #fx (CD-WF4-03); 2W/3W & Bathhouse Row get a single 160ms octagonal rim glint; Boiling/blank gets a restrained puff.
+      // Tier 2 Standard: routine 2L/3L stay quiet on #fx (CD-WF4-03); a big play throws its sparks and nothing else; otherwise 2W/3W & Bathhouse Row get a single 160ms octagonal rim glint, and Boiling/blank a restrained puff.
       if (e.score >= UI.SCORE_BIG) { steam.lastTier = 2; steam.lastEvent = 'big'; sparkBurst(tileCells, { full: false }); }
-      if (rimCells.length) {
-        if (steam.lastTier < 2) { steam.lastTier = 2; steam.lastEvent = rowCells.length ? 'row' : 'word-spring'; }
-        fxFlash(rimCells, FX_SHAPES.word, { dur: 160, color: '#FFE06E' });
-      }
-      if (boilBlank.length) {
-        if (steam.lastTier < 2) { steam.lastTier = 2; steam.lastEvent = 'boil-blank'; }
-        steamBurst(boilBlank, { localized: true });
+      else {
+        if (rimCells.length) { steam.lastTier = 2; steam.lastEvent = rowCells.length ? 'row' : 'word-spring'; fxFlash(rimCells, FX_SHAPES.word, { dur: 160, color: '#FFE06E' }); }
+        if (boilBlank.length) {
+          if (steam.lastTier < 2) { steam.lastTier = 2; steam.lastEvent = 'boil-blank'; }
+          steamBurst(boilBlank, { localized: true });
+        }
       }
     }
     emitPlaqueArcs(s, e, prevPlaqueSnap);
@@ -2176,9 +2175,14 @@ function steamBurst(cells, opts = {}) {
   const loc = !!opts.localized;
   if (!loc) fxFlash(cells, FX_SHAPES.steam, { dur: 190, color: '#7FC8B8' });
   const perTile = loc ? 2 : Math.max(2, Math.min(3, Math.floor(21 / Math.max(1, cells.length))));
-  for (const i of cells) for (let k = 0; k < perTile; k++) {
-    const ang = (k / perTile) * Math.PI * 2 + Math.random() * 0.7;
-    pushPart({ kind: 'steam', i, x: Math.cos(ang) * 0.50, y: Math.sin(ang) * 0.50, vx: Math.cos(ang) * 0.28 + (Math.random() - 0.5) * 0.14, vy: 0.45 + Math.random() * 0.42, life: 0, max: (loc ? 0.75 : 0.95) + Math.random() * 0.4, r: (loc ? 0.17 : 0.20) + Math.random() * 0.09, a: loc ? 0.17 : 0.20, rot: (Math.random() - 0.5) * 0.9, vrot: (Math.random() - 0.5) * 0.65, phase: Math.random() * 6.28 });
+  for (const i of cells) {
+    // off the tile's open sides, not its foot: steam rises, and from the foot it would cross the letter
+    const free = (dx, dy) => { const c = i % N + dx, r = Math.floor(i / N) - dy; return c >= 0 && c < N && r >= 0 && r < N && !covered(r * N + c); };
+    const open = [[0, 1], [-1, 0], [1, 0]].filter((v) => free(v[0], v[1])), sides = open.length ? open : [[0, 1]];
+    for (let k = 0; k < perTile; k++) {
+      const [dx, dy] = sides[k % sides.length], slip = (Math.random() - 0.5) * 0.6;
+      pushPart({ kind: 'steam', i, x: dx * 0.58 + dy * slip, y: dy * 0.58 + dx * slip, vx: dx * 0.28 + (Math.random() - 0.5) * 0.14, vy: 0.45 + Math.random() * 0.42, life: 0, max: (loc ? 0.75 : 0.95) + Math.random() * 0.4, r: (loc ? 0.17 : 0.20) + Math.random() * 0.09, a: loc ? 0.17 : 0.22, rot: (Math.random() - 0.5) * 0.9, vrot: (Math.random() - 0.5) * 0.65, phase: Math.random() * 6.28 });
+    }
   }
   startSteam();
 }
@@ -2201,6 +2205,17 @@ function startSteam() {
   if (!steam.on && (steam.parts.length || steam.sweeps.length || steam.flashes.length || steam.arcs.length || (ambientSteam() && hasOpenWispCell()))) {
     steam.on = true; steam.last = 0; requestAnimationFrame(steamLoop);
   }
+}
+// Steam thins to almost nothing over the face of a placed or staged tile and is whole just off its edge, so it curls round letters and never across them.
+function offLetters(p) {
+  const c0 = p.i % N + Math.round(p.x), r0 = Math.floor(p.i / N) - Math.round(p.y);
+  let a = 1;
+  for (let r = r0 - 1; r <= r0 + 1; r++) for (let c = c0 - 1; c <= c0 + 1; c++) {
+    if (c < 0 || c >= N || r < 0 || r >= N || !covered(r * N + c)) continue;
+    const off = Math.max(Math.abs(p.i % N + p.x - c), Math.abs(Math.floor(p.i / N) - p.y - r));
+    a = Math.min(a, clamp((off - 0.36) / 0.2, 0.1, 1));
+  }
+  return a;
 }
 function drawOctagon(c, cx, cy, r) {
   const k = r * 0.414;
@@ -2253,7 +2268,7 @@ function steamLoop(now) {
     } else {
       p.vx *= vxDrag; p.vy *= vyDrag; p.x += (p.vx + Math.sin(p.life * 3.4 + (p.phase || 0)) * 0.14) * dt; p.y += p.vy * dt; p.rot = (p.rot || 0) + (p.vrot || 0) * dt;
       const scale = 1 + 0.45 * (1 - Math.pow(1 - t, 3));
-      let a = (t < 0.14 ? t / 0.14 : Math.pow(1 - (t - 0.14) / 0.86, 1.35)) * (p.a || 0.20);
+      let a = (t < 0.14 ? t / 0.14 : Math.pow(1 - (t - 0.14) / 0.86, 1.35)) * (p.a || 0.20) * offLetters(p);
       const px = cx + p.x * cell, py = cy - p.y * cell, sz = p.r * cell * 2 * scale;
       if (p.kind === 'steam' && G.drag && G.drag.active && G.drag.bx != null) {
         const dist = Math.hypot(px - G.drag.bx, py - G.drag.by);

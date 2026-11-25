@@ -1,6 +1,7 @@
 // Wave 3, batch W3-B17: W6-S4-03 (poked tile crown, default-name plaque owners), W6-S4-01 (3D figure-ground and ink),
-// W6-S4-02 (spring labels and Row paintings readable under the 3D lamp).
-import { SQUARE } from '../src/js/score.js';
+// W6-S4-02 (spring labels and Row paintings readable under the 3D lamp),
+// W6-S4-04 (steam off the letters, one celebration at a time, the last-play ring from the first frame).
+import { SQUARE, CENTER } from '../src/js/score.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => {
@@ -159,6 +160,97 @@ export const tests = [
         t.expect(m.label >= 3.2, `${theme}: the faintest label holds 3.2:1 with the squares dimmed as far as they go (square ${m.labelAt}, ${m.label.toFixed(2)}; it was 1.01 to 1.09)`);
         t.expect(m.labelMid >= 3.6, `${theme}: the middle label holds 3.6:1 (${m.labelMid.toFixed(2)})`);
       }
+    },
+  },
+  // ---------- W6-S4-04 ----------
+  {
+    name: 'W6-S4-04 the steam of a Hot Springs word never veils its letters, and the last-play ring is there from the first frame',
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      let s = 7; Math.random = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };   // the same puffs every run
+      if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false, motion: 'full', theme: 'light' }));
+    },
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 3, seats: [{ kind: 'human', name: 'A' }, { kind: 'human', name: 'B' }] });
+      await t.waitIdle(5000);
+      await t.game('act', 'reveal');
+      const s = await t.state();
+      s.game.players[0].rack = 'SPRINGE'.split('');
+      await t.game('setState', { game: s.game });
+      await t.waitIdle(5000);
+      await t.game('act', 'stage', [...'SPRING'].map((l, k) => ({ l, i: CENTER - 2 + k })));
+      const r = await t.page.evaluate(async (first) => {
+        const g = window.__game, frame = () => new Promise((f) => requestAnimationFrame(f));
+        const played = (await g.act('play')).ok;
+        await g.act('reveal');
+        // the ring: dark brass on the board canvas round a tile that is still pressing home (held there for the look)
+        const G = window.__G; for (const a of G.anim.values()) a.t0 += 1e6; G.animUntil += 1e6;
+        const pressing = [...G.anim.values()].filter((a) => a.kind === 'commit').length;
+        await frame(); await frame();
+        const bc = document.getElementById('board'), bk = bc.width / bc.clientWidth, pos = [];
+        for (let k = 0; k < 6; k++) pos.push(await g.act('cell', first + k, 0.24));
+        const cell = pos[1][0] - pos[0][0], h = Math.round(0.56 * cell * bk);
+        const bd = bc.getContext('2d').getImageData(Math.round(pos[2][0] * bk) - h, Math.round(pos[2][1] * bk) - h, 2 * h, 2 * h).data;
+        let ring = 0; for (let i = 0; i < bd.length; i += 4) if (bd[i + 3] > 180 && Math.abs(bd[i] - 122) < 18 && Math.abs(bd[i + 1] - 75) < 18 && bd[i + 2] < 30) ring++;
+        for (const a of G.anim.values()) a.t0 -= 1e6; G.animUntil -= 1e6;
+        // the steam: from the moment the sweep, the flash and the arc have gone, every frame until the steam has
+        const fc = document.getElementById('fx'), fx = fc.getContext('2d'), k = fc.width / fc.clientWidth;
+        let seen = 0, most = 0, any = 0;
+        for (;;) {
+          await frame();
+          const st = g.getState();
+          if (st.sweeps || st.flashes || st.arcs) continue;
+          if (!st.fx.steamKinds) break;
+          seen++;
+          for (const [x, y] of pos) {
+            const q = Math.round(0.2 * cell * k), d = fx.getImageData(Math.round(x * k) - q, Math.round(y * k) - q, 2 * q, 2 * q).data;
+            for (let i = 3; i < d.length; i += 4) most = Math.max(most, d[i]);
+          }
+          const all = fx.getImageData(0, 0, fc.width, fc.height).data;
+          for (let i = 3; i < all.length; i += 16) any = Math.max(any, all[i]);
+        }
+        return { played, pressing, ring, seen, most: most / 255, any: any / 255 };
+      }, CENTER - 2);
+      t.log(`ring ${r.ring} px, ${r.seen} frames of steam, at most ${r.most.toFixed(3)} over a letter and ${r.any.toFixed(3)} anywhere`);
+      t.expect(r.played, 'SPRING is played');
+      t.equal(r.pressing, 6, 'its six tiles are pressing home');
+      t.expect(r.ring >= 20, `the dark-brass last-play ring is drawn at once (${r.ring} px)`);
+      t.expect(r.seen > 3 && r.any > 0.03, `the steam itself is still there (${r.seen} frames, ${r.any.toFixed(3)})`);
+      t.expect(r.most <= 0.15, `it lies at most 15% strong over a letter (${r.most.toFixed(3)}; unthinned it is 0.22 to 0.28)`);
+    },
+  },
+  {
+    name: 'W6-S4-04 one celebration at a time: a Featured Spring claim without steam, a big play without a glint or a puff',
+    viewports: ['desktop'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      const fresh = async (edit) => {
+        await t.game('newGame', { seed: 3, seats: [{ kind: 'human', name: 'A' }, { kind: 'human', name: 'B' }] });
+        await t.waitIdle(5000);
+        await t.game('act', 'reveal');
+        const s = await t.state();
+        edit(s.game);
+        await t.game('setState', { game: s.game });
+        await t.waitIdle(5000);
+      };
+      await fresh((g) => { g.featured[0] = { id: 'steam', word: 'STEAM', cat: 'springs', shown: [0], by: null, at: null }; g.players[0].rack = 'STEAMXQ'.split(''); });
+      await t.game('act', 'stage', [...'STEAM'].map((l, k) => ({ l, i: CENTER - 2 + k })));
+      t.expect((await t.game('act', 'play')).ok, 'STEAM claims the Featured Spring');
+      const f = await t.state();
+      t.equal([f.fx.lastEvent, f.fx.steamKinds, f.sweeps], ['featured', 0, 1], 'the claim has its sweep, star and arc, and no steam under them');
+      t.expect(f.arcLog.some((a) => a.reason === 'claim'), 'the arc is there');
+
+      // a big everyday play that covers a word square
+      await fresh((g) => { g.board[CENTER] = { l: 'A', blank: false, p: 1, t: 0 }; g.board[80] = { l: 'A', blank: false, p: 1, t: 0 }; g.move = 1; g.cur = 0; g.players[0].rack = 'JAZZYAA'.split(''); });
+      const big = await t.page.evaluate(async (SQ) => (await window.__game.act('moves', 400)).find((m) => m.tiles.length < 7 && m.score >= 45 && !m.words.some((w) => w.themed) && m.tiles.some((x) => 'sb'.includes(SQ[x.i]))), SQUARE);
+      t.expect(!!big, 'a big everyday play covers a word square');
+      await t.game('act', 'stage', big.tiles);
+      t.expect((await t.game('act', 'play')).ok, 'it is played');
+      const b = await t.state();
+      t.equal([b.fx.lastEvent, b.fx.flashShapes.includes('oct'), b.fx.steamKinds], ['big', false, 0], 'its sparks have the board to themselves');
+      t.expect(b.sparks >= 12, `the sparks are there (${b.sparks})`);
     },
   },
 ];
