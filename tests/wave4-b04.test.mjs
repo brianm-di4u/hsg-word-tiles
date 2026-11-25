@@ -133,4 +133,24 @@ export const tests = [
       await t.shot('w4-b04-todays-springs-130');
     },
   },
+  // ---------- W1-S1-01 ----------
+  {
+    name: 'W1-S1-01 PRD.md records the locked target experience, the four yes-or-no pillars and the anti-goals, and says where Challenge mode and Unlimited hints live (Node)',
+    node: true,
+    run(t) {
+      const prd = doc('PRD.md'), one = prd.split('## 1. Vision and pillars')[1].split('## 2. ')[0];
+      t.expect(/### Target experience/.test(one) && /\*\*Primary: approachable, tactile crossword craft\.\*\*/.test(one) && /\*\*Secondary: discovering Hot Springs\.\*\*/.test(one), 'primary and secondary target experience');
+      const pillars = one.split('### Pillars')[1].split('### Anti-goals')[0];
+      t.equal((pillars.match(/\b[1-4]\. \*\*/g) || []).length, 4, 'four pillars');
+      t.equal((pillars.match(/\?/g) || []).length, 4, 'each a yes-or-no question');
+      const anti = one.split('### Anti-goals')[1].split('### Design principles')[0];
+      t.equal((anti.match(/\b[1-4]\. Never /g) || []).length, 4, 'four anti-goals');
+      t.expect(/### Design principles 1\. \*\*Our own game\.\*\*/.test(one) && /Bathhouse Barons is the quality bar/.test(one), 'the earlier five principles are kept');
+      t.expect(/collapsed "House rules & more options": each computer's difficulty, Unlimited hints and Challenge mode/.test(prd), 'Setup\'s options as built');
+      t.expect(/House rules &amp; more options/.test(doc('src/js/ui.js')) && /data-hints-unl/.test(doc('src/js/ui.js').split('<details class="house-rules"')[1]) && /data-challenge/.test(doc('src/js/ui.js').split('<details class="house-rules"')[1]), 'and they are inside the disclosure');
+      const report = doc('REPORT.md');
+      for (const stale of ['double the bonus', 'about 200 points a game', 'the help says which list is used']) t.expect(!report.includes(stale), `REPORT.md: no "${stale}"`);
+      t.expect(/Turn 1 names "Today's Springs"/.test(prd), 'PRD.md names the Daily banner');
+    },
+  },
 ];

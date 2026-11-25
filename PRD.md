@@ -4,6 +4,36 @@
 An original crossword word-tile game for 1–4 players, set among the hot springs of Hot Springs,
 Arkansas. Players build crossing words on a marble bathhouse board whose premium squares are the
 valley's springs, and earn extra points for Hot Springs words, each of which opens a sourced fact card.
+
+### Target experience (locked in the 2026-11 design review)
+- **Primary: approachable, tactile crossword craft.** Brisk, readable scoring on our own 47-spring marble board, where
+  the maths of every play, the trade-off of the tiles kept and the way back from behind are clear to casual players
+  (12+), families and daily-puzzle players, with depth left for veterans.
+- **Secondary: discovering Hot Springs.** Finding the 107 sourced Hot Springs words, racing to clear the steam from the
+  Featured Springs, routing across the 8 Bathhouse Row squares, and filling the Bathhouse Register over many games.
+
+### Pillars: four yes-or-no questions every change must pass
+1. **Our own thermal board and economy.** Does it keep our 47-spring pinwheel (the Display Spring unmultiplied, word
+   multipliers at least 8 squares apart on a line), the 98-tile bag computed from the dictionary, and nothing borrowed
+   from a commercial game?
+2. **The town in every play.** Does it tie the crossword to Hot Springs words (+10 / +18 / +30), the 8 Bathhouse Row
+   squares (+20 with a Hot Springs word, and a Featured Spring letter for any word), the Featured Springs (+30) and the Register, without an unreviewed fact,
+   a change to the owner's approved wording or a change to the bonus tiers?
+3. **Warm, tactile clarity on phone and desktop.** Can a first-time player on a 390×844 phone or a 1280×800 desktop
+   reach Turn 1 without scrolling past options, read every square's rule and the live score breakdown at a glance,
+   and play by touch, mouse or keyboard?
+4. **Fair, distinct local opponents.** Does every computer play without seeing hidden information, keep a playing
+   style of its own apart from its level, and scale from a welcoming Easy (about 230–270 points) to a sharp Hard?
+
+### Anti-goals
+1. Never borrow a commercial crossword game's name, board, tile table, art or rules wording.
+2. Never put obscure tournament words (MEINY, ZAX, XU) in front of newcomers: not from Easy, not as the Spring
+   Guide's first suggestion, not on the default setup.
+3. Never pad the three verbs (Play, Swap, Pass) with paid mini-swaps, extra flat Row payouts or hidden penalties on
+   the default path; Challenge mode stays an opt-in house rule.
+4. Never let a computer opponent peek at hidden plaques or racks, change a date's Daily deal, or break a saved game.
+
+### Design principles
 1. **Our own game.** An original board (47 springs swirling from the Display Spring, 8 Bathhouse Row
    squares), a tile set computed from the dictionary, our own scoring bonuses and rules text. No
    commercial game's name, board, tile table, art or wording.
@@ -22,7 +52,9 @@ Casual word-game players (12+), families, local-history fans, daily-puzzle playe
 - **Daily Soak:** one player, 10 turns, the same tiles for everyone on a date; best score and streak.
   Turn 1 names "Today's Springs", the kinds of word on the day's three plaques, so the ten turns have Hot Springs
   words to hunt.
-- Options: AI speed (Normal / Fast / Instant), hints on/off (3 "Spring Guide" hints per game in Play).
+- Options: AI speed (Normal / Fast / Instant), hints on/off (3 "Spring Guide" hints per game in Play). Setup keeps
+  the rest in a collapsed "House rules & more options": each computer's difficulty, Unlimited hints and Challenge
+  mode (invalid words cost the turn; off by default, never in the Daily).
 
 ## 4. Rules
 As specified in `MECHANICS.md` §3 (placement, words, scoring, bonuses, swaps, ending), shown in the
