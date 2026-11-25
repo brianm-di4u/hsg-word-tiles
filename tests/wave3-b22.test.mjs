@@ -69,4 +69,60 @@ export const tests = [
       await t.page.clock.resume();
     },
   },
+
+  // ---------- W6-P-N03 ----------
+  ...['normal', 'blocked', 'newer'].map((kind) => ({
+    name: `W6-P-N03 par found after the last turn is worked out in the worker and written into the results in place, under an open card (${kind} storage)`,
+    viewports: kind === 'normal' ? ['desktop', 'mobile'] : ['desktop'],
+    url: `index.html?kind=${kind}`,
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      const kind = new URLSearchParams(location.search).get('kind');
+      localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false }));
+      if (kind === 'newer') localStorage.setItem('hs-letters-save-v1', JSON.stringify({ v: 2, game: { anything: 1 } }));
+      if (kind === 'blocked') Storage.prototype.setItem = function () { throw new Error('QuotaExceededError'); };
+      // the par request is held on its way to the worker
+      const Real = window.Worker;
+      window.Worker = class extends Real {
+        postMessage(m) {
+          if (!m || m.type !== 'dailyPar') { super.postMessage(m); return; }
+          window.__par = () => super.postMessage(m); window.__parAsked = (window.__parAsked || 0) + 1;
+        }
+      };
+    },
+    async run(t) {
+      await ready(t);
+      t.equal((await t.state()).ai, 'worker', 'the worker is running');
+      await t.game('act', 'daily');
+      await until(t, () => window.__G.scene === 'game' && window.__par);
+      await t.page.evaluate(() => { window.__G.fast = true; });
+      for (let k = 0; k < 10; k++) await t.game('act', 'pass');
+      await until(t, () => window.__G.scene === 'over');
+      t.equal(await t.page.locator('.daily-box [data-par-line]').count(), 0, 'no par yet');
+      // scrolled down with a card open
+      await t.page.evaluate(() => {
+        const scr = document.querySelector('#screen'); scr.scrollTop = 60; window.__scroll = scr.scrollTop;
+        document.querySelector('#screen .over').dataset.mark = '1';
+        window.__game.act('fact', 'spa', 'SPA');
+      });
+      await t.page.evaluate(() => window.__par());
+      await until(t, () => document.querySelector('.daily-box [data-par-line]'));
+      const m = await t.page.evaluate(() => ({
+        dialog: window.__G.dialog, shown: !document.querySelector('#modal').hidden, mark: document.querySelector('#screen .over').dataset.mark,
+        scroll: document.querySelector('#screen').scrollTop, was: window.__scroll, date: window.__G.s.daily.date, par: window.__G.parCache[window.__G.s.daily.date],
+        text: document.querySelector('.daily-box [data-par-line]').textContent, asked: window.__parAsked, saved: localStorage.getItem('hs-letters-daily-v1'),
+      }));
+      t.equal([m.dialog, m.shown], ['fact', true], 'the card is still open');
+      t.equal(m.mark, '1', 'the results were not rebuilt');
+      t.equal(m.scroll, m.was, 'nor scrolled');
+      t.equal(m.asked, 1, 'it was asked for once, of the worker');
+      t.expect(m.text.includes(`${m.par.m} and`) && m.text.includes(` ${m.par.h} on these tiles`), 'the line names both scores: ' + m.text);
+      if (kind === 'normal') t.equal(JSON.parse(m.saved).days[m.date].par, m.par, 'and the day keeps it');
+      else t.equal(m.saved, null, 'nothing was stored');
+      // the sheet drawn afresh says the same
+      await t.page.click('#modal [data-close]');
+      await t.page.evaluate(() => window.__game.scene('over'));
+      t.equal(await t.page.textContent('.daily-box [data-par-line]'), m.text, 'and so does the sheet drawn again');
+    },
+  })),
 ];
