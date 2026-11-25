@@ -32,7 +32,7 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 | 13–16 Turns and ending | met | 02, 11, 12, 19 |
 | 17–20 Modes, privacy, Daily, Continue | met | 06 (golden hashes, 3 time zones), 12, 17 |
 | 21 AI legality | met | 05: 7,576 AI actions in 300 games, all legal; 04 |
-| 22 AI strength | met | Hard beats Medium 71 % (69 % over 100g, 70.7 % over 150g), Medium beats Easy 100 % (Easy ~242–254 pts vs Hard/Medium under Option B `OQ-WF7-W2-01`, 0 % obscure words, 0 Full Soaks; `tools/balance.mjs`, 150 games each) |
+| 22 AI strength | met | Hard beats Medium 71 % (72 % over 100g, 70.7 % over 150g), Medium beats Easy 100 % (Easy ~243–254 pts vs Hard/Medium under Option B `OQ-WF7-W2-01`, 0 % obscure words, 0 Full Soaks; `tools/balance.mjs`, 150 games each) |
 | 23 AI off the main thread | met | Worker; fallback tested (`?worker=0`) |
 | 24 Hints | met | 11-play |
 | 25–28 Hot Springs content | met | 07 (lexicon, facts), 14 (cards open; toast, Register, Featured); first built with 96 entries, 107 now (96/96 facts and all 96 cards were the count then) |
@@ -66,10 +66,10 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 ## Balance (`tools/balance.mjs`, 150 games per pairing)
 | Pairing | Win rate | Average scores | Hot Springs share | Full Soaks / game |
 |---|---|---|---|---|
-| Hard vs Medium | 71 % | 420 – 373 | 6.6 % | 2.0 |
-| Medium vs Easy | 100 % | 425 – 254 | 3.1 % | 0.7 |
-| Hard vs Easy | 100 % | 475 – 242 | 6.0 % | 1.5 |
-Hot Springs bonuses come to 3.1–6.6 % of AI points under tier-scaled lexicon foresight (`bonusWeight`: Easy 0 %, Medium 50 %, Hard 100 %, W1-S2-08) while the locked +10 / +18 / +30 tiers stay untouched (CD-WF0-09; before Wave 2, all AI tiers used 100 % foresight for a 9.9–11.5 % AI share). The computer hunts them selectively by tier, so a person hunting them will see more. Computers claim 0.03 to 0.07 Featured Springs a game organically without hidden peeking (CD-WF1-06). All four town opponents carry orthogonal trade-grounded heuristics in `STYLES` independent of difficulty (Opal favours baths/springs words and Bathhouse Row squares, Hollis favours compact connected cross-plays, park words and open-spring defence, Lucky bets on multiplier squares with low leave caution, and Julian favours 5+ letter plays and balanced racks). Table: `node tools/balance.mjs --games 150`, seeds 1000 to 1149 (Medium `leave: 0.65`, `bonusWeight: 0.5`; Easy Option B `slip: 0.60`, `pick: [0.05, 0.35]`, `maxLen: 6`, `bonusWeight: 0`, everyday words ~242–254 pts, 0 % obscure words, 0 Full Soaks); Lucky vs Hollis (Medium, 150 games): 42 % win rate (375 – 387, premium share 0.441 vs 0.359).
+| Hard vs Medium | 71 % | 430 – 380 | 7.6 % | 2.0 |
+| Medium vs Easy | 100 % | 430 – 254 | 3.6 % | 0.7 |
+| Hard vs Easy | 100 % | 479 – 243 | 6.5 % | 1.4 |
+Hot Springs bonuses come to 3.6–7.6 % of AI points under tier-scaled lexicon foresight (`bonusWeight`: Easy 0 %, Medium 50 %, Hard 100 %, W1-S2-08) while the locked +10 / +18 / +30 tiers stay untouched (CD-WF0-09; before Wave 2, all AI tiers used 100 % foresight for a 9.9–11.5 % AI share). The computer hunts them selectively by tier, so a person hunting them will see more. Computers claim 0.20 to 0.36 Featured Springs a game without hidden peeking (CD-WF1-06): Medium and Hard go for one only when its plaque can be worked out (two letters or fewer in the fog, one entry of the lexicon left; W6-S3-02), and Easy never does. Before that rule they counted none and claimed 0.03 to 0.07 by chance. All four town opponents carry orthogonal trade-grounded heuristics in `STYLES` independent of difficulty (Opal favours baths/springs words and Bathhouse Row squares, Hollis favours compact connected cross-plays, park words and open-spring defence, Lucky bets on multiplier squares with low leave caution, and Julian favours 5+ letter plays and balanced racks). Table: `node tools/balance.mjs --games 150`, seeds 1000 to 1149 (Medium `leave: 0.65`, `bonusWeight: 0.5`; Easy Option B `slip: 0.60`, `pick: [0.05, 0.35]`, `maxLen: 6`, `bonusWeight: 0`, everyday words ~243–254 pts, 0 % obscure words, 0 Full Soaks); Lucky vs Hollis (Medium, 150 games): 39 % win rate (382 – 399, premium share 0.432 vs 0.355).
 
 ## Visual results
 Six scored review loops against Bathhouse Barons (two critics each: Claude and a Codex adversarial reviewer) took the
@@ -110,7 +110,7 @@ VISUAL-REPORT.md refer to the previous art.
   likeliest next step is a fully painted board face, as Barons has.
 - Nobody has listened to the sound or used a screen reader; both are tested only by machine (offline renders, the
   live region text).
-- The Easy opponent is calibrated for beginners and casual play (~242–254 points against Hard/Medium, ~285 points in Easy mirror, using everyday common words plus 25 everyday two-letter words and no 7-letter Full Soaks).
+- The Easy opponent is calibrated for beginners and casual play (~243–254 points against Hard/Medium, ~285 points in Easy mirror, using everyday common words plus 25 everyday two-letter words and no 7-letter Full Soaks).
 - The Daily Soak resets at each player's local midnight, so two players in different time zones can be on different
   deals at the same moment.
 - ENABLE lacks some newer short words (QI, ZA); the help says which list is used.

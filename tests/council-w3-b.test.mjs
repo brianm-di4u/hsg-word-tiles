@@ -8,6 +8,7 @@ import { ctx, root } from './lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
 import { generateMoves } from '../src/js/movegen.js';
 import { reviewSeat, reviewSteps, summarize, MIN_MISS } from '../src/js/review.js';
+import { deducibleFeatured } from '../src/js/lexicon.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 // a pre-wave profile with a settings key: no first-run tips, no sound; the computer answers at once unless a test asks for a pace
@@ -233,8 +234,9 @@ export const tests = [
       const s = createGame({ mode: 'play', seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', name: 'Julian', level: 'hard' }], seed: 31 }, c.lex);
       const want = [];   // what the game itself says is best on each of the person's turns, asked at the time
       for (let turn = 0; !s.over && turn < 40; turn++) {
-        // W1-S3-02 / CD-WF1-06: review never peeks at hidden Featured Springs (+30), so compare against visible-state moves (featured: [])
-        const { moves } = generateMoves(c.dict, s.board, s.players[s.cur].rack, { lex: c.lex, featured: [] });
+        // CD-WF1-06: the review counts a Featured Spring only where its plaque could be worked out (W6-S3-02; before it, none was counted and
+        // turn 5 here read 44; the plaque is readable by then, and the best play pays 62, as the test had it before wave 2)
+        const { moves } = generateMoves(c.dict, s.board, s.players[s.cur].rack, { lex: c.lex, featured: deducibleFeatured(s.featured, c.lex) });
         let action;
         if (s.cur === 0) {
           // turn 2: the weakest play; turn 3: a pass; otherwise the best

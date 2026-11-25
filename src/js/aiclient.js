@@ -3,6 +3,7 @@
 import { WORKER_SRC } from './worker-src.js';
 import { chooseAction, hintChoices } from './ai.js';
 import { dailyPar } from './par.js';
+import { deducibleFeatured } from './lexicon.js';
 
 export const aiClient = { mode: 'none', worker: null, pending: new Map(), seq: 0, ready: null, dict: null, lex: null };
 
@@ -49,8 +50,8 @@ function call(msg) {
 }
 
 // Copy of the state with only what the AI reads (and a fresh rng it may advance).
-// W1-S3-02 / CD-WF1-06: never leak hidden Featured Spring words to AI opponents or hints.
-const slim = (s) => ({ mode: s.mode, daily: s.daily, board: s.board, players: s.players.map((p) => ({ kind: p.kind, rack: p.rack, level: p.level })), cur: s.cur, bag: s.bag, featured: [], rng: { ...s.rng } });
+// W1-S3-02, W6-S3-02 / CD-WF1-06: a Featured Spring goes along only once its plaque gives it away; hidden words never reach the AI or the hint.
+const slim = (s) => ({ mode: s.mode, daily: s.daily, board: s.board, players: s.players.map((p) => ({ kind: p.kind, rack: p.rack, level: p.level })), cur: s.cur, bag: s.bag, featured: deducibleFeatured(s.featured, aiClient.lex), rng: { ...s.rng } });
 
 // Resolves { action, rngAi } for the current seat of s.
 export async function aiMove(s, level, persona) {

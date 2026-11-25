@@ -13,7 +13,7 @@ export async function dailyScore(c, date, seat, pause) {
   const s = createGame({ mode: 'daily', date, seats: [{ kind: 'human', name: 'You' }] }, c.lex);
   s.players[0].level = seat.level;
   for (let n = 0; !s.over && n < 40; n++) {
-    const { action } = chooseAction(c.dict, c.lex, s, { level: seat.level, persona: seat.persona, exact: true });
+    const { action } = chooseAction(c.dict, c.lex, s, { level: seat.level, persona: seat.persona, exact: true, plaques: false });
     if (!apply(s, action, c).ok) apply(s, { type: 'pass' }, c);
     if (pause && !s.over) await pause();
   }

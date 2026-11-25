@@ -17,6 +17,27 @@ export function makeLexicon(data) {
   return { data, byForm, byId, bonusOf, featurable, categories: data.categories, entry: (w) => byForm.get(w) || null };
 }
 
+// The unclaimed Featured Springs anyone at the table can work out from the plaque alone (CD-WF1-06): the category, the number of
+// letters and the letters clear of steam leave one entry of the lexicon. Any form of that entry claims it, so two forms of one
+// entry (STEAMS, STEAMY) still count as one answer. More than half of the plaques are the only one of their kind from their first
+// letter, to someone who has the whole list in mind; a player at the table has not, so the fog must be down to READABLE_FOG letters
+// too. The computers, the hint and the review value a Featured Spring only then.
+export const READABLE_FOG = 2;
+export function deducibleFeatured(featured, lex) {
+  if (!featured || !featured.length || !lex) return [];
+  return featured.filter((f) => {
+    if (f.by != null || !Array.isArray(f.shown) || f.word.length - new Set(f.shown).size > READABLE_FOG) return false;
+    let id = null, own = false;
+    for (const [w, e] of lex.byForm) {
+      if (e.cat !== f.cat || w.length !== f.word.length || !f.shown.every((k) => w[k] === f.word[k])) continue;
+      if (id !== null && e.id !== id) return false;
+      id = e.id;
+      if (w === f.word) own = true;
+    }
+    return own;
+  });
+}
+
 // Which Hot Springs bonus forms can be spelled strictly from the tiles on `rack` (blanks '?' match any letter).
 // Fast (< 0.05 ms over 290 forms) and reveals only that a town word is formable without spoiling fact cards.
 export function townWordsInRack(rack, lex) {

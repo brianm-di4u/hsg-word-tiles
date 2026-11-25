@@ -3,6 +3,7 @@
 import { TILES, BLANKS } from './tiles.js';
 import { seedState, rand, shuffle, hashString } from './rng.js';
 import { has } from './dict.js';
+import { deducibleFeatured } from './lexicon.js';
 import { N, RACK, VALUE, findWords, connectError, scorePlay, isBath } from './score.js';
 
 export const DAILY_TURNS = 10;
@@ -125,6 +126,8 @@ export function apply(s, action, ctx) {
   if (s.over) return { ok: false, error: 'The game is over.' };
   const p = s.players[s.cur];
   const rack = p.rack.join('');   // kept in the log so the game can be looked back over (review.js)
+  // the Featured Springs a person could work out on this turn, also for review.js (only written when there is one)
+  const known = p.kind === 'human' ? deducibleFeatured(s.featured, ctx.lex).map((f) => f.word) : [];
   let entry;
   if (action.type === 'play') {
     const ev = evaluate(s, action.tiles, ctx);
@@ -190,6 +193,7 @@ export function apply(s, action, ctx) {
     s.scoreless++;
   } else return { ok: false, error: 'Unknown action.' };
 
+  if (known.length) entry.known = known;
   s.log.push(entry);
   s.move++;
   // End checks

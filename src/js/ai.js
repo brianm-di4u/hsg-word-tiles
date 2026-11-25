@@ -3,6 +3,7 @@
 // keeps the advanced stream, so games stay reproducible.
 import { generateMoves } from './movegen.js';
 import { isCommon } from './dict.js';
+import { deducibleFeatured } from './lexicon.js';
 import { rand } from './rng.js';
 import { N, SQUARE, VALUE, LETTER_MULT, WORD_MULT, RACK } from './score.js';
 import { LEAVE } from './leave-table.js';
@@ -126,10 +127,13 @@ export function chooseAction(dict, lex, s, opts = {}) {
   const p = s.players[s.cur];
   const L = LEVELS[opts.level || p.level || 'medium'];
   const style = STYLES[opts.persona || p.persona] || null;
-  // W1-S3-02 / CD-WF1-06: never score hidden Featured Springs (+30) during AI move search; AI earns them organically on word merit.
+  // W1-S3-02, W6-S3-02 / CD-WF1-06: only a Featured Spring anyone can work out from its plaque is worth +30 in the search (and not to
+  // Easy, which plays without Hot Springs foresight); a hidden one is earned only by chance, when a word is played on its own merit.
+  // The Daily's par (plaques: false) goes for the score on the board alone, so the par of a date stays what it was.
   // W1-S2-08: scale Hot Springs lexicon-bonus foresight by tier (Easy 0%, Medium 50%, Hard 100%).
   const bonusWeight = L.bonusWeight ?? 1;
-  const { moves, nodes } = generateMoves(dict, s.board, p.rack, { lex, featured: [], bonusWeight, commonOnly: L.commonOnly, freeLen: L.freeLen, allowTwo: L.allowTwo, maxLen: L.maxLen, budget: L.budget });
+  const known = bonusWeight > 0 && opts.plaques !== false ? deducibleFeatured(s.featured, lex) : [];
+  const { moves, nodes } = generateMoves(dict, s.board, p.rack, { lex, featured: known, bonusWeight, commonOnly: L.commonOnly, freeLen: L.freeLen, allowTwo: L.allowTwo, maxLen: L.maxLen, budget: L.budget });
   const bag = s.bag.length;
   if (!moves.length) return { action: fallback(p.rack, bag), nodes };
 
@@ -171,7 +175,9 @@ export function chooseAction(dict, lex, s, opts = {}) {
       let val;
       if (!left.length) val = m.score + 2 * rackScore(opp.rack);
       else {
-        const reply = generateMoves(dict, board, opp.rack, { lex, featured: [], budget: 300000 }).moves[0];
+        // the reply is searched with the plaques this play leaves unclaimed
+        const open = known.filter((f) => !m.words.some((w) => w === f.word || (f.id != null && lex.byForm.get(w)?.id === f.id)));
+        const reply = generateMoves(dict, board, opp.rack, { lex, featured: open, budget: 300000 }).moves[0];
         const oppOut = reply && rackMinus(opp.rack, reply.tiles).length === 0;
         val = m.score - (reply ? reply.score : 0) - (oppOut ? 2 * rackScore(left) : 0);
       }
@@ -222,8 +228,8 @@ export function casualAudience(s) {
 // same words count as one. Empty when nothing fits.
 export function hintChoices(dict, lex, s, n = 3) {
   const p = s.players[s.cur];
-  // W1-S3-02 / CD-WF1-06: Spring Guide hints never peek at hidden Featured Spring words.
-  const { moves } = generateMoves(dict, s.board, p.rack, { lex, featured: [], budget: 900000 });
+  // W1-S3-02, W6-S3-02 / CD-WF1-06: Spring Guide hints never peek: only a plaque anyone can work out counts.
+  const { moves } = generateMoves(dict, s.board, p.rack, { lex, featured: deducibleFeatured(s.featured, lex), budget: 900000 });
   if (!moves.length) return [];
   const bag = s.bag.length, bagScale = 0.5 * Math.min(1, bag / RACK);
   const casual = casualAudience(s);

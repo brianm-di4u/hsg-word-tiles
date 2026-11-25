@@ -26,9 +26,11 @@ export function* reviewSteps(s, seat, dict, lex) {
     if (e.p === seat) {
       turn++;
       if (typeof e.rack === 'string' && /^[A-Z?]{1,7}$/.test(e.rack)) {
-        // W1-S3-02 / CD-WF1-06: post-game review never peeks at hidden Featured Spring words for +30 equity.
+        // W1-S3-02, W6-S3-02 / CD-WF1-06: a Featured Spring counts only on the turns its plaque could be worked out (engine.js writes those
+        // into the entry as `known`; a game saved before that has none), never one that was still hidden.
         // W1-S3-06 / CD-WF1-05: Easy/Medium games prefer teachable everyday and Hot Springs misses over obscure ENABLE words.
-        const { moves } = generateMoves(dict, board, [...e.rack], { lex, featured: [] });
+        const featured = Array.isArray(e.known) ? s.featured.filter((f) => e.known.includes(f.word)).map((f) => ({ ...f, by: null })) : [];
+        const { moves } = generateMoves(dict, board, [...e.rack], { lex, featured });
         const best = (casual && moves.find((m) => m.words.every((w) => isTeachableWord(dict, lex, w)))) || moves[0] || null;
         yield { turn, kind: e.kind, word: e.kind === 'play' ? e.words[0].w : null, score: e.score, best: best ? { word: best.words[0], score: best.score } : null };
       } else yield { turn, skipped: true };

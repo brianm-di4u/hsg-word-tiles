@@ -17,7 +17,7 @@ pause (700 ms minimum, Fast/Instant settings shorten it). The renderer only draw
   cur: seat, move: n, scoreless: n, over: false, result: null | { winners: [seat], ... },
   featured: [{ id, word, cat, shown: [letter indexes], by: null | seat, at: move }],
   log: [{ p, kind: 'play' | 'swap' | 'pass' | 'end', tiles, words: [{ w, score, bonus, themed }], score,
-          full, themed, featured, n }],
+          full, themed, featured, n, known?: [word] }],                 // known: Featured Springs a person could work out that turn
   daily: null | { date, turns: 10 },
 }
 ```
@@ -133,6 +133,10 @@ word shows.
   - **Hard:** the whole dictionary; maximises score + leave value − 4 per empty Boiling Spring (and 1.5 per empty Steam square) its
     play leaves within reach (`DEFENSE` in `ai.js`); with the bag empty in a 2-player game it looks one reply ahead (the
     opponent's rack is known by then).
+- Featured Springs (`deducibleFeatured` in `lexicon.js`): Medium, Hard, the Spring Guide and the review count a plaque's +30 only once
+  anyone could work it out: at most `READABLE_FOG` (2) letters hidden, and the category, length and clear letters leaving one lexicon
+  entry. Easy and the Daily's par never count it. Hidden words are not sent to the worker. A hidden one is still paid when a word happens to match it.
+  Hard's one-reply look-ahead leaves out a plaque its own play claims. The review uses the log's `known`, written turn by turn.
 - Leave values (`leave-table.js`) are fitted by `tools/selfplay.mjs`.
 - Medium and Hard count plays within `TIE_WINDOW` (1.5) equity points of their best as tied and draw one of them with `rng.ai`, so
   two opponents of one level do not always answer a position alike. Before wave 4 only plays with exactly equal equity were tied, and the one with the lowest key was taken.
