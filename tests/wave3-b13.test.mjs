@@ -228,4 +228,60 @@ export const tests = [
       }
     },
   },
+  {
+    name: 'W5-S3-05 title: capped painting, words inside its gold frame and the whole menu on the first screen; Start and the results buttons in view',
+    viewports: ['desktop', 'mobile'],
+    initScript: noTips,
+    async run(t) {
+      await ready(t);
+      const start = async () => { await t.game('newGame', { seed: 2 }); await t.waitIdle(6000); await t.game('act', 'pass'); await t.waitIdle(8000); await t.game('scene', 'title'); await t.waitFrames(2); };
+      await start();   // a saved game, so Continue shows too: the menu at its longest
+      const fin = async () => { const g = (await t.state()).game; return { ...g, over: true, bag: [], featured: [], result: { why: 'out', out: 0, adjust: [0, 0], winners: [0] } }; };
+      const OVER = await fin();
+      const sizes = t.viewport === 'desktop'
+        ? [[1920, 1080], [1280, 800], [1366, 768], [1280, 720], [1024, 600], [800, 1100], [820, 1180], [768, 1024]]
+        : [[390, 844], [430, 932], [360, 640], [320, 568], [844, 390], [667, 375], [568, 320]];
+      for (const [w, h] of sizes) {
+        await size(t, w, h);
+        const what = `${w}x${h}`;
+        await t.game('scene', 'title');
+        await t.waitFrames(2);
+        const m = await t.page.evaluate(() => {
+          const card = document.querySelector('.title-card').getBoundingClientRect(), inset = 3 + 8 + 1.5;   // border, ::after inset, its line
+          const words = ['.kicker', '.title-words h1', '.tag'].map((s) => { const g = document.createRange(); g.selectNodeContents(document.querySelector(s)); const r = g.getBoundingClientRect(); return { s, room: Math.round(Math.min(r.left - card.left, card.right - r.right, r.top - card.top, card.bottom - r.bottom) - inset) }; });
+          const menu = [...document.querySelectorAll('.menu .btn')].map((b) => ({ go: b.dataset.go, b: b.getBoundingClientRect().bottom, h: b.getBoundingClientRect().height }));
+          return { card: card.height, stacked: document.querySelector('.menu').getBoundingClientRect().top >= card.bottom, words, menu, sideways: document.querySelector('#screen').scrollWidth > document.querySelector('#screen').clientWidth };
+        });
+        t.equal(m.menu[0].go, 'continue', `${what}: Continue first`);
+        const off = m.menu.filter((b) => b.b > h + 0.5).map((b) => b.go);
+        t.equal(off.join(), w === 568 ? 'about' : '', `${what}: the menu is on the first screen`);   // seven 44 px rows cannot fit 320 px of height
+        t.expect(m.menu.every((b) => b.h >= 43.5), `${what}: 44 px buttons`);
+        t.expect(m.words.every((x) => x.room >= 4), `${what}: the words keep clear of the gold frame ${JSON.stringify(m.words)}`);
+        t.expect(m.card <= (m.stacked ? Math.min(0.44 * h, 380) : 380) + 0.5, `${what}: the painting is ${m.card.toFixed(0)} px tall`);
+        if (m.stacked && w < 561) t.expect(m.card <= 0.38 * h + 0.5, `${what}: at most 38% of a phone (${m.card.toFixed(0)} px)`);
+        t.equal(m.sideways, false, `${what}: no sideways scroll`);
+        if ([320, 820, 844, 1366].includes(w)) await t.shot(`w3-b13-title-${what}`);
+        await t.game('scene', 'setup');
+        await t.waitFrames(2);
+        const s = await t.page.evaluate(() => { const r = document.querySelector('[data-start]').getBoundingClientRect(); return { b: r.bottom, pos: getComputedStyle(document.querySelector('.setup .sheet-foot')).position }; });
+        t.expect(s.b <= h + 0.5 && s.pos === 'sticky', `${what}: Start in view in a sticky foot ${JSON.stringify(s)}`);
+        await t.game('setState', { game: OVER, scene: 'over' });
+        await t.waitFrames(2);
+        const o = await t.page.evaluate(() => ({ art: document.querySelector('.over-art').getBoundingClientRect().height, pos: getComputedStyle(document.querySelector('.over .dlg-btns')).position, low: Math.max(...[...document.querySelectorAll('.over .dlg-btns .btn')].map((b) => b.getBoundingClientRect().bottom)) }));
+        t.expect(o.low <= h + 0.5 && o.pos === 'sticky', `${what}: the results buttons in view in a sticky foot ${JSON.stringify(o)}`);
+        if (h <= 800) t.expect(o.art <= 80, `${what}: the results painting is trimmed (${o.art})`);
+        await t.game('setState', { game: { ...OVER, over: false, result: null } });
+      }
+      // 130% text: the words still keep clear of the frame
+      await size(t, t.vp.width, t.vp.height);
+      await textSize(t, 1.3);
+      for (const [w, h] of t.viewport === 'desktop' ? [[1280, 800], [820, 1180]] : [[390, 844], [320, 568], [844, 390]]) {
+        await size(t, w, h);
+        await t.game('scene', 'title');
+        await t.waitFrames(2);
+        const rooms = await t.page.evaluate(() => { const card = document.querySelector('.title-card').getBoundingClientRect(); return ['.kicker', '.title-words h1', '.tag'].map((s) => { const g = document.createRange(); g.selectNodeContents(document.querySelector(s)); const r = g.getBoundingClientRect(); return Math.round(Math.min(r.left - card.left, card.right - r.right, r.top - card.top, card.bottom - r.bottom) - 12.5); }); });
+        t.expect(rooms.every((x) => x >= 2), `${w}x${h} 130%: ${rooms}`);
+      }
+    },
+  },
 ];
