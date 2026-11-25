@@ -359,6 +359,7 @@ function showScene(name, arg) {
   document.body.dataset.scene = name;
   if (game) { renderGame(); layout(); if (keyFocus && !G.privacy) $('#board').focus({ preventScroll: true }); if (G.aiHeld && !G.dialog && !document.hidden) releaseAi(); return; }
   scr.innerHTML = screenHtml(name, arg);
+  if (name === 'over' && prev === 'game' && animOn()) scr.querySelector('.over')?.classList.add('arrive');
   wireScreen(name);
   scr.scrollTop = savedScroll;
   if (sameSheet) {
@@ -1262,7 +1263,7 @@ function syncPlaqueSnap(s) {
   }
   if (!cleared.size && !claimed.size) return;
   clearTimeout(G.plaqueFxTimer);
-  G.plaqueFx = { cleared, claimed };
+  G.plaqueFx = { cleared, claimed, t0: performance.now() };
   G.plaqueFxTimer = setTimeout(clearPlaqueFx, 260);
 }
 function syncSpringsDrawer(open) {
@@ -1282,7 +1283,6 @@ function syncSpringsDrawer(open) {
 }
 function renderGame() {
   if (G.scene !== 'game' || !G.s) return;
-  cancelScoreRoll();
   const s = G.s;
   const mobile = isNarrow();
   if (!mobile) G.springsOpen = false;
@@ -1293,10 +1293,12 @@ function renderGame() {
   const springs = $('#springs');
   springs.innerHTML = UI.springsHtml(s, G.lex, mobile, G.springsOpen);
   springs.classList.toggle('open', mobile && G.springsOpen);
+  const fxAge = G.plaqueFx ? Math.round(performance.now() - G.plaqueFx.t0) : 0;
+  const fxOn = (el, cls) => { el.classList.add(cls); if (fxAge > 0) el.style.animationDelay = `-${fxAge}ms`; };   // redrawn in mid-reveal: it goes on from there
   const toggle = springs.querySelector('[data-springs-toggle]');
   if (toggle) {
     if (G.plaqueHi.size) toggle.classList.add('plaque-updated');
-    if (G.plaqueFx && G.plaqueFx.claimed.size) toggle.classList.add('just-claimed');
+    if (G.plaqueFx && G.plaqueFx.claimed.size) fxOn(toggle, 'just-claimed');
     toggle.addEventListener('click', () => {
       if (G.coach && G.coach.phase === 'plaques') coachDismiss('plaques');
       syncSpringsDrawer(!G.springsOpen);
@@ -1306,11 +1308,11 @@ function renderGame() {
     const pk = +b.dataset.plaque;
     if (G.plaqueHi.has(pk)) b.classList.add('plaque-updated');
     if (G.plaqueFx) {
-      if (G.plaqueFx.claimed.has(pk)) b.classList.add('just-claimed');
+      if (G.plaqueFx.claimed.has(pk)) fxOn(b, 'just-claimed');
       const cols = G.plaqueFx.cleared.get(pk);
       if (cols && cols.length) {
         const letters = b.querySelectorAll('.pword b');
-        for (const j of cols) if (letters[j]) letters[j].classList.add('fog-clear');
+        for (const j of cols) if (letters[j]) fxOn(letters[j], 'fog-clear');
       }
     }
     b.addEventListener('click', () => {
@@ -1322,9 +1324,9 @@ function renderGame() {
   });
   $('#log').innerHTML = UI.logHtml(s, G.lex) || '<li class="empty">Every play is written here: the words, the points, and any Hot Springs bonus.</li>';
   renderTurnline();
+  resumeRolls();
   if (G.scoreHi != null) {
-    const sel = G.scoreHi === 'all' ? '[data-score]' : `[data-score="${G.scoreHi}"]`;
-    document.querySelectorAll(sel).forEach((el) => el.classList.add('score-updated'));
+    scoreEls(G.scoreHi).forEach((el) => el.classList.add('score-updated'));
   }
   renderActions(); renderRack(); renderPreview(); renderPrivacy();
   coachRender();
@@ -1563,43 +1565,56 @@ function shake() {
   errFlashTimer = setTimeout(() => { G.errFlash = false; $('#preview')?.classList.remove('err-flash'); }, 450);
 }
 
-const SCORE_ROLL_MS = 280;
+const SCORE_ROLL_MS = 280, SCORE_BUMP_MS = 500;
+// Scores counting up, by player. The turn's hand-over redraws the cards 150 ms after a person's play, in the middle of the
+// count: the roll is kept here, not on the nodes, and picked up where it was (resumeRolls).
+const rollVal = (r, now) => { const u = Math.min(1, Math.max(0, (now - r.t0) / SCORE_ROLL_MS)); return u >= 1 ? r.to : Math.round(r.from + (r.to - r.from) * (1 - Math.pow(1 - u, 3))); };
+const scoreEls = (p) => document.querySelectorAll(`[data-score="${p}"]`);
 function cancelScoreRoll() {
   if (G.scoreRollRaf) { cancelAnimationFrame(G.scoreRollRaf); G.scoreRollRaf = 0; }
+  for (const [p, r] of scoreRolls) for (const el of scoreEls(p)) el.textContent = String(r.to);
+  scoreRolls.clear();
 }
-function rollScores(entry, prevScore = null) {
-  cancelScoreRoll();
-  if (G.fast) return;
-  if (entry && (entry.kind !== 'play' || !entry.score)) return;
-  const sel = entry ? `[data-score="${entry.p}"]` : '[data-score]';
-  const els = [...document.querySelectorAll(sel)];
+const scoreRolls = new Map();
+function stepRolls(now) {
+  G.scoreRollRaf = 0;
+  let more = false;
+  for (const [p, r] of scoreRolls) {
+    const v = String(rollVal(r, now));
+    for (const el of scoreEls(p)) if (el.textContent !== v) el.textContent = v;
+    if (now < r.t0 + SCORE_BUMP_MS) more = true; else scoreRolls.delete(p);
+  }
+  if (more) G.scoreRollRaf = requestAnimationFrame(stepRolls);
+}
+function bumpScore(el, ms = 0) {
+  el.classList.add('bump');
+  el.style.animationDelay = ms ? `-${Math.round(ms)}ms` : '';
+  el.addEventListener('animationend', () => { el.classList.remove('bump'); el.style.animationDelay = ''; }, { once: true });
+}
+function resumeRolls() {
+  if (!scoreRolls.size) return;
+  const now = performance.now();
+  for (const [p, r] of scoreRolls) {
+    const pl = G.s && G.s.players[p];
+    if (!pl || pl.score !== r.to || now >= r.t0 + SCORE_BUMP_MS) { scoreRolls.delete(p); continue; }
+    for (const el of scoreEls(p)) { el.textContent = String(rollVal(r, now)); bumpScore(el, now - r.t0); }
+  }
+}
+function rollScores(entry, prevScore) {
+  if (G.fast || !entry || entry.kind !== 'play' || !entry.score || !G.s.players[entry.p]) return;
+  const els = scoreEls(entry.p);
   if (!els.length) return;
   if (animOn()) {
-    const target = entry && G.s && G.s.players[entry.p] ? G.s.players[entry.p].score : null;
-    const from = prevScore != null ? prevScore : (target != null && entry ? Math.max(0, target - entry.score) : target);
-    for (const el of els) {
-      el.classList.remove('bump');
-      void el.offsetWidth;
-      el.classList.add('bump');
-      el.addEventListener('animationend', () => el.classList.remove('bump'), { once: true });
-    }
-    if (target != null && from != null && from !== target) {
-      const t0 = performance.now();
-      for (const el of els) el.textContent = String(from);
-      const step = (now) => {
-        if (!els[0].isConnected) { G.scoreRollRaf = 0; return; }
-        const u = Math.min(1, Math.max(0, (now - t0) / SCORE_ROLL_MS));
-        const val = u >= 1 ? target : Math.round(from + (target - from) * (1 - Math.pow(1 - u, 3)));
-        for (const el of els) el.textContent = String(val);
-        if (u < 1) G.scoreRollRaf = requestAnimationFrame(step);
-        else G.scoreRollRaf = 0;
-      };
-      G.scoreRollRaf = requestAnimationFrame(step);
-    }
+    const to = G.s.players[entry.p].score, t0 = performance.now();
+    for (const el of els) { el.classList.remove('bump'); void el.offsetWidth; bumpScore(el); }
+    if (to === prevScore) return;
+    scoreRolls.set(entry.p, { from: prevScore, to, t0 });
+    for (const el of els) el.textContent = String(prevScore);
+    if (!G.scoreRollRaf) G.scoreRollRaf = requestAnimationFrame(stepRolls);
     return;
   }
   if (!reduced()) return;
-  G.scoreHi = entry ? entry.p : 'all';
+  G.scoreHi = entry.p;
   els.forEach((el) => el.classList.add('score-updated'));
   clearTimeout(scoreHiTimer);
   scoreHiTimer = setTimeout(() => {
@@ -1695,7 +1710,7 @@ function hideToast() { const el = $('#toast'); clearTimeout(toastTimer); clearTi
 function toggleBreakdown() {
   if (!G.preview || !G.preview.ok || !G.staged.length || G.aiBusy || G.flash) return;
   G.breakdown = !G.breakdown; renderPreview();
-  if (G.breakdown) { const bd = $('#preview .bd'); if (bd) liveSay(bd.textContent.replace(/\s+/g, ' ').trim()); }
+  if (G.breakdown) { const bd = $('#preview .bd'); if (bd && animOn()) bd.classList.add('unfold'); if (bd) liveSay(bd.textContent.replace(/\s+/g, ' ').trim()); }
 }
 
 function closeBreakdown() {

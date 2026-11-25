@@ -1028,6 +1028,8 @@ body.reduce .coach-target { animation: none; }
 #preview .bd li b { font: 800 1em var(--f-serif); letter-spacing: 0.04em; }
 #preview .bd li span { font-variant-numeric: tabular-nums; }
 body.theme-dark #preview .bd { background: #0C0A16; }
+body:not(.reduce) #preview .bd.unfold { animation: unfold 0.16s cubic-bezier(0.22, 1, 0.36, 1); transform-origin: 50% 100%; }
+@keyframes unfold { from { opacity: 0; transform: translateY(6px) scaleY(0.92); } }
 #preview .bd li.tot { border-top: 1px solid rgba(255, 255, 255, 0.25); padding-top: 4px; color: #F3DD8B; }
 /* the Daily Soak's last fourteen days */
 .dhead { margin: 10px 0 4px; font: 600 1rem var(--f-serif); }
@@ -1041,6 +1043,10 @@ body.theme-dark #preview .bd { background: #0C0A16; }
 
 /* wave 3, batch D: results ceremony by outcome, the deciding line, Featured Spring chips that open their card, the stall note */
 .decisive { margin: 6px 0 0; font: 600 0.98rem var(--f-serif); color: var(--ink); }
+/* from the last play: the results come in one after another (buttons and focus are there at once) */
+body:not(.reduce) .over.arrive > :not(.over-art):not(.dlg-btns) { animation: arrive 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(var(--n, 0) * 60ms); }
+.over.arrive > .daily-box, .over.arrive > .winner { --n: 1; } .over.arrive > .pbs { --n: 2; } .over.arrive > .final { --n: 3; } .over.arrive > .over-cols { --n: 4; }
+@keyframes arrive { from { opacity: 0; transform: translateY(10px); } }
 .over-win .over-art { filter: saturate(1.2) brightness(1.1) sepia(0.12); background-position: center 40%; }
 .over-loss .over-art { filter: saturate(0.5) brightness(0.72) hue-rotate(-14deg); background-position: center 85%; }
 .over-tie .over-art { filter: saturate(0.85) brightness(0.92); }

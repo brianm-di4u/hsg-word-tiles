@@ -1,4 +1,5 @@
-// Wave 3, batch W3-B14: W5-S3-16 (banners and clacks keep to the landing of the computer's tiles).
+// Wave 3, batch W3-B14: W5-S3-16 (banners and clacks keep to the landing of the computer's tiles), W5-S4-02 (score roll and
+// plaque reveals that outlive the hand-over redraw, breakdown unfold, results arriving card by card).
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const full = () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'normal', sound: false, motion: 'full' })); };
 const SEATS = [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'hard' }];
@@ -118,6 +119,181 @@ export const tests = [
       const n = (await t.state()).game.log.at(-1).tiles.length, st = heard.indexOf('steam');
       t.expect(st >= 0, 'the sting is heard');
       t.expect(heard.lastIndexOf('place') < st && heard.filter((x) => x === 'place').length >= n - 1, 'after all the tiles');
+    },
+  },
+
+  // ---------- W5-S4-02 ----------
+  {
+    name: "W5-S4-02 a person's score goes on counting, and a claimed plaque goes on shimmering, through the redraw that hands the turn over",
+    viewports: ['desktop', 'mobile'],
+    initScript: full,
+    async run(t) {
+      await ready(t);
+      await freezeClock(t);
+      await t.seed(5);
+      await t.game('newGame', { seats: SEATS });
+      await t.waitIdle(8000);
+      const s = await t.state();
+      s.game.players[0].rack = 'SPRINGA'.split('');
+      s.game.featured[0] = { ...s.game.featured[0], word: 'SPRING', cat: 'springs', shown: [0], by: null };
+      await t.game('setState', { game: s.game });
+      await t.waitIdle(5000);
+      await t.page.addStyleTag({ content: '.score.bump, .just-claimed { animation-play-state: paused !important; }' });   // real-time CSS held still: the game's clock is the only one running
+      await stopClock(t);
+      await t.game('act', 'stage', [...'SPRING'].map((l, k) => ({ i: 110 + k, l })));
+      t.expect((await t.game('act', 'play')).ok, 'SPRING played');
+      const at = () => t.page.evaluate(() => {
+        const el = document.querySelector('[data-score="0"]'), pl = document.querySelector('.plaque.just-claimed, .springs-bar.just-claimed');
+        const d = (x) => (x ? parseFloat(x.style.animationDelay) || 0 : null);
+        return { n: Number(el.textContent), to: window.__G.s.players[0].score, node: window.__el === el, bump: el.classList.contains('bump'), delay: d(el), claim: !!pl, claimDelay: d(pl), other: document.querySelector('[data-score="1"]').classList.contains('bump') };
+      });
+      await t.page.evaluate(() => { window.__el = document.querySelector('[data-score="0"]'); });
+      let v = await at();
+      t.equal(v.n, 0, 'it starts from the old score');
+      t.expect(v.bump && v.claim && !v.other, 'with the bump, and the claimed plaque shimmering');
+      await t.page.clock.runFor(120);
+      v = await at();
+      t.expect(v.node && v.n > 0 && v.n < v.to, 'counting before the hand-over (' + v.n + ' of ' + v.to + ')');
+      const n1 = v.n;
+      await t.page.clock.runFor(60);
+      v = await at();
+      t.equal(v.node, false, 'the cards were redrawn when the turn passed to the computer');
+      t.expect(v.n >= n1 && v.n < v.to, 'and the count goes on, not cut short (' + n1 + ', then ' + v.n + ' of ' + v.to + ')');
+      t.expect(v.bump && v.delay < -100, 'the bump goes on from where it was (' + v.delay + ' ms)');
+      t.expect(v.claim && v.claimDelay < -100, 'and so does the plaque, instead of starting over (' + v.claimDelay + ' ms)');
+      t.equal(v.other, false, "the computer's score does not move");
+      await t.page.clock.runFor(140);
+      v = await at();
+      t.equal(v.n, v.to, 'the count ends on the score');
+      t.equal(v.claim, false, 'and the shimmer is over');
+      await t.page.clock.resume();
+    },
+  },
+  {
+    name: 'W5-S4-02 a score caught in mid-count lands on the real number when motion is turned off, and then nothing counts',
+    viewports: ['desktop'],
+    initScript: () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'normal', sound: false, motion: 'system' })); },
+    async run(t) {
+      await t.page.emulateMedia({ reducedMotion: 'no-preference' });
+      await ready(t);
+      await freezeClock(t);
+      const start = async () => {
+        await t.seed(5);
+        await t.game('newGame', { seats: [{ kind: 'human', name: 'Ann' }, { kind: 'human', name: 'Bo' }] });
+        await t.waitIdle(8000);
+        const s = await t.state();
+        s.game.players[0].rack = 'SPRINGA'.split('');
+        await t.game('setState', { game: s.game });
+        await stopClock(t);
+      };
+      const play = async () => { await t.game('act', 'stage', [...'SPRING'].map((l, k) => ({ i: 110 + k, l }))); return (await t.game('act', 'play')).ok; };
+      const read = () => t.page.evaluate(() => ({ n: Number(document.querySelector('[data-score="0"]').textContent), to: window.__G.s.players[0].score }));
+      await start();
+      t.expect(await play(), 'played');
+      await t.page.clock.runFor(60);
+      let v = await read();
+      t.expect(v.n < v.to, 'mid-count (' + v.n + ' of ' + v.to + ')');
+      await t.page.emulateMedia({ reducedMotion: 'reduce' });
+      await t.page.waitForFunction(() => document.body.classList.contains('reduce'));
+      v = await read();
+      t.equal(v.n, v.to, 'the number is the real one at once');
+      await t.page.clock.resume();
+      await start();
+      t.expect(await play(), 'played with reduced motion');
+      v = await read();
+      t.equal(v.n, v.to, 'the score is simply there');
+      t.equal(await t.page.locator('.score.bump').count(), 0, 'with no bump');
+      await t.page.clock.resume();
+    },
+  },
+  {
+    name: 'W5-S4-02 the score breakdown unfolds in 160 ms when it is opened, once, and not at all with reduced motion',
+    viewports: ['desktop', 'mobile'],
+    initScript: full,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 3, seats: SEATS });
+      await t.waitIdle(8000);
+      const s = await t.state();
+      s.game.players[0].rack = 'SPRINGA'.split('');
+      await t.game('setState', { game: s.game });
+      await t.waitIdle(5000);
+      const stage = () => t.game('act', 'stage', [...'SPRING'].map((l, k) => ({ i: 110 + k, l })));
+      const bd = () => t.page.evaluate(() => { const el = document.querySelector('#preview .bd'); if (!el) return null; const c = getComputedStyle(el); return { name: c.animationName, dur: c.animationDuration, h: el.getBoundingClientRect().height }; });
+      await stage();
+      await t.page.click('#preview .bdbtn');
+      let v = await bd();
+      t.equal(v.name, 'unfold', 'it unfolds');
+      t.equal(v.dur, '0.16s', 'in 160 ms');
+      // the strip is redrawn while it is open (a hovered square's rule): it must not unfold again
+      if (t.viewport === 'desktop') {
+        const [x, y] = await t.game('act', 'screen', 8);   // an empty Bathhouse Row square
+        await t.page.mouse.move(x, y); await t.page.mouse.move(x + 2, y + 1);
+        await t.page.waitForFunction(() => document.querySelector('#preview .sq-tip'));
+        v = await bd();
+        t.equal(v && v.name, 'none', 'a redraw of the open breakdown does not play it again');
+      }
+      await t.page.evaluate(() => document.getAnimations().forEach((a) => { try { a.finish(); } catch (e) { /* endless */ } }));
+      await t.shot('w3-b14-breakdown', { wait: false });
+      await t.game('act', 'recall');
+      await t.page.evaluate(() => { const st = JSON.parse(localStorage.getItem('hs-letters-settings-v1')); st.motion = 'reduce'; localStorage.setItem('hs-letters-settings-v1', JSON.stringify(st)); });
+      await t.reload(); await ready(t);
+      await t.game('newGame', { seed: 3, seats: SEATS });
+      await t.waitIdle(8000);
+      const s2 = await t.state();
+      s2.game.players[0].rack = 'SPRINGA'.split('');
+      await t.game('setState', { game: s2.game });
+      await t.waitIdle(5000);
+      await stage();
+      await t.page.click('#preview .bdbtn');
+      t.equal((await bd()).name, 'none', 'reduced motion: it is simply open');
+    },
+  },
+  {
+    name: 'W5-S4-02 the results arrive card by card after the last play, with the buttons and the focus there at once, and not again on coming back',
+    viewports: ['desktop', 'mobile'],
+    initScript: full,
+    async run(t) {
+      await ready(t);
+      const end = async () => {
+        await t.seed(5);
+        await t.game('newGame', { seats: SEATS });
+        await t.waitIdle(8000);
+        const st = await t.state(), g = st.game;
+        g.board = g.board.map(() => null);
+        [...'CAT'].forEach((l, k) => { g.board[111 + k] = { l, blank: false }; });
+        g.bag = []; g.move = 10; g.cur = 0;
+        g.players[0].rack = ['S']; g.players[0].score = 120; g.players[1].rack = ['E', 'R']; g.players[1].score = 80;
+        await t.game('setState', { game: g });
+        await t.waitIdle(5000);
+        await t.game('act', 'stage', [{ i: 114, l: 'S' }]);
+        await t.page.evaluate(() => { const o = new MutationObserver(() => { const el = document.querySelector('#screen .over'); if (!el) return; o.disconnect(); window.__over = read(el); });
+          const read = (box) => [...box.children].map((c) => { const cs = getComputedStyle(c); return { c: c.className || c.tagName, name: cs.animationName, ms: parseFloat(cs.animationDelay) * 1000, dur: parseFloat(cs.animationDuration) * 1000 }; }).concat([{ c: 'focus', name: box.contains(document.activeElement) ? document.activeElement.tagName : 'elsewhere' }]);
+          window.__over = null; o.observe(document.querySelector('#screen'), { childList: true }); });
+        t.expect((await t.game('act', 'play')).ok, 'the last play');
+        await t.page.waitForFunction(() => window.__over, null, { timeout: 8000 });
+        return t.page.evaluate(() => window.__over);
+      };
+      let v = await end();
+      const by = (c) => v.find((x) => x.c.split(' ')[0] === c);
+      t.log(v.map((x) => `${x.c}: ${x.name} ${x.ms ?? ''}`).join(' | '));
+      const cards = ['winner', 'final', 'over-cols'].map(by);
+      t.expect(cards.every((x) => x && x.name === 'arrive'), 'the winner, the others and the word lists each arrive');
+      t.expect(by('masthead').ms === 0 && cards[0].ms > 0 && cards[1].ms > cards[0].ms && cards[2].ms > cards[1].ms, 'one after another (' + cards.map((x) => x.ms) + ' ms)');
+      t.expect(cards[2].ms + cards[2].dur <= 500, 'and all are there within half a second');
+      t.equal(by('dlg-btns').name, 'none', 'the buttons do not wait');
+      t.equal(v.at(-1).name, 'H1', 'and the keyboard is on the heading already, as before');
+      await t.page.waitForFunction(() => document.querySelector('#screen .over').getAnimations({ subtree: true }).length === 0, null, { timeout: 5000 });
+      await t.shot('w3-b14-results');
+      t.expect(await t.page.evaluate(() => [...document.querySelectorAll('#screen .over > *')].every((c) => getComputedStyle(c).opacity === '1')), 'everything is fully there at the end');
+      await t.page.click('.over [data-go="register"]');
+      await t.page.click('#screen [data-back]');
+      await t.page.waitForFunction(() => document.querySelector('#screen .over'));
+      t.equal(await t.page.locator('.over.arrive').count(), 0, 'back from the Register the results are simply there');
+      await t.page.evaluate(() => { const st = JSON.parse(localStorage.getItem('hs-letters-settings-v1')); st.motion = 'reduce'; localStorage.setItem('hs-letters-settings-v1', JSON.stringify(st)); });
+      await t.reload(); await ready(t);
+      v = await end();
+      t.expect(v.every((x) => x.c === 'focus' || x.name === 'none'), 'reduced motion: nothing moves');
     },
   },
 ];
