@@ -694,12 +694,13 @@ function scheduleAi() {
     if (!res.ok) { console.warn('AI move refused', res.error); E.apply(s, { type: 'pass' }, ctx()); }
     afterAction(res.ok ? res.entry : s.log[s.log.length - 1], true);
   };
+  const dropped = () => { if (token === G.aiToken) G.aiBusy = false; };   // the game it was for is gone: nobody is thinking any more, unless a newer turn is
   aiMove(s, cur().level, cur().persona).then((r) => {
-    if (token !== G.aiToken || G.s !== s || s.over) return;
+    if (token !== G.aiToken || G.s !== s || s.over) { dropped(); return; }
     const wait = G.aiSkip ? 0 : Math.max(0, delay - (performance.now() - t0));
     const fire = () => {
       G.aiFire = null;
-      if (!live()) { if (token === G.aiToken) G.aiBusy = false; return; }
+      if (!live()) { dropped(); return; }
       s.rng.ai = r.rngAi;
       act(r.action);
     };
@@ -707,7 +708,7 @@ function scheduleAi() {
     G.aiFire = fire;
     G.aiTimer = setTimeout(() => {
       G.aiTimer = 0;
-      if (token !== G.aiToken || G.s !== s || s.over) { G.aiFire = null; return; }
+      if (token !== G.aiToken || G.s !== s || s.over) { G.aiFire = null; dropped(); return; }
       if (document.hidden || G.dialog || G.scene !== 'game') { G.aiFire = null; G.aiHeld = fire; }
       else fire();
     }, wait);
