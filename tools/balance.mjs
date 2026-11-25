@@ -28,12 +28,13 @@ export async function playMatch(levels, seed, stats) {
     const who = s.players[s.cur].persona || lvl;
     stats.ms[lvl] = stats.ms[lvl] || [];
     stats.ms[lvl].push(ms);
+    const before = s.board.slice();
     const r = apply(s, action, c);
     if (!r.ok) throw new Error(`seed ${seed}: ${lvl} made an illegal ${action.type}: ${r.error}`);
     const e = r.entry;
     if (e.kind === 'play') {
       stats.prem = stats.prem || {};
-      stats.prem[who] = (stats.prem[who] || 0) + premiumPoints({ tiles: e.tiles, score: e.score });
+      stats.prem[who] = (stats.prem[who] || 0) + premiumPoints(e, before);
       stats.pts = stats.pts || {};
       stats.pts[who] = (stats.pts[who] || 0) + e.score;
       stats.byWho = stats.byWho || {};

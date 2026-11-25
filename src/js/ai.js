@@ -5,7 +5,7 @@ import { generateMoves } from './movegen.js';
 import { isCommon } from './dict.js';
 import { deducibleFeatured } from './lexicon.js';
 import { rand } from './rng.js';
-import { N, SQUARE, VALUE, LETTER_MULT, WORD_MULT, RACK } from './score.js';
+import { N, SQUARE, VALUE, RACK, findWords, wordScore } from './score.js';
 import { LEAVE } from './leave-table.js';
 
 // Everyday two-letter words Easy is allowed to play (no obscure tournament two-letter tools like XU, ZA, QI, KI, OY, UT).
@@ -44,7 +44,7 @@ export function styleBonus(style, move, left, s, lex, opts = {}) {
   if (!style) return 0;
   const bag = s.bag.length;
   let delta = 0;
-  if (style.premium && bag > 0) delta += style.premium * premiumPoints(move);
+  if (style.premium && bag > 0) delta += style.premium * premiumPoints(move, s.board);
   if (style.cats && style.catBonus && lex) {
     for (const w of move.words) {
       const e = lex.byForm.get(w);
@@ -62,15 +62,16 @@ export function styleBonus(style, move, left, s, lex, opts = {}) {
   return delta;
 }
 
-// Points a play earns from the premium squares it covers (letter multipliers, then the word multiplier).
-export function premiumPoints(move) {
-  let extra = 0, wm = 1;
-  for (const t of move.tiles) {
-    const sq = SQUARE[t.i];
-    if (!t.blank) extra += VALUE[t.l] * ((LETTER_MULT[sq] || 1) - 1);
-    wm *= WORD_MULT[sq] || 1;
+// Points a play earns from the premium squares it covers: each word it makes, with the multipliers less without (W6-S1-03). The Hot
+// Springs, Featured and Full Soak bonuses and the words no multiplier touches are not part of it.
+export function premiumPoints(move, board = []) {
+  const { words, add } = findWords(board, move.tiles);
+  let extra = 0;
+  for (const w of words || []) {
+    extra += wordScore(board, add, w);
+    for (const k of w.cells) { const t = add.get(k) || board[k]; if (!t.blank) extra -= VALUE[t.l]; }
   }
-  return extra + move.score * (1 - 1 / wm);
+  return extra;
 }
 
 const VOWELS = new Set(['A', 'E', 'I', 'O', 'U']);

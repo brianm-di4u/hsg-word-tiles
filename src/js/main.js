@@ -10,7 +10,7 @@ import { art, loadArt } from './art.js';
 import { store, KEYS, createGameSaves, validRegister, validDaily, pruneDays } from './storage.js';
 import { startAi, aiMove, aiHint, aiReview, aiDailyPar, aiClient } from './aiclient.js';
 import { PERSONAS, PERSONA_MOTION, persona, personaMotion, LEVEL_NAME, seatLevel } from './personas.js';
-import { barkFor, endBark, SHORT } from './voices.js';
+import { barkFor, endBark, greeting, SHORT } from './voices.js';
 import { cleanStats, applyGame, applyDaily, nextStreak, dayNumber } from './stats.js';
 import * as B3 from './board3d.js';
 import * as UI from './ui.js';
@@ -616,7 +616,7 @@ function beginGame(s, intent) {
   clearFx(); steam.arcLog.length = 0;
   document.querySelectorAll('#boardwrap .pop').forEach((el) => el.remove());
   if (!G.settings.tipsSeen) store.put(KEYS.settings, G.settings); // the newcomer flag is written before the first save, so a tab closed mid-tips still counts as a newcomer
-  G.bark = null;
+  G.bark = null; if (!s.log.length) G.lastLine = '';   // a new game does not open on the last one's line
   const handle = gameSaves.open(s, intent);
   gameHandles.set(s, handle);
   G.s = s;
@@ -1502,7 +1502,12 @@ function renderPreview() {
     } else { html = esc(p.error); cls = 'bad'; }
     if (G.hoverInfo) html += `<span class="said sq-tip">${G.hoverBath ? `<span class="sq sq-B preview-bath" aria-hidden="true">${UI.bathMedallionHtml(G.hoverBath, false)}</span>` : ''}<span>${esc(G.hoverInfo)}</span></span>`;
   } else if (G.hoverInfo) html = G.hoverBath ? `<span class="sq sq-B preview-bath" aria-hidden="true">${UI.bathMedallionHtml(G.hoverBath, false)}</span><span>${esc(G.hoverInfo)}</span>` : esc(G.hoverInfo);
-  else if (G.lastLine && G.bark) { cls = 'idle'; html = `<span class="bark"><b>${esc(SHORT[G.bark.persona] || '')}:</b> “${esc(G.bark.text)}”</span><span class="said">${esc(G.lastLine)}</span>`; } else if (G.lastLine) { cls = 'idle'; html = esc(G.lastLine); } else { cls = 'idle'; html = cur().kind === 'human' ? (G.s.move === 0 ? (isNarrow() ? 'Start on the centre square.' : 'Start on the Display Spring in the centre.') : (isNarrow() ? 'Drag tiles to the board.' : 'Drag tiles to the board to make a word.')) : ''; }
+  else {
+    const said = G.lastLine || (cur().kind !== 'human' ? '' : G.s.move === 0 ? (isNarrow() ? 'Start on the centre square.' : 'Start on the Display Spring in the centre.') : (isNarrow() ? 'Drag tiles to the board.' : 'Drag tiles to the board to make a word.'));
+    const hello = G.lastLine ? null : greeting(G.s), b = G.lastLine ? G.bark : hello;   // the table greets a person's opening play
+    cls = hello ? 'idle greet' : 'idle';
+    html = b ? `<span class="bark"><b>${esc(SHORT[b.persona] || '')}:</b> “${esc(b.text)}”</span><span class="said">${esc(said)}</span>` : esc(said);
+  }
   const stall = !G.s.over && !G.aiBusy && !G.hintBusy && !G.flash && !G.preview && !G.hoverInfo && cur().kind === 'human' ? UI.stallNote(G.s) : '';
   if (stall) { cls = ''; html += `<span class="said stall">${esc(stall)}</span>`; }
   const refocus = el.contains(document.activeElement)

@@ -99,7 +99,7 @@ export const tests = [
             if (mine && res.entry.kind === 'play') {
               const e = res.entry;
               st.plays++; st.pts += e.score;
-              st.prem += premiumPoints({ tiles: e.tiles, score: e.score });
+              st.prem += premiumPoints(e, b0);
               for (const w of e.words) { const en = c.lex.entry(w.w); if (en && (en.cat === 'baths' || en.cat === 'springs')) st.bathSprings++; }
               st.rowSq += e.tiles.filter((x) => SQUARE[x.i] === 'B').length;
               if (e.words.length > 1) st.cross++;

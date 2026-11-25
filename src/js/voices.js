@@ -49,6 +49,12 @@ const EVENTS = Object.keys(BARKS.opal);
 const mix = (a, b) => { let h = (a ^ Math.imul(b + 0x9e3779b9, 0x85ebca6b)) >>> 0; h = Math.imul(h ^ (h >>> 15), 0xc2b2ae35) >>> 0; return (h ^ (h >>> 13)) >>> 0; };
 const seedOf = (s) => (s.seed != null ? s.seed : s.rng.bag) >>> 0;
 const base = (s, p, event) => mix(mix(seedOf(s), EVENTS.indexOf(event)), p.persona.length * 31 + p.persona.charCodeAt(0));
+// The seat that greets the table before a person's opening play: the first character, when a person plays first.
+const greeter = (s) => (s.players[0].kind === 'human' ? s.players.findIndex((p) => p.persona && BARKS[p.persona]) : -1);
+export function greeting(s) {
+  const k = s.move === 0 && !s.over ? greeter(s) : -1, p = s.players[k];
+  return p ? { persona: p.persona, text: BARKS[p.persona].open[base(s, p, 'open') % BARKS[p.persona].open.length] } : null;
+}
 const kindOf = (s, e, last) => {
   if (e.kind !== 'play') return 'pass';
   if (last && s.over && s.result && s.result.why === 'out' && s.result.out === e.p) return 'out';
@@ -68,7 +74,7 @@ export function barkFor(s, entry) {
   let event = kindOf(s, entry, at < 0 || at === mine.length - 1);
   if (!event && !earlier.length) event = 'open';
   if (!event) return null;
-  const prior = earlier.filter((e) => kindOf(s, e, false) === event).length;
+  const prior = event === 'open' ? (greeter(s) === entry.p ? 1 : 0) : earlier.filter((e) => kindOf(s, e, false) === event).length;   // an opening line once greeted with is not said again
   const list = lines[event];
   return { event, text: list[(base(s, p, event) + prior) % list.length] };
 }

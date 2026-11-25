@@ -1,7 +1,10 @@
 // Wave 3, batch W3-B20 (WF-6 vision and cohesion): what the earlier waves left of W6-S1-01 to W6-S1-04.
 import { ctx } from './lib.mjs';
-import { createGame } from '../src/js/engine.js';
-import { hintChoices, bestHint, isTeachableWord } from '../src/js/ai.js';
+import { createGame, apply } from '../src/js/engine.js';
+import { generateMoves } from '../src/js/movegen.js';
+import { findWords, explainWord } from '../src/js/score.js';
+import { hintChoices, bestHint, isTeachableWord, chooseAction, premiumPoints, styleBonus, STYLES } from '../src/js/ai.js';
+import { BARKS, SHORT, barkFor, greeting } from '../src/js/voices.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => {
@@ -99,6 +102,110 @@ export const tests = [
       const tags = await t.page.evaluate(() => [...document.querySelectorAll('#springs .plaque, #springs .springs-bar')].map((p) => { const n = p.querySelector('.pcat-name'), r = p.getBoundingClientRect(), q = n.getBoundingClientRect(); return { tag: n.textContent, h: r.height, seen: q.width > 8 && q.left >= r.left && q.right <= r.right + 0.5, plaque: p.classList.contains('plaque') }; }));
       t.equal(tags.filter((x) => x.plaque).map((x) => x.tag).join(), 'Springs,Club,Track', 'Springs, Club and Track are written on the plaques');
       for (const x of tags) t.expect(x.seen && x.h >= 44, `${x.tag} shows on a ${x.h} px target`);
+    },
+  },
+  {
+    name: 'W6-S1-03 Lucky counts only what the multiplied letters and words earn: no flat bonus and no untouched cross-word',
+    node: true,
+    async run(t) {
+      const c = await ctx();
+      let n = 0, flat = 0, cross = 0;
+      for (let seed = 51; seed <= 56; seed++) {
+        const s = createGame({ mode: 'play', seed, seats: [{ kind: 'ai', level: 'medium', persona: 'lucky' }, { kind: 'ai', level: 'medium', persona: 'hollis' }] }, c.lex);
+        for (let guard = 0; !s.over && guard < 60; guard++) {
+          const p = s.players[s.cur];
+          const { moves } = generateMoves(c.dict, s.board, p.rack, { lex: c.lex, featured: s.featured, budget: 900000 });
+          for (const m of moves.slice(0, 60)) {
+            const f = findWords(s.board, m.tiles);
+            let want = m.score - m.bonus - m.full - m.featured;
+            for (const w of f.words) want -= explainWord(s.board, f.add, w).parts.reduce((a, q) => a + q.v, 0);
+            const got = premiumPoints(m, s.board);
+            if (got !== want) { t.fail(`seed ${seed} ${m.words.join('+')}: ${got}, want ${want}`); return; }
+            n++;
+            if (m.bonus + m.full + m.featured > 0) flat++;
+            if (f.words.length > 1) cross++;
+            // the same tiles with 100 more flat points are worth the same to him
+            if (styleBonus(STYLES.lucky, m, [], s, c.lex) !== styleBonus(STYLES.lucky, { ...m, score: m.score + 100 }, [], s, c.lex)) { t.fail('a flat bonus moves his style'); return; }
+          }
+          const r = apply(s, chooseAction(c.dict, c.lex, s, { level: 'medium' }).action, c);
+          if (!r.ok) { t.fail(r.error); return; }
+        }
+      }
+      t.expect(n > 2000 && flat > 100 && cross > 500, `${n} plays checked, ${flat} with a flat bonus, ${cross} with cross-words`);
+    },
+  },
+  {
+    name: 'W6-S1-03 the first character at the table greets the opening play, always the same for a game, and does not say it twice',
+    node: true,
+    async run(t) {
+      const c = await ctx();
+      const H = { kind: 'human', name: 'You' }, AI = (persona) => ({ kind: 'ai', persona, level: 'medium', name: persona });
+      const game = (seats, seed) => createGame({ mode: 'play', seed, seats }, c.lex);
+      for (const id of Object.keys(BARKS)) {
+        const heard = new Set();
+        for (let seed = 1; seed <= 60; seed++) {
+          const s = game([H, AI(id)], seed), g = greeting(s);
+          t.equal(g.persona, id, `${id} greets`);
+          t.expect(BARKS[id].open.includes(g.text), `with an opening line (${g.text})`);
+          t.equal(greeting(game([H, AI(id)], seed)).text, g.text, 'the same one for the same game');
+          heard.add(g.text);
+          const e = { p: 1, kind: 'play', n: 1, score: 12, full: 0, words: [], themed: 0, featured: null };
+          s.log.push({ p: 0, kind: 'play', n: 0, score: 8, words: [] }, e); s.move = 2;
+          t.equal(greeting(s), null, 'once the game is under way, no greeting');
+          const b = barkFor(s, e);
+          t.equal(b.event, 'open', 'a plain first play still has an opening line');
+          t.expect(b.text !== g.text && BARKS[id].open.includes(b.text), `a different one (${b.text})`);
+        }
+        t.equal(heard.size, 6, `${id}: all six opening lines come up`);
+      }
+      t.equal(greeting(game([H, H, AI('lucky'), AI('opal')], 3)).persona, 'lucky', 'the first of several characters');
+      t.equal(greeting(game([AI('opal'), H], 3)), null, 'a character who plays first does not');
+      t.equal(greeting(game([H, H], 3)), null, 'nor does a table of people');
+      t.equal(greeting(createGame({ mode: 'daily', date: '2026-11-25', seats: [H] }, c.lex)), null, 'nor the Daily Soak');
+    },
+  },
+  {
+    name: 'W6-S1-03 in the game the greeting waits in the strip with where to start, moves nothing, and steps aside for the play',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      const strip = () => t.page.evaluate(() => { const p = document.querySelector('#preview'), b = p.querySelector('.bark'), s = p.querySelector('.said'); return { bark: b && b.textContent, clip: b ? b.scrollHeight - b.clientHeight : 0, said: s && s.getBoundingClientRect().height > 0 ? s.textContent : '', rack: document.querySelector('#rack').getBoundingClientRect().top }; });
+      const sizes = t.viewport === 'mobile' ? [[360, 740], [390, 844]] : [[1024, 600], [1280, 800]];
+      for (const [width, height] of sizes) {
+        await t.page.setViewportSize({ width, height });
+        for (const id of Object.keys(BARKS)) for (let seed = 1; seed <= 8; seed++) {
+          await t.game('newGame', { seed, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: id }] });
+          await t.waitFrames(2);
+          const g = await strip();
+          t.equal(g.bark, `${SHORT[id]}: “${greeting((await t.state()).game).text}”`, `${width} px: ${SHORT[id]} greets`);
+          t.expect(/^Start on the/.test(g.said), `${width} px: and where to start is still there (${g.said})`);
+          t.expect(g.clip <= 1, `${width} px: the line is whole (${g.bark})`);
+          const idle = await t.page.evaluate(() => { const p = document.querySelector('#preview'); p.className = 'idle'; p.textContent = 'Start'; return document.querySelector('#rack').getBoundingClientRect().top; });
+          t.expect(Math.abs(idle - g.rack) <= 1, `${width} px: the rack does not move (${idle} and ${g.rack})`);
+        }
+      }
+      await t.game('newGame', { seed: 2, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'lucky' }] });
+      await t.waitIdle(8000);
+      const g = await strip();
+      t.expect(!(await t.page.textContent('#live')).includes('“'), 'the live region stays plain');
+      await t.shot('w3-b20-greeting');
+      const cr = await t.contrastReport({ selector: '#preview', min: 4.5, largeMin: 3 });
+      t.equal(cr.fails.length, 0, `readable (${JSON.stringify(cr.fails)})`);
+      const mv = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', mv[0].tiles);
+      t.equal((await strip()).bark, null, 'the score of a staged play takes its place');
+      await t.game('act', 'recall');
+      t.equal((await strip()).bark, g.bark, 'and it is back when the tiles are');
+      await t.game('act', 'stage', mv[0].tiles);
+      await t.game('act', 'play');
+      await t.page.waitForFunction(() => { const s = window.__game.getState(); return s.game.log.length >= 2 && !s.aiThinking; }, null, { timeout: 20000 });
+      t.expect((await strip()).bark !== g.bark, 'it is not said again');
+      // a new game opens on its own line, not on the last game's account
+      await t.game('newGame', { mode: 'daily', date: '2026-11-25' });
+      await t.waitIdle(8000);
+      const first = (await t.page.textContent('#preview')).trim();
+      t.expect(/^Start on the/.test(first), `the next game does not open on the last one (${first})`);
     },
   },
 ];
