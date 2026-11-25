@@ -89,7 +89,8 @@ export const tests = [
           }
         }
       }
-      t.expect(coated.length >= 4, `at least 4 clearcoated Blender materials export kr (${coated.join(', ')})`);
+      // exactly the glazed tiles and the walnut rail: W6-S6-03 (3f0ab23) took the coat off the bell's base, a standard material now, so it is three and not four
+      t.equal(coated.sort().join(), 'frame.walnut,tile.tilebody,tile.tiletop', 'the clearcoated Blender materials');
     },
   },
   {
