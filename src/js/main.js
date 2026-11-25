@@ -1289,7 +1289,7 @@ function syncSpringsDrawer(open) {
 function renderGame() {
   if (G.scene !== 'game' || !G.s) return;
   const s = G.s;
-  const mobile = isNarrow();
+  const mobile = G.narrow = isNarrow();
   if (!mobile) G.springsOpen = false;
   syncPlaqueSnap(s);
   const scoresEl = $('#scores');
@@ -2216,7 +2216,7 @@ function goldSweep(cells) { if (!animOn() || !cells.length) return; steam.sweeps
 function startSteam() {
   clearTimeout(steam.wakeTimer); steam.wakeTimer = 0;
   if (!steam.on && (steam.parts.length || steam.sweeps.length || steam.flashes.length || steam.arcs.length || (ambientSteam() && hasOpenWispCell()))) {
-    steam.on = true; steam.last = 0; requestAnimationFrame(steamLoop);
+    steam.on = true; steam.last = 0; steam.raf = requestAnimationFrame(steamLoop);
   }
 }
 // Steam thins to almost nothing over the face of a placed or staged tile and is whole just off its edge, so it curls round letters and never across them.
@@ -2327,7 +2327,7 @@ function steamLoop(now) {
     c.globalAlpha = fade * (claim ? 1 : 0.8); c.drawImage(claim ? st.star : st.wisp, hx - hsz / 2, hy - hsz / 2, hsz, hsz); c.restore();
   }
   const active = steam.parts.length || steam.sweeps.length || steam.flashes.length || steam.arcs.length;
-  if (active || G.fxFrozen != null) requestAnimationFrame(steamLoop);
+  if (active || G.fxFrozen != null) steam.raf = requestAnimationFrame(steamLoop);
   else {
     steam.on = false; c.clearRect(0, 0, R.view.W, R.view.H);
     if (ambientSteam() && hasOpenWispCell() && !document.hidden) {
@@ -2929,7 +2929,17 @@ function wireStatic() {
     if (t && t.id === e.pointerId && !G.dialog && !G.privacy && Math.hypot(e.clientX - t.x, e.clientY - t.y) < 10) skipComputerWait();
   }, true);
   window.addEventListener('keydown', (e) => { if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) G.input = 'key'; }, true);
-  window.addEventListener('resize', () => { if (G.drag) G.drag.boxes = null; layout(); if (G.scene === 'game') renderGame(); });
+  // at most one relayout a frame, drawn in that frame; the HUD is rebuilt only where the window crosses into or out of the narrow layout
+  let resizeRaf = 0;
+  const resized = (now) => {
+    resizeRaf = 0;
+    if (G.drag) G.drag.boxes = null;
+    if (G.scene === 'game' && G.s && isNarrow() !== G.narrow) renderGame();
+    layout();
+    if (raf) { cancelAnimationFrame(raf); frame(now); }
+    if (steam.on) { cancelAnimationFrame(steam.raf); steamLoop(now); }
+  };
+  window.addEventListener('resize', () => { if (!resizeRaf) resizeRaf = requestAnimationFrame(resized); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applySettings);
   matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', applySettings);
   // no text selection, callouts or context menus on the game screen (phones)

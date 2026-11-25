@@ -83,6 +83,7 @@ export const tests = [
       t.expect(p.captured, '#app holds the pointer capture during a rack drag');
       // a re-render mid-drag (resize, rotation) must not detach it either
       await t.page.evaluate(() => dispatchEvent(new Event('resize')));
+      await t.waitFrames(2);   // the relayout comes with the next frame (W6-S6-05)
       t.expect(await t.page.evaluate(() => window.__probe.target.isConnected), 'still attached after a re-render');
       if (f) { await f.up(1); await f.done(); } else await t.page.mouse.up();
       const s = await t.state();

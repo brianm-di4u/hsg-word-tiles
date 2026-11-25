@@ -489,6 +489,10 @@ export function paintFace(ctx, l, blank, w, theme = 'light') {
 const tileCache = new Map();
 export function invalidateTileCache() { tileCache.clear(); }
 export function tileCacheSize() { return tileCache.size; }
+// W6-S6-05: a tile drawn on the board takes its sprite from a fixed set of widths (device px) and drawImage scales it, so a
+// pinch or a zoom paints each letter once a bucket instead of once a frame. Finer under 64: a value's digits keep their size.
+const SPRITE_W = [24, 32, 40, 48, 56, 64, 96, 128, 192, 256, 384, 512];
+export const spriteWidth = (w) => SPRITE_W.find((b) => b >= w) || 512;
 export function tileSprite(l, blank, w, kind = 'board', theme = 'light') {
   w = Math.round(w);
   if (kind === 'face') {
@@ -703,12 +707,12 @@ export function drawFrame(ctx, d) {
     }
     ctx.restore();
   }
-  const cellPx = s, tilePx = cellPx * dpr;
+  const cellPx = s, sprW = spriteWidth(cellPx * dpr);
   const at = (i) => toScreen(FRAME + (i % N), FRAME + Math.floor(i / N));
   const drawTile = (i, t, kind, alpha = 1, lift = 0, sx = 1, sy = sx, rot = 0) => {
     const [x, y] = at(i);
-    // WF-4 §1.1: request unscaled cached base sprite and apply transient animation scaling via drawImage (zero per-frame canvas allocation).
-    const spr = tileSprite(t.l, t.blank, tilePx, kind, d.theme || 'light');
+    // WF-4 §1.1: request the cached bucket sprite and apply zoom and transient animation scaling via drawImage (zero per-frame canvas allocation).
+    const spr = tileSprite(t.l, t.blank, sprW, kind, d.theme || 'light');
     ctx.globalAlpha = alpha;
     if (kind !== 'ghost') {
       ctx.fillStyle = 'rgba(22,13,5,0.24)'; roundRect(ctx, x + cellPx * 0.07, y + cellPx * 0.14 + lift * 0.5, cellPx * 0.91, cellPx * 0.91, cellPx * 0.15); ctx.fill();
@@ -822,7 +826,7 @@ export function drawFrame(ctx, d) {
     const x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(...xs) - x0, h = Math.max(...ys) - y0;
     ctx.save();
     ctx.fillStyle = 'rgba(217,162,58,0.24)'; poly(ctx, q); ctx.fill();
-    if (d.dragTile) { ctx.globalAlpha = 0.92; ctx.drawImage(tileSprite(d.dragTile.l, d.dragTile.blank, Math.round(Math.max(w, h) * view.dpr), 'staged', d.theme || 'light'), x0, y0, w, h); ctx.globalAlpha = 1; }
+    if (d.dragTile) { ctx.globalAlpha = 0.92; ctx.drawImage(tileSprite(d.dragTile.l, d.dragTile.blank, spriteWidth(Math.max(w, h) * view.dpr), 'staged', d.theme || 'light'), x0, y0, w, h); ctx.globalAlpha = 1; }
     ctx.lineJoin = 'round';
     ctx.strokeStyle = 'rgba(26,17,8,0.85)'; ctx.lineWidth = lw(0.14); poly(ctx, q); ctx.stroke();
     ctx.strokeStyle = '#F3DD8B'; ctx.lineWidth = lw(0.08); poly(ctx, q); ctx.stroke();

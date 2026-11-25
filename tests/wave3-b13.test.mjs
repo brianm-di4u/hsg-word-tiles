@@ -301,7 +301,7 @@ export const tests = [
           await t.waitIdle(6000);
           for (const [w, h] of [[1024, 600], [1024, 701], [1024, 768], [1280, 720], [1366, 768], [1280, 800], [1920, 1080]]) {
             await t.page.setViewportSize({ width: w, height: h });
-            await t.page.evaluate(() => { window.__G.preview.score = 104; dispatchEvent(new Event('resize')); });   // a three-figure play, the widest the badge gets
+            await t.page.evaluate(() => { window.__G.preview.score = 104; window.__game.act('reveal'); });   // a three-figure play, the widest the badge gets; redrawn by hand, since a resize no longer rebuilds the HUD (W6-S6-05)
             await t.waitFrames(3);
             const what = `${w}x${h} ${n}P ${text * 100}%`;
             const m = await t.page.evaluate(() => {

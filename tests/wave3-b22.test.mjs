@@ -180,4 +180,89 @@ export const tests = [
       await t.shot('w3-b22-3d-restored', { timeout: 15000 });
     },
   },
+
+  // ---------- W6-S6-05 ----------
+  {
+    name: 'W6-S6-05 zooming the flat board right in paints each tile a few times, not once a step, and a tile at rest is dark ink on a bright crown',
+    viewports: ['desktop', 'mobile'],
+    url: 'index.html?gl=0',
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 41, seats: SEATS });
+      await t.waitIdle(8000);
+      await t.game('act', 'autoplay', 10);
+      await t.waitIdle(10000);
+      const glyphs = await t.page.evaluate(() => new Set(window.__G.s.board.filter(Boolean).map((x) => x.l + x.blank)).size);
+      // counted as they are made: the cache empties itself when it is full, so its size says nothing
+      const { steps, grown } = await t.page.evaluate(async () => {
+        let n = 0, made = 0;
+        const real = document.createElement;
+        document.createElement = function (name, ...a) { if (name === 'canvas') made++; return real.call(document, name, ...a); };
+        for (let z = 1; z <= 2.4; z += 0.02) { window.__game.act('zoom', z, 8, 8); n++; await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); }
+        document.createElement = real;
+        return { steps: n, grown: made };
+      });
+      t.log(`${glyphs} letters, ${steps} zoom steps, ${grown} sprites painted`);
+      t.expect(grown > 0 && grown <= glyphs * 7, `${grown} sprites for ${glyphs} letters over ${steps} zoom steps (at most 7 sizes each)`);
+      await t.game('act', 'zoom', 1, 8, 8);
+      await t.waitFrames(3);
+      // ink and crown of every tile on the board, read off the canvas
+      const ink = await t.page.evaluate(() => {
+        const cv = document.querySelector('#board'), c = cv.getContext('2d'), d = cv.width / cv.clientWidth, at = window.__game.act;
+        const rows = [];
+        window.__G.s.board.forEach((x, i) => { if (x && !x.blank) rows.push(i); });
+        return Promise.all(rows.map(async (i) => {
+          const [x, y] = await at('cell', i), cell = ((await at('cell', 113))[0] - (await at('cell', 112))[0]) * d, w = Math.round(cell * 0.6);
+          const q = c.getImageData(Math.round(x * d - cell * 0.4), Math.round(y * d - cell * 0.35), w, w).data;
+          let lo = 255, hi = 0;
+          for (let k = 0; k < q.length; k += 4) { const l = 0.2126 * q[k] + 0.7152 * q[k + 1] + 0.0722 * q[k + 2]; if (l < lo) lo = l; if (l > hi) hi = l; }
+          return [Math.round(lo), Math.round(hi)];
+        }));
+      });
+      t.log('ink/crown ' + ink.map((a) => a.join('/')).join(' '));
+      t.expect(ink.length > 10 && ink.every(([lo, hi]) => lo < 60 && hi > 215), 'every letter is dark on a bright crown');
+      await t.shot('w3-b22-2d-tiles');
+    },
+  },
+  {
+    name: 'W6-S6-05 a burst of resizes is one relayout in one frame that keeps the buttons and the focus, the board is never blank, and the narrow layout still swaps in',
+    viewports: ['desktop'],
+    url: 'index.html?gl=0',
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 41, seats: SEATS });
+      await t.waitIdle(8000);
+      await t.page.focus('#actions [data-act="swap"]');
+      const r = await t.page.evaluate(async () => {
+        const frame = () => new Promise((res) => requestAnimationFrame(res));
+        await frame(); await frame();
+        const el = document.activeElement, plaque = document.querySelector('#springs').firstElementChild, n0 = window.__G.layoutCount;
+        for (let k = 0; k < 12; k++) dispatchEvent(new Event('resize'));
+        const atOnce = window.__G.layoutCount - n0;
+        await frame(); await frame();
+        return { atOnce, n: window.__G.layoutCount - n0, act: el.dataset.act, kept: document.activeElement === el && el.isConnected, plaque: plaque.isConnected };
+      });
+      t.equal(r, { atOnce: 0, n: 1, act: 'swap', kept: true, plaque: true }, 'twelve resizes');
+      // watched after every frame while the window changes size
+      await t.page.evaluate(() => {
+        const cv = document.querySelector('#board'), ch = new MessageChannel();
+        window.__blank = 0; window.__seen = 0;
+        ch.port1.onmessage = () => { window.__seen++; if (cv.getContext('2d').getImageData(cv.width >> 1, cv.height >> 1, 1, 1).data[3] === 0) window.__blank++; };
+        const watch = () => { ch.port2.postMessage(0); window.__w = requestAnimationFrame(watch); };
+        window.__w = requestAnimationFrame(watch);
+      });
+      for (let w = 1280; w >= 1000; w -= 40) { await t.page.setViewportSize({ width: w, height: 800 }); await t.waitFrames(2); }
+      const seen = await t.page.evaluate(() => { cancelAnimationFrame(window.__w); return [window.__blank, window.__seen]; });
+      t.expect(seen[0] === 0 && seen[1] >= 8, `no blank frame (${seen[0]} of ${seen[1]})`);
+      t.expect(await t.page.evaluate(() => Math.abs(document.querySelector('#board').width - document.querySelector('#boardwrap').clientWidth) <= 1), 'the board fits its place');
+      // into the narrow layout and out again
+      t.equal(await t.page.locator('#scores > *').count() > 0, true, 'the score list is beside the board');
+      await t.page.setViewportSize({ width: 500, height: 800 });
+      await until(t, () => document.querySelector('#scores').children.length === 0 && document.querySelector('#springs [data-springs-toggle]') && document.querySelectorAll('#actions .abtn').length === 5);
+      await t.page.setViewportSize({ width: 1280, height: 800 });
+      await until(t, () => document.querySelector('#scores').children.length > 0 && !document.querySelector('#springs [data-springs-toggle]') && document.querySelectorAll('#actions .abtn').length === 6);
+    },
+  },
 ];
