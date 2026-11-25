@@ -91,7 +91,9 @@ export const tests = [
       await t.page.selectOption('[data-level="1"]', 'hard');
       t.expect(/every word in the book/.test(await t.page.textContent('[data-level-note="1"]')), 'the sentence follows the level');
       await t.page.click('[data-persona="1"][data-val="lucky"]');
-      t.equal(await t.page.inputValue('[data-level="1"]'), 'hard', 'changing the character keeps the level the player chose');
+      t.equal(await t.page.inputValue('[data-level="1"]'), 'medium', 'another character starts at its own usual level (W6-S2-01; it used to keep Hard)');
+      await t.page.selectOption('[data-level="1"]', 'hard');
+      t.equal(await t.page.inputValue('[data-level="1"]'), 'hard', 'and the level chosen after the character stays');
       const cards = await t.page.$$eval('[data-persona="1"]', (o) => o.map((x) => x.textContent));
       t.expect(cards.every((x) => /Usually (Easy|Medium|Hard)/.test(x)), 'each character card names only the level it usually plays at');
       await t.checkLayout({ allowScrollY: true });
