@@ -153,7 +153,7 @@ export function setupHtml(setup, opts = {}) {
 // the word multiplier, then the Hot Springs, Featured and Full Soak extras. `board` is the board without the staged tiles.
 const featuredList = (e) => (Array.isArray(e?.featuredAll) && e.featuredAll.length ? e.featuredAll : (e?.featured ? [e.featured] : []));
 
-export function breakdownHtml(p, board, staged) {
+export function breakdownHtml(p, board, staged, rowReveals = true) {
   const add = new Map(staged.map((t) => [t.i, { l: t.l, blank: t.blank }]));
   const rows = p.words.map((w) => {
     const x = explainWord(board, add, w);
@@ -161,7 +161,10 @@ export function breakdownHtml(p, board, staged) {
     return `<li><b>${esc(w.w)}</b> <span>${sum} = ${x.sum}${x.wm > 1 ? `, word ×${x.wm} = ${x.total}` : ''}</span></li>`;
   });
   for (const w of p.words) if (w.bonus) rows.push(`<li><b>Hot Springs</b> <span>${esc(w.w)} +${w.bonus}${w.bath ? ` (${w.bonus - ROW_BONUS} for the word, ${ROW_BONUS} for a Bathhouse Row square)` : ''}</span></li>`);
-  if (staged.some((t) => isBath(t.i))) rows.push(`<li><b>Bathhouse Row</b> <span>clears 1 fogged Featured Spring letter</span></li>`);
+  if (staged.some((t) => isBath(t.i))) {
+    const notes = [rowReveals ? 'clears 1 fogged Featured Spring letter' : '', p.words.some((w) => w.bath) ? '' : `+${ROW_BONUS} with a Hot Springs word`].filter(Boolean);
+    if (notes.length) rows.push(`<li><b>Bathhouse Row</b> <span>${notes.join(' · ')}</span></li>`);
+  }
   for (const fw of featuredList(p)) rows.push(`<li><b>Featured Spring</b> <span>${esc(fw)} +${FEATURED_BONUS}</span></li>`);
   if (p.full) rows.push(`<li><b>Full Soak</b> <span>all seven tiles +${FULL_SOAK}</span></li>`);
   return `<div class="bd" role="region" aria-label="How this play scores"><ul>${rows.join('')}<li class="tot"><b>Total</b> <span>${p.score} points</span></li></ul></div>`;

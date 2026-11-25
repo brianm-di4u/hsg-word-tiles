@@ -5,7 +5,7 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 - **Board:** 15×15 marble on a walnut-and-brass frame, one square for each of the valley's 47 springs as Wikipedia
   counts them: the Display Spring at the centre and 46 premium squares (Warm ×2 letter, Hot ×3 letter, Steam ×2 word,
   Boiling Spring ×3 word) in stained glass, swirling out in a pinwheel. Eight Bathhouse Row squares, each a painted
-  medallion of one historic bathhouse, double the bonus of a Hot Springs word laid over them.
+  medallion of one historic bathhouse, add a flat +20 to a Hot Springs word laid over them.
 - **Tiles:** 98 (2 blank "Steam tiles"), with counts and values computed from the dictionary's letter frequencies
   (`tools/build-tiles.mjs`), not taken from any commercial table.
 - **Words:** ENABLE (public domain) minus a curated blocklist of slurs and crude words: 168,271 words (168,295 before

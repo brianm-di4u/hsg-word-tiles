@@ -107,4 +107,45 @@ export const tests = [
       t.equal(plain.steamKinds, 0, 'none on an ordinary play');
     },
   },
+  {
+    name: 'W1-S5-01 a plain word over a Bathhouse Row square says what the square pays a Hot Springs word, with or without a plaque letter left to clear, and moves nothing',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      const PLAQUES = [{ id: 'casino', word: 'CASINO', cat: 'club', shown: [0], by: null, at: null }];
+      const DONE = PLAQUES.map((f) => ({ ...f, by: 1, at: 0 }));
+      const read = () => t.page.evaluate(() => {
+        const p = document.querySelector('#preview'), box = (s) => { const r = document.querySelector(s).getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map((v) => Math.round(v * 10) / 10); };
+        return { note: [...document.querySelectorAll('#preview .row-reveal')].map((e) => e.textContent).join(' | '), strip: p.offsetHeight, rack: box('#rackbar'), actions: box('#actions'), board: box('#boardwrap'), clipped: p.scrollHeight > p.clientHeight + 1 || p.scrollWidth > p.clientWidth + 1 };
+      });
+      const narrow = t.viewport === 'mobile', plus = '+20 with a Hot Springs word';
+      const sizes = narrow ? [[390, 844], [360, 740]] : [[1280, 800], [1024, 600]];
+      for (const [width, height] of sizes) {
+        await t.page.setViewportSize({ width, height });
+        const at = `${width}x${height}`;
+        const stage = async (rack, board, tiles, featured) => {
+          await table(t, rack, board, (g) => { g.featured = featured.map((f) => ({ ...f })); });
+          const before = await read();
+          await t.game('act', 'stage', tiles);
+          await t.page.waitForFunction(() => document.querySelector('#preview .words'));
+          const now = await read();
+          for (const k of ['rack', 'actions', 'board']) t.equal(JSON.stringify(now[k]), JSON.stringify(before[k]), `${at}: ${k} stays put under the note`);
+          t.equal(now.clipped, false, `${at}: nothing clipped in the strip`);
+          return now.note;
+        };
+        const CAT = [[[7, 'C']], [{ i: 8, l: 'A' }, { i: 9, l: 'T' }]];
+        t.equal(await stage('ATQQQQQ', ...CAT, PLAQUES), narrow ? 'Row · clears 1 plaque letter' : `Row · clears 1 plaque letter | ${plus}`, `${at}: a letter to clear`);
+        if (width === sizes[0][0]) await t.shot('w4-b01-row-note');
+        await t.page.click('#preview .bdbtn');
+        t.expect((await t.page.textContent('#preview .bd')).includes(`clears 1 fogged Featured Spring letter · ${plus}`), `${at}: and both in How it scores`);
+        t.equal(await stage('ATQQQQQ', ...CAT, DONE), `Row · ${plus}`, `${at}: nothing left to clear`);
+        if (width === sizes[0][0]) await t.shot('w4-b01-row-note-none');
+        await t.page.click('#preview .bdbtn');
+        t.expect(!/clears 1/.test(await t.page.textContent('#preview .bd')), `${at}: How it scores promises no letter either`);
+        // a Hot Springs word there is already paid its +20, so the note only has the letter
+        t.equal(await stage('AQQQQQQ', [[6, 'S'], [7, 'P']], [{ i: 8, l: 'A' }], PLAQUES), 'Row · clears 1 plaque letter', `${at}: SPA over the Row`);
+      }
+    },
+  },
 ];
