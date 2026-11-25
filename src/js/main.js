@@ -1491,19 +1491,17 @@ function renderPreview() {
     const p = G.preview;
     if (p.ok) {
       const rowCanReveal = G.staged.some((t) => SQUARES[t.i] === 'B') && G.s.featured.some((f) => f.by == null && f.shown.length < E.featuredRevealCap(G.s, f));
-      html = `<span class="words">${p.words.map((w) => `<b class="${w.themed ? 'themed' : ''}">${w.themed ? UI.ICON.steam : ''}${w.w}</b>`).join(' ')}</span><span class="pts">${p.score}<small> pts</small></span>${p.themed ? `<span class="extra">${UI.ICON.steam} +${p.themed}</span>` : ''}${p.full ? `<span class="extra">Full Soak +${FULL_SOAK}</span>` : ''}${p.featured ? `<span class="extra">Featured +${p.featuredBonus || FEATURED_BONUS}</span>` : ''}${rowCanReveal ? '<span class="extra row-reveal">Row · clears 1 plaque letter</span>' : ''}${G.s.challenge ? '<span class="extra">words checked when you play</span>' : ''}`;
-      if (hintLive()) html += `<span class="extra">keeps ${G.hintAlts[G.hintIx].keep.length ? G.hintAlts[G.hintIx].keep.map((l) => (l === '?' ? 'blank' : l)).join('') : 'nothing'}</span><button type="button" class="bdbtn" data-hintnext aria-label="Show another Spring Guide play, ${G.hintIx + 1} of ${G.hintAlts.length} shown">Other plays ${G.hintIx + 1}/${G.hintAlts.length}</button>`;
+      html = `<span class="pv"><span class="words">${p.words.map((w) => `<b class="${w.themed ? 'themed' : ''}">${w.themed ? UI.ICON.steam : ''}${w.w}</b>`).join(' ')}</span><span class="pts">${p.score}<small> pts</small></span>${p.themed ? `<span class="extra">${UI.ICON.steam} +${p.themed}</span>` : ''}${p.full ? `<span class="extra">Full Soak +${FULL_SOAK}</span>` : ''}${p.featured ? `<span class="extra">Featured +${p.featuredBonus || FEATURED_BONUS}</span>` : ''}${rowCanReveal ? '<span class="extra row-reveal">Row · clears 1 plaque letter</span>' : ''}${G.s.challenge ? '<span class="extra">words checked when you play</span>' : ''}${hintLive() ? `<span class="extra">keeps ${G.hintAlts[G.hintIx].keep.length ? G.hintAlts[G.hintIx].keep.map((l) => (l === '?' ? 'blank' : l)).join('') : 'nothing'}</span>` : ''}</span>`;
+      if (hintLive()) html += `<button type="button" class="bdbtn" data-hintnext aria-label="Show another Spring Guide play, ${G.hintIx + 1} of ${G.hintAlts.length} shown">Other plays ${G.hintIx + 1}/${G.hintAlts.length}</button>`;
       html += `<button type="button" class="bdbtn" aria-expanded="${G.breakdown}">${G.breakdown ? 'Hide' : 'How it scores'}</button>`;
       if (G.breakdown) html += UI.breakdownHtml(p, G.s.board, G.staged);
       cls = hintLive() ? 'ok hintlive' : 'ok';
     } else { html = esc(p.error); cls = 'bad'; }
     if (G.hoverInfo) html += `<span class="said sq-tip">${G.hoverBath ? `<span class="sq sq-B preview-bath" aria-hidden="true">${UI.bathMedallionHtml(G.hoverBath, false)}</span>` : ''}<span>${esc(G.hoverInfo)}</span></span>`;
   } else if (G.hoverInfo) html = G.hoverBath ? `<span class="sq sq-B preview-bath" aria-hidden="true">${UI.bathMedallionHtml(G.hoverBath, false)}</span><span>${esc(G.hoverInfo)}</span>` : esc(G.hoverInfo);
-  else if (G.lastLine && G.bark) html = `<span class="bark"><b>${esc(SHORT[G.bark.persona] || '')}:</b> “${esc(G.bark.text)}”</span><span class="said">${esc(G.lastLine)}</span>`;
-  else if (G.lastLine) html = esc(G.lastLine);
-  else html = cur().kind === 'human' ? (G.s.move === 0 ? (isNarrow() ? 'Start on the centre square.' : 'Start on the Display Spring in the centre.') : (isNarrow() ? 'Drag tiles to the board.' : 'Drag tiles to the board to make a word.')) : '';
+  else if (G.lastLine && G.bark) { cls = 'idle'; html = `<span class="bark"><b>${esc(SHORT[G.bark.persona] || '')}:</b> “${esc(G.bark.text)}”</span><span class="said">${esc(G.lastLine)}</span>`; } else if (G.lastLine) { cls = 'idle'; html = esc(G.lastLine); } else { cls = 'idle'; html = cur().kind === 'human' ? (G.s.move === 0 ? (isNarrow() ? 'Start on the centre square.' : 'Start on the Display Spring in the centre.') : (isNarrow() ? 'Drag tiles to the board.' : 'Drag tiles to the board to make a word.')) : ''; }
   const stall = !G.s.over && !G.aiBusy && !G.hintBusy && !G.flash && !G.preview && !G.hoverInfo && cur().kind === 'human' ? UI.stallNote(G.s) : '';
-  if (stall) html += `<span class="said stall">${esc(stall)}</span>`;
+  if (stall) { cls = ''; html += `<span class="said stall">${esc(stall)}</span>`; }
   const refocus = el.contains(document.activeElement)
     ? (document.activeElement.hasAttribute('data-hintnext') ? '[data-hintnext]' : '.bdbtn:not([data-hintnext])')
     : null;

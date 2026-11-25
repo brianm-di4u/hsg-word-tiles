@@ -288,6 +288,7 @@ body.theme-dark #turnline .bag.phase-empty { background: #D4AF37; border-color: 
 #b-zoomin[data-mode="out"] .zin { display: none; }
 @media (max-width: 860px), (max-aspect-ratio: 1/1), (max-height: 520px) { #b-zoomin { display: grid; } #b-zoom { display: none; } }
 #preview { grid-area: preview; min-height: 46px; padding: 8px 14px; border-radius: 10px; background: var(--strip); color: var(--strip-ink); display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; font-size: 0.98em; }
+#preview .pv { display: contents; }
 #preview .words b { font: 800 1.05em var(--f-serif); letter-spacing: 0.05em; margin-right: 6px; }
 #preview .words b.themed { color: #9FE3D6; display: inline-flex; align-items: center; gap: 2px; padding: 0 7px 0 4px; border: 1.5px solid #7FD3C4; border-radius: 99px; }
 #preview .words svg { width: 0.9em; height: 0.9em; }
@@ -502,7 +503,7 @@ body.theme-dark #crash { background: linear-gradient(160deg, #2E2A44, #3A3456); 
 #toast.on { display: flex; gap: 4px; align-items: stretch; animation: toastin 0.22s ease-out; }
 #toast.on.keep-chip { align-self: start; transform: translateY(calc(-100% - 6px)); animation: none; z-index: 8; }
 @keyframes toastin { from { transform: translateY(8px); } }
-#app.toasting #preview > * , #app.toasting #preview { color: transparent; }
+#app.toasting #preview *, #app.toasting #preview { color: transparent; }
 body.reduce #toast.on { animation: none; }
 #toast button { min-height: 44px; display: flex; gap: 10px; align-items: center; text-align: left; padding: 6px 12px; border-radius: 10px; border: 1.5px solid #6E4B1E; background: linear-gradient(160deg, #FBF3D9, #F0D57A 70%, #D9B85A); color: #2A1E0C; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
 #toast .toast-main { flex: 1; min-width: 0; }
@@ -760,6 +761,12 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   #preview { min-height: 56px; padding: 4px 10px; font-size: 0.92em; }   /* two lines (was 40px, one): a refusal or a bark no longer moves the rack and the buttons under a thumb */
   #preview .bark { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }   /* the quote takes at most the two lines the strip holds; what was played is in the ledger */
   #preview .said:not(.stall):not(.sq-tip) { display: none; }
+  /* the words and points wrap beside the buttons, not above them, so a hint or a Challenge play does not push the rack down */
+  #preview.ok { gap: 4px 8px; }
+  #preview.ok .pv { flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; line-height: 1.15; }
+  #preview .words { overflow-wrap: anywhere; }
+  #preview .extra { padding: 1px 7px; }
+  #preview.hintlive .bdbtn { width: 7em; padding: 2px 6px; border-radius: 14px; line-height: 1.15; }
   #rackbar { padding: 8px 4px 12px; }
   .abtn { min-height: 52px; font-size: 0.8em; }
   .abtn kbd { display: none; }
@@ -942,12 +949,44 @@ body.theme-dark .coach-card { background: linear-gradient(160deg, #2E2A44, #3A34
     grid-template-rows: auto auto auto auto auto auto auto minmax(0, 1fr);
     grid-template-areas: "top" "springs" "board" "coach" "preview" "rack" "actions" "ledger";
   }
-  #app.coaching #coach { grid-area: coach; overflow-y: visible; }
+  #app.coaching #coach { grid-area: coach; }
+}
+/* phones held sideways: the same place, and the ledger stays */
+@media (max-height: 520px) and (min-height: 360px) and (min-aspect-ratio: 1/1) {
+  #app.coaching {
+    grid-template-rows: auto auto auto auto auto auto minmax(0, 1fr);
+    grid-template-areas: "board top" "board springs" "board coach" "board preview" "board rack" "board actions" "board ledger";
+  }
+  #app.coaching #coach { grid-area: coach; }
+}
+/* a compact strip: the words beside the buttons, above them where there is no room */
+@media (max-width: 860px), (max-aspect-ratio: 1/1), (max-height: 520px) {
+  #coach { max-height: none; min-height: auto; overflow: visible; }
   #app.coaching #ledger { display: block; }
-  #coach .coach-card { gap: 4px 8px; padding: 6px 10px; border-radius: 10px; }
+  #coach .coach-card { display: flex; flex-wrap: wrap; gap: 4px 8px; padding: 5px 8px 5px 10px; border-radius: 10px; }
   #coach .coach-ic svg { width: 22px; height: 22px; }
-  #coach .coach-card p { font-size: 0.9em; line-height: 1.25; }
-  #coach .coach-card .btn { min-height: 44px; padding: 4px 12px; font-size: 0.88em; }
+  #coach .coach-card p { flex: 1 1 8em; font-size: 0.86em; line-height: 1.2; }
+  #coach .coach-btns { margin-left: auto; gap: 6px; }
+  #coach .coach-card .btn { min-height: 44px; padding: 4px 10px; font-size: 0.84em; letter-spacing: 0; }
+}
+/* no spare height (short phones, tablets): the tip takes the preview strip's place while that has nothing to say, so nothing is covered or moved */
+@media (max-width: 860px) and (min-height: 521px) and (min-aspect-ratio: 47/100), (min-aspect-ratio: 47/100) and (max-aspect-ratio: 1/1), (max-height: 359px) and (min-aspect-ratio: 1/1) {
+  #app.coaching {
+    grid-template-rows: auto auto auto auto auto auto minmax(0, 1fr);
+    grid-template-areas: "top" "springs" "board" "preview" "rack" "actions" "ledger";
+  }
+  #app.coaching #coach { grid-area: preview; align-self: stretch; }
+  #app.coaching #preview.idle, #app.coaching #preview:not(.idle) ~ #coach, #app.toasting #coach { visibility: hidden; }
+  #coach .coach-card { min-height: 100%; }
+  #coach .coach-ic { display: none; }
+  #coach .coach-card p { flex-basis: 7em; }
+}
+@media (max-width: 380px) {
+  #coach .coach-card { padding: 4px 6px 4px 8px; gap: 4px 6px; }
+  #coach .coach-card .btn { padding: 4px 7px; }
+}
+@media (max-height: 359px) and (min-aspect-ratio: 1/1) {
+  #app.coaching { grid-template-rows: auto auto auto auto auto minmax(0, 1fr); grid-template-areas: "board top" "board springs" "board preview" "board rack" "board actions" "board ledger"; }
 }
 .coach-target { outline: 3px solid #F3DD8B; outline-offset: 3px; border-radius: 12px; animation: coachpulse 1.6s ease-in-out infinite; }
 #boardwrap.coach-target { outline: 0; animation: none; }
