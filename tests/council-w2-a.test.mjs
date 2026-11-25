@@ -1,6 +1,6 @@
 // Wave 2, batch A: S5-01 (music and ambience) and S5-03 (cue variation).
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
-const BPM = { lobby: 62, table: 72, finale: 84 };   // the bar is four beats
+const BPM = { lobby: 62, table: 72, finale: 84, dusk: 66 };   // the bar is four beats
 const settingsKey = 'hs-letters-settings-v1';
 const stored = (t) => t.page.evaluate((k) => JSON.parse(localStorage.getItem(k) || '{}'), settingsKey);
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -13,7 +13,7 @@ export const tests = [
     async run(t) {
       await ready(t);
       const l = await t.game('audioList');
-      t.equal(JSON.stringify(l.music), JSON.stringify(['lobby', 'table', 'finale']), 'three tunes: the lobby, the table and the results');
+      t.equal(JSON.stringify(l.music), JSON.stringify(['lobby', 'table', 'finale', 'dusk']), 'four tunes: the lobby, the table, the results and (W4-S5-02) the results after a loss');
       t.equal(JSON.stringify(l.ambience), JSON.stringify(['bathhouse']), 'one bed');
     },
   },
@@ -79,7 +79,7 @@ export const tests = [
       }
       const loudest = Math.max(...Object.values(peaks).map((p) => Math.max(...p)));
       const bed = (await t.game('audioRender', 'bathhouse', 30)).peak;
-      for (const n of ['lobby', 'table', 'finale']) {
+      for (const n of ['lobby', 'table', 'finale', 'dusk']) {
         const m = (await t.game('audioRender', n, 60)).peak;
         t.expect(m + bed + loudest < 0.95, `${n} + bed + loudest cue stays under 0.95 (${(m + bed + loudest).toFixed(2)})`);
       }

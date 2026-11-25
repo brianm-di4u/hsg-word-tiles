@@ -177,7 +177,7 @@ export const tests = [
       await t.checkLayout({ allowScrollY: true });
       await t.shot('W1-S3-03-daily-hud');
 
-      // Verify music intensity ramp across turns 1..7 (0), turns 8-9 (0.5), turn 10 (0.85), plus .par-pip.met when score beats par
+      // Verify music intensity ramp across turn 1 (0), turns 8-9 (0.55), turn 10 (0.9) (W4-S5-02; 0.5 and 0.85 before), plus .par-pip.met when score beats par
       const checkTurn = async (turnsLeft, score) => {
         const st = (await t.state()).game;
         st.daily.turns = turnsLeft;
@@ -198,17 +198,17 @@ export const tests = [
       for (let k = 0; k < 7; k++) await t.game('act', 'pass');
       await t.waitIdle(5000);
       t.equal((await t.page.textContent('#turnline .daily-turn')).trim(), 'Turn 8 / 10', 'Turn 8 badge updated');
-      t.equal((await t.page.evaluate(() => window.__game.audioState().intensity)), 0.5, 'Turn 8 (3 turns left) ramps music intensity to 0.5');
+      t.equal((await t.page.evaluate(() => window.__game.audioState().intensity)), 0.55, 'Turn 8 (3 turns left) ramps music intensity to 0.55');
 
       await t.game('act', 'pass');
       await t.waitIdle(5000);
       t.equal((await t.page.textContent('#turnline .daily-turn')).trim(), 'Turn 9 / 10', 'Turn 9 badge updated');
-      t.equal((await t.page.evaluate(() => window.__game.audioState().intensity)), 0.5, 'Turn 9 (2 turns left) holds music intensity at 0.5');
+      t.equal((await t.page.evaluate(() => window.__game.audioState().intensity)), 0.55, 'Turn 9 (2 turns left) holds music intensity at 0.55');
 
       await t.game('act', 'pass');
       await t.waitIdle(5000);
       t.equal((await t.page.textContent('#turnline .daily-turn')).trim(), 'Turn 10 / 10', 'Turn 10 badge updated');
-      t.equal((await t.page.evaluate(() => window.__game.audioState().intensity)), 0.85, 'Turn 10 (1 turn left) ramps music intensity to 0.85');
+      t.equal((await t.page.evaluate(() => window.__game.audioState().intensity)), 0.9, 'Turn 10 (1 turn left) ramps music intensity to 0.9');
 
       // Verify .par-pip.met lights up when score exceeds par threshold
       const stHigh = await checkTurn(1, 999);

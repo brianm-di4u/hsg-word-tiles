@@ -1,5 +1,5 @@
 // Bathhouse Letters: generative music and ambience, all synthesized (adapted from the Hot Springs Games audio kit).
-// Three tunes (the lobby, the table, the results) and one place (the bathhouse) are written below as data;
+// Four tunes (the lobby, the table, the results and the results after a loss) and one place (the bathhouse) are written below as data;
 // `makeAudioKit` plays them into whatever bus the game gives it and `measureAudio` renders them for the tests.
 
 export function makeAudioKit(ctx, out, opt = {}) {
@@ -369,6 +369,14 @@ export const SCORES = {
     comp: { inst: 'piano', at: [1, 3], gain: 0.013, len: 0.5 },
     lead: { inst: 'mallet', gain: 0.045, vary: 0.3, rest: 0.12, oct: 1 },
     lp: 3600, delay: 0.2, delayBeats: 0.75,
+  },
+  // The results sheet after a loss ("Dusk on the Row"): slower and darker, a soft low piano over a warm pad, coming to rest.
+  // 16 bars at 66 bpm, about 58 s, D dorian.
+  dusk: {
+    bpm: 66, swing: 0.12, key: 62, scale: [0, 2, 3, 5, 7, 9, 10], form: 'AABA', sections: { A: [0, 3, 4, 0], B: [2, 6, 3, 4] },
+    pad: { inst: 'pad', gain: 0.024 }, bass: { inst: 'bass', pattern: 'root', gain: 0.047 },
+    lead: { inst: 'piano', gain: 0.042, vary: 0.3, rest: 0.12, oct: 1, lo: -3, hi: 6 },
+    lp: 2600, delay: 0.18, delayBeats: 1,
   },
 };
 export const SCENES = {

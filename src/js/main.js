@@ -288,30 +288,23 @@ function persistEndgame(s) {
 }
 
 // ---------- music and the bed ----------
-// the lobby tune on the title and setup, the table tune in play, the results tune after the last move; a sheet opened
-// from another screen keeps that screen's tune. The bag running dry quickens the table tune a little, and the steam
-// air of the bed thickens as the board fills.
+// the lobby tune on the title and setup, the table tune in play, the results tune after the last move (a slower one after
+// a loss to the computer); a sheet opened from another screen keeps that screen's tune. The table tune follows the bag, or
+// the turns of a Daily Soak (tableIntensity), and the steam air of the bed thickens as the board fills.
 const SHEETS = ['help', 'settings', 'about', 'register', 'records'];
-const tuneFor = (name) => (SHEETS.includes(name) ? tuneFor(G.back) : name === 'game' ? 'table' : name === 'over' ? 'finale' : 'lobby');
+const tuneFor = (name) => (SHEETS.includes(name) ? tuneFor(G.back) : name === 'game' ? 'table' : name === 'over' ? (G.s && G.s.result && UI.outcome(G.s) === 'loss' ? 'dusk' : 'finale') : 'lobby');
+// 0.5 wakes the brush of SCORES.table, over 0.8 the octave lift
+function tableIntensity(s) {
+  if (s.daily) { const t = s.daily.turns; return t <= 1 ? 0.9 : t <= 3 ? 0.55 : t <= 5 ? 0.3 : 0; }   // turn 10, 8-9, 6-7
+  const b = s.bag.length;
+  return b === 0 ? 0.9 : b < RACK ? 0.6 : b <= 14 ? 0.55 : b <= 45 ? 0.25 : 0;
+}
 function moodUpdate() {
   setTune(tuneFor(G.scene));
   const k = audio.kit, s = G.s;
   if (!k) return;
   const live = s && !s.over && G.scene === 'game';
-  let inten = 0;
-  if (live) {
-    if (s.daily) {
-      if (s.daily.turns <= 1) inten = 0.85;
-      else if (s.daily.turns <= 3) inten = 0.5;
-    } else if (s.bag.length === 0) {
-      inten = 0.9;
-    } else if (s.bag.length < RACK) {
-      inten = 0.6;
-    } else if (s.bag.length < 14) {
-      inten = 0.35;
-    }
-  }
-  k.music.intensity(inten);
+  k.music.intensity(s && !s.over && tuneFor(G.scene) === 'table' ? tableIntensity(s) : 0);   // also on a sheet opened over the table
   k.amb.set('steam', live ? Math.min(1, s.board.filter(Boolean).length / 90) : 0.3, 2);
 }
 const colPan = (i) => ((i % N) - 7) / 7 * 0.7;

@@ -1,4 +1,4 @@
-// Short, quiet WebAudio sounds (adapted from Bathhouse Barons), plus a quiet bathhouse bed and three soft tunes.
+// Short, quiet WebAudio sounds (adapted from Bathhouse Barons), plus a quiet bathhouse bed and four soft tunes.
 // Created on the first user gesture; Sound is the master switch, with Sound effects, Music and Ambience under it.
 // Ceramic clicks for tiles, a soft hiss of steam for bonus words, a brass chime for a Full Soak and a bell for a
 // Featured Spring. No two tile sounds are alike: every cue is nudged in pitch, level and colour as it is made.

@@ -270,18 +270,18 @@ export const tests = [
       });
       await t.waitIdle(6000);
 
-      // 1) Midgame (bag >= 14): intensity 0, no phase callout, no tile counts
+      // 1) Midgame (bag 15 to 45): intensity 0.25 (W4-S5-02; 0 before), no phase callout, no tile counts
       let st = (await t.state()).game;
       st.bag = Array(20).fill('E');
       await t.game('setState', { game: st });
-      t.equal(await t.page.evaluate(() => window.__game.audioState().intensity), 0, 'bag=20 intensity is 0');
+      t.equal(await t.page.evaluate(() => window.__game.audioState().intensity), 0.25, 'bag=20 intensity is 0.25');
       t.equal(await t.page.locator('[data-tiles]').count(), 0, 'no seat tile counts while bag > 0');
 
-      // 2) Approaching endgame (bag < 14, >= 7): progressive ramp to 0.35
+      // 2) Approaching endgame (bag <= 14, >= 7): progressive ramp to 0.55 (W4-S5-02; 0.35 at < 14 before)
       st = (await t.state()).game;
       st.bag = Array(10).fill('E');
       await t.game('setState', { game: st });
-      t.equal(await t.page.evaluate(() => window.__game.audioState().intensity), 0.35, 'bag=10 (< 14) ramps intensity to 0.35');
+      t.equal(await t.page.evaluate(() => window.__game.audioState().intensity), 0.55, 'bag=10 (<= 14) ramps intensity to 0.55');
 
       // 3) Final stretch (bag < 7, > 0): swaps closed callout + intensity 0.6 (activates perc2)
       st = (await t.state()).game;
