@@ -1306,7 +1306,7 @@ function renderGame() {
     if (G.plaqueHi.size) toggle.classList.add('plaque-updated');
     if (G.plaqueFx && G.plaqueFx.claimed.size) fxOn(toggle, 'just-claimed');
     toggle.addEventListener('click', () => {
-      if (G.coach && G.coach.phase === 'plaques') coachDismiss('plaques');
+      if (G.coach && coachBeat(G.coach) === 'plaques') coachDismiss('plaques');
       syncSpringsDrawer(!G.springsOpen);
     });
   }
@@ -1323,7 +1323,7 @@ function renderGame() {
     }
     b.addEventListener('click', () => {
       const f = s.featured[pk];
-      if (G.coach && G.coach.phase === 'plaques') coachDismiss('plaques');
+      if (G.coach && coachBeat(G.coach) === 'plaques') coachDismiss('plaques');
       if (f.by != null) { syncSpringsDrawer(false); openFact(G.lex.entry(f.word).id, f.word); }
       else flash(`Featured Spring: ${f.word.length} letters, ${G.lex.categories[f.cat].name}. Form any form of it to claim +${FEATURED_BONUS}.`);
     });
@@ -1737,27 +1737,42 @@ function closeBreakdown() {
 // A newcomer's first game gets a concise, trigger-gated 4-beat sequence that never auto-expires unseen:
 // (1) Turn 1 center Display Spring + Play, (2) Turn 2 multiplier discs, (3) Turn 3 Hot Springs words & Bathhouse Row,
 // (4) Turn 4 Featured Springs plaques. Each advances on completing the turn or tapping Got it; Skip tips ends them all.
-const COACH_PHASES = ['start', 'discs', 'town', 'plaques'];
+// After Turn 1, beat 3 comes early, the discs waiting a turn, when the player first lays a Hot Springs word or a word on or beside an open Row
+// square (W1-S4-07).
+const COACH_BEATS = ['start', 'discs', 'town', 'plaques'];
+const coachBeat = (c) => (c.town && c.left.includes('town') ? 'town' : c.left[0]);
+const nearRow = (i) => [0, i % 15 ? -1 : 0, i % 15 < 14 ? 1 : 0, -15, 15].some((d) => SQUARES[i + d] === 'B' && !G.s.board[i + d]);
+function coachTown(words, tiles) {   // what there is to say about the town in this play, if anything
+  const w = words.find((x) => x.themed);
+  return w ? { w: w.w, move: G.s.move } : tiles.some((t) => SQUARES[t.i] === 'B' || nearRow(t.i)) ? { row: true } : null;
+}
+const townWord = (c) => (c.town && c.town.move === G.s.move ? c.town.w : '');   // named only on the turn it was laid: the rest is the next player's business too
 let liveTimer = 0;
 const liveSay = (t) => { const live = $('#live'); clearTimeout(liveTimer); live.textContent = ''; liveTimer = setTimeout(() => { live.textContent = t; }, 30); };
 function coachTip() {
   const c = G.coach;
   if (!c || G.scene !== 'game' || !G.s || G.s.over || cur().kind !== 'human' || G.privacy || G.dialog) return null;
   const input = G.input || (matchMedia('(pointer: coarse)').matches ? 'touch' : 'mouse');
-  if (c.phase === 'start') {
+  const beat = coachBeat(c);
+  if (beat === 'start') {
     if (G.staged.length) return { id: 'play', target: '#actions .play', text: ({ touch: 'Happy with it? Tap Play.', mouse: 'Happy with it? Click Play.', key: 'Happy with it? Press Enter.' })[input] };
     return { id: 'start', target: '#boardwrap', text: input === 'key' ? 'Score the most. Type letters to spell across the centre.' : 'Score the most. Drag tiles to the centre square.' };
   }
-  if (c.phase === 'discs') return { id: 'discs', target: '#boardwrap', text: 'Cream 2L/3L discs boost a letter. Dark 2W/3W discs boost the word.' };
-  if (c.phase === 'town') return { id: 'town', target: '#boardwrap', text: 'Hot Springs words (SPA, STEAM, TUB) pay bonuses & cards; Row +20.' };
-  if (c.phase === 'plaques') return { id: 'plaques', target: '#springs', text: `Plaques hide secret words. Form one for +${FEATURED_BONUS}.` };
+  if (beat === 'discs') return { id: 'discs', target: '#boardwrap', text: 'Cream 2L/3L discs boost a letter. Dark 2W/3W discs boost the word.' };
+  if (beat === 'town' && townWord(c)) return { id: 'town', target: '#boardwrap', text: townWord(c) + ': a Hot Springs word! Bonus and card; Row +20.' };
+  if (beat === 'town' && c.town && c.town.row) return { id: 'town', target: '#boardwrap', text: 'Bathhouse Row square: +20 for a Hot Springs word like SPA.' };
+  if (beat === 'town') return { id: 'town', target: '#boardwrap', text: 'Hot Springs words (SPA, STEAM, TUB) pay bonuses & cards; Row +20.' };
+  if (beat === 'plaques') return { id: 'plaques', target: '#springs', text: `Plaques hide secret words. Form one for +${FEATURED_BONUS}.` };
   return null;
 }
 function coachRender() {
   if (!G.settings.tipsSeen && G.s && (!G.coach || G.coach.s !== G.s)) {
-    const played = G.s.log.filter((e) => e.kind === 'play' && G.s.players[e.p].kind === 'human').length;
-    G.coach = { s: G.s, phase: COACH_PHASES[Math.min(played, COACH_PHASES.length - 1)], gone: new Set(), shown: null };
+    const plays = G.s.log.filter((e) => e.kind === 'play' && G.s.players[e.p].kind === 'human');
+    let k = Math.min(plays.length, COACH_BEATS.length - 1);
+    if (k === 2 && coachTown(plays[1].words, plays[1].tiles)) k = 1;   // resumed: the town may have come first, so the discs are not missed
+    G.coach = { s: G.s, left: COACH_BEATS.slice(k), town: null, seen: false, gone: new Set(), shown: null };
   }
+  if (G.coach && G.coach.left[0] !== 'start' && G.staged.length && G.preview && G.preview.ok) G.coach.town = coachTown(G.preview.words, G.staged) || G.coach.town;
   const tip = coachTip(), el = $('#coach');
   document.querySelectorAll('.coach-target').forEach((x) => x.classList.remove('coach-target'));
   if (!tip || G.coach.gone.has(tip.id)) {
@@ -1769,20 +1784,21 @@ function coachRender() {
   const target = $(tip.target); if (target) target.classList.add('coach-target');
   if (G.coach.shown !== tip.id) {
     G.coach.shown = tip.id;
+    const h = tip.id === 'town' && G.staged.length && el.firstElementChild ? el.firstElementChild.getBoundingClientRect().height : 0;   // an early town tip keeps the room the discs had: no board or rack moves under the hand
     el.innerHTML = `<div class="coach-card" role="note"><span class="coach-ic" aria-hidden="true">${UI.ICON.hint}</span><p>${esc(tip.text)}</p><div class="coach-btns"><button class="btn quiet" data-coach="got">Got it</button><button class="btn quiet" data-coach="skip">Skip tips</button></div></div>`;
+    if (h) el.firstElementChild.style.minHeight = `${h}px`;
     el.querySelector('[data-coach="got"]').addEventListener('click', () => coachDismiss(tip.id));
     el.querySelector('[data-coach="skip"]').addEventListener('click', coachEnd);
     liveSay(`Tip: ${tip.text}`);
   } else {
     const p = el.querySelector('p'); if (p && p.textContent !== tip.text) p.textContent = tip.text;
   }
+  if (tip.id === 'town' && (!G.staged.length || getComputedStyle(el).visibility === 'visible')) G.coach.seen = true;
 }
 function coachDismiss(id) {
   const c = G.coach; if (!c) return;
-  if (id === 'plaques') { coachEnd(); return; }
-  const next = { discs: 'town', town: 'plaques' }[id];
-  if (next) { c.phase = next; c.shown = null; } else c.gone.add(id);
-  renderStaging();
+  if (id === 'start' || id === 'play') c.gone.add(id); else coachNext(c, id);
+  if (G.coach) renderStaging();
 }
 function coachEnd() {
   G.coach = null; G.settings.tipsSeen = true; saveSettings();
@@ -1792,9 +1808,12 @@ function coachEnd() {
 // each completed human turn advances the 4-beat onboarding sequence
 function coachPlayed() {
   const c = G.coach; if (!c) return;
-  const next = { start: 'discs', discs: 'town', town: 'plaques' }[c.phase];
-  if (!next) { coachEnd(); return; }
-  c.phase = next; c.shown = null; c.gone.clear();
+  coachNext(c, c.seen ? coachBeat(c) : c.left[0]);   // an early town beat that never had room to show (short phones, a word placed) waits for the next turn
+}
+function coachNext(c, done) {
+  c.left = c.left.filter((b) => b !== done);
+  if (!c.left.length) { coachEnd(); return; }
+  c.shown = null; c.gone.clear();
 }
 
 // ---------- dialogs ----------
