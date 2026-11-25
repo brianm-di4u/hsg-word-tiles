@@ -2812,7 +2812,8 @@ function onKey(e) {
     return;
   }
   if (G.springsOpen && k === 'Escape') { e.preventDefault(); syncSpringsDrawer(false); $('#springs [data-springs-toggle]')?.focus(); return; }
-  if (k === 'Escape' && $('#toast')?.classList.contains('on')) { e.preventDefault(); hideToast(); return; }
+  // Escape shuts a banner; with no placed tiles to look after, the same press goes on to the menu
+  if (k === 'Escape' && $('#toast')?.classList.contains('on')) { e.preventDefault(); hideToast(); if (!G.staged.length) openDialog('pause'); return; }
   if (!humanCanAct()) { if (k === 'Escape') { e.preventDefault(); openDialog('pause'); } return; }
   const c = G.cursor;
   const move = (dr, dc) => { const r = Math.floor(c.i / N) + dr, col = (c.i % N) + dc; if (r >= 0 && r < N && col >= 0 && col < N) c.i = r * N + col; c.on = true; $('#board').focus({ preventScroll: true }); ensureVisible(c.i); draw(); sayCursor(c.i); };   // the focus goes with the cursor, so Enter plays instead of pressing a button left focused

@@ -216,12 +216,15 @@ export const tests = [
       await t.game('setState', { game: s.game });
       await t.waitIdle(5000);
 
-      // 1) Escape dismisses a live toast without opening Pause
+      // 1) with nothing placed, one Escape dismisses a live toast and opens the menu (ruling 23: Read the board stays one Escape away; with tiles placed it only dismisses the toast, below)
       await t.game('act', 'toast', { kind: 'soak', title: 'Full Soak! +40', sub: 'All seven tiles played.' });
       await t.page.waitForSelector('#toast.on', { timeout: 3000 });
       await t.page.keyboard.press('Escape');
       await t.page.waitForFunction(() => !document.querySelector('#toast').classList.contains('on'), null, { timeout: 3000 });
-      t.equal((await t.state()).dialog, null, 'Escape dismissed toast without opening Pause');
+      t.equal((await t.state()).dialog, 'pause', 'the same Escape opened the menu');
+      t.expect(await t.page.isVisible('#modal [data-open="boardtext"]'), 'Read the board is in it');
+      await t.page.keyboard.press('Escape');
+      t.equal((await t.state()).dialog, null, 'the next Escape closes the menu');
 
       // 2) Pressing down on a rack tile (rackDown, before any drag motion) clears a transient toast immediately
       await t.game('act', 'toast', { kind: 'bark', title: 'Opal Vance: TEA +18', sub: '“Nice warm cup.”' });
@@ -249,6 +252,7 @@ export const tests = [
       await t.page.keyboard.press('Escape');
       await t.page.waitForFunction(() => !document.querySelector('#toast').classList.contains('on'), null, { timeout: 3000 });
       t.equal((await t.state()).staged.length, 6, 'Escape dismissed toast without recalling staged tiles');
+      t.equal((await t.state()).dialog, null, 'and without opening the menu over them');
 
       // 4) Empty-square premium & Bathhouse Row tooltips render as a quiet .sq-tip sub-line beneath live #preview during active staging
       const inspectCell = async (idx) => {
