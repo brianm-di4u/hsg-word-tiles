@@ -223,7 +223,8 @@ export function casualAudience(s) {
 
 // The hint: up to three different plays for a human seat, best Medium-strength play first (score plus half the value of the tiles kept),
 // each with the tiles it keeps. In Easy/Medium games, prefers SCOWL common words and Hot Springs bonus words whenever one sits within
-// HINT_COMMON_GAP equity points of the raw best (W1-S3-06), and when n >= 2 surfaces a competitive Hot Springs bonus word (within
+// HINT_COMMON_GAP equity points of the raw best (W1-S3-06); on the game's opening play it always sets an everyday or Hot Springs word,
+// and a rarer word further ahead than that waits in the last choice (W6-S1-01, CD-WF1-05). When n >= 2 surfaces a competitive Hot Springs bonus word (within
 // HINT_THEMED_GAP equity of the best choice) among the choices if none already made the top n (W1-S5-03). Two plays that make the
 // same words count as one. Empty when nothing fits.
 export function hintChoices(dict, lex, s, n = 3) {
@@ -257,6 +258,7 @@ export function hintChoices(dict, lex, s, n = 3) {
     .map((m) => { const keep = rackMinus(p.rack, m.tiles); return { m, keep, common: casual ? teachable(m) : true, e: m.score + leaveValue(keep) * bagScale }; })
     .sort((a, b) => b.e - a.e || (a.m.key < b.m.key ? -1 : 1));
   const ordered = [];
+  let rareLast = null;
   if (casual) {
     const bestAll = ranked[0];
     const commons = ranked.filter((r) => r.common);
@@ -264,7 +266,9 @@ export function hintChoices(dict, lex, s, n = 3) {
     if (commons.length && bestAll.e - commons[0].e <= HINT_COMMON_GAP) {
       ordered.push(...commons, ...rares);
     } else {
-      if (bestAll && !bestAll.common) ordered.push(bestAll);
+      const opening = commons.length > 0 && !s.board.some(Boolean);
+      if (opening) rareLast = n >= 3 ? bestAll : null;
+      else if (bestAll && !bestAll.common) ordered.push(bestAll);
       ordered.push(...commons, ...rares);
     }
   } else {
@@ -276,13 +280,14 @@ export function hintChoices(dict, lex, s, n = 3) {
     if (seen.has(k)) continue;
     seen.add(k);
     picked.push(r);
-    if (picked.length >= n) break;
+    if (picked.length >= n - (rareLast ? 1 : 0)) break;
   }
   if (n >= 2 && lex && picked.length >= 2 && !picked.some((r) => r.m.bonus > 0)) {
     const topE = picked[0].e;
     const themed = ordered.find((r) => r.m.bonus > 0 && (!casual || r.common) && !seen.has(r.m.words.join(',')) && topE - r.e <= HINT_THEMED_GAP);
     if (themed) picked[picked.length - 1] = themed;
   }
+  if (rareLast && !picked.includes(rareLast)) picked.push(rareLast);
   return picked.map(({ m, keep }) => ({ tiles: m.tiles, score: m.score, words: m.words, keep }));
 }
 // The best of them, or null.

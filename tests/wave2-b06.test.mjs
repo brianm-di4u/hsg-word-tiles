@@ -63,8 +63,18 @@ export const tests = [
       const bestRaw3 = m3.map((m) => ({ m, e: eq(m) })).sort((a, b) => b.e - a.e)[0];
       const bestCom3 = m3.filter((m) => m.words.every((w) => isTeachableWord(c.dict, c.lex, w))).map((m) => ({ m, e: eq(m) })).sort((a, b) => b.e - a.e)[0];
       t.expect(bestRaw3.e - bestCom3.e > HINT_COMMON_GAP, `seed 3 equity gap ${(bestRaw3.e - bestCom3.e).toFixed(1)} exceeds ${HINT_COMMON_GAP}`);
+      // W6-S1-01 (wave 3): on the opening play the first choice is always teachable and the far-ahead rare play waits in slot 3.
+      const gapOpen = hintChoices(c.dict, c.lex, sGap, 3);
+      t.expect(gapOpen[0].words.every((w) => isTeachableWord(c.dict, c.lex, w)), `opening Slot 1 is teachable (${gapOpen[0].words.join('+')})`);
+      t.equal(gapOpen[2].words[0], bestRaw3.m.words[0], `opening Slot 3 keeps ${bestRaw3.m.words[0]}`);
+      // Later in the game (AT on the board) the fallback is as it was.
+      sGap.board[112] = { l: 'A', blank: false }; sGap.board[113] = { l: 'T', blank: false };
+      const mLater = generateMoves(c.dict, sGap.board, sGap.players[0].rack, { lex: c.lex, featured: [] }).moves;
+      const bestRawL = mLater.map((m) => ({ m, e: eq(m) })).sort((a, b) => b.e - a.e)[0];
+      const bestComL = mLater.filter((m) => m.words.every((w) => isTeachableWord(c.dict, c.lex, w))).map((m) => ({ m, e: eq(m) })).sort((a, b) => b.e - a.e)[0];
+      t.expect(bestRawL.e - bestComL.e > HINT_COMMON_GAP, `later equity gap ${(bestRawL.e - bestComL.e).toFixed(1)} exceeds ${HINT_COMMON_GAP}`);
       const gapHints = hintChoices(c.dict, c.lex, sGap, 3);
-      t.equal(gapHints[0].words[0], bestRaw3.m.words[0], `falls back to ${bestRaw3.m.words[0]} when >${HINT_COMMON_GAP} eq ahead`);
+      t.equal(gapHints[0].words[0], bestRawL.m.words[0], `falls back to ${bestRawL.m.words[0]} when >${HINT_COMMON_GAP} eq ahead`);
       t.expect(gapHints[1].words.every((w) => isTeachableWord(c.dict, c.lex, w)), `Slot 2 still offers teachable play (${gapHints[1].words.join('+')})`);
 
       // 5. Invariant across 100 opening seeds (Easy): Slot 1 is NEVER obscure when a teachable move sits within HINT_COMMON_GAP.
