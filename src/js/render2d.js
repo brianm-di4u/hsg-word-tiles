@@ -463,19 +463,37 @@ function drawTileValue(ctx, val, x, y, px, twoDigit) {
   }
 }
 
+// A blank Steam tile (W1-S5-04): a frosted sea-glass glaze, a fine inner chamfer and three engraved steam curls, crisp while it has no
+// letter (rack, drag) and faint behind one. Marks, not colour alone: the curls and the missing value also tell it from a lettered tile.
+const STEAM_INK = '#144B48', STEAM_CURLS = 'M8 20c-2-3 2-5 0-8s2-5 0-8M12 20c-2-3 2-5 0-8s2-5 0-8M16 20c-2-3 2-5 0-8s2-5 0-8';
+const STEAM_GLAZE = { light: ['#E6F3F0', '#DCEEEA', '#CFE6E2'], dark: ['#DDEAE6', '#D3E3DF', '#C3D8D4'] };
+function steamGlaze(ctx, x, y, s, r, l) {
+  const line = (d, color) => { const g = s * d; roundRect(ctx, x + g, y + g, s - g * 2, s - g * 2, r); ctx.strokeStyle = color; ctx.lineWidth = Math.max(0.8, s * 0.018); ctx.stroke(); };
+  ctx.save();
+  line(0.07, 'rgba(20,75,72,0.30)'); line(0.093, 'rgba(255,255,255,0.75)');
+  const k = s * 0.66 / 24, path = new Path2D(STEAM_CURLS);
+  ctx.translate(x + s * 0.5 - 12 * k, y + s * 0.5 - 12 * k); ctx.scale(k, k);
+  ctx.lineCap = 'round'; ctx.lineWidth = 2;
+  if (!l) { ctx.translate(0.5, 0.6); ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.stroke(path); ctx.translate(-0.5, -0.6); }   // the lit lip of the engraving
+  ctx.strokeStyle = l ? 'rgba(20,75,72,0.10)' : 'rgba(20,75,72,0.72)'; ctx.stroke(path);
+  ctx.restore();
+}
+
 // The flat top of a 3D tile: board3d.js maps the flat ceramic crown [-0.38..+0.38] to [0..1] UVs (W3-S1-01),
 // so 100% of face texels sit cleanly inside the bevel. Exported so board3d.js paints directly into its 2048x1024 atlas (W3-S4-01).
 export function paintFace(ctx, l, blank, w, theme = 'light') {
   const g = ctx.createLinearGradient(0, 0, w, w);
-  if (theme === 'dark') { g.addColorStop(0, '#F2EADB'); g.addColorStop(0.6, '#EDE5D4'); g.addColorStop(1, '#DFD5BE'); }
+  if (blank) STEAM_GLAZE[theme === 'dark' ? 'dark' : 'light'].forEach((c, k) => g.addColorStop([0, 0.6, 1][k], c));
+  else if (theme === 'dark') { g.addColorStop(0, '#F2EADB'); g.addColorStop(0.6, '#EDE5D4'); g.addColorStop(1, '#DFD5BE'); }
   else { g.addColorStop(0, '#FFFDF5'); g.addColorStop(0.6, '#FAF3E3'); g.addColorStop(1, '#F0E6CE'); }
   ctx.fillStyle = g; ctx.fillRect(0, 0, w, w);
+  if (blank) steamGlaze(ctx, 0, 0, w, w * 0.1, l);
   if (!l) return;
   const isQ = l === 'Q', val = VALUE[l], twoDigit = !blank && val >= 10;
   ctx.save();
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   ctx.font = `800 ${w * (isQ ? 0.56 : 0.62)}px ${FONT_TILE}`;
-  ctx.fillStyle = blank ? '#1F6F6B' : '#0F1713';
+  ctx.fillStyle = blank ? STEAM_INK : '#0F1713';
   const m = ctx.measureText(l), asc = m.actualBoundingBoxAscent || w * 0.38;
   ctx.fillText(l, w * (isQ ? 0.42 : 0.47), w * (isQ ? 0.47 : 0.50) + asc / 2 - (isQ ? w * 0.05 : w * 0.02));
   if (!blank) {
@@ -509,7 +527,8 @@ export function tileSprite(l, blank, w, kind = 'board', theme = 'light') {
   const inset = w * 0.05, s = w - inset * 2, r = s * 0.14;
   // body
   const g = ctx.createLinearGradient(inset, inset, inset + s, inset + s);
-  if (theme === 'dark') { g.addColorStop(0, '#F2EADB'); g.addColorStop(0.6, '#EDE5D4'); g.addColorStop(1, '#DDD2B9'); }
+  if (blank) STEAM_GLAZE[theme === 'dark' ? 'dark' : 'light'].forEach((c, k) => g.addColorStop([0, 0.6, 1][k], c));
+  else if (theme === 'dark') { g.addColorStop(0, '#F2EADB'); g.addColorStop(0.6, '#EDE5D4'); g.addColorStop(1, '#DDD2B9'); }
   else { g.addColorStop(0, '#FFFDF5'); g.addColorStop(0.6, '#F8F0DE'); g.addColorStop(1, '#EAE0C7'); }
   roundRect(ctx, inset, inset, s, s, r); ctx.fillStyle = g; ctx.fill();
   // edge: dark lower bevel, bright upper rim
@@ -521,12 +540,13 @@ export function tileSprite(l, blank, w, kind = 'board', theme = 'light') {
   const hg = ctx.createRadialGradient(inset + s * 0.28, inset + s * 0.2, 0, inset + s * 0.28, inset + s * 0.2, s * 0.55);
   hg.addColorStop(0, 'rgba(255,255,255,0.55)'); hg.addColorStop(1, 'rgba(255,255,255,0)');
   roundRect(ctx, inset, inset, s, s, r); ctx.fillStyle = hg; ctx.fill();
+  if (blank) steamGlaze(ctx, inset, inset, s, r * 0.8, l);
   // letter and value (W3-S1-01: unified upper-left anchor, lifted/scaled Q, compact tight-tracked two-digit '10')
   if (l) {
     const isQ = l === 'Q', val = VALUE[l], twoDigit = !blank && val >= 10;
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     ctx.font = `800 ${w * (isQ ? 0.56 : 0.62)}px ${FONT_TILE}`;
-    ctx.fillStyle = blank ? '#1F6F6B' : '#0F1713';
+    ctx.fillStyle = blank ? STEAM_INK : '#0F1713';
     const m = ctx.measureText(l);
     const asc = m.actualBoundingBoxAscent || w * 0.40;
     ctx.fillText(l, w * (isQ ? 0.42 : 0.47), w * (isQ ? 0.47 : 0.50) + asc / 2 - (isQ ? w * 0.05 : w * 0.02));
