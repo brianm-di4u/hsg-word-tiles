@@ -88,7 +88,7 @@ and ≤ 1.2 s (Hard) at 4× throttle.
 12. Engine scores match an independent reference scorer on 50,000 random plays.
 
 ### Turns and ending
-13. Swap 1–7 tiles when the bag has ≥ 7; the turn passes; swapped tiles go to the bag bottom.
+13. Swap 1–7 tiles when the bag has ≥ 7; the turn passes; the swapped tiles are mixed back into the bag.
 14. Pass ends the turn.
 15. The game ends when a player goes out on an empty bag or after two scoreless rounds; rack penalties and the go-out bonus apply.
 16. The game-over screen shows final scores, winner(s), each player's best word and the bonus words played.

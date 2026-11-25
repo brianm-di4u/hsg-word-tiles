@@ -186,7 +186,11 @@ export function apply(s, action, ctx) {
     if (!left) return { ok: false, error: 'Those tiles are not on your rack.' };
     p.rack = left;
     draw(s, p);
+    // The returned tiles are mixed back into the bag (W1-S2-03), so they can come up again at any point. The shuffle's own stream starts from
+    // rng.bag and the move: a seed and the same turns give the same bag, whatever order the tiles were picked in, and rng.bag itself goes
+    // on as it would have, so a swap changes none of the letters a Daily's fog clears. The Daily's par (par.js) keeps the old order.
     s.bag.push(...letters.slice().sort());
+    if (!ctx.swapToEnd) shuffle({ rng: { bag: seedState(s.rng.bag ^ Math.imul(s.move + 1, 0x9e3779b9)) } }, 'bag', s.bag);
     entry = { p: s.cur, kind: 'swap', n: s.move, count: letters.length, score: 0, rack };
     s.scoreless++;
   } else if (action.type === 'pass') {

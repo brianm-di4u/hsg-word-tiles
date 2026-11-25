@@ -61,8 +61,11 @@ Racks are arrays of letters, `'?'` for a blank. A placed blank stores the letter
 - The log entry keeps each word's base score and bonus separately, so the UI can show the breakdown.
 
 ### Swaps and passes
-- Swap 1–7 rack tiles while at least 7 tiles are in the bag: draw first, then the returned tiles go to the
-  **bottom** of the bag in alphabetical order (no shuffle, so a seed fixes the whole draw sequence).
+- Swap 1–7 rack tiles while at least 7 tiles are in the bag: draw first, then the returned tiles are
+  **mixed back into** the bag: it is shuffled by a stream started from `rng.bag` and the move number, which leaves `rng.bag`
+  itself as it was, so a seed and the same turns still fix the whole draw sequence (and the letters a Daily's fog clears).
+  Until wave 4 they went to the bottom in alphabetical order. The Daily's par still plays it that way (`swapToEnd` in
+  `par.js`), so a date's par is unchanged.
 - Pass: nothing changes.
 - **Challenge mode** (an option in the setup, off by default; a game keeps the rule it started with, `challenge: true` in its state): a play with a word that is not in the dictionary is not refused but costs the turn, as a pass, and the lost turn is logged with the word (`challenge`). While it is on, the live preview does not check the dictionary (`evaluate` with `skipDict`) and the Help word check is off. Never in the Daily.
 - A swap, a pass, or a play that scores 0 counts as scoreless.

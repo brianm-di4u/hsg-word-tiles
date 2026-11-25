@@ -155,12 +155,14 @@ export const tests = [
     name: 'swap and pass', node: true,
     async run(t) {
       const { s, c } = await game(['ABCDEFG', 'HIJKLMN']);
-      const before = s.bag.slice(0, 2);
+      const before = s.bag.slice(0, 2), rest = s.bag.slice(2);
       const r = apply(s, { type: 'swap', letters: ['G', 'A'] }, c);
       t.expect(r.ok, r.error);
       t.equal(s.players[0].rack.length, 7, 'rack refilled');
       t.equal(JSON.stringify(s.players[0].rack.slice(5)), JSON.stringify(before), 'drew from the top');
-      t.equal(JSON.stringify(s.bag.slice(-2)), JSON.stringify(['A', 'G']), 'returned to the bottom in order');
+      // W1-S2-03: they used to go to the bottom in order ('A', 'G' as the last two); now they are mixed back in
+      t.equal(JSON.stringify(s.bag.slice().sort()), JSON.stringify([...rest, 'A', 'G'].sort()), 'the returned tiles are in the bag, and nothing else changed in it');
+      t.expect(JSON.stringify(s.bag) !== JSON.stringify([...rest, 'A', 'G']), 'mixed in, not put on the bottom');
       t.equal(s.cur, 1, 'turn passed');
       t.expect(apply(s, { type: 'pass' }, c).ok, 'pass');
       t.equal(s.scoreless, 2, 'two scoreless turns');
