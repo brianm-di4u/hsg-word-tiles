@@ -182,7 +182,7 @@ export function scoresHtml(s, compact) {
   }).join('');
 }
 
-const CAT_SHORT = { baths: 'Row', springs: 'Springs', park: 'Park', track: 'Track', club: 'Club', town: 'Town' };
+export const CAT_SHORT = { baths: 'Row', springs: 'Springs', park: 'Park', track: 'Track', club: 'Club', town: 'Town' };
 const ownerShort = (p) => (p && p.persona && SHORT[p.persona]) || (p ? seatMono(p.name) || p.name.split(' ')[0] : '');
 
 // when a letter clears by itself (engine.js fogStep)

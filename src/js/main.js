@@ -857,7 +857,8 @@ function afterAction(entry, fromAi) {
     if (fogRevealed) later(s, 80, () => sfx('reveal'));
   }
   if (fromAi && !s.over && cur().kind === 'human') later(s, landed * 1000 + (aiInstant ? 120 : 300), () => { if (!s.over && cur().kind === 'human') sfx('yourturn'); });   // the hand-over, once the computer's move has landed
-  announce(entry);
+  const cats = new Set((entry.words || []).map((w) => w.themed && G.lex.byId.get(w.themed)?.cat));
+  announce(entry, fogRevealed && s.featured.some((f, k) => f.by == null && cats.has(f.cat) && prevPlaqueSnap[k] && f.shown.length > prevPlaqueSnap[k].shown));
   moodUpdate();
   if (cur().kind === 'human' && !fromAi) G.lastHuman = s.cur;
   if (s.over) persistEndgame(s);
@@ -1006,10 +1007,10 @@ function celebrate(e, bark, wait = 0, prevPlaqueSnap = null, extra = {}) {
   if (!e.full && bark && bark.event === 'big') tell({ kind: 'bark', who, title: `${p.name}: ${e.words[0].w} +${e.score}`, sub: quote('big') });
 }
 
-function announce(e) {
+function announce(e, catReveal = false) {
   const p = G.s.players[e.p];
   let t;
-  if (e.kind === 'play') t = `${p.name} played ${e.words.map((w) => w.w).join(' and ')} for ${e.score}${e.themed ? `, including a Hot Springs bonus of ${e.themed}` : ''}${e.full ? ', with a Full Soak' : ''}${e.rowReveal ? ', clearing a Featured Spring letter' : ''}.`;
+  if (e.kind === 'play') t = `${p.name} played ${e.words.map((w) => w.w).join(' and ')} for ${e.score}${e.themed ? `, including a Hot Springs bonus of ${e.themed}` : ''}${e.full ? ', with a Full Soak' : ''}${e.rowReveal || catReveal ? ', clearing a Featured Spring letter' : ''}.`;
   else if (e.challenge) t = `${p.name} played ${e.challenge}, which is not in the dictionary, and lost the turn.`;
   else t = e.kind === 'swap' ? `${p.name} swapped ${UI.plural(e.count, 'tile')}.` : `${p.name} passed.`;
   liveSay(t);
@@ -1491,7 +1492,9 @@ function renderPreview() {
     const p = G.preview;
     if (p.ok) {
       const rowCanReveal = G.staged.some((t) => SQUARES[t.i] === 'B') && G.s.featured.some((f) => f.by == null && f.shown.length < E.featuredRevealCap(G.s, f));
-      html = `<span class="pv"><span class="words">${p.words.map((w) => `<b class="${w.themed ? 'themed' : ''}">${w.themed ? UI.ICON.steam : ''}${w.w}</b>`).join(' ')}</span><span class="pts">${p.score}<small> pts</small></span>${p.themed ? `<span class="extra">${UI.ICON.steam} +${p.themed}</span>` : ''}${p.full ? `<span class="extra">Full Soak +${FULL_SOAK}</span>` : ''}${p.featured ? `<span class="extra">Featured +${p.featuredBonus || FEATURED_BONUS}</span>` : ''}${rowCanReveal ? '<span class="extra row-reveal">Row · clears 1 plaque letter</span>' : ''}${G.s.challenge ? '<span class="extra">words checked when you play</span>' : ''}${hintLive() ? `<span class="extra">keeps ${G.hintAlts[G.hintIx].keep.length ? G.hintAlts[G.hintIx].keep.map((l) => (l === '?' ? 'blank' : l)).join('') : 'nothing'}</span>` : ''}</span>`;
+      const cats = new Set(p.words.map((w) => w.themed && G.lex.byId.get(w.themed).cat)), won = p.featuredAll || [];
+      const catReveal = rowCanReveal ? null : G.s.featured.find((f) => f.by == null && cats.has(f.cat) && !won.includes(f.word) && f.shown.length < E.featuredRevealCap(G.s, f));   // a Hot Springs word of a plaque's own kind
+      html = `<span class="pv"><span class="words">${p.words.map((w) => `<b class="${w.themed ? 'themed' : ''}">${w.themed ? UI.ICON.steam : ''}${w.w}</b>`).join(' ')}</span><span class="pts">${p.score}<small> pts</small></span>${p.themed ? `<span class="extra">${UI.ICON.steam} +${p.themed}</span>` : ''}${p.full ? `<span class="extra">Full Soak +${FULL_SOAK}</span>` : ''}${p.featured ? `<span class="extra">Featured +${p.featuredBonus || FEATURED_BONUS}</span>` : ''}${rowCanReveal ? '<span class="extra row-reveal">Row · clears 1 plaque letter</span>' : catReveal ? `<span class="extra row-reveal">${UI.CAT_SHORT[catReveal.cat]} · clears 1 plaque letter</span>` : ''}${G.s.challenge ? '<span class="extra">words checked when you play</span>' : ''}${hintLive() ? `<span class="extra">keeps ${G.hintAlts[G.hintIx].keep.length ? G.hintAlts[G.hintIx].keep.map((l) => (l === '?' ? 'blank' : l)).join('') : 'nothing'}</span>` : ''}</span>`;
       if (hintLive()) html += `<button type="button" class="bdbtn" data-hintnext aria-label="Show another Spring Guide play, ${G.hintIx + 1} of ${G.hintAlts.length} shown">Other plays ${G.hintIx + 1}/${G.hintAlts.length}</button>`;
       html += `<button type="button" class="bdbtn" aria-expanded="${G.breakdown}">${G.breakdown ? 'Hide' : 'How it scores'}</button>`;
       if (G.breakdown) html += UI.breakdownHtml(p, G.s.board, G.staged);
