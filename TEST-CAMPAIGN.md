@@ -8,7 +8,7 @@ for every defect fixed (`DEV-PLAN.md` §5 is the defect log).
 | File | Kind | What it checks |
 |---|---|---|
 | `tests/01-dict` | Node | The packed dictionary decodes to exactly ENABLE minus the blocklist (168,271 words, hash-checked); common flags; lookups at the edges; blocked words absent |
-| `tests/02-rules` | Node | Layout counts and symmetry; bag and deal; every placement error; premiums only on new squares; word premiums; Full Soak and blanks; Bathhouse Row doubling; Featured Spring once; swap and pass; going out and stalling; the Daily; plaque reveals |
+| `tests/02-rules` | Node | Layout counts and symmetry; bag and deal; every placement error; premiums only on new squares; word premiums; Full Soak and blanks; the flat +20 on a Bathhouse Row square; Featured Spring once; swap and pass; going out and stalling; the Daily; plaque reveals |
 | `tests/03-reference` | Node | 50,029 plays (generated, mutated and random) through the engine and through `tools/ref-validator.mjs`, an independent from-scratch scorer: 0 mismatches (26,870 legal) |
 | `tests/04-movegen` | Node | ~25,000 generated moves re-scored by the engine (all equal); brute-force completeness for 3-tile racks on 12 positions (no missed or extra moves); greedy games finish |
 | `tests/05-ai` | Node | 7,576 AI actions over 300 games (all pairings and 4-seat tables): all legal; Easy and Medium vocabularies hold (3,010 words checked); leave-table sanity |
@@ -25,7 +25,7 @@ for every defect fixed (`DEV-PLAN.md` §5 is the defect log).
 |---|---|---|---|---|---|---|
 | Placement legality and every error | ✓ (+ reference) | ✓ | ✓ | ✓ | ✓ | 02, 03, 11, 19 |
 | Scoring: premiums, Full Soak, blanks | ✓ (+ reference) | ✓ | ✓ | ✓ | ✓ | 02, 03, 04, 11 |
-| Hot Springs bonus, Row doubling, Featured | ✓ (+ reference) | ✓ | — | ✓ | ✓ | 02, 03, 14 |
+| Hot Springs bonus, Row +20, Featured | ✓ (+ reference) | ✓ | — | ✓ | ✓ | 02, 03, 14 |
 | Move generation and AI legality | ✓ | — | — | ✓ | ✓ | 04, 05, 11, 18 |
 | Swap, pass, ending, rack penalties | ✓ | ✓ | — | ✓ | ✓ | 02, 11, 19 |
 | Daily determinism and records | ✓ | ✓ | — | ✓ | ✓ | 02, 06, 12 |

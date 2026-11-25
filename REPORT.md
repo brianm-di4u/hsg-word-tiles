@@ -56,7 +56,7 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 ## Performance
 | Measure | Result | Budget |
 |---|---|---|
-| `index.html` | 1.15 MB (three.js 530 KB, dictionary 330 KB) | ≤ 2 MB |
+| `index.html` | 1.49 MB on 25 Nov 2026 (three.js 546 KB, dictionary 330 KB) | ≤ 2 MB |
 | Dictionary ready | 153 ms; 864 ms at 4× throttle | ≤ 1.5 s at 4× |
 | Frame cost, 2D | idle 0.15 ms, dragging 2.5 ms | ≤ 8 / ≤ 12 ms |
 | Frame cost, 3D (GPU) | idle 0.36 ms, dragging 1.1 ms, 60 fps | ≤ 8 / ≤ 12 ms |
@@ -117,7 +117,8 @@ VISUAL-REPORT.md refer to the previous art.
   0.996094 and -2.98545e-017 cannot be represented accurately"). It is the Direct3D compiler's note on a constant in
   three.js r186's own shader code, the same before and after the board, counter and bell became standard materials
   (measured on a real GPU, 25 Nov 2026). Nothing is drawn wrongly, so it is left as it is: no shader is patched for it.
-- ENABLE lacks some newer short words (QI, ZA); the help says which list is used.
+- ENABLE lacks some newer short words (QI, ZA and others); the 28-word supplement (`src/js/supplement.js`) adds them, and
+  About says which words are added. Other newer words are still refused.
 
 ## Harness requests
 - `shared/tools/inline.mjs` mis-parses an `export const` arrow function whose body has a regex literal containing

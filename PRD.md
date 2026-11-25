@@ -130,5 +130,5 @@ and ≤ 1.2 s (Hard) at 4× throttle.
 40. `index.html` ≤ 2 MB; performance budgets in §10 are met (or the gap is reported).
 
 ## 12. Out of scope
-Online multiplayer, accounts, leaderboards, word definitions, challenge mode, timed games,
+Online multiplayer, accounts, leaderboards, word definitions, timed games,
 languages other than English, custom dictionaries.
