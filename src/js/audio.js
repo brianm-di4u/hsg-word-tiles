@@ -212,7 +212,7 @@ const bell = (t, f, g = 0.12) => {
 };
 
 const DUCK = { chime: [6, 900], featured: [6, 1400], fanfare: [6, 1800], discover: [4, 800], big: [4, 700] };
-const CUE_THROTTLE_S = 0.035;
+const CUE_THROTTLE_S = 0.020;
 const lastCueAt = new WeakMap();
 
 // opts: pan (-1..1, kept within +-0.7: the board column of a tile), step (0.. : semitones up along a word), delay
@@ -230,6 +230,7 @@ export function sfx(name, opts = {}) {
   if (!audio.on || !audio.fx || !audio.ctx) return;
   const c = audio.ctx, t = c.currentTime + (opts.delay || 0), step = opts.step || 0;
   if (!opts._offline && c === audio.live) {
+    if (audio.holds.has('hidden') || c.state !== 'running') { audio.suppressed++; return; }
     if (audio.isFast && audio.isFast()) { audio.suppressed++; return; }
     let seen = lastCueAt.get(c);
     if (!seen) { seen = new Map(); lastCueAt.set(c, seen); }

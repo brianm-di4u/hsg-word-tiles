@@ -49,7 +49,7 @@ const G = {
   settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, fxVol: 1, musicVol: 1, ambVol: 1, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true, townCue: true, tipsSeen: true, vibrate: matchMedia('(pointer: coarse)').matches },
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false }, inspect: -1,
-  preview: null, hint: null, last: new Set(), lastPulse: null, badPulse: null, anim: new Map(), animUntil: 0,
+  preview: null, hint: null, last: new Set(), lastPulse: null, badPulse: null, anim: new Map(), animUntil: 0, aiClack: null,
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, releaseAiTimer: 0, turnTimers: new Set(), privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returningCell: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, pendingVfx: null, busyUntil: 0, lastHuman: -1,
   errFlash: false, scoreHi: null, scoreRollRaf: 0, flipTimer: 0, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, plaqueFx: null, plaqueFxTimer: 0, springsOpen: false,
@@ -898,6 +898,7 @@ function afterAction(entry, fromAi) {
     const avgPan = colPan(Math.round(entry.tiles.reduce((a, t) => a + (t.i % N), 0) / entry.tiles.length));
     if (aiAnim) {
       const t0 = performance.now();
+      G.aiClack = null;
       entry.tiles.forEach((t, k) => {
         const sch = aiSched[k];
         G.anim.set(t.i, { t0: t0 + sch.offset, dur: aiPace.drop, kind: 'ai', lift: sch.lift, roll: sch.roll, persona: perId, pan: colPan(t.i), step: k, sq: SQUARES[t.i], clacked: false });
@@ -2124,7 +2125,16 @@ function landClacks(now) {
     if (a.kind === 'ai' && !a.clacked && (now - a.t0) / a.dur >= R.CONTACT_K) {
       a.clacked = true;
       const sq = a.sq;
-      sfx('place', { pan: a.pan, step: a.step, ...(sq && sq !== '.' && sq !== '*' ? { sq } : {}) });
+      let delay = 0;
+      if (audio.ctx && audio.ctx.state === 'running' && !audio.holds.has('hidden')) {
+        const ct = audio.ctx.currentTime;
+        if (G.aiClack) {
+          const want = G.aiClack.at + Math.max(0, (a.t0 - G.aiClack.t0) / 1000);
+          if (want > ct) delay = want - ct;
+        }
+        G.aiClack = { at: ct + delay, t0: a.t0 };
+      }
+      sfx('place', { pan: a.pan, step: a.step, ...(delay > 0 ? { delay } : {}), ...(sq && sq !== '.' && sq !== '*' ? { sq } : {}) });
     }
   }
 }
