@@ -796,6 +796,17 @@ export function drawFrame(ctx, d) {
     if (!sp.vis) continue;
     drawTile(t.i, t, 'staged', d.dragFrom === t.i ? 0.35 : 1, sp.lift * cellPx * 0.67, sp.sx, sp.sy);
   }
+  // W2-S1-03: a staged 3D tile's crown has the 2D staged tile's warm gold at its four corners (its top face is the placed one's),
+  // so it stays apart from placed tiles when Challenge hides the teal outline; the last play keeps its brass ring and one pip (CD-WF2-04)
+  else for (const t of d.staged || []) {
+    const sp = stageSettlePose(d.settle ? d.settle.get(t.i) : null, now);
+    if (!sp.vis || d.dragFrom === t.i) continue;
+    const q = quad(t.i, 0.07, TILE_LIFT + sp.lift), at = (a, b) => [a[0] + (b[0] - a[0]) * 0.24, a[1] + (b[1] - a[1]) * 0.24];
+    ctx.save(); ctx.strokeStyle = '#D9A23A'; ctx.lineWidth = Math.max(1.5, (d.cellPx || cellPx) * 0.05); ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let k = 0; k < 4; k++) { const c = q[k], a = at(c, q[(k + 3) % 4]), b = at(c, q[(k + 1) % 4]); ctx.moveTo(a[0], a[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(b[0], b[1]); }
+    ctx.stroke(); ctx.restore();
+  }
   // word outlines for the live preview (projected at tile-top lift so rings wrap raised 3D ceramic faces)
   const lw = (k) => Math.max(1.5, (d.cellPx || cellPx) * k);
   const outline = (cells, color, width) => { for (const i of cells) { ctx.strokeStyle = color; ctx.lineWidth = width; poly(ctx, quad(i, 0.03, liftOf(i))); ctx.stroke(); } };
