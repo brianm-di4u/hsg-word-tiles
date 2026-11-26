@@ -212,11 +212,16 @@ export const tests = [
       }, h);
 
       // Install live node-start spies (music & amb are off so only sfx() creates nodes)
+      // ...and the live context plus its clock at the first yourturn, so step 5 can wait for the audio clock (see there)
       await t.page.evaluate(() => {
-        window.__sfxSpies = { osc: 0, buf: 0 };
+        window.__sfxSpies = { osc: 0, buf: 0, ctx: null, firstAt: null };
         const origOsc = OscillatorNode.prototype.start;
         const origBuf = AudioBufferSourceNode.prototype.start;
-        OscillatorNode.prototype.start = function (...a) { window.__sfxSpies.osc++; return origOsc.apply(this, a); };
+        OscillatorNode.prototype.start = function (...a) {
+          window.__sfxSpies.osc++;
+          if (!window.__sfxSpies.ctx && !(this.context instanceof OfflineAudioContext)) { window.__sfxSpies.ctx = this.context; window.__sfxSpies.firstAt = this.context.currentTime; }
+          return origOsc.apply(this, a);
+        };
         AudioBufferSourceNode.prototype.start = function (...a) { window.__sfxSpies.buf++; return origBuf.apply(this, a); };
       });
 
@@ -286,8 +291,19 @@ export const tests = [
       t.equal(afterResume.osc, 0, 'resuming tab fires 0 queued stale oscillators');
       t.equal(afterResume.buf, 0, 'resuming tab fires 0 queued stale buffer sources');
 
-      await t.page.evaluate(() => { window.__game.act('sfx', 'yourturn'); });
-      const resumedPlay = await t.page.evaluate(() => ({ ...window.__sfxSpies }));
+      // W5-B05-hotfix follow-up 2: the suspended context's clock stood still while hidden, so step 1's yourturn can be less than
+      // CUE_THROTTLE_S (0.020 s) of audio time behind this one and be throttled as a duplicate. Wait for that state (the live
+      // audio clock past step 1's time plus the throttle window), never for wall time; the throttle itself is unchanged.
+      const spy = await t.page.evaluate(() => ({ live: !!window.__sfxSpies.ctx, firstAt: window.__sfxSpies.firstAt }));
+      t.expect(spy.live && spy.firstAt != null, `step 1's live yourturn and its audio time were recorded (${spy.firstAt})`);
+      await t.page.waitForFunction(() => window.__sfxSpies.ctx.currentTime >= window.__sfxSpies.firstAt + 0.020 + 0.005, null, { timeout: 5000 });
+      const resumedPlay = await t.page.evaluate(() => {
+        window.__sfxSpies.osc = 0;
+        const thrBefore = window.__game.audioState().throttled;
+        window.__game.act('sfx', 'yourturn');
+        return { osc: window.__sfxSpies.osc, thrDelta: window.__game.audioState().throttled - thrBefore };
+      });
+      t.equal(resumedPlay.thrDelta, 0, 'the yourturn after resume is not taken for a duplicate of step 1\'s');
       t.expect(resumedPlay.osc > 0, `live sfx synthesizes normally after resume (${resumedPlay.osc} osc)`);
 
       await t.page.evaluate(() => { delete document.hidden; });
