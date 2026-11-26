@@ -101,4 +101,38 @@ export const tests = [
       t.expect(after.music === 0.9 && after.amb === 0.3 && after.stored === 0.3, `Music moved to 90% later: Ambience stays at 30% (${JSON.stringify(after)})`);
     },
   },
+  // ---------- OQ-WF7-W3-05 ----------
+  {
+    name: "OQ-WF7-W3-05 activeStreak and the Title line keep the streak when the device's date is behind the last day played (Node)",
+    node: true,
+    async run(t) {
+      t.equal(activeStreak({ streak: 4, last: '2026-12-11', rest: null }, '2026-12-10'), 4, 'one day behind: the streak shows');
+      t.equal(activeStreak({ streak: 4, last: '2026-12-11', rest: '2026-12-08' }, '2026-11-20'), 4, 'three weeks behind: the streak shows');
+      t.equal(streakRestReady({ streak: 4, last: '2026-12-11', rest: null }, '2026-12-10'), false, 'and no rest-day cue for it');
+      t.equal(dailyLine({ streak: 4, last: '2026-12-11', rest: null, today: null, todayDate: '2026-12-10' }), '10 turns · streak 4', 'the Title line says streak 4');
+      t.equal(activeStreak({ streak: 4, last: '2026-12-06', rest: null }, '2026-12-10'), 0, 'a lapsed streak still reads 0');
+    },
+  },
+  {
+    name: "OQ-WF7-W3-05 Title and Records show the Daily streak when the device's clock is a day behind the last Daily played",
+    viewports: ['desktop', 'mobile'],
+    initScript: () => { window.__TEST_TIPS__ = false; if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false })); },
+    async run(t) {
+      await t.page.clock.install({ time: new Date(2026, 11, 10, 12, 0, 0).getTime() });   // the page's today is 2026-12-10
+      await t.page.evaluate(() => localStorage.setItem('hs-letters-daily-v1', JSON.stringify({ days: { '2026-12-11': { score: 214, first: 214, plays: 1 } }, streak: 4, last: '2026-12-11', rest: null })));
+      await t.reload(); await ready(t);
+      await t.game('scene', 'title');
+      const title = (await t.page.textContent('[data-go="daily"] small')).trim();
+      t.expect(/streak 4/.test(title), `the Title says streak 4 (${title})`);
+      await t.game('scene', 'records');
+      const rec = await t.page.evaluate(() => {
+        const stats = [...document.querySelectorAll('.sheet.records .stat')];
+        const get = (re) => stats.find((el) => re.test(el.textContent))?.querySelector('b')?.textContent.trim();
+        return { day: get(/day streak/i), best: get(/best streak/i) };
+      });
+      t.equal(rec.day, '4', 'Records shows a 4-day streak');
+      t.equal(rec.best, '4', 'and best streak 4');
+      t.equal(JSON.parse(await t.page.evaluate(() => localStorage.getItem('hs-letters-daily-v1'))).streak, 4, 'the saved streak is untouched');
+    },
+  },
 ];

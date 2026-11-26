@@ -4962,7 +4962,7 @@ const restSpare = (d, date) => {
 function activeStreak(d, todayDate) {
   if (!d || !(d.streak > 0) || !d.last || !todayDate) return 0;
   const gap = dayNumber(todayDate) - dayNumber(d.last);
-  if (gap === 0 || gap === 1) return d.streak;
+  if (gap <= 1) return d.streak;
   if (gap === 2 && restSpare(d, todayDate)) return d.streak;
   return 0;
 }

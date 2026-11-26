@@ -36,11 +36,12 @@ const restSpare = (d, date) => {
   const rest = d && typeof d.rest === 'string' ? d.rest : null;
   return rest == null || !(dayNumber(date) - dayNumber(rest) < REST_EVERY);
 };
-// Live Daily Soak streak as of `todayDate`: active only on same day (0), next day (1), or a 1-day miss (2) with a spare rest day.
+// Live Daily Soak streak as of `todayDate`: active on the same day (0), the next day (1), a 1-day miss (2) with a spare rest day,
+// and when the device's date is behind the last day played (a negative gap: another time zone or a clock set back, OQ-WF7-W3-05).
 export function activeStreak(d, todayDate) {
   if (!d || !(d.streak > 0) || !d.last || !todayDate) return 0;
   const gap = dayNumber(todayDate) - dayNumber(d.last);
-  if (gap === 0 || gap === 1) return d.streak;
+  if (gap <= 1) return d.streak;
   if (gap === 2 && restSpare(d, todayDate)) return d.streak;
   return 0;
 }

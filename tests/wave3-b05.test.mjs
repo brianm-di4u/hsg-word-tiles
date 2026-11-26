@@ -124,7 +124,8 @@ export const tests = [
       t.equal(streakRestReady({ streak: 7, last: '2026-11-22', rest: '2026-11-20' }, '2026-11-24'), false, 'gap 2 without spare rest is not rest-ready');
       t.equal(activeStreak({ streak: 7, last: '2026-11-22', rest: '2026-11-17' }, '2026-11-24'), 7, 'gap 2 exactly 7 days after prior rest is live again');
       t.equal(activeStreak({ streak: 14, last: '2026-11-01', rest: null }, '2026-11-24'), 0, 'gap > 2 expires streak to 0');
-      t.equal(activeStreak({ streak: 5, last: '2026-11-25', rest: null }, '2026-11-24'), 0, 'gap < 0 returns 0 from activeStreak');
+      // gap < 0 (the device's date is behind the last day played) now shows the streak: owner decision OQ-WF7-W3-05, built in W4-B33-hotfix (was 0)
+      t.equal(activeStreak({ streak: 5, last: '2026-11-25', rest: null }, '2026-11-24'), 5, 'gap < 0 keeps the streak in activeStreak');
       t.equal(activeStreak({ streak: 5, last: null }, '2026-11-24'), 0, 'missing last returns 0');
 
       const back = nextStreak({ streak: 8, last: '2026-11-24', rest: null }, '2026-11-22');
