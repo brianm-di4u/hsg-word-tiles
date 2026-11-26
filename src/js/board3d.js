@@ -41,6 +41,20 @@ function geometries(name) {
     const uq = g.u ? b64(g.u, Uint16Array) : null;
     const pos = new Float32Array(q.length), nor = new Float32Array(q.length), uv = new Float32Array(q.length / 3 * 2);
     const isTileTop = name === 'tile' && g.mat && g.mat.name === 'tiletop';
+    const isFrameBrass = name === 'frame' && g.mat && g.mat.name === 'brass';
+    const isBellBrass = name === 'bell' && g.mat && g.mat.name === 'brass';
+    const isBellBronze = name === 'bell' && g.mat && g.mat.name === 'bronze';
+    const useCreviceColor = isFrameBrass || isBellBrass || isBellBronze;
+    const col = useCreviceColor ? new Float32Array(q.length) : null;
+    let fbMinV = Infinity, fbMaxV = -Infinity;
+    if (isFrameBrass && uq) {
+      for (let k = 1; k < uq.length; k += 2) {
+        const v = uq[k] / 65535;
+        if (v < fbMinV) fbMinV = v;
+        if (v > fbMaxV) fbMaxV = v;
+      }
+    }
+    const fbSpanV = fbMaxV > fbMinV ? fbMaxV - fbMinV : 1;
     for (let i = 0, j = 0; i < q.length; i += 3, j += 2) {
       const bx = d.lo[0] + (q[i] + 32768) / 65535 * (d.hi[0] - d.lo[0]);
       const by = d.lo[1] + (q[i + 1] + 32768) / 65535 * (d.hi[1] - d.lo[1]);
@@ -48,8 +62,23 @@ function geometries(name) {
       pos[i] = bx; pos[i + 1] = bz; pos[i + 2] = -by;
       nor[i] = n[i] / 127; nor[i + 1] = n[i + 2] / 127; nor[i + 2] = -n[i + 1] / 127;
       // W3-S2-02: use exported Blender UVs (mitred along-rail UVs on frame) when present;
-      // W3-S1-01: map tiletop UVs cleanly to the flat ceramic crown [-0.38..+0.38] â†’ [0..1].
-      if (uq) {
+      // W3-S1-01: map tiletop UVs cleanly to the flat ceramic crown [-0.38..+0.38] -> [0..1];
+      // W3-S3-02: normalize frame.brass V across [0..1] (inner walnut seam -> crest -> outer walnut seam) and
+      // assign seamless lathe-brushed UVs on bell.brass (plinth rim & plunger collar crevices -> v≈0, dome/cap -> v≈0.5).
+      if (isFrameBrass && uq) {
+        uv[j] = uq[j] / 65535;
+        uv[j + 1] = clamp01((uq[j + 1] / 65535 - fbMinV) / fbSpanV);
+      } else if (isBellBrass) {
+        uv[j] = Math.abs(Math.atan2(by, bx)) / Math.PI;
+        if (bz <= 0.91) {
+          const t = clamp01((bz - 0.26) / (0.91 - 0.26));
+          uv[j + 1] = t < 0.6 ? 0.02 + (t / 0.6) * 0.48 : 0.50 - ((t - 0.6) / 0.4) * 0.28;
+        } else if (bz <= 1.09) {
+          uv[j + 1] = 0.05 + clamp01((bz - 0.92) / 0.17) * 0.07;
+        } else {
+          uv[j + 1] = 0.28 + clamp01((bz - 1.10) / 0.11) * 0.22;
+        }
+      } else if (uq) {
         uv[j] = uq[j] / 65535;
         uv[j + 1] = uq[j + 1] / 65535;
       } else if (isTileTop) {
@@ -59,10 +88,33 @@ function geometries(name) {
         uv[j] = (bx - d.lo[0]) / (d.hi[0] - d.lo[0]);
         uv[j + 1] = (by - d.lo[1]) / (d.hi[1] - d.lo[1]);
       }
+      if (col) {
+        let ao = 1;
+        if (isFrameBrass) {
+          const h = clamp01((bz - 0.46) / 0.10);
+          ao = 0.72 + 0.28 * Math.pow(h, 0.75);
+        } else if (isBellBrass) {
+          const rimAo = 0.68 + 0.32 * clamp01((bz - 0.26) / 0.20);
+          const neckDip = bz > 0.84 && bz < 1.13 ? (1 - Math.abs(bz - 0.99) / 0.15) : 0;
+          const neckAo = 1 - 0.34 * clamp01(neckDip);
+          const touchBurnish = bz >= 1.15 ? 1.04 : 1;
+          ao = rimAo * neckAo * touchBurnish;
+        } else if (isBellBronze) {
+          const baseAo = 0.76 + 0.24 * clamp01(bz / 0.11);
+          const lipAo = 1 - 0.22 * clamp01((bz - 0.20) / 0.06);
+          ao = baseAo * lipAo;
+        }
+        // Warm bronze crevice darkening (reduces B slightly more than R in seams so patina reads antique, never muddy grey)
+        const warm = Math.min(1, ao);
+        col[i] = Math.min(1, ao);
+        col[i + 1] = Math.min(1, ao * (0.93 + 0.07 * warm));
+        col[i + 2] = Math.min(1, ao * (0.84 + 0.16 * warm));
+      }
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    if (col) geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.setIndex(new THREE.BufferAttribute(idx, 1)); geo.computeBoundingSphere();
     return { geo, mat: g.mat };
   });
@@ -261,6 +313,54 @@ function frameWalnutDiffuse(dark) {
   return t;
 }
 
+// Seeded brushed-brass patina texture shared by B3.frame's brass bead and B3.bell (W3-S3-02):
+// single 256x128 CanvasTexture keeps gpuTextures <= 12 (W3-S4-01) while encoding warm burnished satin brass along
+// the crown/dome (v=0.5), fine horizontal brushed milling streaks along U, and antique bronze-umber crevice darkening
+// at seams/rims (v=0 and v=1).
+function brassPatinaTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const g = c.getContext('2d'), rnd = walnutGrainPrng(7331);
+  const gr = g.createLinearGradient(0, 0, 0, 128);
+  gr.addColorStop(0.00, '#735523');
+  gr.addColorStop(0.17, '#B38C3B');
+  gr.addColorStop(0.50, '#DBB85E');
+  gr.addColorStop(0.83, '#B38C3B');
+  gr.addColorStop(1.00, '#735523');
+  g.fillStyle = gr; g.fillRect(0, 0, 256, 128);
+  // Subtle brushed metal bands wrapping cleanly across U=0/1
+  for (let y = 0; y < 128; y++) {
+    const wave = Math.sin(y * 0.43) * 0.5 + Math.sin(y * 1.13 + 0.7) * 0.5;
+    const crown = 1 - Math.abs(y / 127 - 0.5) * 2;
+    if (wave > 0) g.fillStyle = `rgba(255,244,205,${(0.025 + wave * 0.045 * (0.5 + 0.5 * crown)).toFixed(3)})`;
+    else g.fillStyle = `rgba(68,46,16,${(0.03 - wave * 0.05 * (1 - 0.45 * crown)).toFixed(3)})`;
+    g.fillRect(0, y, 256, 1);
+  }
+  // Fine horizontal brushed hairlines & subtle crevice patina micro-mottling
+  for (let k = 0; k < 380; k++) {
+    const x = rnd() * 256, y = Math.floor(rnd() * 128), w = 18 + rnd() * 58;
+    const crown = 1 - Math.abs(y / 127 - 0.5) * 2;
+    const bright = rnd() < (0.35 + 0.35 * crown);
+    g.fillStyle = bright
+      ? `rgba(255,244,208,${(0.06 + rnd() * 0.08 * crown).toFixed(3)})`
+      : `rgba(66,44,14,${(0.07 + rnd() * 0.11 * (1 - 0.4 * crown)).toFixed(3)})`;
+    g.fillRect(x, y, w, 1);
+    if (x + w > 256) g.fillRect(x - 256, y, w, 1);
+  }
+  // Restrained antique patina dapple strictly tucked along the upper/lower crevice seams
+  for (let k = 0; k < 140; k++) {
+    const x = rnd() * 256;
+    const topEdge = rnd() < 0.5;
+    const y = topEdge ? rnd() * 24 : 104 + rnd() * 24;
+    const r = 1.5 + rnd() * 3.5;
+    g.fillStyle = `rgba(54,36,12,${(0.07 + rnd() * 0.09).toFixed(3)})`;
+    g.beginPath(); g.ellipse(x, y, r * 2.2, r * 0.7, 0, 0, Math.PI * 2); g.fill();
+  }
+  const t = canvasTex(c, true);
+  t.wrapS = THREE.RepeatWrapping;
+  t.repeat.set(4, 1);
+  return t;
+}
+
 // woven terry for the towels: muted linen base tinted per theme in setTheme() (#B5A892 day taupe / #524B61 night twilight)
 function clothTexture(grp) {
   const c = document.createElement('canvas'); c.width = c.height = 256;
@@ -392,9 +492,12 @@ export function init(canvas, theme, hooks = {}) {
   B3.preDim.visible = false;
   scene.add(B3.preDim);
   B3.frame = piece('frame'); B3.frame.scale.set(U / 16, 1, U / 16); scene.add(B3.frame);
-  // W3-S2-02: bind walnut wood-pore roughnessMap onto mitred frame rails (diffuse walnut grain refreshes in setTheme())
+  // W3-S2-02 & W3-S3-02: bind walnut wood-pore roughnessMap onto mitred frame rails and shared brushed-brass patina
+  // + crevice vertex colors onto B3.frame's brass bead and B3.bell (single shared texture keeps gpuTextures <= 12).
   const frameRough = frameWalnutRoughness();
-  B3.frameWalnut = []; B3.frameWalnutFromCounter = false;
+  const brassTex = brassPatinaTexture();
+  B3.brassPatinaTex = brassTex;
+  B3.frameWalnut = []; B3.frameWalnutFromCounter = false; B3.frameBrass = null;
   B3.frame.traverse((o) => {
     if (o.isMesh && o.name === 'walnut' && o.material) {
       o.material.color.set(0xffffff);
@@ -402,6 +505,13 @@ export function init(canvas, theme, hooks = {}) {
       o.material.roughnessMap = frameRough;
       o.material.needsUpdate = true;
       B3.frameWalnut.push(o.material);
+    } else if (o.isMesh && o.name === 'brass' && o.material) {
+      o.material.color.set(0xffffff);
+      o.material.map = brassTex;
+      o.material.roughness = 0.30;
+      o.material.vertexColors = true;
+      o.material.needsUpdate = true;
+      B3.frameBrass = o;
     }
   });
   // set dressing on the counter, outside the board (W3-S3-01 / CD-WF2-06 / CD-WF3-04):
@@ -410,6 +520,18 @@ export function init(canvas, theme, hooks = {}) {
   B3.towels = piece('towels'); clothTexture(B3.towels); B3.towels.position.set(-HALF - 4.15, 0, -HALF + 3.25); B3.towels.rotation.y = -0.05; scene.add(B3.towels);
   B3.bell = piece('bell'); B3.bell.position.set(FRAME_EXTENT + 1.24, 0, -HALF + 1.9); scene.add(B3.bell);
   B3.bellBrass = B3.bell.children.find((m) => m.name === 'brass') || null;
+  B3.bellBronze = B3.bell.children.find((m) => m.name === 'bronze') || null;
+  if (B3.bellBrass && B3.bellBrass.material) {
+    B3.bellBrass.material.color.set(0xffffff);
+    B3.bellBrass.material.map = brassTex;
+    B3.bellBrass.material.roughness = 0.30;
+    B3.bellBrass.material.vertexColors = true;
+    B3.bellBrass.material.needsUpdate = true;
+  }
+  if (B3.bellBronze && B3.bellBronze.material) {
+    B3.bellBronze.material.vertexColors = true;
+    B3.bellBronze.material.needsUpdate = true;
+  }
   B3.bellBob = null; B3.bellLastRing = 0; B3.bellRings = 0;
   // tile pool (W3-S4-01 / CD-WF3-05 / W3-S1-02): static tilebody batched into standard THREE.InstancedMesh pools (board/blank/last/staged),
   // flat tiletop crowns share one 2048x1024 256px-per-glyph atlas material with castShadow = false.
@@ -494,7 +616,7 @@ export function destroy(opts = {}) {
   B3.on = false; B3.renderer = null; B3.canvas = null; B3.scene = null; B3.camera = null;
   B3.hemi = null; B3.key = null; B3.fill = null;
   B3.table = null; B3.top = null; B3.board = null; B3.preDim = null; B3.dimIdx = null;
-  B3.frame = null; B3.frameWalnut = null; B3.frameWalnutFromCounter = false; B3.towels = null; B3.bell = null; B3.bellBrass = null; B3.bellBob = null; B3.bellLastRing = 0; B3.bellRings = 0; B3.towelCloth = null; B3.towelStripe = null;
+  B3.frame = null; B3.frameWalnut = null; B3.frameWalnutFromCounter = false; B3.frameBrass = null; B3.brassPatinaTex = null; B3.towels = null; B3.bell = null; B3.bellBrass = null; B3.bellBronze = null; B3.bellBob = null; B3.bellLastRing = 0; B3.bellRings = 0; B3.towelCloth = null; B3.towelStripe = null;
   B3.tileGeo = null; B3.tileBodyGeo = null; B3.tileTopGeo = null; B3.bodyInst = null; B3.blankInst = null; B3.lastInst = null; B3.stagedInst = null;
   B3.faceAtlasCanvas = null; B3.faceAtlasTex = null; B3.faceAtlasMat = null; B3.faceAtlasKey = '';
   B3.bodyMat = null; B3.blankBodyMat = null; B3.stagedMat = null; B3.lastMat = null; B3.envRT = null; B3.envTheme = ''; B3.envSwaps = 0;
@@ -894,6 +1016,49 @@ export function debug() {
     frameWalnutMap: !!(B3.frameWalnut && B3.frameWalnut[0] && B3.frameWalnut[0].map),
     frameWalnutRoughnessMap: !!(B3.frameWalnut && B3.frameWalnut[0] && B3.frameWalnut[0].roughnessMap),
     frameWalnutFromCounter: !!B3.frameWalnutFromCounter,
+    brassPatina: (() => {
+      const fb = B3.frameBrass, bb = B3.bellBrass, bz = B3.bellBronze;
+      const tex = B3.brassPatinaTex;
+      if (!fb || !bb || !tex) return null;
+      const vertRange = (mesh) => {
+        const c = mesh.geometry && mesh.geometry.getAttribute('color');
+        if (!c) return null;
+        let lo = Infinity, hi = -Infinity;
+        for (let i = 0; i < c.count; i++) {
+          const v = 0.2126 * c.getX(i) + 0.7152 * c.getY(i) + 0.0722 * c.getZ(i);
+          if (v < lo) lo = v; if (v > hi) hi = v;
+        }
+        return { min: +lo.toFixed(3), max: +hi.toFixed(3) };
+      };
+      let seamLum = null, crownLum = null, brushedStd = null;
+      const cv = tex.image, ctx = cv && cv.getContext && cv.getContext('2d');
+      if (ctx) {
+        const band = (y, h) => {
+          const d = ctx.getImageData(0, y, cv.width, h).data;
+          let sum = 0, sum2 = 0, n = d.length / 4;
+          for (let i = 0; i < d.length; i += 4) {
+            const l = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+            sum += l; sum2 += l * l;
+          }
+          const mean = sum / n;
+          return { mean: +mean.toFixed(1), std: +Math.sqrt(Math.max(0, sum2 / n - mean * mean)).toFixed(2) };
+        };
+        const top = band(0, 8), bot = band(cv.height - 8, 8), mid = band(Math.floor(cv.height / 2) - 4, 8);
+        seamLum = +((top.mean + bot.mean) / 2).toFixed(1);
+        crownLum = mid.mean;
+        brushedStd = mid.std;
+      }
+      return {
+        sharedTex: fb.material.map === tex && bb.material.map === tex,
+        frameVertexColors: !!fb.material.vertexColors,
+        bellVertexColors: !!bb.material.vertexColors,
+        bronzeVertexColors: !!(bz && bz.material && bz.material.vertexColors),
+        frameCrevice: vertRange(fb),
+        bellCrevice: vertRange(bb),
+        bronzeCrevice: bz ? vertRange(bz) : null,
+        seamLum, crownLum, brushedStd,
+      };
+    })(),
     keyType: B3.key ? B3.key.type : null,
     frames: B3.frames.length, intervals: B3.intervals.slice(),
   };

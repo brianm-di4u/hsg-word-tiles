@@ -43,6 +43,8 @@ export const LOOK = {
       faceRoughness: 0.55, specularIntensity: 0.25, clearcoat: 0.25, clearcoatRoughness: 0.4,
       atlasFill: '#FAF3E3',
       faceGrad: ['#FFFDF5', '#FAF3E3', '#F0E6CE'],
+      kilnEdge: ['rgba(218,166,86,0)', 'rgba(214,160,80,0.06)', 'rgba(202,146,66,0.20)', 'rgba(188,130,52,0.30)'],
+      kilnRim: 'rgba(206,152,72,0.24)',
       spriteGrad: ['#FFFDF5', '#F8F0DE', '#EAE0C7'],
       bevelDark: 'rgba(92,70,38,0.62)', bevelLight: 'rgba(255,255,255,0.85)',
       stagedEmissive: 0xd9a23a, stagedEmissiveIntensity: 0.35,
@@ -78,6 +80,8 @@ export const LOOK = {
       faceRoughness: 0.55, specularIntensity: 0.25, clearcoat: 0.25, clearcoatRoughness: 0.4,
       atlasFill: '#EDE5D4',
       faceGrad: ['#F2EADB', '#EDE5D4', '#DFD5BE'],
+      kilnEdge: ['rgba(202,150,74,0)', 'rgba(196,144,68,0.05)', 'rgba(184,130,56,0.18)', 'rgba(170,116,44,0.27)'],
+      kilnRim: 'rgba(190,138,64,0.22)',
       spriteGrad: ['#F2EADB', '#EDE5D4', '#DDD2B9'],
       bevelDark: 'rgba(42,32,20,0.72)', bevelLight: 'rgba(255,248,232,0.55)',
       stagedEmissive: 0xd9a23a, stagedEmissiveIntensity: 0.35,
@@ -650,6 +654,26 @@ function steamGlaze(ctx, x, y, s, r, l) {
   ctx.restore();
 }
 
+// Subtle kiln-fired ceramic glaze warmth pooling toward the crown rim and corners (W3-S3-02):
+// keeps the central ivory crown bright for figure-ground & glyph contrast while avoiding clinical flat fills.
+function paintKilnWarmth(ctx, w, theme = 'light') {
+  const tLook = lookFor(theme).tile;
+  const cx = w * 0.5, cy = w * 0.5;
+  const rg = ctx.createRadialGradient(cx, cy, w * 0.48, cx, cy, w * 0.72);
+  rg.addColorStop(0, tLook.kilnEdge[0]);
+  rg.addColorStop(0.42, tLook.kilnEdge[1]);
+  rg.addColorStop(0.80, tLook.kilnEdge[2]);
+  rg.addColorStop(1, tLook.kilnEdge[3]);
+  ctx.fillStyle = rg;
+  ctx.fillRect(0, 0, w, w);
+  ctx.save();
+  const lw = Math.max(1.5, w * 0.036);
+  ctx.strokeStyle = tLook.kilnRim;
+  ctx.lineWidth = lw;
+  ctx.strokeRect(lw * 0.5, lw * 0.5, w - lw, w - lw);
+  ctx.restore();
+}
+
 // The flat top of a 3D tile: board3d.js maps the flat ceramic crown [-0.38..+0.38] to [0..1] UVs (W3-S1-01),
 // so 100% of face texels sit cleanly inside the bevel. Exported so board3d.js paints directly into its 2048x1024 atlas (W3-S4-01).
 export function paintFace(ctx, l, blank, w, theme = 'light') {
@@ -658,6 +682,7 @@ export function paintFace(ctx, l, blank, w, theme = 'light') {
   else lookFor(theme).tile.faceGrad.forEach((c, k) => g.addColorStop([0, 0.6, 1][k], c));
   ctx.fillStyle = g; ctx.fillRect(0, 0, w, w);
   if (blank) steamGlaze(ctx, 0, 0, w, w * 0.1, l);
+  else paintKilnWarmth(ctx, w, theme);
   if (!l) return;
   const isQ = l === 'Q', val = VALUE[l], twoDigit = !blank && val >= 10;
   ctx.save();
