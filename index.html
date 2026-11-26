@@ -249,6 +249,9 @@ body.reduce .house-rules summary::after { transition: none; }
   0%, 100% { box-shadow: var(--badge-in), 0 0 0 2px rgba(243, 221, 139, 0.72), 0 0 8px rgba(217, 162, 58, 0.36), 0 1px 4px rgba(0, 0, 0, 0.42); }
   50% { box-shadow: var(--badge-in), 0 0 0 3.5px rgba(255, 240, 179, 0.92), 0 0 15px rgba(217, 162, 58, 0.62), 0 1px 4px rgba(0, 0, 0, 0.42); }
 }
+/* on the results the winner's halo swells twice, slowly, and rests as the steady brass ring (OQ-WF7-W4-01); in the game it keeps breathing */
+.over .badge.mood-win { animation: badge-settle 1.9s ease-in-out 2; }
+@keyframes badge-settle { 50% { box-shadow: var(--badge-in), 0 0 0 3.5px rgba(255, 240, 179, 0.92), 0 0 15px rgba(217, 162, 58, 0.62), 0 1px 4px rgba(0, 0, 0, 0.42); } }
 .badge.mood-pass, .badge.mood-loss { border-color: #8A96B0; filter: saturate(0.72) brightness(0.88); }
 .badge img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .badge b { font: 600 calc(var(--s) * 0.38) var(--f-serif); }

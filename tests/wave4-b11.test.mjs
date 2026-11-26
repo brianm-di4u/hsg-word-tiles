@@ -170,13 +170,15 @@ export const tests = [
         return {
           winCls: w ? w.className : '',
           winAnim: w ? getComputedStyle(w).animationName : '',
+          winIter: w ? getComputedStyle(w).animationIterationCount : '',
           lossCls: l ? l.className : '',
           lossFilter: l ? getComputedStyle(l).filter : '',
           lossInset: l ? (getComputedStyle(l).boxShadow.match(/inset/g) || []).length : 0,
         };
       });
       t.expect(overBadges.winCls.includes('mood-win'), `Final Soak winner badge gets .mood-win (${overBadges.winCls})`);
-      t.equal(overBadges.winAnim, 'badge-halo', 'Final Soak winner badge pulses warm brass halo');
+      // on the results the halo swells twice and rests as a steady ring (owner decision OQ-WF7-W4-01, W4-B33-hotfix); old: 'badge-halo', infinite
+      t.expect(overBadges.winAnim === 'badge-settle' && overBadges.winIter === '2', `Final Soak winner badge pulses warm brass halo, twice (${overBadges.winAnim} x ${overBadges.winIter})`);
       t.expect(overBadges.lossCls.includes('mood-loss'), `Final Soak runner-up badge gets .mood-loss (${overBadges.lossCls})`);
       t.expect(overBadges.lossFilter.includes('saturate'), `runner-up badge gets subtle cool dim (${overBadges.lossFilter})`);
       t.expect(overBadges.lossInset >= 2, `human runner-up keeps Art Deco double-ring medallion under .mood-loss (${overBadges.lossInset})`);
