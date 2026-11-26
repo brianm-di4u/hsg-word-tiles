@@ -218,7 +218,7 @@ const lastCueAt = new WeakMap();
 // opts: pan (-1..1, kept within +-0.7: the board column of a tile), step (0.. : semitones up along a word), delay
 // (seconds from now: a sting that waits for the tiles it belongs to) and gain (a factor on the cue's level, 1 when left out)
 export function sfx(name, opts = {}) {
-  if (!opts._offline) {
+  if (!opts._offline && audio.ctx === audio.live) {
     const entry = { name, delay: opts.delay || 0, gain: opts.gain ?? 1 };
     if (opts.tiles != null) entry.tiles = opts.tiles;
     if (opts.sq) entry.sq = opts.sq;

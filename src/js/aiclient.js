@@ -13,16 +13,18 @@ export function startAi(dictB64, lexData, local) {
   aiClient.dict = local.dict; aiClient.lex = local.lex;
   const noWorker = /[?&]worker=0\b/.test(location.search) || typeof Worker === 'undefined';
   if (!noWorker) {
+    let url = null;
+    const revoke = () => { if (url) { const u = url; url = null; try { URL.revokeObjectURL(u); } catch (e) { /* gone */ } } };
     try {
-      const url = URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' }));
+      url = URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' }));
       const w = new Worker(url);
       aiClient.worker = w;
       aiClient.mode = 'worker';
       w.onmessage = (ev) => { const p = aiClient.pending.get(ev.data.id); if (p) { aiClient.pending.delete(ev.data.id); p(ev.data); } };
       w.onerror = (e) => { e.preventDefault(); fallBack('worker error'); };
-      aiClient.ready = call({ type: 'init', dict: dictB64, lex: lexData });
+      aiClient.ready = call({ type: 'init', dict: dictB64, lex: lexData }).then((r) => { revoke(); return r; });
       return aiClient.ready;
-    } catch (e) { /* fall through */ }
+    } catch (e) { revoke(); /* fall through */ }
   }
   fallBack('no worker');
   return aiClient.ready;
