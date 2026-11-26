@@ -11,7 +11,7 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 - **Words:** ENABLE (public domain) minus a curated blocklist of slurs and crude words: 168,271 words (168,295 before
   the P-N04 blocklist additions were rebuilt into the data on 2026-11-22), plus the owner's 28-word supplement.
 - **Hot Springs words:** 107 entries, 290 playable forms, each paying +10 / +18 / +30 (by the word's tier) and opening a fact card with
-  its source (59 from the audited trivia bank, 11 quoting the research corpus, all verified by `tools/check-facts.mjs`).
+  its source (95 from the audited trivia bank, 12 quoting the research corpus — 107/107 verified by `tools/check-facts.mjs`).
   Three Featured Springs per game hide in steam on brass plaques (+30, letters clear as the bag empties). The Bathhouse
   Register collects every Hot Springs word you play.
 - **Modes:** against 1–3 computer opponents (four fictional town characters at three levels), pass-and-play for
@@ -36,11 +36,11 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 | 23 AI off the main thread | met | Worker; fallback tested (`?worker=0`) |
 | 24 Hints | met | 11-play |
 | 25–28 Hot Springs content | met | 07 (lexicon, facts), 14 (cards open; toast, Register, Featured); first built with 96 entries, 107 now (96/96 facts and all 96 cards were the count then) |
-| 29 Every screen finished at both sizes | partial | every screen renders cleanly at both sizes (10-smoke, 15-visual, `checkLayout`); the visual review's gate (all categories ≥ 7) was not met: best 52.5/80 |
+| 29 Every screen finished at both sizes | met | every screen renders cleanly at both sizes (10-smoke, 15-visual, `checkLayout`, and Waves 1–5 visual/UI suites; owner-approved `title.webp`, `card-club.webp`, and seamless `terrazzo.webp`) |
 | 30 3D and 2D boards | met | 20-board3d (`--gpu`), `?gl=0` |
 | 31 Day and night contrast | met | 16-a11y: no failures on any screen in either theme |
 | 32 Animation and reduced motion | met | tile drops, score pops, steam, banners; 16-a11y reduced motion |
-| 33 Sound | met (not listened to) | 21-audio renders every sound offline: audible, unclipped, short |
+| 33 Sound | met (music owner-approved; live SFX/Night ambience awaiting final human listen) | 21-audio + full-volume probe verify 0 clipped samples; lobby, table, and dusk music approved by owner on 2026-11-25 (`OQ-WF7-W3-06`) |
 | 34–35 Mouse, touch, zoom, floating tile | met | 13-input |
 | 36–37 Keyboard, live region | met | 13-input, 16-a11y |
 | 38 No storage | met | 17-save |
@@ -50,13 +50,14 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 ## Tests
 - Node: dictionary, rules, reference (50,029 plays), move generator (exact against brute force), AI legality and
   vocabularies, Daily golden hashes, content and facts.
-- Browser: the full matrix (`--milestone final`, slow tests included) passed 99/99 at 1280×800 and 390×844, plus
-  GPU and file:// runs (state fuzz: 800 seeded steps; 4× CPU timings). See `TEST-CAMPAIGN.md`.
+- Browser & wave suite: expanded from the initial 99/99 baseline to 805/805 after Wave 4 and 814/814 after Wave 5
+  Batch 2 across 1280×800, 390×844, and Node checks, plus GPU, `file://`, 32/32 Node save-slot tests (`npm run test:save`),
+  and `npm run check:pipeline`. See `TEST-CAMPAIGN.md` and `REFINEMENT-2026-11.md`.
 
 ## Performance
 | Measure | Result | Budget |
 |---|---|---|
-| `index.html` | 1.49 MB on 25 Nov 2026 (three.js 546 KB, dictionary 330 KB) | ≤ 2 MB |
+| `index.html` | 1.48 MiB (1,515.9 KiB / 1,552,313 bytes on 26 Nov 2026; three.js 532.8 KiB / 32 exports, dictionary 321.9 KiB) | ≤ 2.0 MiB |
 | Dictionary ready | 153 ms; 864 ms at 4× throttle | ≤ 1.5 s at 4× |
 | Frame cost, 2D | idle 0.15 ms, dragging 2.5 ms | ≤ 8 / ≤ 12 ms |
 | Frame cost, 3D (GPU) | idle 0.36 ms, dragging 1.1 ms, 60 fps | ≤ 8 / ≤ 12 ms |
@@ -72,10 +73,11 @@ An original crossword word-tile game for 1–4 players set among the hot springs
 Hot Springs bonuses come to 3.5–7.2 % of AI points under tier-scaled lexicon foresight (`bonusWeight`: Easy 0 %, Medium 50 %, Hard 100 %, W1-S2-08) while the locked +10 / +18 / +30 tiers stay untouched (CD-WF0-09; before Wave 2, all AI tiers used 100 % foresight for a 9.9–11.5 % AI share). The computer hunts them selectively by tier, so a person hunting them will see more. Computers claim 0.23 to 0.36 Featured Springs a game without hidden peeking (CD-WF1-06): Medium and Hard go for one only when its plaque can be worked out (two letters or fewer in the fog, one entry of the lexicon left; W6-S3-02), and Easy never does. Before that rule they counted none and claimed 0.03 to 0.07 by chance. All four town opponents carry orthogonal trade-grounded heuristics in `STYLES` independent of difficulty (Opal favours baths/springs words and Bathhouse Row squares, Hollis favours compact connected cross-plays, park words and open-spring defence, Lucky bets on multiplier squares with low leave caution, and Julian favours 5+ letter plays and balanced racks). Table: `node tools/balance.mjs --games 150`, seeds 1000 to 1149 (Medium `leave: 0.65`, `bonusWeight: 0.5`; Easy Option B `slip: 0.60`, `pick: [0.05, 0.35]`, `maxLen: 6`, `bonusWeight: 0`, everyday words ~243–254 pts, 0 % obscure words, 0 Full Soaks); Lucky vs Hollis (Medium, 150 games): 43 % win rate (384 – 400, premium share 0.388 vs 0.313, counting what the multiplied letters and words earn and no flat bonus, W6-S1-03; before that 39 %, 382 – 399).
 
 ## Visual results
-Six scored review loops against Bathhouse Barons (two critics each: Claude and a Codex adversarial reviewer) took the
-score from 43 to a best of **52.5/80**. Tiles and type and Hot Springs identity reached the benchmark (7); the other
-six categories ended at 6–6.75. The campaign stopped at its six-loop cap, followed by an unscored defect pass. Details
-and the remaining gaps: `VISUAL-REPORT.md`, `reviews/HISTORY.md`.
+An early six-loop review against Bathhouse Barons took the initial baseline from 43 to **52.5/80** (`VISUAL-REPORT.md`,
+`reviews/HISTORY.md`). Subsequent pipeline Waves 1–5 superseded that baseline with honed warm travertine and twilight Night
+marble, brass-bezel painted Bathhouse Row medallions, tightened 3D desktop framing, collapsible mobile Featured Springs
+bar, and owner-approved OpenAI/Gemini art updates (`title.webp`, `card-club.webp`, and seamless `terrazzo.webp`), earning
+`PASS` on Vision (`8.5`), Agency (`8.0`), and Discovery (`8.0`) in the WF-6 round-2 audit.
 
 ## v1.1.1: stuck tiles
 Players on iPhone and iPad reported tiles that got stuck: lifted but never landing, or gone from the rack. A new
@@ -106,10 +108,8 @@ VISUAL-REPORT.md refer to the previous art.
 `npm test`: 115/115 passed.
 
 ## Known gaps
-- The visual gate was not met (best 52.5/80; board materials, phone layout and small defects score 6–6.25). The
-  likeliest next step is a fully painted board face, as Barons has.
-- Nobody has listened to the sound or used a screen reader; both are tested only by machine (offline renders, the
-  live region text).
+- The early 52.5/80 visual review was superseded by Waves 1–5 material, layout, and owner-approved art updates (`title.webp`, `card-club.webp`, `terrazzo.webp`); physical handset touch and thermal checks remain on the release checklist (`REFINEMENT-2026-11.md`).
+- The lobby, table, and dusk music renders were listened to and approved by the owner on 2026-11-25 (`OQ-WF7-W3-06`), while live interactive SFX/Night ambience (`OQ-WF6-03`) and an NVDA/VoiceOver screen-reader pass remain on the pre-release human sign-off checklist (`W6-S1-03`).
 - The Easy opponent is calibrated for beginners and casual play (~243–254 points against Hard/Medium, ~285 points in Easy mirror, using everyday common words plus 25 everyday two-letter words and no 7-letter Full Soaks).
 - The Daily Soak resets at each player's local midnight, so two players in different time zones can be on different
   deals at the same moment.

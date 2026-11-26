@@ -78,15 +78,15 @@ Featured Springs, new game / title). Daily → Daily results (score, words, stre
 
 ## 7. Art direction
 - Day theme from `gilded-spa`, night theme from `deco-neon`, springs from `thermal-water`.
-- Board: polished white marble slab with gray veining, brass inlay grid, terrazzo border, set on a
+- Board: honed warm travertine marble slab (twilight warm slate-marble in Night theme) with subtle veining, brass inlay grid, seamless terrazzo border, set on a
   bathhouse counter (walnut and marble) in 3D, lit by a warm lamp.
 - Premium squares: leaded stained-glass medallions (Warm/Hot turquoise-teal glass, Steam/Boiling amber-copper
   glass), each with its label and a distinct pattern (ring count) so colour is never the only cue.
 - Bathhouse Row squares: one small medallion per building (motifs in town-content §2).
 - Tiles: glazed ivory ceramic with a bevel, Fraunces letters in wrought-iron black-green, value in
   the corner; blanks are clear "steam glass" tiles with a ghosted letter.
-- Painted art (Codex, pilot first): title painting, counter texture, persona portraits, Register
-  ledger, steam sprites; 31 landmark vignettes reused from Barons for fact cards.
+- Painted art (OpenAI and Gemini image generation, pilot first): title painting, counter texture, terrazzo border swatch, bathhouse medallions, persona portraits,
+  category fact-card paintings; 18 landmark vignettes reused from Barons for fact cards.
 - Type: Limelight (display), Fraunces (tiles, headings), Josefin Sans (UI). All OFL, vendored.
 
 ## 8. Audio

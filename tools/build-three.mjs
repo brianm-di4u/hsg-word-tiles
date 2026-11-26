@@ -20,7 +20,7 @@ const NAMES = [
   'CanvasTexture', 'HemisphereLight', 'DirectionalLight', 'SpotLight',
   'Color', 'Vector2', 'Vector3', 'Matrix4', 'Raycaster', 'Plane',
   'SRGBColorSpace', 'NeutralToneMapping', 'PCFShadowMap', 'PMREMGenerator', 'BackSide', 'DoubleSide',
-  'RepeatWrapping', 'MirroredRepeatWrapping', 'LinearMipmapLinearFilter',
+  'RepeatWrapping', 'LinearMipmapLinearFilter',
 ];
 const entry = `export { ${NAMES.join(', ')} } from ${JSON.stringify(path.join(game, 'vendor', 'three', 'three.module.js').split(path.sep).join('/'))};`;
 const res = await esbuild.build({
