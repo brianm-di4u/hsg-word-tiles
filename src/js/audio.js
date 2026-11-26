@@ -4,14 +4,14 @@
 // Featured Spring. No two tile sounds are alike: every cue is nudged in pitch, level and colour as it is made.
 import { makeAudioKit, measureAudio, SCORES, SCENES } from './music.js';
 
-export const audio = { ctx: null, on: true, vol: 0.35, fxVol: 1, musicVol: 1, fx: true, music: true, amb: true, played: [], cues: [], total: 0, live: null, sfxOut: null, bus: null, kit: null, want: null, holds: new Set() };
+export const audio = { ctx: null, on: true, vol: 0.35, fxVol: 1, musicVol: 1, fx: true, music: true, amb: true, played: [], cues: [], total: 0, throttled: 0, suppressed: 0, isFast: null, live: null, sfxOut: null, bus: null, kit: null, want: null, holds: new Set() };
 const DEFAULT_VOL = 0.35;
 // Cues are built this much louder than they were before the music arrived (that was 1), so that at the shipped
 // volume the tile sounds peak between 0.2 and 0.45 and sit clearly over the music and the bed. Set it to 1 to undo.
 const CUE_GAIN = 6;
 // bells and steam are the loudest cues: a little less so they do not outrun the tile sounds (featured was 0.6: a play
 // that finds a Featured Spring peaked at up to 0.98 with the volume at full, so the bell is 3 dB quieter)
-const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, unpick: 1.4, tick: 1.05, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 0.9, hint: 0.6, yourturn: 1.3, good: 1.8, big: 0.57, discover: 0.6, defeat: 0.9, prompt: 1.2, reveal: 0.85, bagempty: 0.5, bell: 0.5 };
+const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, unpick: 1.4, tick: 1.05, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 1.1, hint: 0.92, yourturn: 1.3, good: 1.8, big: 0.57, discover: 0.6, defeat: 0.9, prompt: 1.2, reveal: 0.85, bagempty: 0.5, bell: 0.5 };
 const musicGain = (vol = audio.vol, level = audio.musicVol) => Math.min(1.5, vol / DEFAULT_VOL) * level;   // the Volume slider moves the music with the cues
 // Above the shipped volume the cues rise more gently than the slider: to about twice the shipped level at full, not
 // 2.9 times. With the slider at full the loudest repeats of steam and place overshot the limiter and clipped (peaks
@@ -27,12 +27,14 @@ export const CEILING = Float32Array.from({ length: 4097 }, (_, i) => { const x =
 // one master bus: cues, music and ambience all pass a limiter so the loudest cue on top of both never clips
 function graph(ctx, dest, seed) {
   const lim = ctx.createDynamicsCompressor();
-  lim.threshold.value = -3; lim.knee.value = 3; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.2;
+  lim.threshold.value = -3; lim.knee.value = 3; lim.ratio.value = 12; lim.attack.value = 0.001; lim.release.value = 0.2;
   const ceil = ctx.createWaveShaper(); ceil.curve = CEILING;
   lim.connect(ceil); ceil.connect(dest);
   const sfx = ctx.createGain(); sfx.connect(lim);
-  const mus = ctx.createGain(); mus.gain.value = musicGain(DEFAULT_VOL, 1); mus.connect(lim);
-  return { lim, sfx, mus, kit: makeAudioKit(ctx, mus, { seed, music: 1, ambience: 1 }) };
+  const musEq = ctx.createBiquadFilter();
+  musEq.type = 'peaking'; musEq.frequency.value = 2350; musEq.Q.value = 0.9; musEq.gain.value = -2;
+  const mus = ctx.createGain(); mus.gain.value = musicGain(DEFAULT_VOL, 1); mus.connect(musEq); musEq.connect(lim);
+  return { lim, sfx, mus, musEq, kit: makeAudioKit(ctx, mus, { seed, music: 1, ambience: 1 }) };
 }
 
 export function unlock() {
@@ -159,7 +161,9 @@ const bell = (t, f, g = 0.12) => {
   try { BELL_PARTIALS.forEach(([m, dur, gain]) => tone(f * m, t, dur, 'sine', g * gain)); } finally { OUT = keep; }
 };
 
-const DUCK = { chime: [6, 900], featured: [6, 1400], fanfare: [6, 1800] };
+const DUCK = { chime: [6, 900], featured: [6, 1400], fanfare: [6, 1800], discover: [4, 800], big: [4, 700] };
+const CUE_THROTTLE_S = 0.035;
+const lastCueAt = new WeakMap();
 
 // opts: pan (-1..1, kept within +-0.7: the board column of a tile), step (0.. : semitones up along a word), delay
 // (seconds from now: a sting that waits for the tiles it belongs to) and gain (a factor on the cue's level, 1 when left out)
@@ -174,6 +178,14 @@ export function sfx(name, opts = {}) {
   }
   if (!audio.on || !audio.fx || !audio.ctx) return;
   const c = audio.ctx, t = c.currentTime + (opts.delay || 0), step = opts.step || 0;
+  if (!opts._offline && c === audio.live) {
+    if (audio.isFast && audio.isFast()) { audio.suppressed++; return; }
+    let seen = lastCueAt.get(c);
+    if (!seen) { seen = new Map(); lastCueAt.set(c, seen); }
+    const prevAt = seen.get(name);
+    if (prevAt != null && Math.abs(t - prevAt) < CUE_THROTTLE_S) { audio.throttled++; return; }
+    seen.set(name, t);
+  }
   try {
     OUT = audio.sfxOut || c.destination;
     if (opts.pan && c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = Math.max(-0.7, Math.min(0.7, opts.pan)); p.connect(OUT); OUT = p; }

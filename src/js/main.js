@@ -56,6 +56,7 @@ const G = {
   returnFocus: null, parCache: {}, boardTap: null, houseOpen: false,
 };
 window.__G = G;
+audio.isFast = () => !!G.fast;
 
 // ---------- settings ----------
 const reduced = () => G.settings.motion === 'reduce' || (G.settings.motion === 'system' && matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -3135,8 +3136,8 @@ window.__game = {
   audioList() { return audioList(); },
   audioRender(name, seconds = 30, wantWav = false, opts) { return audioRender(name, seconds, !!wantWav, opts); },
   audioState() {
-    const k = audio.kit, i = k && k.music.info();
-    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, ticking: k ? k.ticking : false, holds: [...audio.holds], tune: tuneName(), intensity: k ? k.music.inten : 0, bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), total: audio.total, cues: audio.cues.slice(), fxGain: audio.bus ? audio.bus.sfx.gain.value : null, musGain: audio.bus ? audio.bus.mus.gain.value : null };
+    const k = audio.kit, i = k && k.music.info(), b = audio.bus;
+    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, ticking: k ? k.ticking : false, holds: [...audio.holds], tune: tuneName(), intensity: k ? k.music.inten : 0, bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), total: audio.total, cues: audio.cues.slice(), throttled: audio.throttled, suppressed: audio.suppressed, fxGain: b ? b.sfx.gain.value : null, musGain: b ? b.mus.gain.value : null, limAttack: b ? b.lim.attack.value : null, musEq: b && b.musEq ? { type: b.musEq.type, freq: b.musEq.frequency.value, q: b.musEq.Q.value, gain: b.musEq.gain.value } : null };
   },
   async act(name, ...a) {
     switch (name) {
