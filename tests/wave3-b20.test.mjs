@@ -205,8 +205,10 @@ export const tests = [
       await t.game('newGame', { mode: 'daily', date: '2026-11-25' });
       await t.waitIdle(8000);
       const first = (await t.page.textContent('#preview')).trim();
-      // a Daily's Turn 1 now opens on Today's Springs (W1-S4-10, wave4-b04); this test was written when it opened on 'Start on the'
-      t.expect(/^Today's Springs/.test(first) && !first.includes('“'), `the next game does not open on the last one (${first})`);
+      // a Daily's Turn 1 now opens on its Springs line (W1-S4-10, wave4-b04); this test was written when it opened on 'Start on the'.
+      // The line says "Today's Springs" only on the Daily's own date and "Springs of the day" on any other (ui.js todaysSprings), so both are
+      // accepted: fe9ce1b's /^Today's Springs/ held only on 2026-11-25 (W4-B33-hotfix; no wall-clock read)
+      t.expect(/^(Today's Springs|Springs of the day)/.test(first) && !first.includes('“'), `the next game does not open on the last one (${first})`);
     },
   },
 ];
