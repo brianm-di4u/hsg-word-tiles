@@ -1016,10 +1016,12 @@ function celebrate(e, bark, wait = 0, prevPlaqueSnap = null, extra = {}) {
     for (const fw of claimedFeats) tell({ kind: 'featured', who, title: `Featured Spring: ${fw}`, sub: `${quote('themed') || `${p.name} found it`} · +${FEATURED_BONUS}`, fact: G.lex.entry(fw)?.id, form: fw });
     cue('featured');
   }
+  const reg = register();
+  const seenNew = new Set();
   for (const w of themed) {
     const entry = G.lex.byId.get(w.themed);
-    const fresh = p.kind === 'human' && !register()[w.w];   // celebrate runs before recordRegister: this is the first time the word is signed in
-    if (fresh) found = true;
+    const fresh = p.kind === 'human' && !seenNew.has(entry.id) && !entry.forms.some((f) => reg[f]);   // celebrate runs before recordRegister: this is the first time the entry is signed in
+    if (fresh) { found = true; seenNew.add(entry.id); }
     tell({ kind: 'themed', title: `${w.w} +${w.bonus}${w.bath ? ` · Row +${ROW_BONUS}` : ''}`, sub: fresh ? 'New in your Register' : G.lex.categories[entry.cat].name, fact: entry.id, form: w.w });
   }
   const fireVfx = () => {
@@ -1080,7 +1082,7 @@ function celebrate(e, bark, wait = 0, prevPlaqueSnap = null, extra = {}) {
   if (barkWho) cue('bark', { persona: barkWho, delay: 0.12 });
   if (e.full) { tell({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); cue('chime', { delay: STING_LAG }); }   // the chime follows the play (and a Featured Spring's bell) by a beat, so they do not stack at full volume
   // one sting a play: a Featured Spring or a Full Soak has its own, then a word new to the Register, then the size of the score
-  const done = p.kind === 'human' ? UI.categoriesCompleted(G.lex, register(), e.words) : [];
+  const done = p.kind === 'human' ? UI.categoriesCompleted(G.lex, reg, e.words) : [];
   for (const ck of done) tell({ kind: 'themed', title: `${G.lex.categories[ck].name}: complete`, sub: 'All its words are in your Register.', keep: true });
   const st = done.length && !e.featured && !e.full ? 'fanfare' : UI.stingFor(e, found); if (st) cue(st, { delay: STING_LAG });
   if (!e.full && bark && bark.event === 'big') tell({ kind: 'bark', who, title: `${p.name}: ${e.words[0].w} +${e.score}`, sub: quote('big') });
