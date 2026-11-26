@@ -216,8 +216,17 @@ body.reduce .house-rules summary::after { transition: none; }
 .over .dlg-btns .btn { min-height: 44px; min-width: min-content; flex: 1 1 auto; padding: 8px 12px; font-size: 0.92rem; }
 @media (min-width: 561px) and (min-height: 701px) { .over .dlg-btns:has(.btn:nth-child(5)) .btn { flex-basis: 30%; } }
 
-/* badges */
-.badge { position: relative; flex: none; width: var(--s); height: var(--s); border-radius: 50%; display: grid; place-items: center; background: var(--c); color: #FFF; border: 2px solid var(--brass-hi); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
+/* badges (W3-S2-07: Art Deco brass-beveled double-ring medallion for monogram seats + subtle expression halos) */
+.badge { --badge-in: 0 0 0 0 transparent; position: relative; flex: none; width: var(--s); height: var(--s); border-radius: 50%; display: grid; place-items: center; background: var(--c); color: #FFF; border: 2px solid var(--brass-hi); box-shadow: var(--badge-in), 0 1px 3px rgba(0, 0, 0, 0.4); }
+.badge:not(.has-face) { --badge-in: inset 0 0 0 2px rgba(28, 18, 8, 0.48), inset 0 0 0 3.5px rgba(243, 221, 139, 0.78); background: radial-gradient(circle at 34% 28%, rgba(255, 248, 224, 0.2), transparent 56%, rgba(16, 10, 4, 0.28) 100%), var(--c); }
+.chip .badge:not(.has-face) { --badge-in: inset 0 0 0 1.25px rgba(28, 18, 8, 0.48), inset 0 0 0 2.25px rgba(243, 221, 139, 0.78); }
+.pcard.on .badge, .chip.on .badge { border-color: #F6E18F; box-shadow: var(--badge-in), 0 0 0 2px rgba(243, 221, 139, 0.65), 0 1px 4px rgba(0, 0, 0, 0.42); }
+.badge.mood-big, .badge.mood-win { border-color: #FFF0B3; box-shadow: var(--badge-in), 0 0 0 2.5px rgba(243, 221, 139, 0.85), 0 0 12px rgba(217, 162, 58, 0.52), 0 1px 4px rgba(0, 0, 0, 0.42); animation: badge-halo 2.2s ease-in-out infinite; }
+@keyframes badge-halo {
+  0%, 100% { box-shadow: var(--badge-in), 0 0 0 2px rgba(243, 221, 139, 0.72), 0 0 8px rgba(217, 162, 58, 0.36), 0 1px 4px rgba(0, 0, 0, 0.42); }
+  50% { box-shadow: var(--badge-in), 0 0 0 3.5px rgba(255, 240, 179, 0.92), 0 0 15px rgba(217, 162, 58, 0.62), 0 1px 4px rgba(0, 0, 0, 0.42); }
+}
+.badge.mood-pass, .badge.mood-loss { border-color: #8A96B0; filter: saturate(0.72) brightness(0.88); }
 .badge img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .badge b { font: 600 calc(var(--s) * 0.38) var(--f-serif); }
 .badge i { position: absolute; right: -4px; bottom: -4px; width: 17px; height: 17px; border-radius: 50%; background: #1F2A24; color: #F3DD8B; font: 700 10px/17px var(--f-ui); font-style: normal; text-align: center; border: 1px solid var(--brass-hi); }
@@ -1089,6 +1098,8 @@ body.reduce .stile,
 body.reduce .sbar-chev svg { transition: none; }
 body.reduce .thinking i,
 body.reduce .pcard.on,
+body.reduce .badge.mood-big,
+body.reduce .badge.mood-win,
 body.reduce .pword b.fog-clear,
 body.reduce .plaque.just-claimed,
 body.reduce .springs-bar.just-claimed,
@@ -1118,6 +1129,8 @@ body.reduce .pop.themed { animation: pop-fade 0.95s ease-out forwards; }
   body:not(.motion-full) .sbar-chev svg { transition: none; }
   body:not(.motion-full) .thinking i,
   body:not(.motion-full) .pcard.on,
+  body:not(.motion-full) .badge.mood-big,
+  body:not(.motion-full) .badge.mood-win,
   body:not(.motion-full) .pword b.fog-clear,
   body:not(.motion-full) .plaque.just-claimed,
   body:not(.motion-full) .springs-bar.just-claimed,

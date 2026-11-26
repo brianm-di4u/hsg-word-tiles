@@ -1,6 +1,6 @@
 // HTML for screens, dialogs and panels. Pure string templates; main.js wires the events.
 import { PERSONAS, persona, LEVEL_NAME, LEVEL_BLURB, seatLevel, HUMAN_COLORS } from './personas.js';
-import { SHORT } from './voices.js';
+import { SHORT, BIG_PLAY } from './voices.js';
 import { TILES, BLANKS } from './tiles.js';
 import { N, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, isBath, explainWord } from './score.js';
 import { DAILY_TURNS, unseen } from './engine.js';
@@ -45,13 +45,31 @@ function seatMono(name) {
   return m ? `P${m[1]}` : '';
 }
 
-// A round monogram badge for a seat: persona colour or seat colour, initials, seat number.
-export function badge(p, k, size = 40) {
+// Subtle reaction mood for a seat's badge (W3-S2-07): warm brass halo on big play/win, cool dim on pass/swap/loss.
+export function seatMood(s, k) {
+  if (!s || !Array.isArray(s.log)) return '';
+  if (s.over && s.result && s.mode !== 'daily') {
+    const wins = s.result.winners || [];
+    return wins.includes(k) ? 'win' : 'loss';
+  }
+  for (let i = s.log.length - 1; i >= 0; i--) {
+    const e = s.log[i];
+    if (e.kind === 'end' || e.p !== k) continue;
+    if (e.kind === 'play') return (e.score >= BIG_PLAY || e.full || e.featured) ? 'big' : '';
+    if (e.kind === 'pass' || e.kind === 'swap') return 'pass';
+    return '';
+  }
+  return '';
+}
+
+// A round monogram badge for a seat: persona colour or seat colour, initials, seat number, optional reaction mood.
+export function badge(p, k, size = 40, mood = '') {
   const per = p.persona ? persona(p.persona) : null;
   const color = per ? per.color : HUMAN_COLORS[k % HUMAN_COLORS.length];
   const face = per && art.has('face-' + per.id) ? `<img src="${art.src('face-' + per.id)}" alt="" width="${size}" height="${size}">` : '';
   const mon = (!per && seatMono(p.name)) || initials(p.name);
-  return `<span class="badge${face ? ' has-face' : ''}" style="--c:${color};--s:${size}px" aria-hidden="true">${face || `<b>${esc(mon)}</b>`}<i>${k + 1}</i></span>`;
+  const cls = `badge${face ? ' has-face' : ''}${mood ? ` mood-${mood}` : ''}`;
+  return `<span class="${cls}" style="--c:${color};--s:${size}px" aria-hidden="true">${face || `<b>${esc(mon)}</b>`}<i>${k + 1}</i></span>`;
 }
 
 // shown where progress would be kept, when the browser will not store anything (a private window, blocked site data)
@@ -179,9 +197,10 @@ export function scoresHtml(s, compact) {
     const n = showTiles && Array.isArray(p.rack) ? p.rack.length : null;
     const tileLabel = n != null ? plural(n, 'tile') : '';
     const lowCls = n === 1 ? ' low' : '';
+    const mood = seatMood(s, k);
     return compact
-      ? `<div class="chip ${active ? 'on' : ''}" aria-current="${active}" aria-label="${esc(p.name)}: ${p.score} points${n != null ? `, ${tileLabel} left` : ''}${active ? ', current turn' : ''}">${badge(p, k, 26)}<span class="sr-only">${esc(p.name)} </span><b class="score" data-score="${k}">${p.score}</b>${n != null ? `<span class="ctiles${lowCls}" data-tiles="${k}" aria-hidden="true">${tileLabel}</span>` : ''}</div>`
-      : `<div class="pcard ${active ? 'on' : ''}" aria-current="${active}">${badge(p, k, 44)}<div class="pmeta"><b>${esc(p.name)}</b><small>${esc(sub)}</small>${n != null ? `<span class="ptiles${lowCls}" data-tiles="${k}">${tileLabel}</span>` : ''}</div><b class="score" data-score="${k}">${p.score}</b></div>`;
+      ? `<div class="chip ${active ? 'on' : ''}" aria-current="${active}" aria-label="${esc(p.name)}: ${p.score} points${n != null ? `, ${tileLabel} left` : ''}${active ? ', current turn' : ''}">${badge(p, k, 26, mood)}<span class="sr-only">${esc(p.name)} </span><b class="score" data-score="${k}">${p.score}</b>${n != null ? `<span class="ctiles${lowCls}" data-tiles="${k}" aria-hidden="true">${tileLabel}</span>` : ''}</div>`
+      : `<div class="pcard ${active ? 'on' : ''}" aria-current="${active}">${badge(p, k, 44, mood)}<div class="pmeta"><b>${esc(p.name)}</b><small>${esc(sub)}</small>${n != null ? `<span class="ptiles${lowCls}" data-tiles="${k}">${tileLabel}</span>` : ''}</div><b class="score" data-score="${k}">${p.score}</b></div>`;
   }).join('');
 }
 
@@ -696,9 +715,9 @@ export function overHtml(s, lex, dinfo, extra = {}) {
     ${art.has('title') ? `<div class="over-art" style="background-image:url(${art.src('title')})" aria-hidden="true"></div>` : ''}
     <header class="masthead"><p class="mast-kicker">${daily ? (dReplay ? 'Practice replay' : 'The Steam Ledger') : KICKER[oc]}</p><h1 tabindex="-1">${daily ? 'Daily Soak' : 'Final Soak'}</h1><p class="mast-sub">${esc(why)}</p>${why2 ? `<p class="decisive">${why2}</p>` : ''}</header>
     ${dinfo ? `<div class="daily-box"><p class="daily-date">${esc(dinfo.label)}${dReplay ? ' · <strong>Practice replay</strong>' : ''}</p><div class="daily-stats"><div><b>${s.players[0].score}</b><small>${dReplay ? 'practice replay' : 'this soak'}</small></div><div><b>${dOfficial}</b><small>official today</small></div><div><b>${dinfo.streak}</b><small>day streak</small></div></div><p class="note">${dReplay ? "Today's official score is already locked to your first run. Practice replays do not change Records." : 'Everyone gets the same tiles today. Come back tomorrow for a new soak.'}</p>${dinfo.par ? `<p class="par" data-par-line="1">${esc(persona('hollis').name)} scored ${dinfo.par.m} and ${esc(persona('julian').name)} ${dinfo.par.h} on these tiles.</p>` : ''}${dinfo.plays > 1 && dinfo.first != null ? `<p class="par">Your first try today: ${dinfo.first}.</p>` : ''}${dReplay && dinfo.replayBest != null ? `<p class="par">Best practice replay today: ${dinfo.replayBest}.</p>` : ''}${dinfo.rested ? '<p class="note rest-note">You missed a day, and a rest day kept your streak going. You get one in any seven days.</p>' : ''}</div>` : ''}
-    ${daily ? '' : `<div class="winner">${badge(top.p, top.k, 92)}<div class="wmeta"><span class="ribbon">${win.length > 1 ? 'Tied for first' : 'Winner'}</span><b>${win.map((k) => esc(s.players[k].name)).join(' &amp; ')}</b><small class="wlines">${line(top.p, top.k)}</small>${say(top.k)}</div><b class="wscore">${top.p.score}</b></div>`}
+    ${daily ? '' : `<div class="winner">${badge(top.p, top.k, 92, 'win')}<div class="wmeta"><span class="ribbon">${win.length > 1 ? 'Tied for first' : 'Winner'}</span><b>${win.map((k) => esc(s.players[k].name)).join(' &amp; ')}</b><small class="wlines">${line(top.p, top.k)}</small>${say(top.k)}</div><b class="wscore">${top.p.score}</b></div>`}
     ${pbs}
-    <ol class="final">${order.slice(daily ? 0 : 1).map(({ p, k }) => `<li>${badge(p, k, 40)}<div><b>${esc(p.name)}</b><small class="wlines">${line(p, k)}</small>${say(k)}</div><b class="fscore">${p.score}</b></li>`).join('')}</ol>
+    <ol class="final">${order.slice(daily ? 0 : 1).map(({ p, k }) => `<li>${badge(p, k, 40, daily ? '' : (win.includes(k) ? 'win' : 'loss'))}<div><b>${esc(p.name)}</b><small class="wlines">${line(p, k)}</small>${say(k)}</div><b class="fscore">${p.score}</b></li>`).join('')}</ol>
     <div class="over-cols">
       <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}">${t.w} <small>+${t.pts}</small></button>`).join('')}</div>` : '<p class="note">None this game. A word like SPA, STEAM or ROCK pays a bonus and opens a card of local history.</p>'}</section>
       ${s.featured.length ? `<section><h2>Featured Springs</h2><ul class="feat-list">${s.featured.map((f) => { const id = lex.entry(f.word)?.id, inner = `<b>${f.word}</b><small>${f.by != null ? `found by ${esc(s.players[f.by].name)}` : 'stayed hidden'}${id ? ' · read the card' : ''}</small>`; return `<li class="${f.by != null ? 'got' : ''}">${id ? `<button type="button" class="fchip" data-fact="${id}" data-form="${f.word}">${inner}</button>` : inner}</li>`; }).join('')}</ul></section>` : ''}
