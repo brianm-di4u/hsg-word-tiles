@@ -78,19 +78,27 @@ export const tests = [
       t.equal((await t.game('audioState')).ctx, 'running', 'Settings slider unlocks AudioContext on a fresh visit');
       t.equal((await t.game('audioState')).ticking, true, 'music scheduler ticks at non-zero slider');
 
-      // 2. Dragging Music level to 0 pauses the 40 Hz scheduler; dragging back restarts it (Ruling 10)
+      // 2. Dragging Music level to 0 keeps the scheduler ticking while Ambience level > 0; dragging both to 0 pauses the 40 Hz scheduler (Ruling 10, updated for W4-S5-05 / OQ-WF6-03 independent Ambience slider)
       await t.page.evaluate(() => {
         const r = document.querySelector('[data-musicvol]');
         r.value = '0';
         r.dispatchEvent(new Event('input', { bubbles: true }));
       });
-      t.equal((await t.game('audioState')).ticking, false, '40 Hz scheduler pauses when musicVol is 0');
+      t.equal((await t.game('audioState')).ticking, true, '40 Hz scheduler stays active while ambVol > 0');
       await t.page.evaluate(() => {
-        const r = document.querySelector('[data-musicvol]');
-        r.value = '1';
+        const r = document.querySelector('[data-ambvol]');
+        r.value = '0';
         r.dispatchEvent(new Event('input', { bubbles: true }));
       });
-      t.equal((await t.game('audioState')).ticking, true, '40 Hz scheduler restarts when musicVol > 0');
+      t.equal((await t.game('audioState')).ticking, false, '40 Hz scheduler pauses when both musicVol and ambVol are 0');
+      await t.page.evaluate(() => {
+        for (const [sel, val] of [['[data-musicvol]', '1'], ['[data-ambvol]', '1']]) {
+          const r = document.querySelector(sel);
+          r.value = val;
+          r.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      });
+      t.equal((await t.game('audioState')).ticking, true, '40 Hz scheduler restarts when musicVol/ambVol > 0');
 
       // 3. Simulate iOS WebKit AudioContext state === 'interrupted' and verify recovery via unlock(), visibilitychange, and pageshow
       const rec = await t.page.evaluate(() => {

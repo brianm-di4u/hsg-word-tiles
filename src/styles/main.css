@@ -665,7 +665,7 @@ body.theme-dark .tier-pts { color: #14121F; }
 /* settings */
 .setrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px dotted var(--line); flex-wrap: wrap; }
 .setrow > span { font-weight: 700; }
-.setrow input[type="range"] { width: 200px; accent-color: var(--primary); min-height: 44px; }
+.setrow input[type="range"] { width: clamp(148px, 46vw, 200px); accent-color: var(--primary); min-height: 44px; }
 
 /* register */
 .reg-nudge {

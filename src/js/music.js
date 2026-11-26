@@ -194,6 +194,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
     },
     intensity(x) { inten = Math.max(0, Math.min(1, x)); },
     get inten() { return inten; },
+    get gain() { return musicBus.gain.value; },
     get score() { return cur && cur.score; },
     // For tests: how much the lead has really varied so far.
     info() { return cur ? { bars: cur.bar, formBars: cur.bars.length, distinctBars: cur.sigs.size, notes: cur.notes, pitches: cur.pitches.size } : null; },
@@ -222,6 +223,17 @@ export function makeAudioKit(ctx, out, opt = {}) {
       }
     },
     cricket: (dst, t, v) => { const f = rr(4200, 5200), n = 3 + ((rnd() * 4) | 0); for (let i = 0; i < n; i++) { const s = t + i * 0.055, o = ctx.createOscillator(), e = gain(0.0001, dst); o.frequency.value = f; e.gain.setValueAtTime(v * 0.35, s); e.gain.exponentialRampToValueAtTime(0.0001, s + 0.03); o.connect(e); o.start(s); o.stop(s + 0.04); } },
+    // Ultra-faint muffled indoor transom night pulse (OQ-WF6-03, CD-WF4-05): strictly <= 2800 Hz (2200 Hz lowpass,
+    // 1950-2450 Hz tone, gain <= 0.008) so the 3.3-5.2 kHz ceramic/steam SFX band stays completely clean.
+    transom: (dst, t, v) => {
+      const f = rr(1950, 2450), n = 3 + ((rnd() * 3) | 0), lp = lowpass(2200, dst, 'lowpass', 0.7);
+      for (let i = 0; i < n; i++) {
+        const s = t + i * 0.062, o = ctx.createOscillator(), e = gain(0.0001, lp);
+        o.frequency.value = f;
+        e.gain.setValueAtTime(0.0001, s); e.gain.linearRampToValueAtTime(v * 0.35, s + 0.008); e.gain.exponentialRampToValueAtTime(0.0001, s + 0.036);
+        o.connect(e); o.start(s); o.stop(s + 0.045);
+      }
+    },
     swell: (dst, t, v) => { const d = rr(2.5, 5), e = gain(0.0001, lowpass(rr(500, 900), dst, 'bandpass', 0.6)); e.gain.setValueAtTime(0.0001, t); e.gain.linearRampToValueAtTime(v, t + d * 0.45); e.gain.linearRampToValueAtTime(0.0001, t + d); noise(t, d + 0.05).connect(e); },
   };
   let scene = null;
@@ -233,14 +245,19 @@ export function makeAudioKit(ctx, out, opt = {}) {
       src.connect(f); nodes.push(src, g, f);
       if (b.lfo) { const l = ctx.createOscillator(); l.frequency.value = b.lfo.rate; l.connect(gain((b.gain ?? 0.05) * b.lfo.depth * 0.5, g.gain)); l.start(at); nodes.push(l); }
       if (b.flfo) { const l = ctx.createOscillator(); l.frequency.value = b.flfo.rate; l.connect(gain(b.flfo.depth, f.frequency)); l.start(at); nodes.push(l); }
-      beds.push({ def: b, g });
+      beds.push({ def: b, g, f });
     }
     bus.gain.setValueAtTime(0.0001, at); bus.gain.linearRampToValueAtTime(1, at + Math.max(fade, 0.02));
     const sc = { def, bus, nodes, beds, spots: (def.spots || []).map((d) => ({ d, next: at + rr(0.3, d.every[1]) })) };
     for (const k of Object.keys(params)) applyParam(sc, k, params[k], at, 0.01);
     return sc;
   }
-  function applyParam(sc, name, v, t, tc) { for (const b of sc.beds) if (b.def.param === name) { const r = b.def.range || [0, 1]; b.g.gain.setTargetAtTime((b.def.gain ?? 0.05) * (r[0] + (r[1] - r[0]) * v), t, tc); } }
+  function applyParam(sc, name, v, t, tc) {
+    for (const b of sc.beds) {
+      if (b.def.param === name) { const r = b.def.range || [0, 1]; b.g.gain.setTargetAtTime((b.def.gain ?? 0.05) * (r[0] + (r[1] - r[0]) * v), t, tc); }
+      if (b.def.fparam === name && b.f) { const fr = b.def.frange || [b.def.freq || 600, b.def.freq || 600]; b.f.frequency.setTargetAtTime(fr[0] + (fr[1] - fr[0]) * v, t, tc); }
+    }
+  }
   const amb = {
     play(def, o = {}) {
       const at = o.at ?? ctx.currentTime + 0.03, fade = o.fade ?? 2;
@@ -252,6 +269,8 @@ export function makeAudioKit(ctx, out, opt = {}) {
     stop(fade = 1.5) { amb.play(null, { fade }); },
     level(v) { aLevel = v; if (!held) ambBus.gain.setTargetAtTime(v, ctx.currentTime, 0.05); syncTimer(); },
     set(name, v, tc = 0.5) { params[name] = v; if (scene) applyParam(scene, name, v, ctx.currentTime, tc); },
+    param(name) { return params[name] ?? 0; },
+    get gain() { return ambBus.gain.value; },
     get scene() { return scene && scene.def; },
   };
 
@@ -287,8 +306,11 @@ export function makeAudioKit(ctx, out, opt = {}) {
         let guard = 0;
         while (sp.next < T && guard++ < 400) {
           const on = sp.d.param ? (params[sp.d.param] ?? 0) : 1;
-          if (on > 0 && rnd() < on) { const p = sp.d.pan || [-0.5, 0.5], dst = panTo(rr(p[0], p[1]), scene.bus), v = (sp.d.gain ?? 0.05) * rr(0.6, 1); if (typeof sp.d.make === 'function') sp.d.make(ctx, dst, sp.next, rnd, v); else SPOT[sp.d.make](dst, sp.next, v); }
-          sp.next += rr(sp.d.every[0], sp.d.every[1]);
+          const sl = sp.d.slow ? (params[sp.d.slow.param] ?? 0) : 0;
+          const gScale = sl > 0 && sp.d.slow.gain != null ? 1 + (sp.d.slow.gain - 1) * sl : 1;
+          if (on > 0 && rnd() < on) { const p = sp.d.pan || [-0.5, 0.5], dst = panTo(rr(p[0], p[1]), scene.bus), v = (sp.d.gain ?? 0.05) * gScale * rr(0.6, 1); if (typeof sp.d.make === 'function') sp.d.make(ctx, dst, sp.next, rnd, v); else SPOT[sp.d.make](dst, sp.next, v); }
+          const pace = sl > 0 && sp.d.slow.factor ? 1 + (sp.d.slow.factor - 1) * sl : 1;
+          sp.next += rr(sp.d.every[0], sp.d.every[1]) * pace;
         }
       }
     }
@@ -381,13 +403,19 @@ export const SCORES = {
 };
 export const SCENES = {
   // Inside the bathhouse: a low wash of water, thin steam air, drips, the odd vent and, rarely, the front-desk bell.
-  // The steam bed swells as the board fills (amb.set('steam', 0..1)).
+  // The steam bed swells as the board fills (amb.set('steam', 0..1)); Night theme warms the bed cutoffs, softens
+  // drip/vent cadence, and adds an ultra-faint <= 2800 Hz muffled transom pulse (OQ-WF6-03, CD-WF4-05).
   bathhouse: {
     beds: [
-      { type: 'lowpass', freq: 520, gain: 0.045, lfo: { rate: 0.07, depth: 0.5 }, flfo: { rate: 0.05, depth: 140 } },
-      { type: 'bandpass', freq: 2400, q: 0.6, gain: 0.011, pan: 0.3, lfo: { rate: 0.11, depth: 0.8 }, param: 'steam', range: [0.5, 1.6] },
-      { type: 'lowpass', freq: 190, gain: 0.025, pan: -0.2, lfo: { rate: 0.04, depth: 0.4 } },
+      { type: 'lowpass', freq: 520, fparam: 'night', frange: [520, 340], gain: 0.045, lfo: { rate: 0.07, depth: 0.5 }, flfo: { rate: 0.05, depth: 140 } },
+      { type: 'bandpass', freq: 2400, fparam: 'night', frange: [2400, 1500], q: 0.6, gain: 0.011, pan: 0.3, lfo: { rate: 0.11, depth: 0.8 }, param: 'steam', range: [0.5, 1.6] },
+      { type: 'lowpass', freq: 190, fparam: 'night', frange: [190, 160], gain: 0.025, pan: -0.2, lfo: { rate: 0.04, depth: 0.4 } },
     ],
-    spots: [{ make: 'drip', every: [1.8, 6], gain: 0.04 }, { make: 'hiss', every: [9, 20], gain: 0.03 }, { make: 'bell', every: [45, 90], gain: 0.028, pan: [-0.3, 0.3] }],
+    spots: [
+      { make: 'drip', every: [1.8, 6], gain: 0.04, slow: { param: 'night', factor: 1.55, gain: 0.78 } },
+      { make: 'hiss', every: [9, 20], gain: 0.03, slow: { param: 'night', factor: 1.45, gain: 0.75 } },
+      { make: 'bell', every: [45, 90], gain: 0.028, pan: [-0.3, 0.3] },
+      { make: 'transom', every: [14, 28], gain: 0.007, pan: [-0.45, 0.45], param: 'night' },
+    ],
   },
 };

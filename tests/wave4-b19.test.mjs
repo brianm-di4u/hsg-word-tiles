@@ -1,6 +1,10 @@
 // Wave 4, batch W4-B19 (WF-4 sonic_world_music):
 // - W4-S5-03: whisper-quiet (0.08-0.15 default peak) ceramic/brass/paper UI micro-foley (uiTap, uiTile, uiClose)
 //   covering menu/Setup/Help tabs/plaque/Breakdown clicks, Swap tile toggles, Blank letter picks, and closeDialog()/back().
+// - W4-S5-05: independent Ambience level slider via kit.amb.level(st.ambVol) (OQ-WF6-03, default 100%) and Night-theme
+//   amb.set('night', dark() ? 1 : 0, 2) low-pass warmth, softened drip/steam cadence, and ultra-faint <=2800 Hz transom pulse (CD-WF4-05).
+import { makeAudioKit, SCENES } from '../src/js/music.js';
+
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const seeded = (seed) => new Function(`
   window.__TEST_TIPS__ = false;
@@ -156,6 +160,157 @@ export const tests = [
       await t.page.waitForSelector('#modal .blank [data-letter="S"]', { timeout: 3000 });
       h = await heard(() => t.page.click('#modal .blank [data-letter="S"]'));
       t.expect(h.includes('uiTile') && h.includes('place') && !h.includes('uiClose'), `Blank letter pick fires uiTile + place without spurious uiClose (${h.join(',')})`);
+    },
+  },
+
+  // ---------- W4-S5-05 ----------
+  {
+    name: 'W4-S5-05 bathhouse Night param warms bed lowpass cutoffs, slows/softens drip & hiss, and uses <=2800 Hz gain<=0.008 transom pulse with zero unfiltered cricket (Node)',
+    node: true,
+    async run(t) {
+      const spots = SCENES.bathhouse.spots;
+      t.equal(spots.some((s) => s.make === 'cricket'), false, 'no raw 4.2-5.2 kHz SPOT.cricket in indoor bathhouse scene (CD-WF4-05)');
+      const tr = spots.find((s) => s.make === 'transom');
+      t.expect(!!tr && tr.param === 'night' && tr.gain <= 0.008, `ultra-faint night-gated transom spot present (gain=${tr?.gain} <= 0.008)`);
+
+      const runScene = (night) => {
+        const filters = [], oscs = [], freqTargets = [];
+        const param = (init = 0, track = null) => ({
+          value: init,
+          cancelScheduledValues() {},
+          setValueAtTime() {},
+          linearRampToValueAtTime() {},
+          exponentialRampToValueAtTime() {},
+          setTargetAtTime(v, at, tc) { if (track) track.push({ v, at, tc }); },
+        });
+        const ctx = {
+          sampleRate: 22050, state: 'running', currentTime: 0,
+          createGain: () => ({ gain: param(1), connect(d) { return d; }, disconnect() {} }),
+          createBiquadFilter: () => {
+            const f = { type: 'lowpass', frequency: param(0, freqTargets), Q: param(0.7), connect(d) { return d; }, disconnect() {} };
+            filters.push(f); return f;
+          },
+          createOscillator: () => {
+            const o = { type: 'sine', frequency: param(0), detune: param(0), connect(d) { return d; }, disconnect() {}, start(at) { o._start = at; }, stop() {} };
+            oscs.push(o); return o;
+          },
+          createDelay: () => ({ delayTime: param(0), connect(d) { return d; }, disconnect() {} }),
+          createStereoPanner: () => ({ pan: param(0), connect(d) { return d; }, disconnect() {} }),
+          createBuffer: (_, len) => ({ getChannelData: () => new Float32Array(len) }),
+          createBufferSource: () => ({ buffer: null, loop: false, connect(d) { return d; }, disconnect() {}, start() {}, stop() {} }),
+        };
+        const kit = makeAudioKit(ctx, { connect() {} }, { seed: 11, music: 1, ambience: 1 });
+        kit.amb.set('night', night, 2);
+        kit.amb.play(SCENES.bathhouse, { at: 0, fade: 0.05 });
+        kit.scheduleUntil(120);
+        kit.stop();
+        return { filters, oscs, freqTargets };
+      };
+
+      const day = runScene(0);
+      const night = runScene(1);
+      // Night warms all three bed filter cutoffs downward (520->340, 2400->1500, 190->160)
+      t.expect(night.freqTargets.some((x) => x.v === 340) && night.freqTargets.some((x) => x.v === 1500) && night.freqTargets.some((x) => x.v === 160),
+        `Night warms bed filter cutoffs to 340/1500/160 Hz (got ${night.freqTargets.map((x) => x.v).join(',')})`);
+      t.expect(day.freqTargets.some((x) => x.v === 520) && day.freqTargets.some((x) => x.v === 2400),
+        `Day keeps bed filter cutoffs at 520/2400 Hz (got ${day.freqTargets.map((x) => x.v).join(',')})`);
+
+      // Drip/hiss cadence softens in Night (fewer highpass vent filters and fewer drip oscillators over 120 s)
+      const countHiss = (r) => r.filters.filter((f) => f.type === 'highpass').length;
+      t.expect(countHiss(night) < countHiss(day), `Night slows steam vent hiss cadence (${countHiss(night)} vs Day ${countHiss(day)} over 120 s)`);
+
+      // Transom spot: 0 high-band (>2800 Hz) oscillators in Night; transom lowpass <= 2800 Hz present only in Night
+      const transomLp = (r) => r.filters.filter((f) => f.type === 'lowpass' && f.frequency.value === 2200).length;
+      t.equal(transomLp(day), 0, 'Day fires 0 transom pulses');
+      t.expect(transomLp(night) >= 2, `Night fires muffled 2200 Hz lowpass transom pulses (${transomLp(night)} over 120 s)`);
+      const nightOscFreqs = night.oscs.map((o) => o.frequency.value).filter((f) => f >= 1800);
+      t.expect(nightOscFreqs.every((f) => f <= 2800), `no Night ambient oscillator exceeds 2800 Hz (max ${Math.max(0, ...nightOscFreqs).toFixed(0)} Hz, CD-WF4-05)`);
+    },
+  },
+  {
+    name: 'W4-S5-05 independent Ambience level slider moves only ambGain, defaults to 100%, persists across reload, and Night theme warms bathhouse ambience cleanly',
+    viewports: ['desktop', 'mobile'],
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-settings-v1')) {
+        localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: true, fx: true, music: true, amb: true, theme: 'light' }));
+      }
+    },
+    async run(t) {
+      await ready(t);
+      // 1. Existing save without ambVol defaults to 1 (100%) so shipped mixes stay untouched (OQ-WF6-03)
+      const rawBefore = await t.page.evaluate(() => JSON.parse(localStorage.getItem('hs-letters-settings-v1')));
+      t.equal(rawBefore.ambVol, undefined, 'pre-wave save has no ambVol key');
+      t.equal((await t.state()).settings.ambVol, 1, 'ambVol defaults to 1 (100%)');
+
+      // 2. Open Settings, start audio, check Ambience level row & independent bus movement
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="amb"][data-val="true"]');
+      await t.page.waitForFunction(() => window.__game.audioState().ctx === 'running', null, { timeout: 8000 });
+      t.expect(await t.page.locator('[data-ambvol]').count() === 1, 'Ambience level slider present');
+      await t.shot('w4-b19-settings-ambvol');
+      await t.checkLayout();
+
+      const slide = (attr, v) => t.page.evaluate(([a, val]) => {
+        const r = document.querySelector(`[${a}]`);
+        r.value = String(val);
+        r.dispatchEvent(new Event('input', { bubbles: true }));
+      }, [attr, v]);
+
+      await slide('data-ambvol', 0.25);
+      await t.page.waitForFunction(() => Math.abs(window.__game.audioState().ambGain - 0.25) < 0.02, null, { timeout: 5000 });
+      let a = await t.game('audioState');
+      t.expect(Math.abs(a.musGain - 1) < 0.02 && Math.abs(a.fxGain - 1) < 0.02, `Ambience slider moves only ambGain (${a.ambGain.toFixed(2)}), leaving musGain (${a.musGain.toFixed(2)}) and fxGain (${a.fxGain.toFixed(2)}) alone`);
+
+      await slide('data-musicvol', 0.5);
+      await t.page.waitForFunction(() => Math.abs(window.__game.audioState().musGain - 0.5) < 0.02, null, { timeout: 5000 });
+      a = await t.game('audioState');
+      t.expect(Math.abs(a.ambGain - 0.25) < 0.02, `Music slider moves musGain (${a.musGain.toFixed(2)}) without moving ambGain (${a.ambGain.toFixed(2)})`);
+
+      // 3. Zero-level scheduler check (Ruling 10): only pauses when BOTH musicVol and ambVol are 0
+      await slide('data-musicvol', 0);
+      t.equal((await t.game('audioState')).ticking, true, 'scheduler keeps ticking at musicVol=0 while ambVol=0.25');
+      await slide('data-ambvol', 0);
+      t.equal((await t.game('audioState')).ticking, false, 'scheduler pauses when both musicVol=0 and ambVol=0');
+      await slide('data-ambvol', 0.4);
+      t.equal((await t.game('audioState')).ticking, true, 'scheduler resumes when ambVol rises above 0');
+      await slide('data-musicvol', 0.6);
+
+      // 4. Reload persistence & out-of-range sanitization
+      await t.reload();
+      await ready(t);
+      t.equal((await t.state()).settings.ambVol, 0.4, 'ambVol survives reload');
+      t.equal((await t.state()).settings.musicVol, 0.6, 'musicVol survives reload');
+      await t.page.evaluate(() => {
+        const s = JSON.parse(localStorage.getItem('hs-letters-settings-v1'));
+        s.ambVol = 99;
+        localStorage.setItem('hs-letters-settings-v1', JSON.stringify(s));
+      });
+      await t.reload();
+      await ready(t);
+      t.equal((await t.state()).settings.ambVol, 1, 'damaged ambVol falls back to 1');
+
+      // 5. Night theme wires amb.set('night', 1, 2) live (and survives Day <-> Night switches)
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="theme"][data-val="dark"]');
+      await t.page.click('[data-set="amb"][data-val="true"]');
+      await t.page.waitForFunction(() => window.__game.audioState().ctx === 'running', null, { timeout: 8000 });
+      t.equal((await t.game('audioState')).ambNight, 1, 'Night theme sets amb night param to 1');
+      await t.page.click('[data-set="theme"][data-val="light"]');
+      t.equal((await t.game('audioState')).ambNight, 0, 'Day theme resets amb night param to 0');
+
+      // 6. Offline acoustic proof (desktop): Night bathhouse bed is measurably warmer (>3.3 kHz energy drops) & unclipped at full vol
+      if (t.viewport === 'desktop') {
+        const dayBed = await t.game('audioRender', 'bathhouse', 30, false, { night: 0 });
+        const nightBed = await t.game('audioRender', 'bathhouse', 30, false, { night: 1 });
+        const dayHi = await t.game('audioRender', 'bathhouse', 30, false, { night: 0, hp: 3300 });
+        const nightHi = await t.game('audioRender', 'bathhouse', 30, false, { night: 1, hp: 3300 });
+        const nightFull = await t.game('audioRender', 'bathhouse', 30, false, { night: 1, vol: 1 });
+        t.log(`W4-S5-05 bathhouse Day rms=${dayBed.rmsDb}dB peak=${dayBed.peak} >3.3kHz=${dayHi.rms} | Night rms=${nightBed.rmsDb}dB peak=${nightBed.peak} >3.3kHz=${nightHi.rms} | Night@full peak=${nightFull.peak}`);
+        t.expect(nightHi.rms < dayHi.rms * 0.85, `Night bathhouse has measurably less >3.3 kHz energy than Day (${nightHi.rms} < 0.85 * ${dayHi.rms})`);
+        t.expect(nightBed.peak < 0.07 && nightBed.rmsDb >= -54 && nightBed.rmsDb <= -38, `Night bed stays quiet and warm (peak=${nightBed.peak}, rms=${nightBed.rmsDb} dB)`);
+        t.expect(nightFull.peak < 0.88, `Night bed stays unclipped at full volume (peak=${nightFull.peak})`);
+      }
     },
   },
 ];

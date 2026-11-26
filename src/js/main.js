@@ -46,7 +46,7 @@ function wordCheck(raw) {
 
 const G = {
   s: null, scene: 'title', back: 'title', dict: null, lex: makeLexicon(LEXICON), ready: false,
-  settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, fxVol: 1, musicVol: 1, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true, townCue: true, tipsSeen: true, vibrate: matchMedia('(pointer: coarse)').matches },
+  settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, fxVol: 1, musicVol: 1, ambVol: 1, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true, townCue: true, tipsSeen: true, vibrate: matchMedia('(pointer: coarse)').matches },
   setup: null, nextSeed: null,
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false }, inspect: -1,
   preview: null, hint: null, last: new Set(), lastPulse: null, badPulse: null, anim: new Map(), animUntil: 0,
@@ -74,7 +74,7 @@ const dark = () => G.settings.theme === 'dark' || (G.settings.theme === 'auto' &
 // stored settings are trusted field by field: a value of the wrong type or range is dropped and the stored copy rewritten
 const SETTING_OK = {
   sound: (v) => typeof v === 'boolean', tipsSeen: (v) => typeof v === 'boolean', fx: (v) => typeof v === 'boolean', music: (v) => typeof v === 'boolean', amb: (v) => typeof v === 'boolean', hints: (v) => typeof v === 'boolean', townCue: (v) => typeof v === 'boolean', vibrate: (v) => typeof v === 'boolean',
-  vol: (v) => typeof v === 'number' && v >= 0 && v <= 1, fxVol: (v) => typeof v === 'number' && v >= 0 && v <= 1, musicVol: (v) => typeof v === 'number' && v >= 0 && v <= 1,
+  vol: (v) => typeof v === 'number' && v >= 0 && v <= 1, fxVol: (v) => typeof v === 'number' && v >= 0 && v <= 1, musicVol: (v) => typeof v === 'number' && v >= 0 && v <= 1, ambVol: (v) => typeof v === 'number' && v >= 0 && v <= 1,
   theme: (v) => ['auto', 'light', 'dark'].includes(v), motion: (v) => ['system', 'full', 'reduce'].includes(v),
   text: (v) => [1, 1.15, 1.3].includes(v), board3d: (v) => ['auto', 'on', 'off'].includes(v), ai: (v) => ['normal', 'fast', 'instant'].includes(v),
   lastSetup: (v) => !!v && typeof v === 'object' && typeof v.hints === 'boolean' && (v.challenge == null || typeof v.challenge === 'boolean') && Array.isArray(v.seats) && v.seats.length >= 2 && v.seats.length <= 4
@@ -96,8 +96,10 @@ function loadSettings() {
 function saveSettings() { store.put(KEYS.settings, G.settings); applySettings(); }
 function applySettings() {
   const st = G.settings;
-  audio.on = !!st.sound; audio.vol = st.vol; audio.fx = st.fx; audio.music = st.music; audio.amb = st.amb; audio.fxVol = st.fxVol; audio.musicVol = st.musicVol;
+  const isDark = dark();
+  audio.on = !!st.sound; audio.vol = st.vol; audio.fx = st.fx; audio.music = st.music; audio.amb = st.amb; audio.fxVol = st.fxVol; audio.musicVol = st.musicVol; audio.ambVol = st.ambVol; audio.night = isDark ? 1 : 0;
   syncAudio();
+  if (audio.kit) audio.kit.amb.set('night', audio.night, 2);
   document.documentElement.style.setProperty('--ts', st.text);
   document.body.classList.toggle('theme-dark', dark());
   const red = reduced();
@@ -309,6 +311,7 @@ function moodUpdate() {
   const live = s && !s.over && G.scene === 'game';
   k.music.intensity(s && !s.over && tuneFor(G.scene) === 'table' ? tableIntensity(s) : 0);   // also on a sheet opened over the table
   k.amb.set('steam', live ? Math.min(1, s.board.filter(Boolean).length / 90) : 0.3, 2);
+  k.amb.set('night', dark() ? 1 : 0, 2);
 }
 const colPan = (i) => ((i % N) - 7) / 7 * 0.7;
 
@@ -516,11 +519,11 @@ function wireScreen(name) {
       G.settings.tipsSeen = false; G.coach = null; saveSettings();
       again.textContent = 'Tips will show in a game'; liveSay('The tips will show again in your game.');
     });
-    // Volume is the master; the effects and music levels sit under it (the music level moves the bed with the tunes)
-    for (const [attr, key] of [['data-vol', 'vol'], ['data-fxvol', 'fxVol'], ['data-musicvol', 'musicVol']]) {
+    // Volume is the master; the effects, music and ambience levels sit under it independently (OQ-WF6-03)
+    for (const [attr, key] of [['data-vol', 'vol'], ['data-fxvol', 'fxVol'], ['data-musicvol', 'musicVol'], ['data-ambvol', 'ambVol']]) {
       const r = scr.querySelector(`[${attr}]`);
       r.addEventListener('input', (e) => { unlock(); G.settings[key] = +e.target.value; saveSettings(); });
-      if (key !== 'musicVol') r.addEventListener('change', () => { unlock(); sfx('place'); });
+      if (key === 'vol' || key === 'fxVol') r.addEventListener('change', () => { unlock(); sfx('place'); });
     }
   }
   if (name === 'register') {
@@ -3156,7 +3159,7 @@ window.__game = {
   audioRender(name, seconds = 30, wantWav = false, opts) { return audioRender(name, seconds, !!wantWav, opts); },
   audioState() {
     const k = audio.kit, i = k && k.music.info(), b = audio.bus;
-    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, ticking: k ? k.ticking : false, holds: [...audio.holds], tune: tuneName(), intensity: k ? k.music.inten : 0, bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), total: audio.total, cues: audio.cues.slice(), throttled: audio.throttled, suppressed: audio.suppressed, fxGain: b ? b.sfx.gain.value : null, musGain: b ? b.mus.gain.value : null, limAttack: b ? b.lim.attack.value : null, musEq: b && b.musEq ? { type: b.musEq.type, freq: b.musEq.frequency.value, q: b.musEq.Q.value, gain: b.musEq.gain.value } : null, reverb: b && b.rev ? { dur: b.rev.conv.buffer ? b.rev.conv.buffer.duration : 0, channels: b.rev.conv.buffer ? b.rev.conv.buffer.numberOfChannels : 0, hp: b.rev.hp.frequency.value, lp: b.rev.lp.frequency.value, sends: b.rev.sends } : null };
+    return { ctx: audio.ctx ? audio.ctx.state : null, held: k ? k.held : null, ticking: k ? k.ticking : false, holds: [...audio.holds], tune: tuneName(), intensity: k ? k.music.inten : 0, bed: !!(k && k.amb.scene), notes: i ? i.notes : 0, bars: i ? i.bars : 0, want: audio.want, on: audio.on, fx: audio.fx, music: audio.music, amb: audio.amb, played: audio.played.slice(), total: audio.total, cues: audio.cues.slice(), throttled: audio.throttled, suppressed: audio.suppressed, fxGain: b ? b.sfx.gain.value : null, musGain: b ? b.mus.gain.value * (k ? k.music.gain : 1) : null, ambGain: b ? b.mus.gain.value * (k ? k.amb.gain : 1) : null, ambNight: k ? k.amb.param('night') : audio.night, limAttack: b ? b.lim.attack.value : null, musEq: b && b.musEq ? { type: b.musEq.type, freq: b.musEq.frequency.value, q: b.musEq.Q.value, gain: b.musEq.gain.value } : null, reverb: b && b.rev ? { dur: b.rev.conv.buffer ? b.rev.conv.buffer.duration : 0, channels: b.rev.conv.buffer ? b.rev.conv.buffer.numberOfChannels : 0, hp: b.rev.hp.frequency.value, lp: b.rev.lp.frequency.value, sends: b.rev.sends } : null };
   },
   async act(name, ...a) {
     switch (name) {

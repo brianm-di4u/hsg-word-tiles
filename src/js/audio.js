@@ -4,7 +4,7 @@
 // Featured Spring. No two tile sounds are alike: every cue is nudged in pitch, level and colour as it is made.
 import { makeAudioKit, measureAudio, SCORES, SCENES } from './music.js';
 
-export const audio = { ctx: null, on: true, vol: 0.35, fxVol: 1, musicVol: 1, fx: true, music: true, amb: true, played: [], cues: [], total: 0, throttled: 0, suppressed: 0, isFast: null, live: null, sfxOut: null, revIn: null, bus: null, kit: null, want: null, holds: new Set() };
+export const audio = { ctx: null, on: true, vol: 0.35, fxVol: 1, musicVol: 1, ambVol: 1, night: 0, fx: true, music: true, amb: true, played: [], cues: [], total: 0, throttled: 0, suppressed: 0, isFast: null, live: null, sfxOut: null, revIn: null, bus: null, kit: null, want: null, holds: new Set() };
 const DEFAULT_VOL = 0.35;
 // Cues are built this much louder than they were before the music arrived (that was 1), so that at the shipped
 // volume the tile sounds peak between 0.2 and 0.45 and sit clearly over the music and the bed. Set it to 1 to undo.
@@ -12,7 +12,7 @@ const CUE_GAIN = 6;
 // bells and steam are the loudest cues: a little less so they do not outrun the tile sounds (featured was 0.6: a play
 // that finds a Featured Spring peaked at up to 0.98 with the volume at full, so the bell is 3 dB quieter)
 const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, unpick: 1.4, tick: 1.05, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 1.1, hint: 0.92, yourturn: 1.3, good: 1.8, big: 0.57, discover: 0.6, defeat: 0.9, prompt: 1.2, reveal: 0.85, bagempty: 0.5, bell: 0.5, uiTap: 1.0, uiTile: 1.0, uiClose: 1.0 };
-const musicGain = (vol = audio.vol, level = audio.musicVol) => Math.min(1.5, vol / DEFAULT_VOL) * level;   // the Volume slider moves the music with the cues
+const masterMus = (vol = audio.vol) => Math.min(1.5, vol / DEFAULT_VOL);   // the Volume slider moves the music and bed together; their own sliders move kit.music.level and kit.amb.level independently
 // Above the shipped volume the cues rise more gently than the slider: to about twice the shipped level at full, not
 // 2.9 times. With the slider at full the loudest repeats of steam and place overshot the limiter and clipped (peaks
 // of 1.03 in 60 renders). The music is held back above the shipped volume in the same way (musicGain).
@@ -67,7 +67,7 @@ function makeReverbIr(ctx) {
 }
 
 // one master bus: cues, music and ambience all pass a limiter so the loudest cue on top of both never clips
-function graph(ctx, dest, seed) {
+function graph(ctx, dest, seed, levels = {}) {
   const lim = ctx.createDynamicsCompressor();
   lim.threshold.value = -3; lim.knee.value = 3; lim.ratio.value = 12; lim.attack.value = 0.001; lim.release.value = 0.2;
   const ceil = ctx.createWaveShaper(); ceil.curve = CEILING;
@@ -81,8 +81,8 @@ function graph(ctx, dest, seed) {
   revIn.connect(revConv); revConv.connect(revHp); revHp.connect(revLp); revLp.connect(sfx);
   const musEq = ctx.createBiquadFilter();
   musEq.type = 'peaking'; musEq.frequency.value = 2350; musEq.Q.value = 0.9; musEq.gain.value = -2;
-  const mus = ctx.createGain(); mus.gain.value = musicGain(DEFAULT_VOL, 1); mus.connect(musEq); musEq.connect(lim);
-  return { lim, sfx, revIn, rev: { conv: revConv, hp: revHp, lp: revLp, sends: REV_SEND }, mus, musEq, kit: makeAudioKit(ctx, mus, { seed, music: 1, ambience: 1 }) };
+  const mus = ctx.createGain(); mus.gain.value = masterMus(DEFAULT_VOL); mus.connect(musEq); musEq.connect(lim);
+  return { lim, sfx, revIn, rev: { conv: revConv, hp: revHp, lp: revLp, sends: REV_SEND }, mus, musEq, kit: makeAudioKit(ctx, mus, { seed, music: levels.music ?? 1, ambience: levels.ambience ?? 1 }) };
 }
 
 export function unlock() {
@@ -92,11 +92,13 @@ export function unlock() {
     if (!AC) return;
     const ctx = new AC();
     audio.ctx = audio.live = ctx;
-    audio.bus = graph(ctx, ctx.destination, (Math.random() * 0xffffff) | 0);
-    audio.bus.mus.gain.value = musicGain();
+    const mMaster = masterMus();
+    audio.bus = graph(ctx, ctx.destination, (Math.random() * 0xffffff) | 0, { music: mMaster > 0 ? audio.musicVol : 0, ambience: mMaster > 0 ? audio.ambVol : 0 });
+    audio.bus.mus.gain.value = mMaster;
     audio.sfxOut = audio.bus.sfx; audio.revIn = audio.bus.revIn; audio.kit = audio.bus.kit;
     noiseBank(ctx);
     audio.kit.start();
+    audio.kit.amb.set('night', audio.night ? 1 : 0, 0.01);
     syncAudio();
   } catch (e) { audio.ctx = audio.live = audio.kit = audio.bus = audio.sfxOut = audio.revIn = null; }
 }
@@ -107,12 +109,12 @@ export function syncAudio() {
   const k = audio.kit;
   if (!k) return;
   const sound = audio.on;
-  const audible = musicGain() > 0 ? 1 : 0;
-  k.music.level(audible);
-  k.amb.level(audible);
+  const mMaster = masterMus();
+  k.music.level(mMaster > 0 ? audio.musicVol : 0);
+  k.amb.level(mMaster > 0 ? audio.ambVol : 0);
   k.music.play(sound && audio.music && audio.want ? SCORES[audio.want] : null, { fade: 2.5 });
   k.amb.play(sound && audio.amb ? SCENES.bathhouse : null, { fade: 3 });
-  audio.bus.mus.gain.setTargetAtTime(musicGain(), audio.ctx.currentTime, 0.05);
+  audio.bus.mus.gain.setTargetAtTime(mMaster, audio.ctx.currentTime, 0.05);
   audio.bus.sfx.gain.setTargetAtTime(audio.fxVol, audio.ctx.currentTime, 0.05);
 }
 export function setTune(name) { audio.want = name; syncAudio(); }
@@ -347,9 +349,12 @@ export function audioRender(name, seconds, wantWav, opts = {}) {
   const music = !!SCORES[name];
   if (!music && !SCENES[name]) return Promise.reject(new Error('no such piece: ' + name));
   return measureAudio((oc, dest) => {
-    const g = graph(oc, dest, 7);
-    if (opts && typeof opts.vol === 'number') g.mus.gain.value = musicGain(opts.vol, 1);
+    let end = dest;
+    if (opts && opts.hp) { end = oc.createBiquadFilter(); end.type = 'highpass'; end.frequency.value = opts.hp; end.Q.value = 0.7; end.connect(dest); }
+    const g = graph(oc, end, 7, { music: opts && typeof opts.musicVol === 'number' ? opts.musicVol : 1, ambience: opts && typeof opts.ambVol === 'number' ? opts.ambVol : 1 });
+    if (opts && typeof opts.vol === 'number') g.mus.gain.value = masterMus(opts.vol);
     if (opts && typeof opts.intensity === 'number') g.kit.music.intensity(opts.intensity);
+    if (opts && typeof opts.night === 'number') g.kit.amb.set('night', opts.night, 0.01);
     if (music) g.kit.music.play(SCORES[name], { at: 0, fade: 0.05 }); else g.kit.amb.play(SCENES[name], { at: 0, fade: 0.05 });
     g.kit.scheduleUntil(seconds);
     return music ? () => g.kit.music.info() : null;
