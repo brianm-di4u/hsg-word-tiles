@@ -120,8 +120,8 @@ export function setupHtml(setup, opts = {}) {
       ${badge(human ? { name: st.name || `Player ${k + 1}` } : { name: persona(st.persona).name, persona: st.persona }, k, 40)}
       <div class="seat-main${human ? ' seat-human' : ''}">
         <div class="seg" role="radiogroup" aria-label="Seat ${k + 1} player">
-          <button role="radio" aria-checked="${human}" tabindex="${human ? 0 : -1}" data-kind="human" data-k="${k}">Person</button>
-          <button role="radio" aria-checked="${!human}" tabindex="${human ? -1 : 0}" data-kind="ai" data-k="${k}">Computer</button>
+          <button role="radio" aria-checked="${human}" tabindex="${human ? 0 : -1}" data-kind="human" data-k="${k}"><span>Person</span></button>
+          <button role="radio" aria-checked="${!human}" tabindex="${human ? -1 : 0}" data-kind="ai" data-k="${k}"><span>Computer</span></button>
         </div>
         ${human
           ? `<label class="field"><span>Name</span><input data-name="${k}" value="${esc(st.name || '')}" maxlength="16" placeholder="Player ${k + 1}" autocomplete="off"></label>`
@@ -515,7 +515,7 @@ export function helpHtml(tab, lex, twos = [], opts = {}) {
   return `<div class="sheet help">
     ${band()}
     <header class="sheet-head"><h1 id="help-h" tabindex="-1">How to play</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
-    <div class="tabs" role="tablist" aria-labelledby="help-h">${tabs.map(([k, t]) => `<button role="tab" id="help-tab-${k}" aria-controls="help-panel" aria-selected="${k === tab}" tabindex="${k === tab ? 0 : -1}" data-tab="${k}">${t}</button>`).join('')}</div>
+    <div class="tabs" role="tablist" aria-labelledby="help-h">${tabs.map(([k, t]) => `<button role="tab" id="help-tab-${k}" aria-controls="help-panel" aria-selected="${k === tab}" tabindex="${k === tab ? 0 : -1}" data-tab="${k}"><span>${t}</span></button>`).join('')}</div>
     <div class="help-body" id="help-panel" role="tabpanel" aria-labelledby="help-tab-${tab}">${body}</div>
   </div>`;
 }
@@ -523,7 +523,7 @@ export function helpHtml(tab, lex, twos = [], opts = {}) {
 // ---------- settings ----------
 const pct = (v) => `${Math.round(Math.max(0, Math.min(1, Number(v) || 0)) * 100)}%`;
 export function settingsHtml(st, canVibrate = false) {
-  const seg = (key, opts, label) => `<div class="setrow"><span id="set-${key}">${label}</span><div class="seg" role="radiogroup" aria-labelledby="set-${key}">${opts.map(([v, t], i) => `<button role="radio" aria-checked="${st[key] === v}" tabindex="${i === Math.max(0, opts.findIndex((o) => o[0] === st[key])) ? 0 : -1}" data-set="${key}" data-val="${v}">${t}</button>`).join('')}</div></div>`;
+  const seg = (key, opts, label) => `<div class="setrow"><span id="set-${key}">${label}</span><div class="seg" role="radiogroup" aria-labelledby="set-${key}">${opts.map(([v, t], i) => `<button role="radio" aria-checked="${st[key] === v}" tabindex="${i === Math.max(0, opts.findIndex((o) => o[0] === st[key])) ? 0 : -1}" data-set="${key}" data-val="${v}"><span>${t}</span></button>`).join('')}</div></div>`;
   const slider = (id, attr, val, label, aria) => {
     const text = pct(val);
     return `<div class="setrow"><span>${label}</span><div class="set-range"><input id="${id}" type="range" min="0" max="1" step="0.05" value="${val}" style="--p:${text}" ${attr} aria-label="${aria}" aria-valuetext="${text}"><output for="${id}" data-out="${attr}">${text}</output></div></div>`;
@@ -748,7 +748,7 @@ export function overHtml(s, lex, dinfo, extra = {}) {
     ${pbs}
     <ol class="final">${order.slice(daily ? 0 : 1).map(({ p, k }) => `<li>${badge(p, k, 40, daily ? '' : (win.includes(k) ? 'win' : 'loss'))}<div><b>${esc(p.name)}</b><small class="wlines">${line(p, k)}</small>${say(k)}</div><b class="fscore">${p.score}</b></li>`).join('')}</ol>
     <div class="over-cols">
-      <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}">${t.w} <small>+${t.pts}</small></button>`).join('')}</div>` : '<p class="note">None this game. A word like SPA, STEAM or ROCK pays a bonus and opens a card of local history.</p>'}</section>
+      <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}"><span>${t.w} <small>+${t.pts}</small></span></button>`).join('')}</div>` : '<p class="note">None this game. A word like SPA, STEAM or ROCK pays a bonus and opens a card of local history.</p>'}</section>
       ${s.featured.length ? `<section><h2>Featured Springs</h2><ul class="feat-list">${s.featured.map((f) => { const id = lex.entry(f.word)?.id, inner = `<b>${f.word}</b><small>${f.by != null ? `found by ${esc(s.players[f.by].name)}` : 'stayed hidden'}${id ? ' · read the card' : ''}</small>`; return `<li class="${f.by != null ? 'got' : ''}">${id ? `<button type="button" class="fchip" data-fact="${id}" data-form="${f.word}">${inner}</button>` : inner}</li>`; }).join('')}</ul></section>` : ''}
     </div>
     <div class="dlg-btns">${daily ? '' : '<button class="btn primary" data-again>Play again</button>'}${nextBtn}<button class="btn mini" data-go="setup">${daily || !s.players.some((p) => p.kind === 'ai') ? 'New game' : 'Change opponent'}</button><button class="btn mini" data-go="register">Bathhouse Register</button>${extra.review ? '<button class="btn mini" data-review>What you missed</button>' : ''}<button class="btn mini${daily ? ' primary' : ''}" data-go="title">Title screen</button></div>

@@ -69,7 +69,9 @@ export const tests = [
           dlgDur: dcs.animationDuration,
         };
       });
-      t.expect(stileFull.props.includes('transform') && /0\.12s/.test(stileFull.durs), `.stile transitions transform in 120ms (${stileFull.props} / ${stileFull.durs})`);
+      // ruling 30 (W4-B33-hotfix): the picked tile no longer moves its own hit box; it stands up on a deeper shadow that eases in over 120 ms.
+      // Old assertion: '.stile transitions transform in 120ms'
+      t.expect(stileFull.props.includes('box-shadow') && !stileFull.props.includes('transform') && /0\.12s/.test(stileFull.durs), `.stile eases its shadow in 120ms and never transitions transform (${stileFull.props} / ${stileFull.durs})`);
       t.equal(stileFull.dlgAnim, 'sheet', '.dialog uses sheet entrance');
       t.equal(stileFull.dlgDur, '0.18s', '.dialog uses --dur-sheet (180ms)');
 
@@ -188,12 +190,13 @@ export const tests = [
       t.equal(await t.page.$eval('[data-tips]', (b) => b.disabled), true, 'ui.js renders [data-tips] disabled when !st.tipsSeen');
       await t.page.evaluate(() => { window.__G.settings.tipsSeen = true; localStorage.setItem('hs-letters-settings-v1', JSON.stringify(window.__G.settings)); });
 
-      const segInfo = await probeActive('.seg button:not([aria-checked="true"])');
+      // ruling 30 (W4-B33-hotfix): these presses move the label's span, so the button's hit box is checked to stay put (old: the button itself)
+      const segInfo = await probeActive('.seg button:not([aria-checked="true"])', 'span');
       t.expect(/0\.06s/.test(segInfo.dur), `.seg button uses --dur-press 60ms (${segInfo.dur})`);
 
       // 2) Help tabs (.tabs button) & Setup opponent card (.opps .opp)
       await t.game('scene', 'help');
-      const tabInfo = await probeActive('.tabs button:not([aria-selected="true"])');
+      const tabInfo = await probeActive('.tabs button:not([aria-selected="true"])', 'span');
       t.expect(/0\.06s/.test(tabInfo.dur), `.tabs button uses --dur-press 60ms (${tabInfo.dur})`);
 
       await t.game('scene', 'setup');
@@ -219,7 +222,7 @@ export const tests = [
 
       await t.game('act', 'stage', [{ i: 110, l: 'S' }, { i: 111, l: 'T' }, { i: 112, l: 'E' }, { i: 113, l: 'A' }, { i: 114, l: 'M' }]);
       await t.waitFrames(2);
-      await probeActive('#preview .bdbtn');
+      await probeActive('#preview .bdbtn', 'span');
       await t.game('act', 'recall');
 
       await t.game('act', 'toast', { kind: 'themed', title: 'STEAM +18', sub: 'Valley of Vapors' });
@@ -230,7 +233,20 @@ export const tests = [
 
       await t.game('act', 'open', 'swap');
       await t.page.evaluate(() => document.querySelector('#modal .dialog')?.getAnimations().forEach((a) => a.finish()));
-      await probeActive('#modal .stile', null, '#modal h2');
+      // ruling 30 (W4-B33-hotfix): a swap tile's press darkens it and sinks its shadow; nothing moves (old: a transform on the tile itself)
+      {
+        const st = t.page.locator('#modal .stile').first();
+        const box = await st.boundingBox(), hb = await t.page.locator('#modal h2').first().boundingBox();
+        const read = () => st.evaluate((el) => { const cs = getComputedStyle(el), r = el.getBoundingClientRect(); return { top: r.top, left: r.left, w: r.width, h: r.height, tx: cs.transform, filter: cs.filter, shadow: cs.boxShadow }; });
+        const before = await read();
+        await t.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await t.page.mouse.down();
+        const during = await read();
+        await t.page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+        await t.page.mouse.up();
+        t.expect(during.filter !== before.filter && during.shadow !== before.shadow, `#modal .stile responds on :active (${during.filter}; ${during.shadow})`);
+        t.expect(during.tx === 'none' && Math.abs(during.top - before.top) < 0.5 && Math.abs(during.left - before.left) < 0.5 && Math.abs(during.w - before.w) < 0.5, `#modal .stile hit box stays stationary on :active (Ruling 30)`);
+      }
       await t.game('act', 'close');
 
       // 5) Final Soak .wchip
@@ -243,7 +259,7 @@ export const tests = [
       await t.game('act', 'pass');
       await t.page.waitForFunction(() => window.__game.getState().scene === 'over', null, { timeout: 6000 });
       await t.waitIdle(4000);
-      await probeActive('.wchip');
+      await probeActive('.wchip', 'span');
 
       // 6) Verify desktop @media (hover: hover) hover state changes appearance on hover without contrast regression
       if (t.viewport === 'desktop') {

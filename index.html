@@ -77,7 +77,7 @@ kbd { font: 600 0.72em var(--f-ui); padding: 1px 4px; border-radius: 4px; border
   min-height: 48px; padding: 10px 18px; border-radius: 10px; border: 1.5px solid var(--brass);
   background: linear-gradient(#FFFDF7, #F1E9D6); color: #1F2A24; font: 700 1rem var(--f-ui); letter-spacing: 0.04em;
   box-shadow: 0 2px 0 rgba(110, 75, 30, 0.35), inset 0 1px 0 #FFF;
-  transition: transform var(--dur-press) var(--ease-press), filter var(--dur-press) var(--ease-press), box-shadow var(--dur-press) var(--ease-press);
+  transition: filter var(--dur-press) var(--ease-press), box-shadow var(--dur-press) var(--ease-press);   /* not transform: the 1 px press stays the instant nudge it always was (ruling 30) */
 }
 .btn small { font: 400 0.78em var(--f-ui); letter-spacing: 0; color: #574A37; }
 .btn-tag { margin-left: 4px; padding: 0 8px; border-radius: 99px; border: 1px solid currentColor; font: 700 0.72rem / 1.4 var(--f-ui); letter-spacing: 0.02em; white-space: nowrap; }
@@ -593,12 +593,13 @@ body.reduce .dialog, body.reduce .fact { animation: none; }
 .swap-bag b { color: var(--ink); }
 .swap-stall { margin: 8px 0 0; font-weight: 600; }
 .swap-tiles, .letters { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.stile { position: relative; width: 48px; height: 48px; border-radius: 9px; border: 1.5px solid var(--tile-line); background: var(--tile-bg); color: var(--tile-ink); font: 800 1.4rem var(--f-serif); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); transition: transform 120ms var(--ease-ceramic), background 120ms var(--ease-ceramic), border-color 120ms var(--ease-ceramic), box-shadow var(--dur-press) var(--ease-press), filter var(--dur-press) var(--ease-press); }
+.stile { position: relative; width: 48px; height: 48px; border-radius: 9px; border: 1.5px solid var(--tile-line); background: var(--tile-bg); color: var(--tile-ink); font: 800 1.4rem var(--f-serif); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); transition: background 120ms var(--ease-ceramic), border-color 120ms var(--ease-ceramic), box-shadow 120ms var(--ease-ceramic), filter var(--dur-press) var(--ease-press); }
 .stile.blank { display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 .stile.blank svg { width: 24px; height: 24px; display: block; }
 .stile.blank:not([aria-pressed="true"]) { background: linear-gradient(#E6F3F0, #CFE6E2); border-color: #5D968D; color: #144B48; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55), 0 2px 0 rgba(0, 0, 0, 0.35); }
 body.theme-dark .stile.blank:not([aria-pressed="true"]) { background: linear-gradient(#264245, #1B3235); border-color: #6EAFA5; color: #CFECE6; box-shadow: inset 0 0 0 2px rgba(160, 224, 214, 0.22), 0 2px 0 rgba(0, 0, 0, 0.45); }
-.stile[aria-pressed="true"] { background: var(--tile-sel-bg); color: var(--tile-sel-ink); border: 3px solid var(--good); transform: translateY(-3px); }
+/* a picked tile stands up on a deeper shadow instead of moving: its own hit box never moves (ruling 30) */
+.stile[aria-pressed="true"] { background: var(--tile-sel-bg); color: var(--tile-sel-ink); border: 3px solid var(--good); box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35), 0 6px 10px rgba(0, 0, 0, 0.22); }
 .stile[aria-pressed="true"]::before, .stile[aria-pressed="true"]::after { content: ""; position: absolute; box-sizing: border-box; }
 .stile[aria-pressed="true"]::before { top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--panel); background: var(--good); }
 .stile[aria-pressed="true"]::after { top: -4px; right: -1px; width: 6px; height: 11px; border: solid var(--panel); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
@@ -1167,9 +1168,11 @@ body:not(.reduce) .over.arrive > :not(.over-art):not(.dlg-btns) { animation: arr
 
 /* ---------- tactile hover/press states across secondary interactive controls (W5-S4-01, Ruling 30 hit-box stability) ---------- */
 .abtn, .iconbtn, .plaque, .springs-bar, .seg button, .tabs button, .opps .opp, .reg-item button, .wchip, .fchip, #toast button, #preview .bdbtn {
-  transition: filter var(--dur-press) var(--ease-press), background var(--dur-press) var(--ease-press), border-color var(--dur-press) var(--ease-press), box-shadow var(--dur-press) var(--ease-press), transform var(--dur-press) var(--ease-press);
+  transition: filter var(--dur-press) var(--ease-press), background var(--dur-press) var(--ease-press), border-color var(--dur-press) var(--ease-press), box-shadow var(--dur-press) var(--ease-press);
 }
-.rtile canvas, .abtn > *, .iconbtn svg, .plaque > *, .springs-bar > *, .opps .opp > *, .reg-item button > *, .fchip > *, #toast button > * {
+/* ruling 30: the press moves a drawn child (the label's span), never the button's own hit box */
+.seg button > span, .tabs button > span, .wchip > span, #preview .bdbtn > span { display: inline-block; }
+.rtile canvas, .abtn > *, .iconbtn svg, .plaque > *, .springs-bar > *, .opps .opp > *, .reg-item button > *, .fchip > *, #toast button > *, .seg button > span, .tabs button > span, .wchip > span, #preview .bdbtn > span {
   transition: transform var(--dur-press) var(--ease-press), filter var(--dur-press) var(--ease-press);
 }
 @media (hover: hover) {
@@ -1204,12 +1207,15 @@ body:not(.reduce) .over.arrive > :not(.over-art):not(.dlg-btns) { animation: arr
 .reg-item button:not([disabled]):active > *,
 .fchip:not([disabled]):active > *,
 #toast button:not([disabled]):active > * { transform: translateY(1px) scale(0.97); }
-.stile:not([disabled]):active { filter: brightness(0.95); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.22); transform: translateY(1px) scale(0.97); }
-.stile[aria-pressed="true"]:not([disabled]):active { transform: translateY(-2px) scale(0.97); }
+.stile:not([disabled]):active { filter: brightness(0.95); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.22); }
 .seg button:not([disabled]):active,
 .tabs button:not([disabled]):active,
 .wchip:not([disabled]):active,
-#preview .bdbtn:not([disabled]):active { filter: brightness(0.94); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.22); transform: translateY(1px) scale(0.97); }
+#preview .bdbtn:not([disabled]):active { filter: brightness(0.94); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.22); }
+.seg button:not([disabled]):active > span,
+.tabs button:not([disabled]):active > span,
+.wchip:not([disabled]):active > span,
+#preview .bdbtn:not([disabled]):active > span { transform: translateY(1px) scale(0.97); }
 
 /* ---------- reduced motion: disable animations/transitions across every animated selector, keeping restrained non-vestibular cues ---------- */
 body.reduce .btn,
@@ -1236,6 +1242,10 @@ body.reduce .fchip > *,
 body.reduce #toast button,
 body.reduce #toast button > *,
 body.reduce #preview .bdbtn,
+body.reduce .seg button > span,
+body.reduce .tabs button > span,
+body.reduce .wchip > span,
+body.reduce #preview .bdbtn > span,
 body.reduce .check input,
 body.reduce .check input::after,
 body.reduce .sbar-chev svg { transition: none; }
@@ -1264,13 +1274,11 @@ body.reduce .opps .opp:not([disabled]):active > *,
 body.reduce .reg-item button:not([disabled]):active > *,
 body.reduce .fchip:not([disabled]):active > *,
 body.reduce #toast button:not([disabled]):active > *,
-body.reduce .stile:not([disabled]):active,
 body.reduce .stile[aria-pressed="true"],
-body.reduce .stile[aria-pressed="true"]:not([disabled]):active,
-body.reduce .seg button:not([disabled]):active,
-body.reduce .tabs button:not([disabled]):active,
-body.reduce .wchip:not([disabled]):active,
-body.reduce #preview .bdbtn:not([disabled]):active { transform: none; }
+body.reduce .seg button:not([disabled]):active > span,
+body.reduce .tabs button:not([disabled]):active > span,
+body.reduce .wchip:not([disabled]):active > span,
+body.reduce #preview .bdbtn:not([disabled]):active > span { transform: none; }
 body.reduce .stile[aria-pressed="true"] { box-shadow: inset 0 0 0 2.5px var(--primary), 0 2px 0 rgba(110, 75, 30, 0.4); }
 body.reduce #preview.shake { box-shadow: inset 0 0 0 2.5px #FF8A7A, 0 0 0 2px rgba(154, 42, 28, 0.55); background: rgba(92, 22, 16, 0.9); color: #FFE6E0; }
 body.reduce .pcard .score.bump { background: rgba(217, 162, 58, 0.28); color: #1F2A24; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px var(--brass); }
@@ -1304,6 +1312,10 @@ body.reduce .pop.themed { animation: pop-fade 0.95s ease-out forwards; }
   body:not(.motion-full) #toast button,
   body:not(.motion-full) #toast button > *,
   body:not(.motion-full) #preview .bdbtn,
+  body:not(.motion-full) .seg button > span,
+  body:not(.motion-full) .tabs button > span,
+  body:not(.motion-full) .wchip > span,
+  body:not(.motion-full) #preview .bdbtn > span,
   body:not(.motion-full) .check input,
   body:not(.motion-full) .check input::after,
   body:not(.motion-full) .sbar-chev svg { transition: none; }
@@ -1332,13 +1344,11 @@ body.reduce .pop.themed { animation: pop-fade 0.95s ease-out forwards; }
   body:not(.motion-full) .reg-item button:not([disabled]):active > *,
   body:not(.motion-full) .fchip:not([disabled]):active > *,
   body:not(.motion-full) #toast button:not([disabled]):active > *,
-  body:not(.motion-full) .stile:not([disabled]):active,
   body:not(.motion-full) .stile[aria-pressed="true"],
-  body:not(.motion-full) .stile[aria-pressed="true"]:not([disabled]):active,
-  body:not(.motion-full) .seg button:not([disabled]):active,
-  body:not(.motion-full) .tabs button:not([disabled]):active,
-  body:not(.motion-full) .wchip:not([disabled]):active,
-  body:not(.motion-full) #preview .bdbtn:not([disabled]):active { transform: none; }
+  body:not(.motion-full) .seg button:not([disabled]):active > span,
+  body:not(.motion-full) .tabs button:not([disabled]):active > span,
+  body:not(.motion-full) .wchip:not([disabled]):active > span,
+  body:not(.motion-full) #preview .bdbtn:not([disabled]):active > span { transform: none; }
   body:not(.motion-full) .stile[aria-pressed="true"] { box-shadow: inset 0 0 0 2.5px var(--primary), 0 2px 0 rgba(110, 75, 30, 0.4); }
   body:not(.motion-full) #preview.shake { box-shadow: inset 0 0 0 2.5px #FF8A7A, 0 0 0 2px rgba(154, 42, 28, 0.55); background: rgba(92, 22, 16, 0.9); color: #FFE6E0; }
   body:not(.motion-full) .pcard .score.bump { background: rgba(217, 162, 58, 0.28); color: #1F2A24; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px var(--brass); }
@@ -10375,8 +10385,8 @@ function setupHtml(setup, opts = {}) {
       ${badge(human ? { name: st.name || `Player ${k + 1}` } : { name: persona(st.persona).name, persona: st.persona }, k, 40)}
       <div class="seat-main${human ? ' seat-human' : ''}">
         <div class="seg" role="radiogroup" aria-label="Seat ${k + 1} player">
-          <button role="radio" aria-checked="${human}" tabindex="${human ? 0 : -1}" data-kind="human" data-k="${k}">Person</button>
-          <button role="radio" aria-checked="${!human}" tabindex="${human ? -1 : 0}" data-kind="ai" data-k="${k}">Computer</button>
+          <button role="radio" aria-checked="${human}" tabindex="${human ? 0 : -1}" data-kind="human" data-k="${k}"><span>Person</span></button>
+          <button role="radio" aria-checked="${!human}" tabindex="${human ? -1 : 0}" data-kind="ai" data-k="${k}"><span>Computer</span></button>
         </div>
         ${human
           ? `<label class="field"><span>Name</span><input data-name="${k}" value="${esc(st.name || '')}" maxlength="16" placeholder="Player ${k + 1}" autocomplete="off"></label>`
@@ -10754,14 +10764,14 @@ function helpHtml(tab, lex, twos = [], opts = {}) {
   return `<div class="sheet help">
     ${band()}
     <header class="sheet-head"><h1 id="help-h" tabindex="-1">How to play</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
-    <div class="tabs" role="tablist" aria-labelledby="help-h">${tabs.map(([k, t]) => `<button role="tab" id="help-tab-${k}" aria-controls="help-panel" aria-selected="${k === tab}" tabindex="${k === tab ? 0 : -1}" data-tab="${k}">${t}</button>`).join('')}</div>
+    <div class="tabs" role="tablist" aria-labelledby="help-h">${tabs.map(([k, t]) => `<button role="tab" id="help-tab-${k}" aria-controls="help-panel" aria-selected="${k === tab}" tabindex="${k === tab ? 0 : -1}" data-tab="${k}"><span>${t}</span></button>`).join('')}</div>
     <div class="help-body" id="help-panel" role="tabpanel" aria-labelledby="help-tab-${tab}">${body}</div>
   </div>`;
 }
 
 const pct = (v) => `${Math.round(Math.max(0, Math.min(1, Number(v) || 0)) * 100)}%`;
 function settingsHtml(st, canVibrate = false) {
-  const seg = (key, opts, label) => `<div class="setrow"><span id="set-${key}">${label}</span><div class="seg" role="radiogroup" aria-labelledby="set-${key}">${opts.map(([v, t], i) => `<button role="radio" aria-checked="${st[key] === v}" tabindex="${i === Math.max(0, opts.findIndex((o) => o[0] === st[key])) ? 0 : -1}" data-set="${key}" data-val="${v}">${t}</button>`).join('')}</div></div>`;
+  const seg = (key, opts, label) => `<div class="setrow"><span id="set-${key}">${label}</span><div class="seg" role="radiogroup" aria-labelledby="set-${key}">${opts.map(([v, t], i) => `<button role="radio" aria-checked="${st[key] === v}" tabindex="${i === Math.max(0, opts.findIndex((o) => o[0] === st[key])) ? 0 : -1}" data-set="${key}" data-val="${v}"><span>${t}</span></button>`).join('')}</div></div>`;
   const slider = (id, attr, val, label, aria) => {
     const text = pct(val);
     return `<div class="setrow"><span>${label}</span><div class="set-range"><input id="${id}" type="range" min="0" max="1" step="0.05" value="${val}" style="--p:${text}" ${attr} aria-label="${aria}" aria-valuetext="${text}"><output for="${id}" data-out="${attr}">${text}</output></div></div>`;
@@ -10972,7 +10982,7 @@ function overHtml(s, lex, dinfo, extra = {}) {
     ${pbs}
     <ol class="final">${order.slice(daily ? 0 : 1).map(({ p, k }) => `<li>${badge(p, k, 40, daily ? '' : (win.includes(k) ? 'win' : 'loss'))}<div><b>${esc(p.name)}</b><small class="wlines">${line(p, k)}</small>${say(k)}</div><b class="fscore">${p.score}</b></li>`).join('')}</ol>
     <div class="over-cols">
-      <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}">${t.w} <small>+${t.pts}</small></button>`).join('')}</div>` : '<p class="note">None this game. A word like SPA, STEAM or ROCK pays a bonus and opens a card of local history.</p>'}</section>
+      <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}"><span>${t.w} <small>+${t.pts}</small></span></button>`).join('')}</div>` : '<p class="note">None this game. A word like SPA, STEAM or ROCK pays a bonus and opens a card of local history.</p>'}</section>
       ${s.featured.length ? `<section><h2>Featured Springs</h2><ul class="feat-list">${s.featured.map((f) => { const id = lex.entry(f.word)?.id, inner = `<b>${f.word}</b><small>${f.by != null ? `found by ${esc(s.players[f.by].name)}` : 'stayed hidden'}${id ? ' · read the card' : ''}</small>`; return `<li class="${f.by != null ? 'got' : ''}">${id ? `<button type="button" class="fchip" data-fact="${id}" data-form="${f.word}">${inner}</button>` : inner}</li>`; }).join('')}</ul></section>` : ''}
     </div>
     <div class="dlg-btns">${daily ? '' : '<button class="btn primary" data-again>Play again</button>'}${nextBtn}<button class="btn mini" data-go="setup">${daily || !s.players.some((p) => p.kind === 'ai') ? 'New game' : 'Change opponent'}</button><button class="btn mini" data-go="register">Bathhouse Register</button>${extra.review ? '<button class="btn mini" data-review>What you missed</button>' : ''}<button class="btn mini${daily ? ' primary' : ''}" data-go="title">Title screen</button></div>
@@ -12531,8 +12541,8 @@ function renderPreview() {
       const cats = new Set(p.words.map((w) => w.themed && G.lex.byId.get(w.themed).cat)), won = p.featuredAll || [];
       const catReveal = rowCanReveal ? null : G.s.featured.find((f) => f.by == null && cats.has(f.cat) && !won.includes(f.word) && f.shown.length < E.featuredRevealCap(G.s, f));   // a Hot Springs word of a plaque's own kind
       html = `<span class="pv"><span class="words">${p.words.map((w) => `<b class="${w.themed ? 'themed' : ''}">${w.themed ? UI.ICON.steam : ''}${w.w}</b>`).join(' ')}</span><span class="pts">${p.score}<small> pts</small></span>${p.themed ? `<span class="extra">${UI.ICON.steam} +${p.themed}</span>` : ''}${p.full ? `<span class="extra">Full Soak +${FULL_SOAK}</span>` : ''}${p.featured ? `<span class="extra">Featured +${p.featuredBonus || FEATURED_BONUS}</span>` : ''}${rowCanReveal || rowPlain ? (rowCanReveal ? ['Row · clears 1 plaque letter', ...(rowPlain && !isNarrow() ? [`+${ROW_BONUS} with a Hot Springs word`] : [])] : [`Row · +${ROW_BONUS} with a Hot Springs word`]).map((x) => `<span class="extra row-reveal">${x}</span>`).join('') : catReveal ? `<span class="extra row-reveal">${UI.CAT_SHORT[catReveal.cat]} · clears 1 plaque letter</span>` : ''}${G.s.challenge ? '<span class="extra">words checked when you play</span>' : ''}${hintLive() ? `<span class="extra">keeps ${G.hintAlts[G.hintIx].keep.length ? G.hintAlts[G.hintIx].keep.map((l) => (l === '?' ? 'blank' : l)).join('') : 'nothing'}</span>` : ''}</span>`;
-      if (hintLive()) html += `<button type="button" class="bdbtn" data-hintnext aria-label="Show another Spring Guide play, ${G.hintIx + 1} of ${G.hintAlts.length} shown">Other plays ${G.hintIx + 1}/${G.hintAlts.length}</button>`;
-      html += `<button type="button" class="bdbtn" aria-expanded="${G.breakdown}">${G.breakdown ? 'Hide' : 'How it scores'}</button>`;
+      if (hintLive()) html += `<button type="button" class="bdbtn" data-hintnext aria-label="Show another Spring Guide play, ${G.hintIx + 1} of ${G.hintAlts.length} shown"><span>Other plays ${G.hintIx + 1}/${G.hintAlts.length}</span></button>`;
+      html += `<button type="button" class="bdbtn" aria-expanded="${G.breakdown}"><span>${G.breakdown ? 'Hide' : 'How it scores'}</span></button>`;
       if (G.breakdown) html += UI.breakdownHtml(p, G.s.board, G.staged, rowCanReveal);
       cls = hintLive() ? 'ok hintlive' : 'ok';
     } else { html = esc(p.error); cls = 'bad'; }

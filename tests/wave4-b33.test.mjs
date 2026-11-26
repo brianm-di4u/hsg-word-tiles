@@ -135,4 +135,82 @@ export const tests = [
       t.equal(JSON.parse(await t.page.evaluate(() => localStorage.getItem('hs-letters-daily-v1'))).streak, 4, 'the saved streak is untouched');
     },
   },
+  // ---------- ruling 30: W5-S4-01, W5-S4-04 ----------
+  {
+    name: "ruling 30 a press on a segment, a tab, the breakdown button or a plain button, and picking a swap tile, never move the button's own hit box",
+    viewports: ['desktop', 'mobile'],
+    initScript: full,
+    async run(t) {
+      await ready(t);
+      const geo = (sel) => t.page.$eval(sel, (el) => {
+        const r = el.getBoundingClientRect(), cs = getComputedStyle(el), kid = el.querySelector(':scope > span');
+        return { x: r.left, y: r.top, w: r.width, h: r.height, tx: cs.transform, props: cs.transitionProperty, kid: kid ? getComputedStyle(kid).transform : null,
+          moving: el.getAnimations().filter((a) => a.transitionProperty === 'transform').length, shadow: cs.boxShadow };
+      });
+      const same = (a, b) => Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5 && Math.abs(a.w - b.w) < 0.5 && Math.abs(a.h - b.h) < 0.5;
+      const settle = (sel) => t.page.waitForFunction((s) => document.querySelector(s).getAnimations({ subtree: true }).every((a) => !(a instanceof CSSTransition)), sel, { timeout: 3000 });
+      // press and hold, read at once and once every transition is over, then slide off and let go (no click)
+      const press = async (sel, label, offSel = null) => {
+        await t.page.locator(sel).first().scrollIntoViewIfNeeded();
+        const before = await geo(sel), c = await t.page.locator(sel).first().boundingBox();
+        await t.page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+        await t.page.mouse.down();
+        const now = await geo(sel);
+        await settle(sel);
+        const held = await geo(sel);
+        const o = offSel ? await t.page.locator(offSel).first().boundingBox() : null;   // let go off the button (inside a dialog: on its heading, not the scrim)
+        await t.page.mouse.move(o ? o.x + o.width / 2 : 2, o ? o.y + o.height / 2 : 2);
+        await t.page.mouse.up();
+        t.expect(!/transform/.test(before.props), `${label}: transform is not among its own transitions (${before.props})`);
+        t.expect(now.moving === 0 && held.moving === 0, `${label}: no transform transition runs on the button`);
+        return { before, now, held };
+      };
+      // Settings segment: the label moves, the button does not
+      await t.game('scene', 'settings');
+      let r = await press('#screen .seg button[aria-checked="false"]', 'Settings segment');
+      t.expect(same(r.before, r.now) && same(r.before, r.held) && r.held.tx === 'none', 'Settings segment: its hit box stays put');
+      t.expect(!!r.held.kid && r.held.kid !== 'none', `Settings segment: its label is pressed in (${r.held.kid})`);
+      // a plain button: the 1 px nudge it always had, never eased
+      await t.game('scene', 'title');
+      r = await press('#screen .btn:not([disabled])', 'Plain button');
+      t.equal(r.held.tx, 'matrix(1, 0, 0, 1, 0, 1)', 'Plain button: the 1 px press it had before the wave');
+      // Help tab
+      await t.game('scene', 'help');
+      r = await press('#screen .tabs button[aria-selected="false"]', 'Help tab');
+      t.expect(same(r.before, r.now) && same(r.before, r.held) && r.held.tx === 'none' && !!r.held.kid && r.held.kid !== 'none', 'Help tab: its hit box stays put and its label is pressed in');
+      // the breakdown button in the strip
+      await t.seed(7);
+      await t.game('newGame', { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(6000);
+      const s = await t.state();
+      s.game.players[0].rack = 'STEAMRN'.split('');
+      await t.game('setState', { game: s.game });
+      await t.waitIdle(4000);
+      await t.game('act', 'stage', [{ i: 110, l: 'S' }, { i: 111, l: 'T' }, { i: 112, l: 'E' }, { i: 113, l: 'A' }, { i: 114, l: 'M' }]);
+      await t.waitFrames(2);
+      r = await press('#preview .bdbtn', 'Breakdown button');
+      t.expect(same(r.before, r.now) && same(r.before, r.held) && r.held.tx === 'none' && !!r.held.kid && r.held.kid !== 'none', 'Breakdown button: its hit box stays put and its label is pressed in');
+      await t.game('act', 'recall');
+      await t.waitIdle(4000);
+      // a swap tile: pressing and picking it move nothing
+      await t.game('act', 'open', 'swap');
+      await t.page.waitForFunction(() => document.querySelector('#modal .stile[data-sw="0"]'), null, { timeout: 5000 });
+      await t.page.evaluate(() => document.querySelector('#modal .dialog')?.getAnimations().forEach((a) => a.finish()));
+      const tile = '#modal .stile[data-sw="0"]';
+      r = await press(tile, 'Swap tile', '#modal h2');
+      t.expect(same(r.before, r.now) && same(r.before, r.held) && r.held.tx === 'none', 'Swap tile: pressing it moves nothing');
+      const off = await geo(tile);
+      await t.page.click(tile);
+      const on = await geo(tile);
+      await settle(tile);
+      const up = await geo(tile);
+      t.equal(await t.page.$eval(tile, (el) => el.getAttribute('aria-pressed')), 'true', 'the tile is picked');
+      t.expect(on.moving === 0 && same(off, on) && same(off, up) && up.tx === 'none', `Swap tile: picking it leaves its hit box where it was (${off.y} -> ${up.y})`);
+      t.expect(up.shadow !== off.shadow && /4px/.test(up.shadow), `and it stands up on a deeper shadow (${up.shadow})`);
+      await t.page.click('#modal .stile[data-sw="2"]');   // a second one picked, one left as it was, for the picture
+      await settle(tile);
+      if (t.viewport === 'desktop') await t.shot('w4-b33-swap-picked');
+      await t.game('act', 'close');
+    },
+  },
 ];
