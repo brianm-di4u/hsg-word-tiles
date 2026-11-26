@@ -17,6 +17,7 @@
   --panel: #F4F0E6; --panel-2: #EAE2D0; --ink: #1F2A24; --muted: #574A37; --line: #CDBF9F;
   --primary: #8E3622; --on-primary: #FFFFFF; --accent: #355E41; --brass: #B8902F; --brass-hi: #F0D57A; --gold: #D9A23A;
   --good: #1E6B60; --bad: #9A2A1C; --strip: rgba(20, 14, 8, 0.72); --strip-ink: #F6EFDF;
+  --strip-up: linear-gradient(180deg, rgba(54, 38, 21, 0.97), rgba(22, 15, 8, 0.97)); --ledger-bg: var(--panel-2);   /* W2-S1-15: a live play sits raised; the ledger rests */
   --tile-bg: linear-gradient(#FFFBF1, #E8DCC0); --tile-ink: #1F2A24; --tile-muted: #574A37; --tile-line: #B9A57A;
   --tile-sel-bg: linear-gradient(#9FE3D6, #4FA79A); --tile-sel-ink: #0E2A26;
   --reward-bg: linear-gradient(160deg, #FBF3D9, #F0D57A 75%, #D9B85A); --reward-ink: #2A1E0C; --reward-muted: #4A3A1E; --reward-line: #8C6A1E;
@@ -31,6 +32,7 @@ body.theme-dark {
   --panel: #1F1C2E; --panel-2: #29253C; --ink: #E6DFD0; --muted: #B5ADBC; --line: #4A4360;
   --primary: #E2BE4A; --on-primary: #14121F; --accent: #7FD3C4; --brass: #9A8138; --brass-hi: #F3DD8B; --gold: #F0C952;
   --good: #7FD3C4; --bad: #FF8A7A; --strip: rgba(10, 8, 20, 0.8); --strip-ink: #EDE6D6;
+  --strip-up: linear-gradient(180deg, rgba(42, 36, 64, 0.97), rgba(12, 10, 24, 0.97)); --ledger-bg: var(--panel);   /* Night's --panel-2 is lighter than --panel, so the ledger keeps --panel */
   --tile-bg: linear-gradient(#383350, #2B2740); --tile-ink: #F2EBD9; --tile-muted: #C9C1D4; --tile-line: #6C6288;
   --tile-sel-bg: linear-gradient(#24645B, #1A4B44); --tile-sel-ink: #E8FAF6;
   --reward-bg: linear-gradient(160deg, #4B3E24, #362C18 75%, #282011); --reward-ink: #FAF0CE; --reward-muted: #DECDA2; --reward-line: #B89844;
@@ -296,8 +298,11 @@ body.theme-dark #turnline .bag.phase-empty { background: #D4AF37; border-color: 
 #preview .pts small { font: 400 0.65em var(--f-ui); }
 #preview .extra { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 99px; background: rgba(42, 157, 143, 0.35); font-size: 0.9em; }
 #preview .extra svg { width: 16px; height: 16px; }
-#preview.ok { box-shadow: inset 0 0 0 1.5px rgba(127, 211, 196, 0.6); }
-#preview.bad { box-shadow: inset 0 0 0 1.5px rgba(255, 138, 122, 0.8); color: #FFD9D2; }
+/* W2-S1-15: a live play is a raised, brass-rimmed plate (the rim and the teal or coral ring are inset, so nothing moves) */
+#preview.ok, #preview.bad { background: var(--strip-up); }
+#preview.ok { box-shadow: inset 0 0 0 1.5px var(--brass), inset 0 0 0 3px rgba(127, 211, 196, 0.75), 0 6px 14px rgba(0, 0, 0, 0.42); }
+#preview.bad { box-shadow: inset 0 0 0 1.5px var(--brass), inset 0 0 0 3px rgba(255, 138, 122, 0.85), 0 6px 14px rgba(0, 0, 0, 0.42); color: #FFD9D2; }
+#preview.ok .pts { font-weight: 700; color: #FFE9A6; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6); }
 #preview.flash { color: #F6E3C0; }
 #preview.err-flash { box-shadow: inset 0 0 0 2.5px #FF8A7A, 0 0 0 2px rgba(154, 42, 28, 0.55); background: rgba(92, 22, 16, 0.9); color: #FFE6E0; }
 #preview.shake { animation: shake 0.35s; }
@@ -305,7 +310,7 @@ body.theme-dark #turnline .bag.phase-empty { background: #D4AF37; border-color: 
 .thinking i { animation: dot 1.2s infinite; font-style: normal; }
 .thinking i:nth-child(2) { animation-delay: 0.2s; } .thinking i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes dot { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
-#ledger { grid-area: ledger; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; background: var(--panel); color: var(--ink); border-radius: 12px; padding: 10px 14px 18px; box-shadow: var(--shadow); }
+#ledger { grid-area: ledger; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; background: var(--ledger-bg); color: var(--ink); border-radius: 12px; padding: 10px 14px 18px; box-shadow: inset 0 1px 3px rgba(40, 26, 12, 0.22), 0 2px 6px rgba(0, 0, 0, 0.25); }
 #ledger h2 { margin: 0 0 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 600 1.05rem var(--f-serif); color: var(--primary); }
 .ledger-all {
   flex: none; padding: 3px 10px; min-height: 28px; border-radius: 99px;
