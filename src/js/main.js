@@ -2798,9 +2798,15 @@ function onUp(e) {
     const selK = G.selected, fromEl = document.querySelector(`#rack .rtile[data-k="${selK}"]`);
     const fromBox = animOn() && fromEl ? fromEl.getBoundingClientRect() : null;
     const rawL = cur().rack[selK];
-    if (stage(selK, i) && fromBox && rawL !== '?') {
-      const toBox = cellScreenBox(i, R.STAGED_LIFT);
-      if (toBox) flyGhost({ l: rawL, blank: false }, fromBox, toBox, 120, null);
+    if (stage(selK, i)) {
+      if (fromBox && rawL !== '?') {
+        const toBox = cellScreenBox(i, R.STAGED_LIFT);
+        if (toBox) flyGhost({ l: rawL, blank: false }, fromBox, toBox, 120, null);
+      }
+    } else if (G.s.board[i] || G.staged.some((t) => t.i === i)) {
+      // W4-S2-05: gentle error nudge when tapping an occupied square with a selected rack tile.
+      flash('That square is taken.', 2200);
+      oops();
     }
     return;
   }
