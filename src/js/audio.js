@@ -11,7 +11,7 @@ const DEFAULT_VOL = 0.35;
 const CUE_GAIN = 6;
 // bells and steam are the loudest cues: a little less so they do not outrun the tile sounds (featured was 0.6: a play
 // that finds a Featured Spring peaked at up to 0.98 with the volume at full, so the bell is 3 dB quieter)
-const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 0.9, hint: 0.6, yourturn: 1.3, good: 1.8, big: 0.57, discover: 0.6, defeat: 0.9, prompt: 1.2, reveal: 0.85, bagempty: 0.5 };
+const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 0.9, hint: 0.6, yourturn: 1.3, good: 1.8, big: 0.57, discover: 0.6, defeat: 0.9, prompt: 1.2, reveal: 0.85, bagempty: 0.5, bell: 0.5 };
 const musicGain = (vol = audio.vol, level = audio.musicVol) => Math.min(1.5, vol / DEFAULT_VOL) * level;   // the Volume slider moves the music with the cues
 // Above the shipped volume the cues rise more gently than the slider: to about twice the shipped level at full, not
 // 2.9 times. With the slider at full the loudest repeats of steam and place overshot the limiter and clipped (peaks
@@ -219,6 +219,7 @@ export function sfx(name, opts = {}) {
         break;
       // soft furniture sounds, well under the play cues: a paper tick for a card or sheet opening, a small bell for the Spring Guide
       case 'open': noise(t, 0.05, 0.1, 2800, 1.2, 'bandpass', 0.006); tone(740, t, 0.04, 'triangle', 0.03); break;
+      case 'bell': tone(3100, t, 0.018, 'triangle', 0.022); bell(t, 1175, 0.045); break;
       case 'hint': bell(t, 880, 0.05); tone(1320, t + 0.12, 0.2, 'sine', 0.03); break;
       case 'turn': tone(660, t, 0.12, 'sine', 0.05); break;
       // damped double marble/walnut knock replacing the bare arcade pitch-glide buzz

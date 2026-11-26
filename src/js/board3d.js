@@ -446,6 +446,8 @@ export function init(canvas, theme, hooks = {}) {
   // right margin: compact ~2.1-cell 1920s front-desk call bell on a chamfered warm-bronze plinth seated cleanly in frame.
   B3.towels = piece('towels'); clothTexture(B3.towels); B3.towels.position.set(-HALF - 4.15, 0, -HALF + 3.25); B3.towels.rotation.y = -0.05; scene.add(B3.towels);
   B3.bell = piece('bell'); B3.bell.position.set(FRAME_EXTENT + 1.24, 0, -HALF + 1.9); scene.add(B3.bell);
+  B3.bellBrass = B3.bell.children.find((m) => m.name === 'brass') || null;
+  B3.bellBob = null; B3.bellLastRing = 0; B3.bellRings = 0;
   // tile pool (W3-S4-01 / CD-WF3-05): static tilebody batched into 3 standard THREE.InstancedMesh pools (board/last/staged),
   // flat tiletop crowns share one 2048x1024 256px-per-glyph atlas material with castShadow = false.
   B3.tileGeo = geometries('tile');
@@ -526,7 +528,7 @@ export function destroy(opts = {}) {
   B3.on = false; B3.renderer = null; B3.canvas = null; B3.scene = null; B3.camera = null;
   B3.hemi = null; B3.key = null; B3.fill = null;
   B3.table = null; B3.top = null; B3.board = null; B3.preDim = null; B3.dimIdx = null;
-  B3.frame = null; B3.frameWalnut = null; B3.frameWalnutFromCounter = false; B3.towels = null; B3.bell = null; B3.towelCloth = null; B3.towelStripe = null;
+  B3.frame = null; B3.frameWalnut = null; B3.frameWalnutFromCounter = false; B3.towels = null; B3.bell = null; B3.bellBrass = null; B3.bellBob = null; B3.bellLastRing = 0; B3.bellRings = 0; B3.towelCloth = null; B3.towelStripe = null;
   B3.tileGeo = null; B3.tileBodyGeo = null; B3.tileTopGeo = null; B3.bodyInst = null; B3.lastInst = null; B3.stagedInst = null;
   B3.faceAtlasCanvas = null; B3.faceAtlasTex = null; B3.faceAtlasMat = null; B3.faceAtlasKey = '';
   B3.bodyMat = null; B3.stagedMat = null; B3.lastMat = null; B3.envRT = null; B3.envTheme = ''; B3.envSwaps = 0;
@@ -761,6 +763,18 @@ export function render(d) {
   }
   const p = pose();
   applyPose(p.tx, p.tz, p.dist);
+  if (B3.bellBrass) {
+    const b = B3.bellBob;
+    if (b && d.now < b.t0 + b.dur) {
+      const u = Math.max(0, (d.now - b.t0) / b.dur);
+      const dip = u < 0.22 ? Math.sin((u / 0.22) * (Math.PI / 2)) : Math.pow(1 - (u - 0.22) / 0.78, 1.8);
+      B3.bellBrass.position.y = -0.075 * dip;
+      B3.bellBrass.scale.set(1 + 0.025 * dip, 1 - 0.06 * dip, 1 + 0.025 * dip);
+    } else {
+      if (b) B3.bellBob = null;
+      if (B3.bellBrass.position.y !== 0) { B3.bellBrass.position.y = 0; B3.bellBrass.scale.set(1, 1, 1); }
+    }
+  }
   B3.renderer.render(B3.scene, B3.camera);
   const dt = performance.now() - t0; B3.frames.push(dt); if (B3.frames.length > 90) B3.frames.shift();
 }
@@ -793,6 +807,34 @@ export function cellAt(x, y) {
   const b = boardAt(x, y); if (!b) return -1;
   const c = Math.floor(b[0] - R.FRAME), r = Math.floor(b[1] - R.FRAME);
   return r >= 0 && r < N && c >= 0 && c < N ? r * N + c : -1;
+}
+// W2-S3-05: lightweight bounding-sphere hit-check and plunger bob on the optional desktop 3D desk bell (only when visible in frame).
+const BELL_BOB_MS = 180;
+export function bellAt(x, y) {
+  if (!B3.on || !B3.camera || !B3.bell || !B3.bell.visible || !B3.W || !B3.H) return false;
+  ray.setFromCamera(new THREE.Vector2((x / B3.W) * 2 - 1, -(y / B3.H) * 2 + 1), B3.camera);
+  const o = ray.ray.origin, d = ray.ray.direction, p = B3.bell.position;
+  const dx = o.x - p.x, dy = o.y - 0.58, dz = o.z - p.z;
+  const r = MESHES.bell.hi[0];
+  const b = dx * d.x + dy * d.y + dz * d.z;
+  const c = dx * dx + dy * dy + dz * dz - r * r;
+  if (c <= 0) return true;
+  return b <= 0 && b * b - c >= 0;
+}
+export function ringBell(animate = true, now = performance.now()) {
+  if (!B3.on || !B3.bell || !B3.bell.visible) return false;
+  if (B3.bellLastRing && now - B3.bellLastRing < BELL_BOB_MS) return false;
+  B3.bellLastRing = now;
+  B3.bellRings = (B3.bellRings || 0) + 1;
+  if (animate && B3.bellBrass) B3.bellBob = { t0: now, dur: BELL_BOB_MS };
+  else {
+    B3.bellBob = null;
+    if (B3.bellBrass) { B3.bellBrass.position.y = 0; B3.bellBrass.scale.set(1, 1, 1); }
+  }
+  return true;
+}
+export function bellAnimating(now = performance.now()) {
+  return !!(B3.bellBob && now < B3.bellBob.t0 + B3.bellBob.dur);
 }
 // approximate on-screen size of one square near the centre (for line widths)
 export function cellPx() { const [x0, y0] = screenOf(HALF - 0.5, HALF); const [x1, y1] = screenOf(HALF + 0.5, HALF); return Math.hypot(x1 - x0, y1 - y0); }
@@ -868,6 +910,9 @@ export function debug() {
       };
     })(),
     bellMats: B3.bell ? B3.bell.children.map((m) => `${m.name}:${m.material.type}`) : null,
+    bellBob: !!(B3.bellBob && B3.bellBrass && B3.bellBrass.position.y < -0.001),
+    bellY: B3.bellBrass ? +B3.bellBrass.position.y.toFixed(4) : 0,
+    bellRings: B3.bellRings || 0,
     topRoughness: B3.top ? B3.top.roughness : null,
     topRoughnessMap: !!(B3.top && B3.top.roughnessMap),
     frameWalnutMap: !!(B3.frameWalnut && B3.frameWalnut[0] && B3.frameWalnut[0].map),

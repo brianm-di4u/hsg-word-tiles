@@ -2036,6 +2036,7 @@ function frame(now) {
   if (G.lastPulse) { if (now < G.lastPulse.t0 + G.lastPulse.dur) { G.chainAt = now; draw(); } else G.lastPulse = null; }
   if (G.badPulse) { if (now < G.badPulse.t0 + G.badPulse.dur) { G.chainAt = now; draw(); } else G.badPulse = null; }
   if (G.settle.size) { if (now < G.settleUntil) { G.chainAt = now; draw(); } else G.settle.clear(); }
+  if (B3.bellAnimating(now)) { G.chainAt = now; draw(); }
   if (G.viewAnim) stepViewAnim(now);
   edgePan(now);
 }
@@ -2506,6 +2507,8 @@ function hoverSquare(e) {
       const hit = themedWordAt(G.s, G.lex, i);
       if (hit) { info = `${hit.form}: Hot Springs word — click to read its history card`; pointer = true; }
     }
+  } else if (onBoard && !G.dialog && !G.privacy && B3.bellAt(mx, my)) {
+    pointer = true;
   }
   b.style.cursor = pointer ? 'pointer' : '';
   setInspect(info && !pointer ? i : -1);
@@ -2756,6 +2759,11 @@ function onUp(e) {
   if (d.from === 'board') { unstage(d.i); return; }
   const [x, y] = boardPoint(e);
   const i = pick(x, y);
+  // W2-S3-05: optional zero-scope desk-bell ding + plunger bob when the bell sits inside frame on desktop 3D.
+  if (i < 0 && !G.dialog && !G.privacy && B3.bellAt(x, y)) {
+    if (B3.ringBell(animOn())) { sfx('bell', { pan: 0.7 }); draw(); }
+    return;
+  }
   if (doubleTapZoom(d, e, i)) return;
   if (G.selected != null && humanCanAct() && i >= 0) {
     const selK = G.selected, fromEl = document.querySelector(`#rack .rtile[data-k="${selK}"]`);
@@ -2969,7 +2977,8 @@ function wireStatic() {
   document.addEventListener('keydown', onKey);
   window.addEventListener('pointerdown', (e) => { G.input = e.pointerType === 'touch' ? 'touch' : 'mouse'; if (G.springsOpen && (!e.target || !e.target.closest || !e.target.closest('#springs'))) syncSpringsDrawer(false); }, true);
   window.addEventListener('pointerdown', (e) => {
-    const onMini = e.target === $('#board') && R.minimapHit(...boardPoint(e));
+    const pt = e.target === $('#board') ? boardPoint(e) : null;
+    const onMini = !!pt && (R.minimapHit(pt[0], pt[1]) || B3.bellAt(pt[0], pt[1]));
     G.boardTap = !onMini && !G.dialog && !G.privacy && e.isPrimary && e.target && e.target.closest && e.target.closest('#boardwrap')
       ? { id: e.pointerId, x: e.clientX, y: e.clientY }
       : null;
