@@ -1934,7 +1934,26 @@ function openDialog(name, arg) {
   else if (name === 'confirm') html = `<div class="card dialog" role="dialog" aria-modal="true" aria-labelledby="cf-h"><h2 id="cf-h">${esc(arg.title)}</h2><p>${esc(arg.text)}</p><div class="dlg-btns"><button class="btn quiet" data-close>Cancel</button><button class="btn primary" data-ok>${esc(arg.ok)}</button></div></div>`;
   if (prev === 'pause' && name !== 'pause') releaseAudio('pause');
   if (name === 'pause') holdAudio('pause');
-  m.innerHTML = html; m.hidden = false; m.dataset.name = name; G.dialogAt = performance.now();
+  // W5-S4-03: reuse the persistent #modal scrim and .card.dialog shell across sub-dialog switches without replaying the outer entrance.
+  const curCard = prev && m.firstElementChild;
+  let reused = false;
+  if (curCard && curCard.classList.contains('dialog')) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html.trim();
+    const nextCard = tpl.content.firstElementChild;
+    if (nextCard && nextCard.classList.contains('dialog')) {
+      curCard.className = nextCard.className;
+      for (const attr of ['aria-labelledby', 'aria-label']) {
+        const v = nextCard.getAttribute(attr);
+        if (v) curCard.setAttribute(attr, v); else curCard.removeAttribute(attr);
+      }
+      curCard.replaceChildren(...nextCard.childNodes);
+      reused = true;
+    }
+  }
+  m.classList.toggle('switched', !!prev);
+  if (!reused) m.innerHTML = html;
+  m.hidden = false; m.dataset.name = name; G.dialogAt = performance.now();
   syncInert();
   if (name !== 'blank' && !(name === 'review' && prev === 'review')) sfx('open');
   m.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => closeDialog()));
@@ -1971,7 +1990,7 @@ function closeDialog(silent, quiet) {
   const m = $('#modal');
   if (!G.dialog && m.hidden) return;
   if (G.dialog === 'pause') releaseAudio('pause');
-  G.dialog = null; G.blankCb = null; G.boardTap = null; m.hidden = true; m.innerHTML = '';
+  G.dialog = null; G.blankCb = null; G.boardTap = null; m.hidden = true; m.classList.remove('switched'); m.innerHTML = '';
   syncInert();
   if (!silent && !quiet) sfx('uiClose');
   const ret = G.returnFocus; G.returnFocus = null;
@@ -2696,10 +2715,12 @@ function placeGhost(d, x, y) {
   gh.classList.toggle('over-blocked', d.blocked != null);
   gh.style.transform = `translate(${x - d.size / 2}px, ${y - d.lift - d.size / 2 - hoverOff}px)`;
 }
-// W4-S1-03: Frame-1-interruptible <= 140 ms ghost flight for tap-to-place and single unstage().
-function flyGhost(tile, fromBox, toBox, ms = 130, hideRackK = null) {
+// W4-S1-03 / W5-S4-03: shared Frame-1-interruptible <= 140 ms #ghost flight helper for tap-to-place, single unstage(), and blocked board returns.
+function flyGhost(tile, fromBox, toBox, ms = 130, opts = null) {
   endReturn();
   if (!animOn() || !fromBox || !toBox) return;
+  const hideRackK = typeof opts === 'number' ? opts : (opts && opts.rackK != null ? opts.rackK : null);
+  const hideCellI = opts && typeof opts === 'object' && opts.cellI != null ? opts.cellI : null;
   const gh = $('#ghost');
   const sz = Math.max(22, Math.round(Math.max(fromBox.width, toBox.width)));
   gh.classList.remove('over-target', 'over-blocked');
@@ -2717,6 +2738,7 @@ function flyGhost(tile, fromBox, toBox, ms = 130, hideRackK = null) {
     const dest = document.querySelector(`#rack .rtile[data-k="${hideRackK}"]`);
     if (dest) dest.style.visibility = 'hidden';
   }
+  if (hideCellI != null) G.returningCell = hideCellI;
   void gh.offsetWidth;
   gh.style.transition = `transform ${ms}ms cubic-bezier(0.22, 1, 0.36, 1), scale ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)`;
   gh.style.transform = `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
@@ -2739,21 +2761,17 @@ function returnToRack(d) {
   gh.style.scale = String(b.width / d.size);
   G.returnTimer = setTimeout(endReturn, 210);
 }
-// a staged tile dropped on an occupied square glides smoothly back to its origin square (interruptible via endReturn)
+// a staged tile dropped on an occupied square glides smoothly back to its origin square via shared flyGhost() (interruptible via endReturn)
 function returnToBoard(d) {
   if (G.s && !G.s.board[d.i] && !G.staged.some((t) => t.i === d.i || t.k === d.k)) {
     G.staged.push({ k: d.k, i: d.i, l: d.tile.l, blank: d.tile.blank });
   }
   const gh = $('#ghost');
-  gh.classList.remove('over-target', 'over-blocked');
-  const to = animOn() ? cellScreenBox(d.i, R.STAGED_LIFT) : null;
-  if (!to) { gh.hidden = true; updatePreview(); renderStaging(); return; }
-  G.returningCell = d.i;
+  const fromBox = animOn() && !gh.hidden ? gh.getBoundingClientRect() : null;
+  const toBox = animOn() ? cellScreenBox(d.i, R.STAGED_LIFT) : null;
+  if (!fromBox || !toBox) { gh.classList.remove('over-target', 'over-blocked'); gh.hidden = true; updatePreview(); renderStaging(); return; }
+  flyGhost(d.tile, fromBox, toBox, 140, { cellI: d.i });
   updatePreview(); renderStaging();
-  gh.style.transition = 'transform 140ms cubic-bezier(0.22, 1, 0.36, 1), scale 140ms cubic-bezier(0.22, 1, 0.36, 1)';
-  gh.style.transform = `translate(${(to.left + to.width / 2 - d.size / 2).toFixed(1)}px, ${(to.top + to.height / 2 - d.size / 2).toFixed(1)}px)`;
-  gh.style.scale = String((to.width / d.size).toFixed(3));
-  G.returnTimer = setTimeout(endReturn, 155);
 }
 function endReturn() {
   clearTimeout(G.returnTimer); G.returnTimer = 0;

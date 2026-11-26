@@ -368,4 +368,173 @@ export const tests = [
       await t.page.clock.resume();
     },
   },
+
+  // ---------- W5-S4-03 ----------
+  {
+    name: 'W5-S4-03 Pause sub-dialog switches reuse persistent #modal scrim & card without replaying sheet entrance, synchronous 0ms closeDialog (CD-WF5-02), and shared <=140ms flyGhost',
+    viewports: ['desktop', 'mobile'],
+    initScript: fullMotion,
+    async run(t) {
+      await ready(t);
+      await t.seed(7);
+      await t.game('newGame', { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(6000);
+      const s = await t.state();
+      s.game.players[0].rack = 'STEAMRN'.split('');
+      await t.game('setState', { game: s.game });
+      await t.waitIdle(4000);
+
+      // Play STEAM so Steam ledger also has a clickable Hot Springs fact chip
+      await t.game('act', 'stage', [{ i: 110, l: 'S' }, { i: 111, l: 'T' }, { i: 112, l: 'E' }, { i: 113, l: 'A' }, { i: 114, l: 'M' }]);
+      t.expect((await t.game('act', 'play')).ok, 'played STEAM');
+      await t.waitIdle(6000);
+
+      // 1) Fresh Pause open: plays outer sheet entrance, !switched
+      await t.page.click('#b-menu');
+      const pauseOpen = await t.page.evaluate(() => {
+        const m = document.querySelector('#modal');
+        const card = m.querySelector('.card.dialog');
+        window.__w5ModalCard = card;
+        return {
+          dialog: window.__G.dialog,
+          switched: m.classList.contains('switched'),
+          anim: card ? getComputedStyle(card).animationName : null,
+          labelledby: card ? card.getAttribute('aria-labelledby') : null,
+        };
+      });
+      t.equal(pauseOpen.dialog, 'pause', 'Pause opened');
+      t.equal(pauseOpen.switched, false, 'fresh Pause open is not marked switched');
+      t.equal(pauseOpen.anim, 'sheet', 'fresh Pause open plays outer sheet entrance');
+      t.equal(pauseOpen.labelledby, 'pause-h', 'Pause sets aria-labelledby="pause-h"');
+
+      // 2) Switch Pause -> Steam ledger -> Back -> Unseen tiles -> Back -> Read the board -> Back
+      for (const [target, lblId] of [['ledger', 'ledger-h'], ['tracker', 'tk-h'], ['boardtext', 'bt-h']]) {
+        await t.page.click(`#modal [data-open="${target}"]`);
+        const sub = await t.page.evaluate(() => {
+          const m = document.querySelector('#modal');
+          const card = m.querySelector('.card.dialog');
+          return {
+            dialog: window.__G.dialog,
+            sameNode: card === window.__w5ModalCard,
+            switched: m.classList.contains('switched'),
+            anim: card ? getComputedStyle(card).animationName : null,
+            labelledby: card ? card.getAttribute('aria-labelledby') : null,
+            holds: window.__game.audioState().holds,
+          };
+        });
+        t.equal(sub.dialog, target, `switched to ${target}`);
+        t.equal(sub.sameNode, true, `${target} reused the persistent .card.dialog DOM node`);
+        t.equal(sub.switched, true, `#modal keeps .switched on ${target}`);
+        t.equal(sub.anim, 'none', `${target} does not replay outer sheet entrance`);
+        t.equal(sub.labelledby, lblId, `${target} updates aria-labelledby to ${lblId}`);
+        t.equal(sub.holds.includes('pause'), false, `${target} released pause audio hold`);
+
+        await t.page.click('#modal [data-open="pause"]');
+        const back = await t.page.evaluate(() => {
+          const m = document.querySelector('#modal');
+          const card = m.querySelector('.card.dialog');
+          return {
+            dialog: window.__G.dialog,
+            sameNode: card === window.__w5ModalCard,
+            switched: m.classList.contains('switched'),
+            anim: card ? getComputedStyle(card).animationName : null,
+            labelledby: card ? card.getAttribute('aria-labelledby') : null,
+          };
+        });
+        t.equal(back.dialog, 'pause', `Back from ${target} returned to Pause`);
+        t.equal(back.sameNode, true, `Back from ${target} reused persistent .card.dialog node`);
+        t.equal(back.switched, true, `Back from ${target} keeps #modal.switched`);
+        t.equal(back.anim, 'none', `Back from ${target} does not replay outer sheet entrance`);
+        t.equal(back.labelledby, 'pause-h', 'Back restored aria-labelledby="pause-h"');
+      }
+
+      // 3) Switch Pause -> Steam ledger -> Fact card: keeps #modal.switched so .fact does not replay outer sheet entrance
+      await t.page.click('#modal [data-open="ledger"]');
+      await t.page.click('#modal [data-fact="steam"]');
+      const factSw = await t.page.evaluate(() => {
+        const m = document.querySelector('#modal');
+        const fact = m.querySelector('.fact');
+        return {
+          dialog: window.__G.dialog,
+          switched: m.classList.contains('switched'),
+          anim: fact ? getComputedStyle(fact).animationName : null,
+        };
+      });
+      t.equal(factSw.dialog, 'fact', 'opened fact card from Steam ledger');
+      t.equal(factSw.switched, true, 'Ledger -> Fact keeps #modal.switched');
+      t.equal(factSw.anim, 'none', 'Ledger -> Fact does not replay outer sheet entrance');
+
+      // 4) Synchronous 0 ms closeDialog() teardown (CD-WF5-02)
+      const syncClose = await t.page.evaluate(() => {
+        const btn = document.querySelector('#modal [data-close]');
+        btn.click();
+        const m = document.querySelector('#modal');
+        return {
+          dialog: window.__G.dialog,
+          hidden: m.hidden,
+          switched: m.classList.contains('switched'),
+          inert: document.querySelector('#app').inert,
+          html: m.innerHTML,
+        };
+      });
+      t.equal(syncClose.dialog, null, 'CD-WF5-02 closeDialog clears G.dialog synchronously in 0 ms');
+      t.equal(syncClose.hidden, true, 'CD-WF5-02 closeDialog hides #modal synchronously in 0 ms');
+      t.equal(syncClose.switched, false, 'closeDialog clears #modal.switched');
+      t.equal(syncClose.inert, false, 'CD-WF5-02 closeDialog removes #app.inert synchronously in 0 ms');
+      t.equal(syncClose.html, '', 'closeDialog empties #modal synchronously');
+
+      // 5) Fresh re-open after close replays outer sheet entrance cleanly
+      await t.page.click('#b-menu');
+      const reopen = await t.page.evaluate(() => ({
+        switched: document.querySelector('#modal').classList.contains('switched'),
+        anim: getComputedStyle(document.querySelector('#modal .card.dialog')).animationName,
+      }));
+      t.equal(reopen.switched, false, 'fresh re-open after close clears .switched');
+      t.equal(reopen.anim, 'sheet', 'fresh re-open after close plays outer sheet entrance');
+      await t.game('act', 'close');
+
+      // 6) Shared <=140ms Frame-1-interruptible flyGhost: tap-to-place, single unstage(), and blocked board return
+      const emptyCell = await t.page.evaluate(() => window.__G.s.board.findIndex((x, i) => !x && i >= 60 && i < 160));
+      const r0 = await t.game('act', 'rackTile', 0);
+      const cellPt = await t.game('act', 'screen', emptyCell);
+      await t.page.mouse.click(r0[0], r0[1]); // select tile
+      await t.page.mouse.click(cellPt[0], cellPt[1]); // tap-to-place -> 120ms flyGhost
+      const tapFly = await t.page.evaluate(() => {
+        const gh = document.querySelector('#ghost');
+        return { visible: !gh.hidden, tr: gh.style.transition };
+      });
+      t.equal(tapFly.visible, true, 'tap-to-place runs #ghost flight');
+      t.expect(/120ms/.test(tapFly.tr), `tap-to-place uses <=140ms flyGhost (${tapFly.tr})`);
+
+      // Single unstage() via tap on staged tile -> 130ms flyGhost, interruptible on Frame 1
+      await t.page.mouse.click(cellPt[0], cellPt[1]);
+      const unFly = await t.page.evaluate(() => {
+        const gh = document.querySelector('#ghost');
+        return { visible: !gh.hidden, tr: gh.style.transition, returning: window.__G.returning };
+      });
+      t.equal(unFly.visible, true, 'single unstage runs #ghost flight');
+      t.expect(/130ms/.test(unFly.tr), `single unstage uses <=140ms flyGhost (${unFly.tr})`);
+      t.expect(unFly.returning != null, 'single unstage hides destination rack tile during flight');
+
+      // Blocked board drop -> 140ms shared flyGhost back to origin cell
+      await t.game('act', 'stage', [{ i: emptyCell, l: (await t.state()).game.players[0].rack[0] }]);
+      const occPt = await t.game('act', 'screen', 112); // occupied by STEAM
+      await t.page.mouse.move(cellPt[0], cellPt[1]);
+      await t.page.mouse.down();
+      await t.page.mouse.move(occPt[0], occPt[1], { steps: 6 });
+      await t.page.mouse.up();
+      const blkFly = await t.page.evaluate((ci) => {
+        const gh = document.querySelector('#ghost');
+        return { visible: !gh.hidden, tr: gh.style.transition, retCell: window.__G.returningCell, want: ci };
+      }, emptyCell);
+      t.equal(blkFly.visible, true, 'blocked board drop runs shared flyGhost');
+      t.equal(blkFly.retCell, emptyCell, 'blocked board drop tracks G.returningCell');
+      t.expect(/140ms/.test(blkFly.tr), `blocked board return uses <=140ms flyGhost (${blkFly.tr})`);
+      // Frame-1 interrupt on boardDown clears ghost immediately
+      await t.page.mouse.move(cellPt[0], cellPt[1]);
+      await t.page.mouse.down();
+      t.equal(await t.page.evaluate(() => document.querySelector('#ghost').hidden && window.__G.returningCell === null), true, 'blocked board flyGhost interrupted cleanly on Frame 1');
+      await t.page.mouse.up();
+    },
+  },
 ];

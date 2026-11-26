@@ -569,6 +569,7 @@ body.theme-dark #toast.featured button { background: linear-gradient(160deg, #1E
 .card.dialog::before, .privacy-card::before { content: ""; position: absolute; inset: 6px; border: 1px solid rgba(184, 144, 47, 0.38); border-radius: 11px; pointer-events: none; }
 body.theme-dark .card.dialog::before, body.theme-dark .privacy-card::before { border-color: rgba(212, 175, 55, 0.42); }
 .dialog { padding: 20px 22px; animation: sheet var(--dur-sheet) var(--ease-ceramic); }
+#modal.switched .dialog, #modal.switched .fact { animation: none; }
 body.reduce .dialog, body.reduce .fact { animation: none; }
 @keyframes sheet { from { transform: translateY(14px); opacity: 0; } }
 .dialog h2 { margin: 0 0 6px; font: 400 1.5rem var(--f-display); color: var(--primary); }
