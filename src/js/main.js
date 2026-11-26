@@ -1559,6 +1559,7 @@ function renderRackCue(show) {
   if (!bar) return;
   let cue = $('#rack-cue');
   const active = !!show && !!G.settings.townCue && !!G.s && !G.s.over && !G.s.challenge && townWordsInRack(cur().rack, G.lex).length > 0;
+  bar.classList.toggle('has-cue', active);
   if (!active) {
     if (cue) { cue.hidden = true; cue.setAttribute('aria-hidden', 'true'); }
     return;

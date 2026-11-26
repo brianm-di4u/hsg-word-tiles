@@ -1,5 +1,6 @@
 // Wave 5, batch W5-B03:
 // - W6-S2-03: Restrict board-to-plaque comet arcs strictly to claim/row/themed triggers (never passive Daily or bag-depletion clearFog).
+// - W6-S4-01: Toggle #rackbar.has-cue and clear .rack-cue below rack tile canvases across portrait, landscape, and desktop without shifting layout.
 import { ctx } from './lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
 import { CENTER } from '../src/js/score.js';
@@ -171,6 +172,93 @@ export const tests = [
       t.equal((await t.game('act', 'play')).ok, true, 'STEAM Featured claim played');
       const afterClaim = await t.state();
       t.expect(afterClaim.arcLog.some((a) => a.plaque === 0 && a.reason === 'claim'), `Featured Spring claim fires claim arc (${JSON.stringify(afterClaim.arcLog)})`);
+    },
+  },
+  // ---------- W6-S4-01 ----------
+  {
+    name: 'W6-S4-01 #rackbar.has-cue toggles cleanly and .rack-cue never overlaps rack tile canvases (Q_10 numerals) across portrait, landscape, and desktop at 100% & 130% text with zero layout shift',
+    viewports: ['desktop', 'mobile'],
+    initScript: fullMotion,
+    async run(t) {
+      await ready(t);
+      const cases = t.viewport === 'mobile'
+        ? [[390, 844, 'portrait'], [568, 320, 'landscape-568'], [844, 390, 'landscape-844']]
+        : [[1280, 800, 'desktop-1280'], [1024, 600, 'desktop-1024']];
+
+      const measure = () => t.page.evaluate(() => {
+        const bar = document.querySelector('#rackbar');
+        const cue = document.querySelector('#rack-cue');
+        const br = bar.getBoundingClientRect();
+        const cr = cue && !cue.hidden ? cue.getBoundingClientRect() : null;
+        const canvases = [...document.querySelectorAll('#rack .rtile canvas')];
+        const maxTileBottom = canvases.length ? Math.max(...canvases.map((c) => c.getBoundingClientRect().bottom)) : 0;
+        const rackTop = Math.round(document.querySelector('#rack').getBoundingClientRect().top);
+        const playRect = document.querySelector('#actions .play').getBoundingClientRect();
+        const app = document.querySelector('#app');
+        return {
+          hasCue: bar.classList.contains('has-cue'),
+          visible: !!cr && cr.width > 0 && cr.height > 0,
+          cueTop: cr ? +cr.top.toFixed(1) : null,
+          cueBottom: cr ? +cr.bottom.toFixed(1) : null,
+          barTop: +br.top.toFixed(1),
+          barBottom: +br.bottom.toFixed(1),
+          maxTileBottom: +maxTileBottom.toFixed(1),
+          clearance: cr ? +(cr.top - maxTileBottom).toFixed(1) : null,
+          insideBar: !!cr && cr.left >= br.left - 1 && cr.right <= br.right + 1 && cr.top >= br.top - 1 && cr.bottom <= br.bottom + 1,
+          rackTop,
+          playTop: Math.round(playRect.top),
+          playBottom: +playRect.bottom.toFixed(1),
+          overflowX: app.scrollWidth - app.clientWidth,
+        };
+      });
+
+      for (const textScale of [1, 1.3]) {
+        await t.page.evaluate((ts) => {
+          const s = JSON.parse(localStorage.getItem('hs-letters-settings-v1') || '{}');
+          s.text = ts;
+          s.townCue = true;
+          localStorage.setItem('hs-letters-settings-v1', JSON.stringify(s));
+        }, textScale);
+        await t.reload();
+        await ready(t);
+
+        for (const [w, h, label] of cases) {
+          const tag = `${label} ${Math.round(textScale * 100)}%`;
+          await t.page.setViewportSize({ width: w, height: h });
+          await t.game('newGame', { seed: 9, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+          await t.waitIdle(6000);
+          for (let k = 0; k < 2; k++) { await t.page.evaluate(() => dispatchEvent(new Event('resize'))); await t.waitFrames(1); }
+
+          // Off state: no Hot Springs word in rack
+          let st = (await t.state()).game;
+          st.players[0].rack = ['Q', 'X', 'Z', 'V', 'W', 'Y', 'B'];
+          await t.game('setState', { game: st });
+          await t.waitFrames(1);
+          const off = await measure();
+          t.equal(off.hasCue, false, `${tag}: #rackbar omits .has-cue when rack has no town word`);
+          t.equal(off.visible, false, `${tag}: #rack-cue hidden when rack has no town word`);
+
+          // On state: SPA + Q_10 in center slots where the pill sits
+          st = (await t.state()).game;
+          st.players[0].rack = ['S', 'P', 'A', 'Q', 'X', 'Z', 'V'];
+          await t.game('setState', { game: st });
+          await t.waitFrames(1);
+          const on = await measure();
+          t.equal(on.hasCue, true, `${tag}: #rackbar carries .has-cue when town word is in rack`);
+          t.equal(on.visible, true, `${tag}: #rack-cue visible`);
+          t.equal(on.insideBar, true, `${tag}: #rack-cue stays strictly inside #rackbar (${on.cueTop}..${on.cueBottom} in ${on.barTop}..${on.barBottom})`);
+          t.expect(on.cueTop >= on.maxTileBottom - 0.1, `${tag}: #rack-cue clears all rack tile canvases including Q_10 (cueTop ${on.cueTop} >= tileBottom ${on.maxTileBottom}, clearance=${on.clearance} px)`);
+          t.equal(on.rackTop, off.rackTop, `${tag}: toggling .has-cue causes 0 px shift on #rack`);
+          t.equal(on.playTop, off.playTop, `${tag}: toggling .has-cue causes 0 px shift on #actions .play`);
+          t.expect(on.playBottom <= h + 0.5, `${tag}: Play button stays on screen (${on.playBottom} <= ${h})`);
+          t.equal(on.overflowX, 0, `${tag}: zero horizontal overflow`);
+
+          if (textScale === 1 && t.viewport === 'mobile' && (label === 'portrait' || label === 'landscape-568')) {
+            await t.shot(`w5-b03-rack-cue-${label}`);
+          }
+        }
+      }
+      await t.page.setViewportSize({ width: t.vp.width, height: t.vp.height });
     },
   },
 ];
