@@ -1,6 +1,8 @@
 // Wave 4, batch W4-B18:
 // W4-S4-04 (tighter 1 ms limiter attack, 35 ms per-cue retrigger throttle + G.fast storm suppression,
 //           -2 dB peaking EQ carve at 2.2-2.5 kHz on bus.mus, 4 dB DUCK on discover/big, gentle lift on hint/open).
+// W4-S4-01 (lean procedural 0.22-0.30 s band-limited 350-3800 Hz tiled-bathhouse early-reflection ConvolverNode,
+//           created once per AudioContext, with restrained per-family wet sends per CD-WF4-01).
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const seeded = (seed) => new Function(`
   window.__TEST_TIPS__ = false;
@@ -158,6 +160,124 @@ export const tests = [
         for (let k = 0; k < 8; k++) worst = Math.max(worst, (await t.game('act', 'renderSfx', mix, 1)).prePeak);
         t.log(`W4-S4-04 mix ${mix} full prePeak max=${worst}`);
         t.expect(worst <= cap, `${mix} full-volume prePeak <= ${cap} (${worst})`);
+      }
+    },
+  },
+  {
+    name: 'W4-S4-01 tiled-bathhouse early-reflection ConvolverNode (0.22-0.30 s, 350-3800 Hz, created once), per-family wet sends (CD-WF4-01), acoustic tail on ceramic/brass, dry steam, and <=0.88 headroom',
+    viewports: ['desktop'],
+    initScript: seeded(41),
+    async run(t) {
+      await ready(t);
+      await t.page.click('#screen [data-go="setup"]');
+      await t.page.waitForFunction(() => window.__game.audioState().ctx === 'running', null, { timeout: 5000 });
+
+      const a = await t.game('audioState');
+      const rev = a.reverb;
+      t.expect(!!rev, `reverb bus exists (${JSON.stringify(rev)})`);
+      t.expect(rev?.dur >= 0.22 && rev?.dur <= 0.30, `IR duration in 0.22-0.30 s (${rev?.dur} s)`);
+      t.equal(rev?.channels, 2, 'IR is stereo (2 channels)');
+      t.expect(rev?.hp >= 300 && rev?.hp <= 400, `reverb highpass ~350 Hz (${rev?.hp} Hz)`);
+      t.expect(rev?.lp >= 3500 && rev?.lp <= 4000, `reverb lowpass ~3800 Hz (${rev?.lp} Hz)`);
+
+      // Per-family send calibration per CD-WF4-01:
+      // 0-5% UI taps & broadband steam (steam === 0), 8-12% ceramic clacks, 15-20% brass reward bells
+      const s = rev?.sends || {};
+      t.equal(s.steam, 0, 'broadband steam wet send is 0%');
+      for (const ui of ['open', 'tick', 'swap', 'turn', 'yourturn', 'prompt']) {
+        t.expect(s[ui] >= 0 && s[ui] <= 0.05, `${ui} wet send in 0-5% (${s[ui]})`);
+      }
+      for (const cer of ['place', 'play', 'pick', 'unpick', 'recall', 'shuffle', 'error']) {
+        t.expect(s[cer] >= 0.08 && s[cer] <= 0.12, `${cer} ceramic wet send in 8-12% (${s[cer]})`);
+      }
+      for (const br of ['chime', 'featured', 'discover', 'fanfare', 'hint', 'bell']) {
+        t.expect(s[br] >= 0.15 && s[br] <= 0.20, `${br} brass wet send in 15-20% (${s[br]})`);
+      }
+
+      // Verify exact DSP graph wiring: revIn -> ConvolverNode -> hp(350) -> lp(3800) -> sfx -> lim,
+      // per-family runtime send gains into revIn, and zero per-cue Convolver/Buffer creation
+      const wiring = await t.page.evaluate(() => {
+        const edges = window.__audioEdges;
+        const conv = edges.map(([x]) => x).find((n) => n instanceof ConvolverNode);
+        const revIn = conv ? edges.find(([x, y]) => x instanceof GainNode && y === conv)?.[0] : null;
+        const hp = edges.map(([x]) => x).find((n) => n instanceof BiquadFilterNode && n.type === 'highpass' && n.frequency.value === 350);
+        const lp = edges.map(([x]) => x).find((n) => n instanceof BiquadFilterNode && n.type === 'lowpass' && n.frequency.value === 3800);
+        const has = (u, v) => !!u && !!v && edges.some(([x, y]) => x === u && y === v);
+        let newConvs = 0, newBufs = 0;
+        const origConv = BaseAudioContext.prototype.createConvolver;
+        const origBuf = BaseAudioContext.prototype.createBuffer;
+        BaseAudioContext.prototype.createConvolver = function (...args) { newConvs++; return origConv.apply(this, args); };
+        BaseAudioContext.prototype.createBuffer = function (...args) { newBufs++; return origBuf.apply(this, args); };
+        const sent = {};
+        try {
+          for (const cue of ['steam', 'open', 'place', 'chime', 'featured', 'fanfare']) {
+            const before = edges.length;
+            window.__game.act('sfx', cue, { delay: 0.1 });
+            const wetEdge = revIn ? edges.slice(before).find(([x, y]) => x instanceof GainNode && y === revIn) : null;
+            sent[cue] = wetEdge ? +wetEdge[0].gain.value.toFixed(3) : 0;
+          }
+        } finally {
+          BaseAudioContext.prototype.createConvolver = origConv;
+          BaseAudioContext.prototype.createBuffer = origBuf;
+        }
+        return {
+          hasConv: !!conv,
+          normOff: conv ? conv.normalize === false : false,
+          convToHp: has(conv, hp),
+          hpToLp: has(hp, lp),
+          lpToGain: !!lp && edges.some(([x, y]) => x === lp && y instanceof GainNode),
+          newConvs,
+          newBufs,
+          sent,
+        };
+      });
+      t.equal(wiring.hasConv, true, 'ConvolverNode created once in graph()');
+      t.equal(wiring.normOff, true, 'ConvolverNode.normalize is false (IR self-normalized)');
+      t.equal(wiring.convToHp, true, 'ConvolverNode feeds 350 Hz highpass');
+      t.equal(wiring.hpToLp, true, '350 Hz highpass feeds 3800 Hz lowpass');
+      t.equal(wiring.lpToGain, true, '3800 Hz lowpass feeds sfx bus');
+      t.equal(wiring.newConvs, 0, 'playing cues creates zero new ConvolverNodes');
+      t.equal(wiring.newBufs, 0, 'playing cues allocates zero new AudioBuffers');
+      t.equal(wiring.sent.steam, 0, 'live steam sends 0% to revIn');
+      t.expect(wiring.sent.open > 0 && wiring.sent.open <= 0.05, `live open sends 0-5% to revIn (${wiring.sent.open})`);
+      t.expect(wiring.sent.place >= 0.08 && wiring.sent.place <= 0.12, `live place sends 8-12% to revIn (${wiring.sent.place})`);
+      t.expect(wiring.sent.chime >= 0.15 && wiring.sent.chime <= 0.20, `live chime sends 15-20% to revIn (${wiring.sent.chime})`);
+
+      // Acoustic proof via offline renderSfx:
+      // 1) Ceramic 'pick' (no lastClack state) & brass 'chime' gain measurable early-reflection tail/energy vs dry, while broadband 'steam' stays bit-identical to dry!
+      const cmp = async (cue) => {
+        const wet = await t.page.evaluate(async (c) => {
+          let s = 4100 >>> 0;
+          Math.random = () => { s = (s + 0x6D2B79F5) >>> 0; let x = s; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+          return window.__game.act('renderSfx', c, 0.35);
+        }, cue);
+        const dry = await t.page.evaluate(async (c) => {
+          let s = 4100 >>> 0;
+          Math.random = () => { s = (s + 0x6D2B79F5) >>> 0; let x = s; x = Math.imul(x ^ (x >>> 15), x | 1); x ^= x + Math.imul(x ^ (x >>> 7), x | 61); return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+          return window.__game.act('renderSfx', c, 0.35, { dry: true });
+        }, cue);
+        return { wet, dry };
+      };
+      const pk = await cmp('pick');
+      const ch = await cmp('chime');
+      const st = await cmp('steam');
+      t.log(`W4-S4-01 pick wet=${pk.wet.ms}ms/rms=${pk.wet.rms}/peak=${pk.wet.peak} vs dry=${pk.dry.ms}ms/rms=${pk.dry.rms}/peak=${pk.dry.peak}`);
+      t.log(`W4-S4-01 chime wet=${ch.wet.ms}ms/rms=${ch.wet.rms}/sig=${ch.wet.sig} vs dry=${ch.dry.ms}ms/rms=${ch.dry.rms}/sig=${ch.dry.sig}`);
+      t.log(`W4-S4-01 steam wet=${st.wet.ms}ms/rms=${st.wet.rms}/sig=${st.wet.sig} vs dry=${st.dry.ms}ms/rms=${st.dry.rms}/sig=${st.dry.sig}`);
+      t.expect(pk.wet.ms > pk.dry.ms + 10 && pk.wet.sig !== pk.dry.sig, `ceramic pick gains early-reflection tail (${pk.wet.ms} ms vs dry ${pk.dry.ms} ms)`);
+      t.expect(Math.abs(pk.wet.peak - pk.dry.peak) <= 0.015, `ceramic pick attack peak stays un-smeared (${pk.wet.peak} vs dry ${pk.dry.peak})`);
+      t.expect(Math.abs(ch.wet.sig - ch.dry.sig) > 100000, `brass chime receives tiled-room early reflections (sig ${ch.wet.sig} vs dry ${ch.dry.sig})`);
+      t.equal(st.wet.sig, st.dry.sig, 'broadband steam is 100% dry (0% reverb)');
+
+      // 2) Full-volume headroom: all solo cues stay unclipped (< 0.95 prePeak, <= 0.90 peak) and reverb never inflates dry full-volume peaks
+      for (const cue of ['place', 'play', 'pick', 'recall', 'shuffle', 'steam', 'chime', 'featured', 'discover', 'fanfare', 'hint', 'open', 'error', 'big']) {
+        let maxPeak = 0, maxPre = 0;
+        for (let k = 0; k < 6; k++) {
+          const r = await t.game('act', 'renderSfx', cue, 1);
+          maxPeak = Math.max(maxPeak, r.peak);
+          maxPre = Math.max(maxPre, r.prePeak);
+        }
+        t.expect(maxPeak <= 0.90 && maxPre < 0.95, `${cue} solo full-volume stays unclipped with reverb (peak=${maxPeak}, prePeak=${maxPre})`);
       }
     },
   },

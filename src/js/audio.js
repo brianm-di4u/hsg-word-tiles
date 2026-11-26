@@ -4,7 +4,7 @@
 // Featured Spring. No two tile sounds are alike: every cue is nudged in pitch, level and colour as it is made.
 import { makeAudioKit, measureAudio, SCORES, SCENES } from './music.js';
 
-export const audio = { ctx: null, on: true, vol: 0.35, fxVol: 1, musicVol: 1, fx: true, music: true, amb: true, played: [], cues: [], total: 0, throttled: 0, suppressed: 0, isFast: null, live: null, sfxOut: null, bus: null, kit: null, want: null, holds: new Set() };
+export const audio = { ctx: null, on: true, vol: 0.35, fxVol: 1, musicVol: 1, fx: true, music: true, amb: true, played: [], cues: [], total: 0, throttled: 0, suppressed: 0, isFast: null, live: null, sfxOut: null, revIn: null, bus: null, kit: null, want: null, holds: new Set() };
 const DEFAULT_VOL = 0.35;
 // Cues are built this much louder than they were before the music arrived (that was 1), so that at the shipped
 // volume the tile sounds peak between 0.2 and 0.45 and sit clearly over the music and the bed. Set it to 1 to undo.
@@ -24,6 +24,48 @@ const cueVol = (vol = audio.vol) => (vol <= DEFAULT_VOL ? vol : DEFAULT_VOL + (v
 const CEIL_KNEE = 0.88, CEIL_TOP = 0.95;
 export const CEILING = Float32Array.from({ length: 4097 }, (_, i) => { const x = i / 2048 - 1, over = Math.abs(x) - CEIL_KNEE, room = CEIL_TOP - CEIL_KNEE; return over <= 0 ? x : Math.sign(x) * (CEIL_KNEE + room * (1 - Math.exp(-over / room))); });
 
+// Lean procedural tiled-bathhouse early-reflection impulse response (0.24 s, band-limited 350-3800 Hz, CD-WF4-01).
+// Created once per AudioContext; >= 11 ms pre-delay preserves crisp ceramic attacks and avoids transient peak stacking.
+const REV_SEC = 0.24;
+export const REV_SEND = {
+  steam: 0,
+  open: 0.02, tick: 0.02, swap: 0.04, turn: 0.04, yourturn: 0.04, prompt: 0.04,
+  good: 0.05, big: 0.05, reveal: 0.05,
+  place: 0.08, play: 0.09, pick: 0.09, unpick: 0.09, recall: 0.09, shuffle: 0.09, error: 0.09,
+  chime: 0.18, featured: 0.18, discover: 0.18, fanfare: 0.18, hint: 0.17, bell: 0.18, bagempty: 0.16, defeat: 0.16,
+};
+function makeReverbIr(ctx) {
+  const sr = ctx.sampleRate, len = Math.max(1, Math.floor(sr * REV_SEC));
+  const buf = ctx.createBuffer(2, len, sr);
+  let a = 0xB47405E1 >>> 0;
+  const rnd = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  // Early-reflection clusters (11-29 ms, matching a 4-10 m tiled bathhouse hall) + exponentially decayed tail (0.24 s total).
+  const taps = [
+    [0.011, 0.44, -0.3], [0.015, 0.38, 0.35], [0.019, 0.31, 0.2], [0.024, 0.23, -0.35], [0.029, 0.16, 0.25],
+  ];
+  const startDiffuse = Math.floor(sr * 0.014), fadeLen = Math.max(1, Math.floor(sr * 0.025)), tau = 0.024;
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (const [sec, amp, bias] of taps) {
+      const base = Math.floor((sec + (ch ? 0.0012 : 0)) * sr);
+      const gain = amp * (1 + (ch ? bias : -bias) * 0.35);
+      for (let k = 0; k < 3 && base + k < len; k++) {
+        d[base + k] += gain * (k === 1 ? 0.55 : 0.3) * (rnd() < 0.5 ? 1 : -1);
+      }
+    }
+    for (let i = startDiffuse; i < len; i++) {
+      const t = (i - startDiffuse) / sr;
+      const env = Math.exp(-t / tau) * (i > len - fadeLen ? (len - i) / fadeLen : 1);
+      d[i] += (rnd() * 2 - 1) * 0.075 * env;
+    }
+    let e = 0;
+    for (let i = 0; i < len; i++) e += d[i] * d[i];
+    const inv = e > 0 ? 0.33 / Math.sqrt(e) : 1;
+    for (let i = 0; i < len; i++) d[i] *= inv;
+  }
+  return buf;
+}
+
 // one master bus: cues, music and ambience all pass a limiter so the loudest cue on top of both never clips
 function graph(ctx, dest, seed) {
   const lim = ctx.createDynamicsCompressor();
@@ -31,10 +73,16 @@ function graph(ctx, dest, seed) {
   const ceil = ctx.createWaveShaper(); ceil.curve = CEILING;
   lim.connect(ceil); ceil.connect(dest);
   const sfx = ctx.createGain(); sfx.connect(lim);
+  const revIn = ctx.createGain(), revConv = ctx.createConvolver();
+  revConv.normalize = false;
+  revConv.buffer = makeReverbIr(ctx);
+  const revHp = ctx.createBiquadFilter(); revHp.type = 'highpass'; revHp.frequency.value = 350; revHp.Q.value = 0.7;
+  const revLp = ctx.createBiquadFilter(); revLp.type = 'lowpass'; revLp.frequency.value = 3800; revLp.Q.value = 0.7;
+  revIn.connect(revConv); revConv.connect(revHp); revHp.connect(revLp); revLp.connect(sfx);
   const musEq = ctx.createBiquadFilter();
   musEq.type = 'peaking'; musEq.frequency.value = 2350; musEq.Q.value = 0.9; musEq.gain.value = -2;
   const mus = ctx.createGain(); mus.gain.value = musicGain(DEFAULT_VOL, 1); mus.connect(musEq); musEq.connect(lim);
-  return { lim, sfx, mus, musEq, kit: makeAudioKit(ctx, mus, { seed, music: 1, ambience: 1 }) };
+  return { lim, sfx, revIn, rev: { conv: revConv, hp: revHp, lp: revLp, sends: REV_SEND }, mus, musEq, kit: makeAudioKit(ctx, mus, { seed, music: 1, ambience: 1 }) };
 }
 
 export function unlock() {
@@ -46,11 +94,11 @@ export function unlock() {
     audio.ctx = audio.live = ctx;
     audio.bus = graph(ctx, ctx.destination, (Math.random() * 0xffffff) | 0);
     audio.bus.mus.gain.value = musicGain();
-    audio.sfxOut = audio.bus.sfx; audio.kit = audio.bus.kit;
+    audio.sfxOut = audio.bus.sfx; audio.revIn = audio.bus.revIn; audio.kit = audio.bus.kit;
     noiseBank(ctx);
     audio.kit.start();
     syncAudio();
-  } catch (e) { audio.ctx = audio.live = audio.kit = audio.bus = audio.sfxOut = null; }
+  } catch (e) { audio.ctx = audio.live = audio.kit = audio.bus = audio.sfxOut = audio.revIn = null; }
 }
 
 // What should be heard right now: the tune named by `want` (or none) and the bathhouse bed, each only when its own
@@ -189,6 +237,15 @@ export function sfx(name, opts = {}) {
   try {
     OUT = audio.sfxOut || c.destination;
     if (opts.pan && c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = Math.max(-0.7, Math.min(0.7, opts.pan)); p.connect(OUT); OUT = p; }
+    const dryDest = OUT;
+    const wetAmt = opts.dry ? 0 : (REV_SEND[name] ?? 0);
+    if (wetAmt > 0 && audio.revIn) {
+      const cueBus = c.createGain(), wet = c.createGain();
+      wet.gain.value = wetAmt;
+      cueBus.connect(dryDest);
+      cueBus.connect(wet); wet.connect(audio.revIn);
+      OUT = cueBus;
+    }
     CJ = jit(25, 1.5); CJ.g *= (TRIM[name] || 1) * (opts.gain ?? 1);
     switch (name) {
       case 'pick': noise(t, 0.03, 0.12, 4600, 3); tone(1500, t, 0.025, 'triangle', 0.07); break;
@@ -229,7 +286,12 @@ export function sfx(name, opts = {}) {
         noise(t, 0.85, 0.34, 700, 1.2, 'bandpass', 0.22, 1800);
         break;
       case 'chime': [784, 988, 1175].forEach((f, k) => bell(t + k * 0.11, f, 0.08)); break;
-      case 'featured': bell(t, 659, 0.14); bell(t + 0.28, 988, 0.12); noise(t + 0.1, 0.9, 0.12, 5200, 0.6, 'highpass', 0.25); break;
+      case 'featured': {
+        bell(t, 659, 0.14); bell(t + 0.28, 988, 0.12);
+        const keep = OUT; OUT = dryDest;
+        try { noise(t + 0.1, 0.9, 0.12, 5200, 0.6, 'highpass', 0.25); } finally { OUT = keep; }
+        break;
+      }
       // control comes back to a person after the computer has played: warm low-passed marimba/wood interval (G4 -> B4), distinct from bright rising-fifth 'good'
       case 'yourturn':
         tone(392, t, 0.17, 'triangle', 0.076, 0, { a: 0.004, d: 0.05, s: 0.36, lp: 1150, lpTo: 420 });
@@ -299,8 +361,8 @@ export async function renderCue(name, vol, opts) {
   // ("suspend failed ... earlier than the current frame") and the cue is never measured
   const stopped = off.suspend(0.25), done = off.startRendering();
   await stopped;
-  const prev = { ctx: audio.ctx, on: audio.on, vol: audio.vol, fx: audio.fx, sfxOut: audio.sfxOut };
-  audio.ctx = off; audio.on = true; audio.fx = true; audio.sfxOut = g.sfx; audio.vol = vol;
+  const prev = { ctx: audio.ctx, on: audio.on, vol: audio.vol, fx: audio.fx, sfxOut: audio.sfxOut, revIn: audio.revIn };
+  audio.ctx = off; audio.on = true; audio.fx = true; audio.sfxOut = g.sfx; audio.revIn = g.revIn; audio.vol = vol;
   try { for (const n of name.split('+')) { const [cue, d] = n.split('@'); sfx(cue, { ...opts, delay: d ? +d : 0, _offline: true }); } } finally { Object.assign(audio, prev); }
   off.resume();
   const buf = await done, d = buf.getChannelData(0);
