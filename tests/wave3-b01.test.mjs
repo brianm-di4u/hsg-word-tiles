@@ -219,12 +219,17 @@ export const tests = [
         scene: window.__G.scene,
         move: window.__G.s.move,
         sfxTotal: window.__game.audioState().total,
+        played: window.__game.audioState().played,
         save: localStorage.getItem('hs-letters-save-v1'),
         aiHeld: !!window.__G.aiHeld,
       }));
       t.equal(stillOnSettings.scene, 'settings', 'still on Settings');
       t.equal(stillOnSettings.move, snap.move, 'AI did not execute while on Settings');
-      t.equal(stillOnSettings.sfxTotal, snap.sfxTotal, 'zero gameplay audio fired while on Settings');
+      // gameplay cues only: since 39b1e53 (W4-S5-03) the player's own Theme click plays its button foley (uiTap), which is not the game
+      // speaking; any other cue still fails (W4-B33-hotfix; the count of all cues went 8 -> 9 with that click, gameplay cues stay 0)
+      const fired = stillOnSettings.played.slice(stillOnSettings.played.length - (stillOnSettings.sfxTotal - snap.sfxTotal));
+      t.expect(stillOnSettings.sfxTotal - snap.sfxTotal <= 30, 'every cue since Settings opened is in the log');
+      t.equal(fired.filter((n) => !/^ui[A-Z]/.test(n)).join(','), '', `zero gameplay audio fired while on Settings (all cues: ${fired.join(',') || 'none'})`);
       t.equal(stillOnSettings.save, snap.save, 'save was not mutated while on Settings');
       t.equal(stillOnSettings.aiHeld, true, 'held AI callback survived Settings re-render');
 
