@@ -872,6 +872,17 @@ export function drawFrame(ctx, d) {
     ctx.strokeStyle = 'rgba(210,36,24,0.98)'; ctx.lineWidth = lw(0.085); poly(ctx, q); ctx.stroke();
     ctx.restore();
   }
+  // W2-S1-18: the empty special square whose rule the strip shows wears a thin brass ring on the board face (round, so it is
+  // neither the keyboard cursor's gold box nor a drag target's square halo)
+  if (d.inspect != null && d.inspect >= 0) {
+    const bx = FRAME + (d.inspect % N) + 0.5, by = FRAME + Math.floor(d.inspect / N) + 0.5;
+    const ring = Array.from({ length: 32 }, (_, k) => project(bx + 0.43 * Math.cos(k * Math.PI / 16), by + 0.43 * Math.sin(k * Math.PI / 16), 0));
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(26,17,8,0.6)'; ctx.lineWidth = lw(0.1); poly(ctx, ring); ctx.stroke();
+    ctx.strokeStyle = '#D4AB4E'; ctx.lineWidth = lw(0.05); poly(ctx, ring); ctx.stroke();
+    ctx.restore();
+  }
   if (d.cursor) {
     const clift = stagedSet.has(d.cursor.i) ? STAGED_LIFT : d.board[d.cursor.i] ? TILE_LIFT + 0.01 : 0;
     const q = quad(d.cursor.i, 0.04, clift);

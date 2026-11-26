@@ -48,7 +48,7 @@ const G = {
   s: null, scene: 'title', back: 'title', dict: null, lex: makeLexicon(LEXICON), ready: false,
   settings: { sound: true, fx: true, music: true, amb: true, vol: 0.35, fxVol: 1, musicVol: 1, theme: 'auto', motion: 'system', text: 1, board3d: 'auto', ai: 'normal', hints: true, townCue: true, tipsSeen: true, vibrate: matchMedia('(pointer: coarse)').matches },
   setup: null, nextSeed: null,
-  staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false },
+  staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false }, inspect: -1,
   preview: null, hint: null, last: new Set(), lastPulse: null, badPulse: null, anim: new Map(), animUntil: 0,
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, releaseAiTimer: 0, turnTimers: new Set(), privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
   drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, pendingVfx: null, busyUntil: 0, lastHuman: -1,
@@ -609,7 +609,7 @@ function resumeGame(record) { whenReady(() => beginGame(record.game, record)); }
 function beginGame(s, intent) {
   clearTimeout(G.aiTimer); G.aiTimer = 0;
   G.aiHeld = null; G.aiFire = null; G.aiBusy = false; G.aiSkip = false; G.aiToken++;
-  G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; G.badPulse = null; G.pendingVfx = null;
+  G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; G.badPulse = null; G.pendingVfx = null; G.inspect = -1;
   cancelTurnTimers();
   clearTimeout(errFlashTimer); G.errFlash = false;
   clearTimeout(scoreHiTimer); G.scoreHi = null; cancelScoreRoll(); endFlip(); endReturn();
@@ -807,7 +807,7 @@ function afterAction(entry, fromAi) {
   const bagJustEmptied = s.mode !== 'daily' && !s.over && G.bagLen > 0 && s.bag.length === 0;
   G.bagLen = s.bag.length;
   cancelDrag(); endReturn(); endFlip();
-  G.flash = null; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer);
+  G.flash = null; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer); G.inspect = -1; clearTimeout(inspectTimer);
   const said = s.players[entry.p].kind === 'ai' ? barkFor(s, entry) : null;
   G.bark = said ? { ...said, persona: s.players[entry.p].persona } : null;
   if (entry.kind === 'play' && s.players[entry.p].kind === 'human') coachPlayed();
@@ -2050,6 +2050,7 @@ function drawData(now) {
     badCells, badPulse: G.badPulse,
     target: G.drag && G.drag.active ? G.drag.target : null, dragFrom: G.drag && G.drag.from === 'board' && G.drag.active ? G.drag.i : null,
     dragTile: G.drag && G.drag.active ? G.drag.tile : null, blocked: G.drag && G.drag.active ? G.drag.blocked : null,
+    inspect: G.inspect >= 0 && !(G.drag && G.drag.active) && !G.s.board[G.inspect] && !G.staged.some((t) => t.i === G.inspect) ? G.inspect : null,
     anim: G.anim, settle: G.settle, now,
   };
 }
@@ -2476,6 +2477,14 @@ function themedWordAt(s, lex, i) {
   hits.sort((a, b) => b.tier - a.tier || b.form.length - a.form.length);
   return { id: hits[0].id, form: hits[0].form };
 }
+// W2-S1-18: the empty special square whose rule the strip shows (under the mouse, or tapped on a touch screen for as long as its tip
+// shows) wears a thin brass ring on the board (render2d.js drawFrame, d.inspect)
+let inspectTimer = 0;
+function setInspect(i, ms = 0) {
+  clearTimeout(inspectTimer);
+  if (G.inspect !== i) { G.inspect = i; draw(); }
+  if (ms && i >= 0) inspectTimer = setTimeout(() => { if (G.inspect === i) { G.inspect = -1; draw(); } }, ms);
+}
 function hoverSquare(e) {
   if (G.drag || e.pointerType !== 'mouse' || G.scene !== 'game' || !G.s) return;
   const b = $('#board'), r = b.getBoundingClientRect();
@@ -2484,6 +2493,7 @@ function hoverSquare(e) {
   if (onBoard && R.minimapHit(mx, my)) {
     b.style.cursor = 'pointer';
     if (G.hoverInfo !== null || G.hoverBath !== null) { G.hoverInfo = null; G.hoverBath = null; renderPreview(); }
+    setInspect(-1);
     return;
   }
   const i = onBoard ? pick(mx, my) : -1;
@@ -2498,6 +2508,7 @@ function hoverSquare(e) {
     }
   }
   b.style.cursor = pointer ? 'pointer' : '';
+  setInspect(info && !pointer ? i : -1);
   if (info !== G.hoverInfo || bath !== G.hoverBath) { G.hoverInfo = info; G.hoverBath = bath; clearTimeout(hoverTapTimer); if (info) clearToasts(); else syncToastStaging(); renderPreview(); }
 }
 
@@ -2765,7 +2776,7 @@ function onUp(e) {
   if (d.touch && i >= 0 && !G.s.board[i] && !G.staged.some((t) => t.i === i) && !G.aiBusy && !G.hintBusy && !G.dialog) {
     const info = squareInfo(i);
     if (info) {
-      clearToasts();
+      clearToasts(); setInspect(i, 3600);
       if (G.staged.length) {
         G.hoverInfo = info; G.hoverBath = SQUARES[i] === 'B' ? BATHS[i] : null;
         renderPreview();
