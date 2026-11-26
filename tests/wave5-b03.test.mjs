@@ -177,7 +177,9 @@ export const tests = [
   },
   // ---------- W6-S4-01 ----------
   {
-    name: 'W6-S4-01 #rackbar.has-cue toggles cleanly and .rack-cue never overlaps rack tile canvases (Q_10 numerals) across portrait, landscape, and desktop at 100% & 130% text with zero layout shift',
+    // W5-B05-hotfix (OQ-WF7-W5-02): the cue padding is for phones only; the desktop rack bar (and so the board, S4-10) keeps its
+    // pre-wave-5 box, so the desktop cases pin that box instead of the phone clearance.
+    name: 'W6-S4-01 #rackbar.has-cue toggles cleanly and .rack-cue never overlaps rack tile canvases (Q_10 numerals) on portrait and landscape phones at 100% & 130% text with zero layout shift; the desktop rack bar keeps its pre-wave-5 box',
     viewports: ['desktop', 'mobile'],
     initScript: fullMotion,
     async run(t) {
@@ -185,6 +187,8 @@ export const tests = [
       const cases = t.viewport === 'mobile'
         ? [[390, 844, 'portrait'], [568, 320, 'landscape-568'], [844, 390, 'landscape-844']]
         : [[1280, 800, 'desktop-1280'], [1024, 600, 'desktop-1024']];
+      // the desktop #rackbar padding and brass lip as they were at the wave-5 base (4960743)
+      const DESKTOP_BOX = { 'desktop-1280': { pad: '10px 22px 16px', lip: '6px' }, 'desktop-1024': { pad: '6px 14px 11px', lip: '4px' } };
 
       const measure = () => t.page.evaluate(() => {
         const bar = document.querySelector('#rackbar');
@@ -210,6 +214,8 @@ export const tests = [
           playTop: Math.round(playRect.top),
           playBottom: +playRect.bottom.toFixed(1),
           overflowX: app.scrollWidth - app.clientWidth,
+          pad: getComputedStyle(bar).padding,
+          lip: getComputedStyle(bar, '::after').bottom,
         };
       });
 
@@ -248,7 +254,15 @@ export const tests = [
           t.equal(on.hasCue, true, `${tag}: #rackbar carries .has-cue when town word is in rack`);
           t.equal(on.visible, true, `${tag}: #rack-cue visible`);
           t.equal(on.insideBar, true, `${tag}: #rack-cue stays strictly inside #rackbar (${on.cueTop}..${on.cueBottom} in ${on.barTop}..${on.barBottom})`);
-          t.expect(on.cueTop >= on.maxTileBottom - 0.1, `${tag}: #rack-cue clears all rack tile canvases including Q_10 (cueTop ${on.cueTop} >= tileBottom ${on.maxTileBottom}, clearance=${on.clearance} px)`);
+          if (t.viewport === 'mobile') {
+            t.expect(on.cueTop >= on.maxTileBottom - 0.1, `${tag}: #rack-cue clears all rack tile canvases including Q_10 (cueTop ${on.cueTop} >= tileBottom ${on.maxTileBottom}, clearance=${on.clearance} px)`);
+          } else {
+            const box = DESKTOP_BOX[label];
+            t.equal(on.pad, box.pad, `${tag}: desktop #rackbar padding is the pre-wave-5 ${box.pad} with the cue showing`);
+            t.equal(off.pad, box.pad, `${tag}: and without it`);
+            t.equal(on.lip, box.lip, `${tag}: desktop brass lip sits at its pre-wave-5 bottom ${box.lip}`);
+            t.log(`${tag}: desktop cue ${on.cueTop}..${on.cueBottom}, tile bottom ${on.maxTileBottom} (clearance ${on.clearance} px), bar ${on.barTop}..${on.barBottom}`);
+          }
           t.equal(on.rackTop, off.rackTop, `${tag}: toggling .has-cue causes 0 px shift on #rack`);
           t.equal(on.playTop, off.playTop, `${tag}: toggling .has-cue causes 0 px shift on #actions .play`);
           t.expect(on.playBottom <= h + 0.5, `${tag}: Play button stays on screen (${on.playBottom} <= ${h})`);
