@@ -114,10 +114,10 @@ export function evaluate(s, tiles, ctx) {
   if (found.error) return { ok: false, error: found.error };
   conn = connectError(s.board, tiles);
   if (conn) return { ok: false, error: conn };
-  // `skipDict` is for the live preview of a Challenge game, which must not tell the player whether a word is in the dictionary
+  // `skipDict` is for the live preview of a Challenge game, which must not tell the player whether a word is in the dictionary or leak Hot Springs / Featured bonuses
   const bad = ctx.skipDict ? null : found.words.find((w) => !has(ctx.dict, w.w));
   if (bad) return { ok: false, error: `${bad.w} is not in the dictionary.`, badWord: bad.w, words: found.words.map((w) => ({ w: w.w, cells: w.cells })) };
-  const sc = scorePlay(s.board, found, tiles.length, ctx.lex, s.featured);
+  const sc = scorePlay(s.board, found, tiles.length, ctx.skipDict ? null : ctx.lex, ctx.skipDict ? null : s.featured);
   return { ok: true, ...sc };
 }
 
