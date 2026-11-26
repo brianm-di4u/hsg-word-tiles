@@ -227,7 +227,7 @@ export const tests = [
       }
 
       // Beat 1 (Turn 1): start -> stage -> play (advances to Turn 2 discs)
-      t.expect(/centre/i.test(await t.page.textContent('#coach p')), 'Turn 1 starts with center Display Spring beat');
+      t.expect(/center/i.test(await t.page.textContent('#coach p')), 'Turn 1 starts with center Display Spring beat');
       const [m1] = await t.game('act', 'moves', 1);
       await t.game('act', 'stage', m1.tiles);
       t.expect(/Play|Enter/.test(await t.page.textContent('#coach p')), 'Turn 1 staging shows Play beat');

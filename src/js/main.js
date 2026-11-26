@@ -1604,7 +1604,7 @@ function renderPreview() {
     if (G.hoverInfo) html += `<span class="said sq-tip">${G.hoverBath ? `<span class="sq sq-B preview-bath" aria-hidden="true">${UI.bathMedallionHtml(G.hoverBath, false)}</span>` : ''}<span>${esc(G.hoverInfo)}</span></span>`;
   } else if (G.hoverInfo) html = G.hoverBath ? `<span class="sq sq-B preview-bath" aria-hidden="true">${UI.bathMedallionHtml(G.hoverBath, false)}</span><span>${esc(G.hoverInfo)}</span>` : esc(G.hoverInfo);
   else {
-    const said = G.lastLine || (cur().kind !== 'human' ? '' : G.s.move === 0 ? (isNarrow() ? 'Start on the centre square.' : 'Start on the Display Spring in the centre.') : (isNarrow() ? 'Drag tiles to the board.' : 'Drag tiles to the board to make a word.'));
+    const said = G.lastLine || (cur().kind !== 'human' ? '' : G.s.move === 0 ? (isNarrow() ? 'Start on the center square.' : 'Start on the Display Spring in the center.') : (isNarrow() ? 'Drag tiles to the board.' : 'Drag tiles to the board to make a word.'));
     const hello = G.lastLine ? null : greeting(G.s), b = G.lastLine ? G.bark : hello;   // the table greets a person's opening play
     cls = hello ? 'idle greet' : 'idle';
     if (UI.dailyOpening(G.s)) { html = UI.todaysSprings(G.s, G.lex, isNarrow(), G.s.daily.date === today()).html; cls = 'idle greet'; }
@@ -1857,7 +1857,7 @@ function coachTip() {
   const beat = coachBeat(c);
   if (beat === 'start') {
     if (G.staged.length) return { id: 'play', target: '#actions .play', text: ({ touch: 'Happy with it? Tap Play.', mouse: 'Happy with it? Click Play.', key: 'Happy with it? Press Enter.' })[input] };
-    return { id: 'start', target: '#boardwrap', text: input === 'key' ? 'Score the most. Type letters to spell across the centre.' : 'Score the most. Drag tiles to the centre square.' };
+    return { id: 'start', target: '#boardwrap', text: input === 'key' ? 'Score the most. Type letters to spell across the center.' : 'Score the most. Drag tiles to the center square.' };
   }
   if (beat === 'discs') return { id: 'discs', target: '#boardwrap', text: 'Cream 2L/3L discs boost a letter. Dark 2W/3W discs boost the word.' };
   if (beat === 'town' && townWord(c)) return { id: 'town', target: '#boardwrap', text: townWord(c) + ': a Hot Springs word! Bonus and card; Row +20.' };

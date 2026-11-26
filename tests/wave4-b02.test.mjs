@@ -11,7 +11,7 @@ const words = (s) => s.trim().split(/\s+/).length;
 const tip = async (t) => ((await t.page.locator('#coach .coach-card').count()) ? t.page.textContent('#coach p') : '');
 const kind = async (t) => {
   const s = await tip(t);
-  return /discs/.test(s) ? 'discs' : /Plaques/.test(s) ? 'plaques' : /Hot Springs word/.test(s) ? 'town' : /Play|Enter/.test(s) ? 'play' : /centre/.test(s) ? 'start' : s ? `? ${s}` : 'none';
+  return /discs/.test(s) ? 'discs' : /Plaques/.test(s) ? 'plaques' : /Hot Springs word/.test(s) ? 'town' : /Play|Enter/.test(s) ? 'play' : /center/.test(s) ? 'start' : s ? `? ${s}` : 'none';
 };
 // the rack to play from, and letters put straight on the board (no new game object, so the tips go on)
 const hand = (t, rack, board = []) => t.page.evaluate(([r, b]) => {

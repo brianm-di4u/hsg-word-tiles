@@ -75,7 +75,7 @@ export function findWords(board, tiles) {
 export function connectError(board, tiles) {
   const empty = !board.some(Boolean);
   if (empty) {
-    if (!tiles.some((t) => t.i === CENTER)) return 'The first word must cover the Display Spring at the centre.';
+    if (!tiles.some((t) => t.i === CENTER)) return 'The first word must cover the Display Spring at the center.';
     if (tiles.length < 2) return 'The first word needs at least two tiles.';
     return null;
   }

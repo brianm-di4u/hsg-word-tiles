@@ -221,7 +221,7 @@ export function todaysSprings(s, lex, compact, isToday) {
   const tiers = Object.values(lex.data.tiers), rules = `${DAILY_TURNS} turns · same tiles for everyone · Hot Springs words earn +${Math.min(...tiers)} to +${Math.max(...tiers)} and open history cards`;
   return {
     rules,
-    html: `<span class="day"><b>${title}</b>${s.featured.map((f) => `<span class="extra">${ICON.cat[lex.categories[f.cat].icon]}${CAT_SHORT[f.cat]}</span>`).join('')}${compact ? '' : `<span class="rules">${rules}</span>`}<span class="said">${how} ${compact ? 'letters.' : 'plaque letters; so does covering a Bathhouse Row square.'}</span><span class="said">Start on the ${compact ? 'centre square.' : 'Display Spring in the centre.'}</span></span>`,
+    html: `<span class="day"><b>${title}</b>${s.featured.map((f) => `<span class="extra">${ICON.cat[lex.categories[f.cat].icon]}${CAT_SHORT[f.cat]}</span>`).join('')}${compact ? '' : `<span class="rules">${rules}</span>`}<span class="said">${how} ${compact ? 'letters.' : 'plaque letters; so does covering a Bathhouse Row square.'}</span><span class="said">Start on the ${compact ? 'center square.' : 'Display Spring in the center.'}</span></span>`,
     say: `${title}: ${s.featured.map((f) => lex.categories[f.cat].name).join(', ')}. ${how} plaque letters; so does covering a Bathhouse Row square.`,
   };
 }
@@ -404,7 +404,7 @@ export function boardTextHtml(s, staged = [], rack) {
     ? `<p class="bt-rack"><b>Your rack:</b> ${tiles.length ? tiles.map((l) => (l === '?' ? 'Blank' : esc(l))).join(', ') : 'empty'}</p>`
     : '';
   return `<div class="card dialog boardtext" role="dialog" aria-modal="true" aria-labelledby="bt-h"><h2 id="bt-h">The board, as text</h2>
-    <p>Columns run A to O and rows 1 to 15, so H8 is the centre square. Only squares with a tile are listed.</p>
+    <p>Columns run A to O and rows 1 to 15, so H8 is the center square. Only squares with a tile are listed.</p>
     ${rackLine}
     <ul class="log">${rows.join('')}</ul>
     <div class="dlg-btns"><button class="btn quiet" data-open="pause">Back</button><button class="btn primary" data-close>Close</button></div></div>`;
@@ -454,7 +454,7 @@ export function helpHtml(tab, lex, twos = [], opts = {}) {
       <p>Each player holds seven tiles. On your turn, either <b>play</b> tiles to make words, <b>swap</b> tiles with the bag, or <b>pass</b>.</p>
       <ol class="steps">
         <li>Lay one or more tiles in a single row or a single column, with no empty squares between them.</li>
-        <li>The first word of the game must cover the <b>Display Spring</b> at the centre and use at least two tiles.</li>
+        <li>The first word of the game must cover the <b>Display Spring</b> at the center and use at least two tiles.</li>
         <li>After that, every play must touch tiles already on the board.</li>
         <li>Every run of two or more tiles your play creates, across and down, must be a word. You score all of them.</li>
         <li>Draw back up to seven tiles from the bag.</li>
@@ -477,7 +477,7 @@ export function helpHtml(tab, lex, twos = [], opts = {}) {
       <p>The game ends when a player uses their last tile and the bag is empty, or when everyone has passed or swapped twice in a row. Tiles left on a rack count against their owner; whoever went out collects their value.</p>
       <p class="fine">Bathhouse Letters is an original game. Its board, tiles, bonuses and rules are game logic made for this town; the facts on its cards are history, with sources.</p>`,
     squares: `<h2>The springs</h2>
-      <p>The board has one square for each of the valley's 47 hot springs, as Wikipedia counts them: the <b>Display Spring</b> in the centre and 46 premium squares that swirl out from it. A premium counts only on the turn a tile first covers it. A <b>cream circle (2L, 3L)</b> multiplies a letter; a <b>dark octagon (2W, 3W)</b> multiplies the whole word.</p>
+      <p>The board has one square for each of the valley's 47 hot springs, as Wikipedia counts them: the <b>Display Spring</b> in the center and 46 premium squares that swirl out from it. A premium counts only on the turn a tile first covers it. A <b>cream circle (2L, 3L)</b> multiplies a letter; a <b>dark octagon (2W, 3W)</b> multiplies the whole word.</p>
       <ul class="legend">
         <li><span class="sq sq-w"><i>2L</i></span><span><b>Warm (2L)</b> doubles the letter on it.</span></li>
         <li><span class="sq sq-h"><i>3L</i></span><span><b>Hot (3L)</b> triples the letter on it.</span></li>
@@ -632,7 +632,7 @@ export function aboutHtml(meta) {
     <header class="sheet-head"><h1 tabindex="-1">About</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     <p><b>Bathhouse Letters</b> is part of Hot Springs Games, an open-source (MIT) collection of browser games set in Hot Springs, Arkansas. It's an original crossword word-tile game: the board, tiles, bonuses and rules were made for it, and nothing here is endorsed by any park, business or bathhouse.</p>
     <h2>Words</h2>
-    <p>The dictionary is the ENABLE word list (public domain), ${meta.words.toLocaleString('en-US')} words of 2–15 letters, minus slurs and crude words${meta.added ? `, plus ${meta.added} added by the game: the two-letter words QI, ZA, OK, EW, KI, FE, GI and OI, and everyday words such as EMAIL, ONLINE, APP, BLOG and EMOJI` : ''}. Common words for the computer opponents are marked using SCOWL by Kevin Atkinson (© 2000–2018, used under its permissive licence).</p>
+    <p>The dictionary is the ENABLE word list (public domain), ${meta.words.toLocaleString('en-US')} words of 2–15 letters, minus slurs and crude words${meta.added ? `, plus ${meta.added} added by the game: the two-letter words QI, ZA, OK, EW, KI, FE, GI and OI, and everyday words such as EMAIL, ONLINE, APP, BLOG and EMOJI` : ''}. Common words for the computer opponents are marked using SCOWL by Kevin Atkinson (© 2000–2018, used under its permissive license).</p>
     <h2>History</h2>
     <p>Each Hot Springs word card cites its source: the National Park Service, the Encyclopedia of Arkansas, Wikipedia, and other sources checked for the collection's trivia game. The opponents are fictional characters.</p>
     <h2>Type and art</h2>
@@ -765,7 +765,7 @@ export function reviewHtml(r) {
     : !r.total ? '<p>There is nothing to look back over.</p>'
     : `<p class="rv-rate"><b>${r.found} of ${r.total}</b> ${r.total === 1 ? 'turn' : 'turns'}: you made the highest-scoring play ${r.casual ? 'in everyday and Hot Springs words, or a better one' : 'your tiles allowed'}.</p>
       ${r.misses.length ? `<ol class="rv-list">${r.misses.map((m) => `<li><b>Turn ${m.turn}</b> ${did(m)} <em>${esc(m.best.word)}</em> would have scored ${m.best.score}${where(m.best)}.</li>`).join('')}</ol>` : '<p>No play left more than a few points behind the best one on offer.</p>'}
-      <p class="note">${r.misses.length ? 'Columns run A to O and rows 1 to 15, so H8 is the centre square. ' : ''}This counts points only. A smaller play that keeps good tiles can be the better one.${r.cut ? ` ${plural(r.cut, 'turn')} had too many plays to look through here.` : ''}${r.skipped ? ` ${plural(r.skipped, 'turn')} from before this was kept could not be looked at.` : ''}</p>`;
+      <p class="note">${r.misses.length ? 'Columns run A to O and rows 1 to 15, so H8 is the center square. ' : ''}This counts points only. A smaller play that keeps good tiles can be the better one.${r.cut ? ` ${plural(r.cut, 'turn')} had too many plays to look through here.` : ''}${r.skipped ? ` ${plural(r.skipped, 'turn')} from before this was kept could not be looked at.` : ''}</p>`;
   return `<div class="card dialog review" role="dialog" aria-modal="true" aria-labelledby="rv-h"><h2 id="rv-h">What you missed</h2>${body}<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div></div>`;
 }
 

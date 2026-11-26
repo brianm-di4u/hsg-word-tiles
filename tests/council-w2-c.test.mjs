@@ -226,7 +226,7 @@ export const tests = [
       t.expect(await card.isVisible(), 'the first tip shows on the first turn');
       const first = await t.page.textContent('#coach p');
       t.expect(words(first) <= 12, `tip one is ${words(first)} words: ${first}`);
-      t.expect(/centre/i.test(first) && /Score the most/.test(first), 'it names the goal and the centre square');
+      t.expect(/center/i.test(first) && /Score the most/.test(first), 'it names the goal and the center square');
       t.expect(await t.page.locator('#boardwrap.coach-target').count() === 1, 'the board is marked');
       t.expect(await t.page.locator('#coach [data-coach="skip"]').isVisible(), 'Skip tips is visible');
       t.expect((await t.page.locator('#live').textContent()).includes('Tip:'), 'the tip is announced');

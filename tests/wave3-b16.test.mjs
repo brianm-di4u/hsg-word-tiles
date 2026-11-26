@@ -228,7 +228,7 @@ export const tests = [
       const all = text(summarize(steps));
       t.expect(/Turn 1 You tried QZXJ, not in the dictionary, and lost the turn\. [A-Z]+ would have scored \d+, (across|down) from [A-O]\d+\./.test(all), 'the lost turn: ' + all);
       t.equal((all.match(/You passed\./g) || []).length, 1, 'one pass'); t.equal((all.match(/You swapped tiles\./g) || []).length, 1, 'one swap');
-      t.expect(/Columns run A to O and rows 1 to 15, so H8 is the centre square\./.test(all), 'and how squares are named');
+      t.expect(/Columns run A to O and rows 1 to 15, so H8 is the center square\./.test(all), 'and how squares are named');
       t.expect(/in everyday and Hot Springs words, or a better one\./.test(all), 'an Easy game says which words it looked at');
       // a save is not trusted: the word is escaped, and anything but a word is a pass
       const odd = (v) => { const x = JSON.parse(json(s)); x.log[0].challenge = v; return reviewHtml(summarize([...reviewSteps(x, 0, c.dict, c.lex)])); };
