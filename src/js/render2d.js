@@ -21,11 +21,87 @@ export const PREMIUM = {
   b: { name: 'BOILING', mult: '3W', unit: 'WORD', glass: ['#F0A27A', '#C4532F', '#7E2F1F'], lead: 0, rings: 3 },
 };
 
+// Shared declarative Day / Night look config (W3-S1-15, completing W3-S2-01 a2e6530): single source of truth
+// for 3D spotlight/fill/PMREM environment, tile clearcoat/emissive, towel albedo, and 2D/3D marble & board tints.
+export const LOOK = {
+  day: {
+    key: { color: 0xfff0d8, intensity: 600, angle: 0.7, penumbra: 0.95, decay: 1.6, pos: [-6, 30, -4], target: [0, 0, 0.5] },
+    hemi: { sky: 0xfff1dc, ground: 0x6a4a2c, intensity: 0.6 },
+    fill: { color: 0xcfe0ff, intensity: 0.5, pos: [12, 10, 16] },
+    envIntensity: 0.5,
+    env: {
+      sphere: 0x8f7a64,
+      panels: [
+        [0xfff0d0, -4, 7, -3, 6],
+        [0xc8d8ff, 6, 3, 6, 5],
+        [0xffd9a0, 0, 2, 9, 7],
+        [0x3a2414, 0, -8, 0, 16],
+      ],
+    },
+    tile: {
+      emissive: 0xffffff, emissiveIntensity: 0.14,
+      bodyColor: 0xeadfc4, blankBodyColor: 0xcfe6e2, blankRoughness: 0.62,
+      faceRoughness: 0.55, specularIntensity: 0.25, clearcoat: 0.25, clearcoatRoughness: 0.4,
+      atlasFill: '#FAF3E3',
+      faceGrad: ['#FFFDF5', '#FAF3E3', '#F0E6CE'],
+      spriteGrad: ['#FFFDF5', '#F8F0DE', '#EAE0C7'],
+      bevelDark: 'rgba(92,70,38,0.62)', bevelLight: 'rgba(255,255,255,0.85)',
+      stagedEmissive: 0xd9a23a, stagedEmissiveIntensity: 0.35,
+      lastColor: 0xf0d57a, lastEmissive: 0xd9a23a, lastEmissiveIntensity: 0.3,
+    },
+    towel: { cloth: 0xb5a892, stripe: 0x3b7870 },
+    top: { emissive: 0x000000, emissiveIntensity: 0, roughness: 1.0 },
+    table: { roughness: 0.48, darkTint: null, vignette: ['rgba(18,10,4,0)', 'rgba(16,9,4,0.14)', 'rgba(12,7,3,0.44)'] },
+    marble: {
+      base: ['#D0C5AF', '#C8BCA5'], fallback: ['#D4C9B4', '#CEC3AD', '#C6B9A2'], alpha: 0.27,
+      grout: '#7A6340', bevelLight: 'rgba(255,250,238,0.36)', bevelDark: 'rgba(88,70,46,0.28)',
+      boardTint: null, dimRgb: '30,20,10',
+    },
+    preDimColor: 0x1e140a,
+  },
+  night: {
+    key: { color: 0xffe1b0, intensity: 500, angle: 0.7, penumbra: 0.95, decay: 1.6, pos: [-6, 30, -4], target: [0, 0, 0.5] },
+    hemi: { sky: 0x8697c8, ground: 0x1d182c, intensity: 0.28 },
+    fill: { color: 0x5c72b8, intensity: 0.35, pos: [12, 10, 16] },
+    envIntensity: 0.32,
+    env: {
+      sphere: 0x24223a,
+      panels: [
+        [0xffe1b0, -4, 7, -3, 5.5],
+        [0x5c72b8, 6, 3, 6, 6],
+        [0x3b4878, 0, 2, 9, 7],
+        [0x141222, 0, -8, 0, 16],
+      ],
+    },
+    tile: {
+      emissive: 0xffe4be, emissiveIntensity: 0.11,
+      bodyColor: 0xd8cdb6, blankBodyColor: 0xc3d8d4, blankRoughness: 0.62,
+      faceRoughness: 0.55, specularIntensity: 0.25, clearcoat: 0.25, clearcoatRoughness: 0.4,
+      atlasFill: '#EDE5D4',
+      faceGrad: ['#F2EADB', '#EDE5D4', '#DFD5BE'],
+      spriteGrad: ['#F2EADB', '#EDE5D4', '#DDD2B9'],
+      bevelDark: 'rgba(42,32,20,0.72)', bevelLight: 'rgba(255,248,232,0.55)',
+      stagedEmissive: 0xd9a23a, stagedEmissiveIntensity: 0.35,
+      lastColor: 0xf0d57a, lastEmissive: 0xd9a23a, lastEmissiveIntensity: 0.3,
+    },
+    towel: { cloth: 0x524b61, stripe: 0x26444a },
+    top: { emissive: 0xcabfd2, emissiveIntensity: 0.9, roughness: 1.0 },
+    table: { roughness: 0.48, darkTint: 'rgba(10,8,22,0.55)', vignette: ['rgba(6,5,16,0)', 'rgba(6,5,16,0.18)', 'rgba(6,5,16,0.52)'] },
+    marble: {
+      base: ['#383548', '#312E40'], fallback: ['#3B384D', '#353244', '#2D2A3B'], alpha: 0.27,
+      grout: '#221E30', bevelLight: 'rgba(200,205,235,0.12)', bevelDark: 'rgba(8,6,16,0.44)',
+      boardTint: 'rgba(20,18,31,0.22)', dimRgb: '20,18,31',
+    },
+    preDimColor: 0x14121f,
+  },
+};
+export const lookFor = (theme) => LOOK[theme === 'dark' ? 'night' : 'day'];
+
 function marble(ctx, x, y, w, h, rnd, theme = 'light') {
   const dark = theme === 'dark';
+  const fb = lookFor(theme).marble.fallback;
   const g = ctx.createLinearGradient(x, y, x + w, y + h);
-  if (dark) { g.addColorStop(0, '#3B384D'); g.addColorStop(0.55, '#353244'); g.addColorStop(1, '#2D2A3B'); }
-  else { g.addColorStop(0, '#D4C9B4'); g.addColorStop(0.55, '#CEC3AD'); g.addColorStop(1, '#C6B9A2'); }
+  g.addColorStop(0, fb[0]); g.addColorStop(0.55, fb[1]); g.addColorStop(1, fb[2]);
   ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
   // veins: a few soft wandering strokes
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
@@ -341,8 +417,8 @@ export function paintBoard(size, theme = 'light', mode3d = false) {
     }
   }
   // grout under the cells
-  const dark = theme === 'dark';
-  ctx.fillStyle = dark ? '#221E30' : '#7A6340'; ctx.fillRect(f, f, cell * N, cell * N);
+  const dark = theme === 'dark', mLook = lookFor(theme).marble;
+  ctx.fillStyle = mLook.grout; ctx.fillRect(f, f, cell * N, cell * N);
   const gap = Math.max(1, cell * 0.035);
   for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
     const i = r * N + c, k = SQUARE[i];
@@ -352,20 +428,19 @@ export function paintBoard(size, theme = 'light', mode3d = false) {
       // (0.27 alpha, no double-multiply) so bright ivory ceramic tiles hold Rank 1 figure-ground contrast (CD-WF2-03).
       const m = art.img('marble'), sw = m.width * (0.14 + rnd() * 0.16);
       const base = ctx.createLinearGradient(x, y, x + w, y + w);
-      if (dark) { base.addColorStop(0, '#383548'); base.addColorStop(1, '#312E40'); }
-      else { base.addColorStop(0, '#D0C5AF'); base.addColorStop(1, '#C8BCA5'); }
+      base.addColorStop(0, mLook.base[0]); base.addColorStop(1, mLook.base[1]);
       ctx.fillStyle = base; ctx.fillRect(x, y, w, w);
       ctx.save(); ctx.translate(x + w / 2, y + w / 2); ctx.rotate(Math.floor(rnd() * 4) * Math.PI / 2); if (rnd() < 0.5) ctx.scale(-1, 1);
       const sx = rnd() * (m.width - sw), sy = rnd() * (m.height - sw);
       if (dark) ctx.globalCompositeOperation = 'soft-light';
-      ctx.globalAlpha = 0.27;
+      ctx.globalAlpha = mLook.alpha;
       ctx.drawImage(m, sx, sy, sw, sw, -w / 2, -w / 2, w, w);
       ctx.restore();
     } else marble(ctx, x, y, w, w, rnd, theme);
     // bevel: subtle light top-left, shade bottom-right (calibrated for calm Day travertine & Night twilight stone)
-    ctx.strokeStyle = dark ? 'rgba(200,205,235,0.12)' : 'rgba(255,250,238,0.36)'; ctx.lineWidth = Math.max(0.8, cell * 0.02);
+    ctx.strokeStyle = mLook.bevelLight; ctx.lineWidth = Math.max(0.8, cell * 0.02);
     ctx.beginPath(); ctx.moveTo(x + 1, y + w - 1); ctx.lineTo(x + 1, y + 1); ctx.lineTo(x + w - 1, y + 1); ctx.stroke();
-    ctx.strokeStyle = dark ? 'rgba(8,6,16,0.44)' : 'rgba(88,70,46,0.28)';
+    ctx.strokeStyle = mLook.bevelDark;
     ctx.beginPath(); ctx.moveTo(x + w - 1, y + 1); ctx.lineTo(x + w - 1, y + w - 1); ctx.lineTo(x + 1, y + w - 1); ctx.stroke();
     const cx = x + w / 2, cy = y + w / 2;
     if (PREMIUM[k]) {
@@ -462,7 +537,7 @@ export function paintBoard(size, theme = 'light', mode3d = false) {
       ctx.fillStyle = gsh; ctx.fillRect(Math.min(x0, x0 + w0), Math.min(y0, y0 + h0), Math.abs(w0), Math.abs(h0));
     }
   }
-  if (dark) { ctx.fillStyle = 'rgba(20,18,31,0.22)'; ctx.fillRect(0, 0, size, size); }
+  if (mLook.boardTint) { ctx.fillStyle = mLook.boardTint; ctx.fillRect(0, 0, size, size); }
   return cv;
 }
 
@@ -565,8 +640,7 @@ function steamGlaze(ctx, x, y, s, r, l) {
 export function paintFace(ctx, l, blank, w, theme = 'light') {
   const g = ctx.createLinearGradient(0, 0, w, w);
   if (blank) STEAM_GLAZE[theme === 'dark' ? 'dark' : 'light'].forEach((c, k) => g.addColorStop([0, 0.6, 1][k], c));
-  else if (theme === 'dark') { g.addColorStop(0, '#F2EADB'); g.addColorStop(0.6, '#EDE5D4'); g.addColorStop(1, '#DFD5BE'); }
-  else { g.addColorStop(0, '#FFFDF5'); g.addColorStop(0.6, '#FAF3E3'); g.addColorStop(1, '#F0E6CE'); }
+  else lookFor(theme).tile.faceGrad.forEach((c, k) => g.addColorStop([0, 0.6, 1][k], c));
   ctx.fillStyle = g; ctx.fillRect(0, 0, w, w);
   if (blank) steamGlaze(ctx, 0, 0, w, w * 0.1, l);
   if (!l) return;
@@ -607,15 +681,15 @@ export function tileSprite(l, blank, w, kind = 'board', theme = 'light') {
   const ctx = cv.getContext('2d');
   const inset = w * 0.05, s = w - inset * 2, r = s * 0.14;
   // body
+  const tLook = lookFor(theme).tile;
   const g = ctx.createLinearGradient(inset, inset, inset + s, inset + s);
   if (blank) STEAM_GLAZE[theme === 'dark' ? 'dark' : 'light'].forEach((c, k) => g.addColorStop([0, 0.6, 1][k], c));
-  else if (theme === 'dark') { g.addColorStop(0, '#F2EADB'); g.addColorStop(0.6, '#EDE5D4'); g.addColorStop(1, '#DDD2B9'); }
-  else { g.addColorStop(0, '#FFFDF5'); g.addColorStop(0.6, '#F8F0DE'); g.addColorStop(1, '#EAE0C7'); }
+  else tLook.spriteGrad.forEach((c, k) => g.addColorStop([0, 0.6, 1][k], c));
   roundRect(ctx, inset, inset, s, s, r); ctx.fillStyle = g; ctx.fill();
   // edge: dark lower bevel, bright upper rim
   ctx.lineWidth = Math.max(1, w * 0.038);
-  ctx.strokeStyle = theme === 'dark' ? 'rgba(42,32,20,0.72)' : 'rgba(92,70,38,0.62)'; roundRect(ctx, inset, inset, s, s, r); ctx.stroke();
-  ctx.lineWidth = Math.max(0.8, w * 0.025); ctx.strokeStyle = theme === 'dark' ? 'rgba(255,248,232,0.55)' : 'rgba(255,255,255,0.85)';
+  ctx.strokeStyle = tLook.bevelDark; roundRect(ctx, inset, inset, s, s, r); ctx.stroke();
+  ctx.lineWidth = Math.max(0.8, w * 0.025); ctx.strokeStyle = tLook.bevelLight;
   ctx.beginPath(); ctx.moveTo(inset + r, inset + w * 0.02); ctx.lineTo(inset + s - r, inset + w * 0.02); ctx.stroke();
   // glaze highlight
   const hg = ctx.createRadialGradient(inset + s * 0.28, inset + s * 0.2, 0, inset + s * 0.28, inset + s * 0.2, s * 0.55);
@@ -759,7 +833,7 @@ export function drawFrame(ctx, d) {
     const flatPreDim = openCenter && down === 0 ? PRE_DIM : 0;
     const effDim = Math.max(dim, flatPreDim);
     if (effDim > 0) {
-      ctx.fillStyle = (d.theme === 'dark' ? 'rgba(20,18,31,' : 'rgba(30,20,10,') + effDim.toFixed(3) + ')';
+      ctx.fillStyle = `rgba(${lookFor(d.theme).marble.dimRgb},${effDim.toFixed(3)})`;
       for (const i of DIMMABLE) {
         if (d.board[i] || (d.staged && d.staged.some((t) => t.i === i))) continue;
         poly(ctx, quad(i, 0.035)); ctx.fill();

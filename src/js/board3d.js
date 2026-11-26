@@ -115,15 +115,15 @@ function ensureFaceAtlas(dark) {
   const c = document.createElement('canvas');
   c.width = ATLAS_W; c.height = ATLAS_H;
   const ctx = c.getContext('2d');
+  const prof = LOOK[dark ? 'night' : 'day'];
   // Pre-fill unused atlas cells with matching ivory ground so mipmap filters never bleed dark pixels at cell borders
-  ctx.fillStyle = dark ? '#EDE5D4' : '#FAF3E3';
+  ctx.fillStyle = prof.tile.atlasFill;
   ctx.fillRect(0, 0, ATLAS_W, ATLAS_H);
-  const prof = LIGHTING_PROFILES[dark ? 'night' : 'day'];
   const tex = canvasTex(c);
   const mat = new THREE.MeshPhysicalMaterial({
     map: tex, emissiveMap: tex,
     emissive: prof.tile.emissive, emissiveIntensity: prof.tile.emissiveIntensity,
-    roughness: 0.55, metalness: 0, specularIntensity: 0.25, clearcoat: 0.25, clearcoatRoughness: 0.4,   // the glaze is the clearcoat; a second full highlight under it veiled the letters
+    roughness: prof.tile.faceRoughness, metalness: 0, specularIntensity: prof.tile.specularIntensity, clearcoat: prof.tile.clearcoat, clearcoatRoughness: prof.tile.clearcoatRoughness,   // the glaze is the clearcoat; a second full highlight under it veiled the letters
   });
   B3.faceAtlasCanvas = c;
   B3.faceAtlasTex = tex;
@@ -274,55 +274,17 @@ function clothTexture(grp) {
   B3.towelCloth = []; B3.towelStripe = [];
   grp.traverse((o) => {
     if (!o.material || !o.material.color) return;
-    if (o.material.color.getHex() > 0xe0e0e0) { o.material.map = t; o.material.color.set(0xb5a892); o.material.needsUpdate = true; B3.towelCloth.push(o.material); }
+    if (o.material.color.getHex() > 0xe0e0e0) { o.material.map = t; o.material.color.set(LOOK.day.towel.cloth); o.material.needsUpdate = true; B3.towelCloth.push(o.material); }
     else { B3.towelStripe.push(o.material); }
   });
 }
 
-// Unified declarative Day / Night 3D lighting & PMREM environment profiles (W3-S2-01 / CD-WF3-02).
-export const LIGHTING_PROFILES = {
-  day: {
-    key: { color: 0xfff0d8, intensity: 600 },   // W6-S4-01: at 900 the marble rendered within 16 of the tiles (218 against 233) and greyed their ink
-    hemi: { sky: 0xfff1dc, ground: 0x6a4a2c, intensity: 0.6 },
-    fill: { color: 0xcfe0ff, intensity: 0.5 },
-    envIntensity: 0.5,
-    env: {
-      sphere: 0x8f7a64,
-      panels: [
-        [0xfff0d0, -4, 7, -3, 6],
-        [0xc8d8ff, 6, 3, 6, 5],
-        [0xffd9a0, 0, 2, 9, 7],
-        [0x3a2414, 0, -8, 0, 16],
-      ],
-    },
-    tile: { emissive: 0xffffff, emissiveIntensity: 0.14, bodyColor: 0xeadfc4, blankBodyColor: 0xcfe6e2 },
-    towel: { cloth: 0xb5a892, stripe: 0x3b7870 },
-    top: { emissive: 0x000000, emissiveIntensity: 0 },
-    preDimColor: 0x1e140a,
-  },
-  night: {
-    key: { color: 0xffe1b0, intensity: 500 },
-    hemi: { sky: 0x8697c8, ground: 0x1d182c, intensity: 0.28 },
-    fill: { color: 0x5c72b8, intensity: 0.35 },
-    envIntensity: 0.32,
-    env: {
-      sphere: 0x24223a,
-      panels: [
-        [0xffe1b0, -4, 7, -3, 5.5],
-        [0x5c72b8, 6, 3, 6, 6],
-        [0x3b4878, 0, 2, 9, 7],
-        [0x141222, 0, -8, 0, 16],
-      ],
-    },
-    tile: { emissive: 0xffe4be, emissiveIntensity: 0.11, bodyColor: 0xd8cdb6, blankBodyColor: 0xc3d8d4 },
-    towel: { cloth: 0x524b61, stripe: 0x26444a },
-    top: { emissive: 0xcabfd2, emissiveIntensity: 0.9 },   // through the board's own picture (emissiveMap), so dark ink stays dark
-    preDimColor: 0x14121f,
-  },
-};
+// Unified declarative Day / Night look config shared with render2d.js (W3-S1-15, completing W3-S2-01 a2e6530).
+export const LOOK = R.LOOK;
+export const LIGHTING_PROFILES = LOOK;
 
 function envMap(profileName = 'day') {
-  const prof = LIGHTING_PROFILES[profileName] || LIGHTING_PROFILES.day;
+  const prof = LOOK[profileName] || LOOK.day;
   const pm = new THREE.PMREMGenerator(B3.renderer), sc = new THREE.Scene();
   const temps = [];
   const add = (geo, mat, pos) => {
@@ -380,20 +342,21 @@ export function init(canvas, theme, hooks = {}) {
   const scene = new THREE.Scene(); B3.scene = scene;
   B3.envTheme = ''; B3.envSwaps = 0;
   B3.camera = new THREE.PerspectiveCamera(28, 1, 0.5, 400);
-  B3.hemi = new THREE.HemisphereLight(0xfff1dc, 0x6a4a2c, 0.6); scene.add(B3.hemi);
-  const key = new THREE.SpotLight(0xfff0d8, 900, 0, 0.7, 0.95, 1.6);
-  key.position.set(-6, 30, -4); key.target.position.set(0, 0, 0.5);
+  const dLook = LOOK.day;
+  B3.hemi = new THREE.HemisphereLight(dLook.hemi.sky, dLook.hemi.ground, dLook.hemi.intensity); scene.add(B3.hemi);
+  const key = new THREE.SpotLight(dLook.key.color, dLook.key.intensity, 0, dLook.key.angle, dLook.key.penumbra, dLook.key.decay);
+  key.position.set(...dLook.key.pos); key.target.position.set(...dLook.key.target);
   key.castShadow = true; const sm = Math.min(window.innerWidth, window.innerHeight) < 600 ? 1024 : 2048;
   key.shadow.mapSize.set(sm, sm); key.shadow.camera.near = 10; key.shadow.camera.far = 60; key.shadow.bias = -0.0004; key.shadow.normalBias = 0.03; key.shadow.radius = 3;
   scene.add(key); scene.add(key.target); B3.key = key;
-  B3.fill = new THREE.DirectionalLight(0xcfe0ff, 0.5); B3.fill.position.set(12, 10, 16); scene.add(B3.fill);
+  B3.fill = new THREE.DirectionalLight(dLook.fill.color, dLook.fill.intensity); B3.fill.position.set(...dLook.fill.pos); scene.add(B3.fill);
   // counter and board slab (MeshStandardMaterial per CD-WF3-02 / CD-WF6-01; hero ceramic tiles keep MeshPhysicalMaterial clearcoat)
   // W2-S5-09: 54x36 exact 3:2 plane matches native 1600x1066 counter.webp at repeat(1,1) with zero MirroredRepeatWrapping seams.
-  B3.table = new THREE.Mesh(new THREE.PlaneGeometry(54, 36), new THREE.MeshStandardMaterial({ roughness: 0.48, metalness: 0 }));
+  B3.table = new THREE.Mesh(new THREE.PlaneGeometry(54, 36), new THREE.MeshStandardMaterial({ roughness: dLook.table.roughness, metalness: 0 }));
   B3.table.rotation.x = -Math.PI / 2; B3.table.receiveShadow = true; scene.add(B3.table);
   B3.boardCanvas = null;
   const boardRough = canvasTex(R.boardRoughnessTexture(), false);
-  B3.top = new THREE.MeshStandardMaterial({ roughness: 1.0, roughnessMap: boardRough, metalness: 0 });
+  B3.top = new THREE.MeshStandardMaterial({ roughness: dLook.top.roughness, roughnessMap: boardRough, metalness: 0 });
   const side = new THREE.MeshStandardMaterial({ color: 0x3a2414, roughness: 0.6 });
   B3.board = new THREE.Mesh(new THREE.BoxGeometry(U, TOP, U), [side, side, B3.top, side, side, side]);
   B3.board.position.y = TOP / 2; B3.board.receiveShadow = true; B3.board.castShadow = true; scene.add(B3.board);
@@ -419,7 +382,7 @@ export function init(canvas, theme, hooks = {}) {
   const preGeo = new THREE.BufferGeometry();
   preGeo.setAttribute('position', new THREE.BufferAttribute(prePos, 3));
   preGeo.setIndex(new THREE.BufferAttribute(preIdx, 1));
-  const preMat = new THREE.MeshBasicMaterial({ color: 0x1e140a, transparent: true, opacity: R.PRE_DIM, depthWrite: false, depthTest: true });
+  const preMat = new THREE.MeshBasicMaterial({ color: dLook.preDimColor, transparent: true, opacity: R.PRE_DIM, depthWrite: false, depthTest: true });
   B3.preDim = new THREE.Mesh(preGeo, preMat);
   B3.dimIdx = preIdx;
   B3.preDimActive = false;
@@ -456,9 +419,9 @@ export function init(canvas, theme, hooks = {}) {
   B3.tileBodyGeo = bodyPart.geo;
   B3.tileTopGeo = topPart.geo;
   B3.bodyMat = stdMaterial(bodyPart.mat);
-  B3.blankBodyMat = new THREE.MeshStandardMaterial({ color: 0xcfe6e2, metalness: 0, roughness: 0.62 });
-  B3.stagedMat = B3.bodyMat.clone(); B3.stagedMat.emissive = new THREE.Color(0xd9a23a); B3.stagedMat.emissiveIntensity = 0.35;
-  B3.lastMat = B3.bodyMat.clone(); B3.lastMat.color = new THREE.Color(0xF0D57A); B3.lastMat.emissive = new THREE.Color(0xD9A23A); B3.lastMat.emissiveIntensity = 0.3;
+  B3.blankBodyMat = new THREE.MeshStandardMaterial({ color: dLook.tile.blankBodyColor, metalness: 0, roughness: dLook.tile.blankRoughness });
+  B3.stagedMat = B3.bodyMat.clone(); B3.stagedMat.emissive = new THREE.Color(dLook.tile.stagedEmissive); B3.stagedMat.emissiveIntensity = dLook.tile.stagedEmissiveIntensity;
+  B3.lastMat = B3.bodyMat.clone(); B3.lastMat.color = new THREE.Color(dLook.tile.lastColor); B3.lastMat.emissive = new THREE.Color(dLook.tile.lastEmissive); B3.lastMat.emissiveIntensity = dLook.tile.lastEmissiveIntensity;
   const makeBodyInst = (mat, cap) => {
     const im = new THREE.InstancedMesh(B3.tileBodyGeo, mat, cap);
     im.count = 0; im.visible = false; im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
@@ -554,11 +517,13 @@ export function setTheme(theme) {
   const g = c.getContext('2d');
   if (hasCounter) g.drawImage(cImg, 0, 0, cw, ch);
   else { const gr = g.createLinearGradient(0, 0, cw, ch); gr.addColorStop(0, '#5A3A22'); gr.addColorStop(1, '#3A2414'); g.fillStyle = gr; g.fillRect(0, 0, cw, ch); }
-  if (dark) { g.fillStyle = 'rgba(10,8,22,0.55)'; g.fillRect(0, 0, cw, ch); }
+  const profileName = dark ? 'night' : 'day';
+  const prof = LOOK[profileName];
+  if (prof.table.darkTint) { g.fillStyle = prof.table.darkTint; g.fillRect(0, 0, cw, ch); }
   const vig = g.createRadialGradient(cw * 0.5, ch * 0.48, ch * 0.28, cw * 0.5, ch * 0.48, cw * 0.56);
-  vig.addColorStop(0, dark ? 'rgba(6,5,16,0)' : 'rgba(18,10,4,0)');
-  vig.addColorStop(0.6, dark ? 'rgba(6,5,16,0.18)' : 'rgba(16,9,4,0.14)');
-  vig.addColorStop(1, dark ? 'rgba(6,5,16,0.52)' : 'rgba(12,7,3,0.44)');
+  vig.addColorStop(0, prof.table.vignette[0]);
+  vig.addColorStop(0.6, prof.table.vignette[1]);
+  vig.addColorStop(1, prof.table.vignette[2]);
   g.fillStyle = vig; g.fillRect(0, 0, cw, ch);
   B3.table.material.map?.dispose(); B3.table.material.map = canvasTex(c);
   B3.table.material.map.repeat.set(1, 1);
@@ -568,9 +533,7 @@ export function setTheme(theme) {
     const fTex = frameWalnutDiffuse(dark);
     for (const m of B3.frameWalnut) { m.map?.dispose(); m.map = fTex; m.needsUpdate = true; }
   }
-  // W3-S2-01 / W2-S1-04 / W2-S2-06: apply unified LIGHTING_PROFILES (including theme-matched PMREM envMap swap)
-  const profileName = dark ? 'night' : 'day';
-  const prof = LIGHTING_PROFILES[profileName];
+  // W3-S1-15 / W3-S2-01 / W2-S1-04 / W2-S2-06: apply shared declarative LOOK profile (including theme-matched PMREM envMap swap)
   if (B3.envTheme !== profileName) B3.scene.environment = envMap(profileName);
   for (const m of B3.towelCloth || []) { m.color.set(prof.towel.cloth); m.needsUpdate = true; }
   for (const m of B3.towelStripe || []) { m.color.set(prof.towel.stripe); m.needsUpdate = true; }
@@ -889,6 +852,7 @@ export function debug() {
     envTempDisposed: B3.envTempDisposed || 0, disposed: B3.lastDispose || null,
     envTheme: B3.envTheme || '', envSwaps: B3.envSwaps || 0,
     lightingProfile: B3.dark ? 'night' : 'day',
+    look: { active: B3.dark ? 'night' : 'day', ...LOOK[B3.dark ? 'night' : 'day'] },
     envIntensity: B3.scene ? B3.scene.environmentIntensity : 0,
     tileCoatRoughness: B3.bodyMat && B3.bodyMat.clearcoatRoughness != null ? B3.bodyMat.clearcoatRoughness : null,
     topMat: B3.top ? B3.top.type : null, tableMat: B3.table && B3.table.material ? B3.table.material.type : null,
