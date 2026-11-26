@@ -1,4 +1,10 @@
-// Wave 4, batch W4-B12 (WF-3 tech_art_pipeline): W3-S1-15 (shared declarative LOOK config).
+// Wave 4, batch W4-B12 (WF-3 tech_art_pipeline): W3-S1-15, W3-S3-14.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { root } from './lib.mjs';
+import { rawDir } from '../tools/raw-dir.mjs';
+
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => {
   window.__TEST_TIPS__ = false;
@@ -88,6 +94,41 @@ export const tests = [
       t.equal(nightB3.look.tile.emissiveIntensity, 0.11, 'b3.look.tile.emissiveIntensity matches Night tile');
       t.equal(nightB3.look.towel.cloth, 0x524b61, 'b3.look.towel.cloth matches Night towel');
       t.equal(nightB3.look.marble.boardTint, 'rgba(20,18,31,0.22)', 'b3.look.marble.boardTint matches Night marble tint');
+    },
+  },
+  // ---------- W3-S3-14 ----------
+  {
+    name: 'W3-S3-14 raw-dir.mjs gates external reference lookup on explicit HSG_WORKSPACE opt-in; layout comments state flat +20 and style guide keeps 46 WebPs (Node)',
+    node: true,
+    run(t) {
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hsg-rawdir-'));
+      try {
+        const fakeWs = path.join(tmp, 'ws');
+        const fakeRepo = path.join(fakeWs, 'repos', 'hsg-word-tiles');
+        fs.mkdirSync(path.join(fakeWs, 'reference', 'word-lists'), { recursive: true });
+        fs.mkdirSync(fakeRepo, { recursive: true });
+
+        // Without HSG_WORKSPACE, rawDir stays strictly repo-local even when ../../reference exists
+        t.equal(rawDir(fakeRepo, {}), path.join(fakeRepo, 'data/raw'), 'unset HSG_WORKSPACE defaults strictly to repo-local data/raw');
+        t.equal(rawDir(fakeRepo, { HSG_WORKSPACE: '  ' }), path.join(fakeRepo, 'data/raw'), 'blank HSG_WORKSPACE defaults to repo-local data/raw');
+        // Explicit HSG_WORKSPACE opt-in resolves <HSG_WORKSPACE>/reference/word-lists when reference/ exists
+        t.equal(rawDir(fakeRepo, { HSG_WORKSPACE: fakeWs }), path.join(fakeWs, 'reference', 'word-lists'), 'explicit HSG_WORKSPACE opts into shared reference/word-lists');
+        // Explicit HSG_WORKSPACE without reference/ falls back cleanly to repo-local data/raw
+        t.equal(rawDir(fakeRepo, { HSG_WORKSPACE: path.join(tmp, 'missing') }), path.join(fakeRepo, 'data/raw'), 'absent HSG_WORKSPACE/reference falls back cleanly to repo-local data/raw');
+      } finally {
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
+
+      const rawSrc = fs.readFileSync(path.join(root, 'tools/raw-dir.mjs'), 'utf8');
+      t.equal(/\.\.['"]\s*,\s*['"]\.\./.test(rawSrc), false, 'tools/raw-dir.mjs no longer walks ../.. outside the repo by default');
+
+      // Layout header comments (landed in 27353a3) and visual-style-guide.md:22 (P-F08)
+      const buildLayout = fs.readFileSync(path.join(root, 'tools/build-layout.mjs'), 'utf8');
+      const layoutJs = fs.readFileSync(path.join(root, 'src/js/layout.js'), 'utf8');
+      const guide = fs.readFileSync(path.join(root, 'research/visual-style-guide.md'), 'utf8');
+      t.expect(buildLayout.includes('adds a flat +20 to a Hot Springs word'), 'tools/build-layout.mjs states flat +20 Bathhouse Row scoring');
+      t.expect(layoutJs.includes('adds a flat +20 to a Hot Springs word'), 'src/js/layout.js states flat +20 Bathhouse Row scoring');
+      t.expect(guide.includes('46 painted `.webp` files'), 'research/visual-style-guide.md keeps verified 46 painted .webp files count (P-F08)');
     },
   },
 ];

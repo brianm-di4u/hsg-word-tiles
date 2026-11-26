@@ -51,7 +51,7 @@ Springs Games workspace (`reference/`, `research/`, or a sibling checkout in `re
 repo sits at `<workspace>/repos/<repo>`. When the workspace copy is not there, each tool falls back to a path in this repo or
 skips that step with a message.
 
-- `tools/raw-dir.mjs`: raw lists in `reference/word-lists/`, else `data/raw/` here. The word-list tools use it, and so do the dictionary tests in `npm test`, which skip when no `enable1.txt` is found.
+- `tools/raw-dir.mjs`: defaults to repo-local `data/raw/` (dictionary tests in `npm test` skip cleanly when `enable1.txt` is absent) and reads `$HSG_WORKSPACE/reference/word-lists/` only when `HSG_WORKSPACE` is explicitly set.
 
 ## Credits and licences
 
