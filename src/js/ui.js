@@ -334,7 +334,7 @@ export function swapHtml(rack, s = null) {
     <p>Choose the tiles to put back. You draw the same number, and your turn ends.</p>
     ${bagNote}
     ${stall ? `<p class="note warn swap-stall" role="alert">${esc(stall)}</p>` : ''}
-    <div class="swap-tiles" role="group" aria-label="Your tiles">${rack.map((l, k) => `<button class="stile" data-sw="${k}" aria-pressed="false" aria-label="${l === '?' ? 'Blank' : l}">${l === '?' ? '' : l}</button>`).join('')}</div>
+    <div class="swap-tiles" role="group" aria-label="Your tiles">${rack.map((l, k) => `<button class="stile${l === '?' ? ' blank' : ''}" data-sw="${k}" aria-pressed="false" aria-label="${l === '?' ? 'Blank' : l}">${l === '?' ? ICON.steam : l}</button>`).join('')}</div>
     <div class="dlg-btns"><button class="btn quiet" data-close>Cancel</button><button class="btn primary" data-swap-go disabled>Swap</button></div>
   </div>`;
 }
@@ -374,15 +374,37 @@ export function tileSpeech(s, staged, i) {
   if (t) return `tile ${t.l}${t.blank ? ', a blank' : ''}`;
   return st ? `your tile ${st.l}${st.blank ? ', a blank' : ''}, not played yet` : 'empty';
 }
-export function boardTextHtml(s, staged) {
+export function boardTextHtml(s, staged = [], rack) {
   const rows = [];
   for (let r = 0; r < N; r++) {
     const bits = [];
-    for (let c = 0; c < N; c++) { const i = r * N + c, t = s.board[i] || staged.find((x) => x.i === i); if (t) bits.push(`${squareName(i)} ${t.l}${s.board[i] ? '' : ' (not played yet)'}`); }
+    for (let c = 0; c < N; c++) {
+      const i = r * N + c, placed = s.board[i], t = placed || staged.find((x) => x.i === i);
+      if (t) bits.push(`${squareName(i)} ${t.l}${t.blank ? ' (blank)' : ''}${placed ? '' : ' (not played yet)'}`);
+    }
     rows.push(`<li><b>Row ${r + 1}:</b> ${bits.length ? bits.join(', ') : 'empty'}</li>`);
   }
+  let tiles = rack;
+  if (tiles === undefined && s && Array.isArray(s.players)) {
+    const p = s.players[s.cur];
+    if (p && p.kind === 'human' && Array.isArray(p.rack)) {
+      const used = new Set(staged.map((x) => x.k).filter((k) => Number.isInteger(k)));
+      if (used.size) tiles = p.rack.filter((_, k) => !used.has(k));
+      else {
+        tiles = p.rack.slice();
+        for (const st of staged) {
+          const ix = tiles.indexOf(st.blank ? '?' : st.l);
+          if (ix >= 0) tiles.splice(ix, 1);
+        }
+      }
+    } else tiles = null;
+  }
+  const rackLine = Array.isArray(tiles)
+    ? `<p class="bt-rack"><b>Your rack:</b> ${tiles.length ? tiles.map((l) => (l === '?' ? 'Blank' : esc(l))).join(', ') : 'empty'}</p>`
+    : '';
   return `<div class="card dialog boardtext" role="dialog" aria-modal="true" aria-labelledby="bt-h"><h2 id="bt-h">The board, as text</h2>
     <p>Columns run A to O and rows 1 to 15, so H8 is the centre square. Only squares with a tile are listed.</p>
+    ${rackLine}
     <ul class="log">${rows.join('')}</ul>
     <div class="dlg-btns"><button class="btn quiet" data-open="pause">Back</button><button class="btn primary" data-close>Close</button></div></div>`;
 }

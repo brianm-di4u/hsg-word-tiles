@@ -558,11 +558,16 @@ body.reduce .dialog, body.reduce .fact { animation: none; }
 .swap-stall { margin: 8px 0 0; font-weight: 600; }
 .swap-tiles, .letters { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .stile { position: relative; width: 48px; height: 48px; border-radius: 9px; border: 1.5px solid var(--tile-line); background: var(--tile-bg); color: var(--tile-ink); font: 800 1.4rem var(--f-serif); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
+.stile.blank { display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.stile.blank svg { width: 24px; height: 24px; display: block; }
+.stile.blank:not([aria-pressed="true"]) { background: linear-gradient(#E6F3F0, #CFE6E2); border-color: #5D968D; color: #144B48; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55), 0 2px 0 rgba(0, 0, 0, 0.35); }
+body.theme-dark .stile.blank:not([aria-pressed="true"]) { background: linear-gradient(#264245, #1B3235); border-color: #6EAFA5; color: #CFECE6; box-shadow: inset 0 0 0 2px rgba(160, 224, 214, 0.22), 0 2px 0 rgba(0, 0, 0, 0.45); }
 .stile[aria-pressed="true"] { background: var(--tile-sel-bg); color: var(--tile-sel-ink); border: 3px solid var(--good); transform: translateY(-3px); }
 .stile[aria-pressed="true"]::before, .stile[aria-pressed="true"]::after { content: ""; position: absolute; box-sizing: border-box; }
 .stile[aria-pressed="true"]::before { top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--panel); background: var(--good); }
 .stile[aria-pressed="true"]::after { top: -4px; right: -1px; width: 6px; height: 11px; border: solid var(--panel); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg); }
 .letters .stile { width: 44px; height: 44px; font-size: 1.2rem; }
+.boardtext .bt-rack { margin: 8px 0 10px; padding: 6px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); }
 .dialog-wrap { width: 100%; max-width: 560px; }
 .fact { display: grid; grid-template-columns: 210px 1fr; overflow: hidden; animation: sheet 0.2s ease-out; }
 .fact-art { position: relative; min-height: 200px; background: #2A1C12; border-right: 2px solid var(--brass); overflow: hidden; }

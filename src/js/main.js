@@ -1915,7 +1915,10 @@ function openDialog(name, arg) {
   else if (name === 'blank') html = UI.blankHtml();
   else if (name === 'pause') html = UI.pauseHtml({ mobile: isNarrow(), tracker: trackerSeat() >= 0 });
   else if (name === 'tracker') html = UI.trackerHtml(G.s, trackerSeat());
-  else if (name === 'boardtext') html = UI.boardTextHtml(G.s, G.staged);
+  else if (name === 'boardtext') {
+    const seat = trackerSeat(), p = seat >= 0 ? G.s.players[seat] : null;
+    html = UI.boardTextHtml(G.s, G.staged, p ? G.order.map((k) => p.rack[k]).filter((l) => l != null) : null);
+  }
   else if (name === 'ledger') html = UI.ledgerHtml(G.s, G.lex);
   else if (name === 'fact') html = `<div class="dialog-wrap" role="dialog" aria-modal="true" aria-label="Hot Springs word card">${UI.factHtml(arg.entry, G.lex, arg.form, '<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div>')}</div>`;
   else if (name === 'review') html = UI.reviewHtml(arg ? arg.review : null);
