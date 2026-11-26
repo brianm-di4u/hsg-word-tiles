@@ -953,6 +953,7 @@ body:not(.theme-dark) .pbs li { color: #FFF; }
 #preview .day b { font-family: var(--f-serif); font-weight: 600; font-size: 0.95em; color: #F3DD8B; }
 #preview .day .extra { padding: 0 6px; gap: 3px; font-size: 0.82em; white-space: nowrap; }
 #preview .day .extra svg { width: 1em; height: 1em; }
+#preview .day .rules { flex: 1 1 100%; font-size: 0.82em; color: #F3DD8B; }   /* W2-S4-16: what the Daily is and what a Hot Springs word pays (wide screens) */
 #app.coaching #preview .day .said + .said { display: none; }   /* a newcomer's tip says where to begin, in the ledger's place */
 @media (max-width: 860px), (max-aspect-ratio: 1/1), (max-height: 520px) {
   #preview .day { gap: 0 5px; line-height: 1.25em; max-height: 2.5em; overflow: hidden; align-content: flex-start; }

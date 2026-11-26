@@ -142,4 +142,68 @@ export const tests = [
       t.expect(!isTeal(after[2]), `a covered Display Spring has no beacon (${after[2].slice(0, 3)})`);
     },
   },
+  // ---------- W2-S4-16 ----------
+  {
+    name: 'W2-S4-16 Turn 1 of the Daily says what it is and what a Hot Springs word pays: the tiers from the word list, wide screens only in the strip (Node)',
+    node: true,
+    async run(t) {
+      const c = await ctx();
+      const s = createGame({ mode: 'daily', date: '2026-11-25', seats: [{ kind: 'human', name: 'You' }] }, c.lex);
+      const tiers = Object.values(c.lex.data.tiers);
+      t.equal(`${Math.min(...tiers)}-${Math.max(...tiers)}`, '10-30', 'the tiers run +10 to +30');
+      const w = todaysSprings(s, c.lex, false, true), b = todaysSprings(s, c.lex, true, true);
+      const line = '10 turns · same tiles for everyone · Hot Springs words earn +10 to +30 and open history cards';
+      t.equal(w.rules, line, 'the line');
+      t.expect(w.html.includes(`</span><span class="rules">${line}</span><span class="said">`), 'on wide screens it follows the kinds, before what a word of such a kind does');
+      t.expect(!b.html.includes('class="rules"'), 'phones keep their two lines for the kinds and what they do');
+    },
+  },
+  {
+    name: 'W2-S4-16 in the game: on Turn 1 of the Daily the line shows whole and readable on wide screens, is read out on all, and is gone after the first play',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { mode: 'daily' });
+      await t.waitIdle(8000);
+      await t.waitFrames(2);
+      await t.page.waitForFunction(() => /^Today's Springs: /.test(document.querySelector('#live').textContent), null, { timeout: 3000 });
+      t.expect(/10 turns, same tiles for everyone, Hot Springs words earn \+10 to \+30 and open history cards\./.test(await t.page.textContent('#live')), 'the live region reads it');
+      const r = await t.page.evaluate(() => {
+        const e = document.querySelector('#preview .day .rules'), day = document.querySelector('#preview .day');
+        if (!e) return null;
+        const a = e.getBoundingClientRect(), b = day.getBoundingClientRect();
+        return { text: e.textContent, whole: a.top >= b.top - 0.6 && a.bottom <= b.bottom + 0.6 && e.scrollWidth <= e.clientWidth + 1 && getComputedStyle(e).display !== 'none' };
+      });
+      if (t.viewport === 'mobile') { t.equal(r, null, 'phones: not in the strip'); return; }
+      t.expect(r && r.whole, `wide screens: whole in the strip (${JSON.stringify(r)})`);
+      const cr = await t.contrastReport({ selector: '#preview', min: 4.5, largeMin: 3 });
+      t.equal(cr.fails.length, 0, `readable (${JSON.stringify(cr.fails)})`);
+      await t.shot('w4-b08-daily-line');
+      // on desktops from 1024x600 up the line is whole and moves nothing but the ledger's bottom edge (the strip sits in the side column)
+      const boxes = () => t.page.evaluate(() => {
+        const b = (s) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height].map((v) => Math.round(v)); };
+        const e = document.querySelector('#preview .day .rules'), day = document.querySelector('#preview .day'), a = e.getBoundingClientRect(), d = day.getBoundingClientRect();
+        const without = (() => { const keep = e.style.display; e.style.display = 'none'; const o = { rack: b('#rackbar'), actions: b('#actions'), board: b('#boardwrap'), springs: b('#springs'), ledger: b('#ledger') }; e.style.display = keep; return o; })();
+        return { whole: a.top >= d.top - 0.6 && a.bottom <= d.bottom + 0.6 && e.scrollWidth <= e.clientWidth + 1, rack: b('#rackbar'), actions: b('#actions'), board: b('#boardwrap'), springs: b('#springs'), ledger: b('#ledger'), without };
+      });
+      for (const [width, height] of [[1280, 800], [1180, 820], [1024, 768], [1024, 600]]) {
+        await t.page.setViewportSize({ width, height });
+        await t.waitFrames(4);
+        const g = await boxes();
+        t.expect(g.whole, `${width}x${height}: the line is whole`);
+        for (const k of ['rack', 'actions', 'board', 'springs']) t.equal(JSON.stringify(g[k]), JSON.stringify(g.without[k]), `${width}x${height}: ${k} does not move for it`);
+        t.log(`${width}x${height}: ledger ${g.ledger && g.ledger[3]} px tall (${g.without.ledger && g.without.ledger[3]} without the line)`);
+        t.expect(!g.ledger || g.ledger[3] >= 60, `${width}x${height}: the ledger keeps room (${g.ledger && g.ledger[3]} px)`);
+      }
+      await t.shot('w4-b08-daily-line-1024x600');
+      await t.page.setViewportSize({ width: 1280, height: 800 });
+      await t.waitFrames(4);
+      const mv = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', mv[0].tiles);
+      t.equal((await t.game('act', 'play')).ok, true, 'Turn 1 played');
+      await t.waitIdle(8000);
+      t.equal(await t.page.$('#preview .rules'), null, 'gone on Turn 2');
+    },
+  },
 ];

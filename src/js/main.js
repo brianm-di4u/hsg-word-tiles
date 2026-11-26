@@ -631,7 +631,7 @@ function beginGame(s, intent) {
   saveNotice(s, gameSaves.status(handle));
   if (s.mode === 'daily') findPar(s.daily.date, s);
   startTurn();
-  if (UI.dailyOpening(s)) { const tip = $('#coach p'); liveSay(`${UI.todaysSprings(s, G.lex, false, s.daily.date === today()).say}${tip ? ` Tip: ${tip.textContent}` : ''}`); }
+  if (UI.dailyOpening(s)) { const tip = $('#coach p'), o = UI.todaysSprings(s, G.lex, false, s.daily.date === today()); liveSay(`${o.say} ${o.rules.replace(/ · /g, ', ')}.${tip ? ` Tip: ${tip.textContent}` : ''}`); }
 }
 // A hint taken this turn comes back after a reload, put on the board as it was (only if it still fits: the rack, the board and the turn).
 function restoreHint(s) {

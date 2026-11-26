@@ -196,8 +196,12 @@ const fogPace = (s) => (s.mode === 'daily' ? 'a letter clears every turn' : 'fog
 export const dailyOpening = (s) => !!s.daily && !s.over && !s.log.length && s.featured.length > 0;
 export function todaysSprings(s, lex, compact, isToday) {
   const title = isToday ? "Today's Springs" : 'Springs of the day', how = 'Hot Springs words of these kinds clear';
+  // W2-S4-16: what the Daily is and what any Hot Springs word pays, before the first turn (the tiers: data/thermal-words.json). Phones
+  // keep the strip's two lines for the kinds and what they do, and hear this in the live region (`rules`)
+  const tiers = Object.values(lex.data.tiers), rules = `${DAILY_TURNS} turns · same tiles for everyone · Hot Springs words earn +${Math.min(...tiers)} to +${Math.max(...tiers)} and open history cards`;
   return {
-    html: `<span class="day"><b>${title}</b>${s.featured.map((f) => `<span class="extra">${ICON.cat[lex.categories[f.cat].icon]}${CAT_SHORT[f.cat]}</span>`).join('')}<span class="said">${how} ${compact ? 'letters.' : 'plaque letters; so does covering a Bathhouse Row square.'}</span><span class="said">Start on the ${compact ? 'centre square.' : 'Display Spring in the centre.'}</span></span>`,
+    rules,
+    html: `<span class="day"><b>${title}</b>${s.featured.map((f) => `<span class="extra">${ICON.cat[lex.categories[f.cat].icon]}${CAT_SHORT[f.cat]}</span>`).join('')}${compact ? '' : `<span class="rules">${rules}</span>`}<span class="said">${how} ${compact ? 'letters.' : 'plaque letters; so does covering a Bathhouse Row square.'}</span><span class="said">Start on the ${compact ? 'centre square.' : 'Display Spring in the centre.'}</span></span>`,
     say: `${title}: ${s.featured.map((f) => lex.categories[f.cat].name).join(', ')}. ${how} plaque letters; so does covering a Bathhouse Row square.`,
   };
 }

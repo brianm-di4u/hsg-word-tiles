@@ -51,7 +51,8 @@ Casual word-game players (12+), families, local-history fans, daily-puzzle playe
   humans = pass-and-play with a privacy screen.
 - **Daily Soak:** one player, 10 turns, the same tiles for everyone on a date; best score and streak.
   Turn 1 names "Today's Springs", the kinds of word on the day's three plaques, so the ten turns have Hot Springs
-  words to hunt.
+  words to hunt. On wide screens it also says "10 turns · same tiles for everyone · Hot Springs words earn +10 to +30 and
+  open history cards" (phones hear it in the live region).
 - Options: AI speed (Normal / Fast / Instant), hints on/off (3 "Spring Guide" hints per game in Play). Setup keeps
   the rest in a collapsed "House rules & more options": each computer's difficulty, Unlimited hints and Challenge
   mode (invalid words cost the turn; off by default, never in the Daily).
