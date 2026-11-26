@@ -381,12 +381,14 @@ body.theme-dark .rack-cue { background: #14121F; border-color: rgba(243, 221, 13
   border: 0; background: none; border-radius: 9px; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.45)); transition: transform 0.12s; touch-action: none;
 }
 .rtile canvas { width: var(--tile); height: var(--tile); flex: none; display: block; pointer-events: none; }
+.rtile:not([disabled]):active canvas { transform: translateY(1.5px) scale(0.97); filter: brightness(0.96); }
 .rtile.lifted { display: none; }
 .rtile.deal { animation: deal 0.22s ease-out both; animation-delay: calc(var(--i, 0) * 35ms); }
 @keyframes deal { from { opacity: 0; translate: 0 12px; scale: 0.9; } to { opacity: 1; translate: 0 0; scale: 1; } }
 body.reduce .rtile.deal { animation: none; }
 .rtile.sel { transform: translateY(-8px); filter: drop-shadow(0 0 6px rgba(240, 213, 122, 0.95)) drop-shadow(0 6px 4px rgba(0, 0, 0, 0.45)); }
 .rslot { border-radius: 9px; background: rgba(0, 0, 0, 0.18); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4); }
+.rslot.parting { background: rgba(240, 213, 122, 0.22); box-shadow: inset 0 0 0 1.5px rgba(240, 213, 122, 0.72), inset 0 1px 3px rgba(0, 0, 0, 0.35); }
 #ghost { position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.45)); }
 #ghost.over-target { opacity: 0.22; }
 #ghost.over-blocked { opacity: 0.4; }
@@ -396,6 +398,8 @@ body.reduce .rtile.deal { animation: none; }
   min-width: 0; min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 2px;
   border-radius: 10px; border: 1.5px solid rgba(240, 213, 122, 0.6); background: linear-gradient(#FFFDF7, #EDE3CC); color: #1F2A24; font: 700 0.86em var(--f-ui);
 }
+.abtn:not([disabled]):not([aria-disabled="true"]):active { filter: brightness(0.95); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.24); }
+.abtn:not([disabled]):not([aria-disabled="true"]):active > * { transform: translateY(1px); }
 .abtn > span { display: inline-flex; align-items: center; justify-content: center; gap: 2px; max-width: 100%; }
 /* the labels and Play's points stay inside their buttons at 130% text and in a narrow sidebar */
 @media (min-width: 861px) and (min-aspect-ratio: 1/1) {
@@ -1112,6 +1116,8 @@ body.reduce .fact,
 body.reduce .coach-target { animation: none; }
 body.reduce .thinking i { opacity: 1; }
 body.reduce .btn:active,
+body.reduce .rtile:not([disabled]):active canvas,
+body.reduce .abtn:not([disabled]):not([aria-disabled="true"]):active > *,
 body.reduce .stile[aria-pressed="true"] { transform: none; }
 body.reduce .stile[aria-pressed="true"] { box-shadow: inset 0 0 0 2.5px var(--primary), 0 2px 0 rgba(110, 75, 30, 0.4); }
 body.reduce #preview.shake { box-shadow: inset 0 0 0 2.5px #FF8A7A, 0 0 0 2px rgba(154, 42, 28, 0.55); background: rgba(92, 22, 16, 0.9); color: #FFE6E0; }
@@ -1143,6 +1149,8 @@ body.reduce .pop.themed { animation: pop-fade 0.95s ease-out forwards; }
   body:not(.motion-full) .coach-target { animation: none; }
   body:not(.motion-full) .thinking i { opacity: 1; }
   body:not(.motion-full) .btn:active,
+  body:not(.motion-full) .rtile:not([disabled]):active canvas,
+  body:not(.motion-full) .abtn:not([disabled]):not([aria-disabled="true"]):active > *,
   body:not(.motion-full) .stile[aria-pressed="true"] { transform: none; }
   body:not(.motion-full) .stile[aria-pressed="true"] { box-shadow: inset 0 0 0 2.5px var(--primary), 0 2px 0 rgba(110, 75, 30, 0.4); }
   body:not(.motion-full) #preview.shake { box-shadow: inset 0 0 0 2.5px #FF8A7A, 0 0 0 2px rgba(154, 42, 28, 0.55); background: rgba(92, 22, 16, 0.9); color: #FFE6E0; }

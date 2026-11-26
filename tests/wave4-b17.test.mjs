@@ -256,4 +256,125 @@ export const tests = [
       t.expect(blockedRes.vibs.some((p) => JSON.stringify(p) === '[30,40,30]'), `blocked drop pulsed error haptic (${JSON.stringify(blockedRes.vibs)})`);
     },
   },
+  // ---------- W4-S2-03 ----------
+  {
+    name: 'W4-S2-03 reduced-motion-safe :active press states on .rtile/.abtn, live in-rackbar slot parting (steady d.pos0 above rack per CD-WF4-06), and smooth blocked board-tile return',
+    viewports: ['desktop', 'mobile'],
+    initScript: withVibrate(),
+    async run(t) {
+      await start(t, 'SPRINGE');
+      // 1. Frame-1 :active press feedback on .rtile and .abtn (reduced-motion safe, hit boxes never move)
+      const r0 = await t.game('act', 'rackTile', 0);
+      const rtileBefore = await t.page.$eval('#rack .rtile[data-pos="0"]', (b) => {
+        const br = b.getBoundingClientRect();
+        return { top: br.top, tx: getComputedStyle(b.firstChild).transform };
+      });
+      await t.page.mouse.move(r0[0], r0[1]);
+      await t.page.mouse.down();
+      const rtileActive = await t.page.$eval('#rack .rtile[data-pos="0"]', (b) => {
+        const br = b.getBoundingClientRect();
+        return { top: br.top, tx: getComputedStyle(b.firstChild).transform, filter: getComputedStyle(b.firstChild).filter };
+      });
+      await t.page.mouse.up();
+      t.expect(Math.abs(rtileActive.top - rtileBefore.top) < 0.5, '.rtile button hit box stays stationary on :active');
+      t.expect(rtileActive.tx !== 'none' && rtileActive.tx !== rtileBefore.tx, `.rtile canvas transforms on :active (${rtileActive.tx})`);
+      // Check .abtn:active on Pass (always enabled)
+      const passBtn = t.page.locator('#actions [data-act="pass"]');
+      const pbBox = await passBtn.boundingBox();
+      const abtnBefore = await passBtn.evaluate((b) => ({ top: b.getBoundingClientRect().top, shadow: getComputedStyle(b).boxShadow, childTx: getComputedStyle(b.firstElementChild).transform }));
+      await t.page.mouse.move(pbBox.x + pbBox.width / 2, pbBox.y + pbBox.height / 2);
+      await t.page.mouse.down();
+      const abtnActive = await passBtn.evaluate((b) => ({ top: b.getBoundingClientRect().top, shadow: getComputedStyle(b).boxShadow, childTx: getComputedStyle(b.firstElementChild).transform }));
+      // Move off button before releasing so we do not open Pass confirm dialog
+      await t.page.mouse.move(4, 4);
+      await t.page.mouse.up();
+      t.expect(Math.abs(abtnActive.top - abtnBefore.top) < 0.5, '.abtn hit box stays stationary on :active');
+      t.expect(abtnActive.childTx !== 'none' && abtnActive.childTx !== abtnBefore.childTx, `.abtn child nudges on :active (${abtnActive.childTx})`);
+      t.expect(abtnActive.shadow !== abtnBefore.shadow, `.abtn shows inset press shadow on :active (${abtnActive.shadow})`);
+      // Under body.reduce, :active transforms are disabled (reduced-motion safe)
+      await t.page.evaluate(() => { window.__G.settings.motion = 'reduce'; document.body.classList.add('reduce'); });
+      await t.page.mouse.move(r0[0], r0[1]); await t.page.mouse.down();
+      const rtileRed = await t.page.$eval('#rack .rtile[data-pos="0"]', (b) => getComputedStyle(b.firstChild).transform);
+      await t.page.mouse.up();
+      t.equal(rtileRed, 'none', '.rtile:active canvas transform disabled under reduced motion');
+      await t.page.mouse.move(pbBox.x + pbBox.width / 2, pbBox.y + pbBox.height / 2); await t.page.mouse.down();
+      const abtnRed = await passBtn.evaluate((b) => ({ childTx: getComputedStyle(b.firstElementChild).transform, shadow: getComputedStyle(b).boxShadow }));
+      await t.page.mouse.move(4, 4); await t.page.mouse.up();
+      t.equal(abtnRed.childTx, 'none', '.abtn:active child transform disabled under reduced motion');
+      t.expect(abtnRed.shadow !== abtnBefore.shadow, '.abtn keeps non-vestibular press shadow under reduced motion');
+      await t.page.evaluate(() => { window.__G.settings.motion = 'full'; document.body.classList.remove('reduce'); window.__G.selected = null; });
+      // 2. Live rack-slot parting strictly inside #rackbar; steady d.pos0 hole once lifted toward the board (CD-WF4-06)
+      const slot0 = await t.game('act', 'rackTile', 0);
+      const slot4 = await t.game('act', 'rackTile', 4);
+      await t.page.mouse.move(slot0[0], slot0[1]);
+      await t.page.mouse.down();
+      // Drag horizontally inside #rackbar to slot 4
+      await t.page.mouse.move(slot4[0], slot4[1], { steps: 10 });
+      await t.waitFrames(2);
+      const inBar = await t.page.evaluate(() => {
+        const kids = [...document.querySelector('#rack').children].filter((el) => !el.classList.contains('lifted'));
+        const holeIdx = kids.findIndex((el) => el.classList.contains('rslot'));
+        const parting = holeIdx >= 0 && kids[holeIdx].classList.contains('parting');
+        return { holeIdx, parting, drag: window.__game.getState().drag };
+      });
+      t.equal(inBar.holeIdx, 4, `live rack-slot hole parted to index 4 inside #rackbar (got ${inBar.holeIdx})`);
+      t.expect(inBar.parting, 'parted .rslot carries .parting indicator inside #rackbar');
+      t.equal(inBar.drag && inBar.drag.rackSlot, 4, 'state exposes rackSlot=4 while inside #rackbar');
+      await t.shot('w4-b17-rack-parting', { wait: false });
+      // Lift toward the board: hole must return steadily to d.pos0 (0) per CD-WF4-06
+      const boardMid = await t.game('act', 'screen', CENTER);
+      await t.page.mouse.move(boardMid[0], boardMid[1], { steps: 10 });
+      await t.waitFrames(2);
+      const onBoard = await t.page.evaluate(() => {
+        const kids = [...document.querySelector('#rack').children].filter((el) => !el.classList.contains('lifted'));
+        const holeIdx = kids.findIndex((el) => el.classList.contains('rslot'));
+        const parting = holeIdx >= 0 && kids[holeIdx].classList.contains('parting');
+        return { holeIdx, parting, drag: window.__game.getState().drag };
+      });
+      t.equal(onBoard.holeIdx, 0, `once lifted to board, hole stays steady at d.pos0=0 per CD-WF4-06 (got ${onBoard.holeIdx})`);
+      t.equal(onBoard.parting, false, 'no .parting highlight once lifted off #rackbar');
+      // Move back inside #rackbar to visual slot 3 and release: tile lands at slot 3
+      const slot3 = [slot0[0] + (slot4[0] - slot0[0]) * 3 / 4, slot0[1]];
+      await t.page.mouse.move(slot3[0], slot3[1], { steps: 8 });
+      await t.waitFrames(2);
+      const beforeDropOrder = (await t.state()).order.slice();
+      await t.page.mouse.up();
+      await t.page.waitForFunction(() => document.querySelector('#ghost').hidden, null, { timeout: 2000 });
+      const afterDrop = await t.state();
+      t.equal(afterDrop.order[3], 0, `tile 0 dropped into parted slot 3 (order=${afterDrop.order.join(',')}, before=${beforeDropOrder.join(',')})`);
+      // 3. Blocked from==='board' tile drop triggers oops() and smooth origin return via #ghost (instead of 1-frame snap)
+      await t.game('act', 'stage', [{ l: 'S', i: CENTER }, { l: 'P', i: CENTER + 1 }]);
+      const fromPt = await t.game('act', 'screen', CENTER + 1);
+      const occPt = await t.game('act', 'screen', CENTER);
+      await t.page.evaluate(() => { window.__vib.length = 0; });
+      const sfx0 = await t.page.evaluate(() => window.__game.audioState().total);
+      await t.page.mouse.move(fromPt[0], fromPt[1]);
+      await t.page.mouse.down();
+      await t.page.mouse.move(occPt[0], occPt[1], { steps: 8 });
+      await t.waitFrames(2);
+      await t.page.mouse.up();
+      const midReturn = await t.page.evaluate((n0) => {
+        const gh = document.querySelector('#ghost');
+        const a = window.__game.audioState();
+        return {
+          ghostHidden: gh.hidden,
+          returningCell: window.__G.returningCell,
+          returnTimer: window.__G.returnTimer,
+          transition: gh.style.transition,
+          stagedAtOrigin: window.__G.staged.some((x) => x.i === 113),
+          played: a.played.slice(-(a.total - n0)),
+          vibs: window.__vib.slice(),
+        };
+      }, sfx0);
+      t.equal(midReturn.ghostHidden, false, 'blocked board tile glides back via visible #ghost instead of 1-frame snap');
+      t.equal(midReturn.returningCell, CENTER + 1, 'G.returningCell tracks the returning board square during glide');
+      t.expect(midReturn.returnTimer > 0 && /transform/.test(midReturn.transition), `smooth return transition active (${midReturn.transition})`);
+      t.equal(midReturn.stagedAtOrigin, true, 'staging invariant holds immediately while gliding back');
+      t.expect(midReturn.played.includes('error'), `blocked board drop played error (${midReturn.played.join(',')})`);
+      t.expect(midReturn.vibs.some((p) => JSON.stringify(p) === '[30,40,30]'), `blocked board drop pulsed error haptic (${JSON.stringify(midReturn.vibs)})`);
+      await t.page.waitForFunction(() => document.querySelector('#ghost').hidden && window.__G.returningCell === null, null, { timeout: 2000 });
+      const finalStaged = (await t.state()).staged.map((x) => x.i).sort((a, b) => a - b);
+      t.equal(finalStaged.join(','), `${CENTER},${CENTER + 1}`, 'both staged tiles intact after smooth return completes');
+    },
+  },
 ];

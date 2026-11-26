@@ -51,7 +51,7 @@ const G = {
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false }, inspect: -1,
   preview: null, hint: null, last: new Set(), lastPulse: null, badPulse: null, anim: new Map(), animUntil: 0,
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, releaseAiTimer: 0, turnTimers: new Set(), privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
-  drag: null, returning: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, pendingVfx: null, busyUntil: 0, lastHuman: -1,
+  drag: null, returning: null, returningCell: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, pendingVfx: null, busyUntil: 0, lastHuman: -1,
   errFlash: false, scoreHi: null, scoreRollRaf: 0, flipTimer: 0, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, plaqueFx: null, plaqueFxTimer: 0, springsOpen: false,
   returnFocus: null, parCache: {}, boardTap: null, houseOpen: false,
 };
@@ -1465,9 +1465,9 @@ function renderRack() {
     b.setAttribute('aria-pressed', G.selected === k); b.style.visibility = G.returning === k ? 'hidden' : '';
     return b;
   });
-  // the lifted tile leaves its own place empty until the drag ends, so the others do not slide about under the finger
-  const hole = lifted != null && d.pos0 != null ? Math.min(d.pos0, seq.length) : -1;
-  if (hole >= 0) { const x = document.createElement('span'); x.className = 'rslot'; x.setAttribute('aria-hidden', 'true'); seq.splice(hole, 0, x); }
+  // inside #rackbar: part slots live around the pointer; once lifted toward the board, keep the hole steady at d.pos0 (CD-WF4-06)
+  const hole = lifted != null && d.pos0 != null ? Math.min(d.rackSlot != null ? d.rackSlot : d.pos0, seq.length) : -1;
+  if (hole >= 0) { const x = document.createElement('span'); x.className = d.rackSlot != null ? 'rslot parting' : 'rslot'; x.setAttribute('aria-hidden', 'true'); seq.splice(hole, 0, x); }
   const keep = lifted != null ? button(lifted) : null;
   if (keep) { keep.classList.add('lifted'); delete keep.dataset.pos; }
   for (const b of old.values()) b.remove();
@@ -2059,7 +2059,7 @@ function drawData(now) {
   const badWordCells = p && !p.ok && p.words && p.badWord ? p.words.filter((w) => w.w === p.badWord).flatMap((w) => w.cells) : [];
   const badCells = p && !p.ok ? (badWordCells.length ? [...new Set(badWordCells)] : G.staged.map((t) => t.i)) : null;
   return {
-    board: G.s.board, staged: G.staged, last: G.last, lastPulse: G.lastPulse, hint: G.hint, theme: dark() ? 'dark' : 'light',
+    board: G.s.board, staged: G.returningCell != null ? G.staged.filter((t) => t.i !== G.returningCell) : G.staged, last: G.last, lastPulse: G.lastPulse, hint: G.hint, theme: dark() ? 'dark' : 'light',
     cursor: G.cursor.on && humanCanAct() ? G.cursor : null,
     goodCells: p && p.ok && !G.s.challenge ? [...new Set(p.words.flatMap((w) => w.cells))] : null,
     badCells, badPulse: G.badPulse,
@@ -2576,8 +2576,25 @@ function squareNear(x, y, m = 0.5) {
   return clamp(Math.floor(r), 0, N - 1) * N + clamp(Math.floor(c), 0, N - 1);
 }
 // the board and rackbar boxes are measured once per drag (and again after a resize), not on every move
-const boxes = (d) => d.boxes || (d.boxes = { board: $('#board').getBoundingClientRect(), bar: $('#rackbar').getBoundingClientRect() });
+function boxes(d) {
+  if (d.boxes) return d.boxes;
+  const rk = $('#rack'), rs = rk ? getComputedStyle(rk) : null;
+  const gap = rs ? (parseFloat(rs.columnGap) || parseFloat(rs.gap) || 6) : 6;
+  const first = rk ? rk.querySelector(':scope > :not(.lifted)') : null;
+  const rackLeft = first ? first.getBoundingClientRect().left : (rk ? rk.getBoundingClientRect().left : 0);
+  return (d.boxes = { board: $('#board').getBoundingClientRect(), bar: $('#rackbar').getBoundingClientRect(), rackLeft, rackStep: rackTileSize() + gap });
+}
 function inRackbar(e, d) { const r = boxes(d).bar; return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom; }
+function updateRackSlot(d, e, redraw = true) {
+  if (!d || !d.active || d.from !== 'rack') return;
+  const inside = inRackbar(e, d) && d.target == null && d.blocked == null;
+  const b = boxes(d);
+  const next = inside && b.rackStep > 0 ? clamp(Math.floor((e.clientX - b.rackLeft) / b.rackStep), 0, G.order.length) : null;
+  if (next !== d.rackSlot) {
+    d.rackSlot = next;
+    if (redraw) renderRack();
+  }
+}
 function updateDragTarget(d, e) {
   if (waitSeat()) { d.hover = -1; d.target = null; d.blocked = null; return; }   // the computer's turn: a tile can only be moved about the rack
   const r = boxes(d).board;
@@ -2647,13 +2664,31 @@ function returnToRack(d) {
   gh.style.scale = String(b.width / d.size);
   G.returnTimer = setTimeout(endReturn, 210);
 }
+// a staged tile dropped on an occupied square glides smoothly back to its origin square (interruptible via endReturn)
+function returnToBoard(d) {
+  if (G.s && !G.s.board[d.i] && !G.staged.some((t) => t.i === d.i || t.k === d.k)) {
+    G.staged.push({ k: d.k, i: d.i, l: d.tile.l, blank: d.tile.blank });
+  }
+  const gh = $('#ghost');
+  gh.classList.remove('over-target', 'over-blocked');
+  const to = animOn() ? cellScreenBox(d.i, R.STAGED_LIFT) : null;
+  if (!to) { gh.hidden = true; updatePreview(); renderStaging(); return; }
+  G.returningCell = d.i;
+  updatePreview(); renderStaging();
+  gh.style.transition = 'transform 140ms cubic-bezier(0.22, 1, 0.36, 1), scale 140ms cubic-bezier(0.22, 1, 0.36, 1)';
+  gh.style.transform = `translate(${(to.left + to.width / 2 - d.size / 2).toFixed(1)}px, ${(to.top + to.height / 2 - d.size / 2).toFixed(1)}px)`;
+  gh.style.scale = String((to.width / d.size).toFixed(3));
+  G.returnTimer = setTimeout(endReturn, 155);
+}
 function endReturn() {
   clearTimeout(G.returnTimer); G.returnTimer = 0;
   const gh = $('#ghost');
   gh.classList.remove('over-target', 'over-blocked');
   gh.hidden = true;
-  if (G.returning == null) return;
-  G.returning = null; renderRack();
+  const hadRack = G.returning != null, hadCell = G.returningCell != null;
+  G.returning = null; G.returningCell = null;
+  if (hadRack) renderRack();
+  if (hadCell) draw();
 }
 const slot = (d) => Math.max(0, Math.min(d.pos0 ?? G.order.length, G.order.length));
 // Ends a tile drag without a drop (cancelled touch, lost capture, the page losing focus, a new turn, a dialog or
@@ -2718,7 +2753,7 @@ function onMove(e) {
     if (d.from === 'board') { G.staged = G.staged.filter((t) => t.i !== d.i); if (coarseInput(e)) buzz('pick'); }
     else { d.pos0 = G.order.indexOf(d.k); G.order = G.order.filter((x) => x !== d.k); if (d.wasSelected) { sfx('pick'); if (d.coarse) buzz('pick'); } }
     endReturn();
-    Object.assign(d, dragGeom(d), { hover: -1, target: null, blocked: null });
+    Object.assign(d, dragGeom(d), { hover: -1, target: null, blocked: null, rackSlot: null });
     const gh = $('#ghost');
     gh.classList.remove('over-target', 'over-blocked');
     gh.width = gh.height = Math.round(d.size * dpr());
@@ -2728,6 +2763,7 @@ function onMove(e) {
     const from = d.from === 'rack' ? rackTileSize() : pxPerCell();
     gh.style.transition = 'none'; gh.style.scale = String(from / d.size);
     updateDragTarget(d, e);
+    updateRackSlot(d, e, false);
     placeGhost(d, e.clientX, e.clientY);
     gh.hidden = false;
     void gh.offsetWidth;
@@ -2736,6 +2772,7 @@ function onMove(e) {
   }
   if (!d.active) return;
   updateDragTarget(d, e);
+  updateRackSlot(d, e, true);
   placeGhost(d, e.clientX, e.clientY);
   draw();
 }
@@ -2790,9 +2827,9 @@ function onUp(e) {
     if (d.blocked != null) oops();
     else if (d.from === 'board') sfx('recall');
     else if (pos == null) sfx('recall', { gain: 0.65 });
-    if (pos != null) { const gh = $('#ghost'); gh.classList.remove('over-target', 'over-blocked'); gh.hidden = true; G.order.splice(pos, 0, d.k); if (d.from === 'rack' && d.blocked == null) sfx('pick'); updatePreview(); renderStaging(); }   // a tile set down in a new place on the rack
-    // a staged tile dropped on a taken square goes back to its own square
-    else if (d.from === 'board' && d.blocked != null) { G.drag = d; cancelDrag(); }
+    if (pos != null) { const gh = $('#ghost'); gh.classList.remove('over-target', 'over-blocked'); gh.hidden = true; const dropPos = d.from === 'rack' && d.rackSlot != null ? d.rackSlot : pos; G.order.splice(dropPos, 0, d.k); if (d.from === 'rack' && d.blocked == null) sfx('pick'); updatePreview(); renderStaging(); }   // a tile set down in a new place on the rack
+    // a staged tile dropped on a taken square glides smoothly back to its own square
+    else if (d.from === 'board' && d.blocked != null) returnToBoard(d);
     else returnToRack(d);
     draw();
     return;
@@ -3069,7 +3106,7 @@ window.__game = {
   getState() {
     return JSON.parse(JSON.stringify({ scene: G.scene, dialog: G.dialog, game: G.s, staged: G.staged, order: G.order, preview: G.preview, settings: G.settings,
       view: { zoom: R.view.zoom, cx: R.view.cx, cy: R.view.cy, W: R.view.W, H: R.view.H, mode3d: B3.B3.on, reason3d: B3.B3.reason }, aiThinking: G.aiBusy, aiHeld: !!G.aiHeld, pulse: !!G.lastPulse, badPulse: G.badPulse ? { cells: G.badPulse.cells.slice(), dur: G.badPulse.dur } : null, aiWait: { reply: !!G.aiFire, turn: !!(G.turnWait && G.turnWait.fromAi) }, ready: G.ready, privacy: G.privacy,
-      drag: G.drag && G.drag.active ? { from: G.drag.from, target: G.drag.target, blocked: G.drag.blocked, lift: G.drag.lift, size: G.drag.size } : null,
+      drag: G.drag && G.drag.active ? { from: G.drag.from, target: G.drag.target, blocked: G.drag.blocked, lift: G.drag.lift, size: G.drag.size, rackSlot: G.drag.rackSlot ?? null } : null,
       ai: aiClient.mode, dictMs: G.dictMs, toast: $('#toast').textContent, sweeps: steam.sweeps.length, sweepCells: steam.sweeps.length ? steam.sweeps[0].cells.slice() : [], flashes: steam.flashes.length, fx: { on: steam.on, parts: steam.parts.length, maxParts: MAX_PARTICLES, stamps: !!_fxStamps, shapes: FX_SHAPES, flashShapes: steam.flashes.map((f) => f.shape), flashDurs: steam.flashes.map((f) => f.dur), lastTier: steam.lastTier, lastEvent: steam.lastEvent, sparkKinds: steam.parts.filter((p) => p.kind === 'spark').length, steamKinds: steam.parts.filter((p) => p.kind === 'steam').length, wispKinds: steam.parts.filter((p) => p.kind === 'wisp').length, seeded: !!(window.__TEST__ || G.fxFrozen != null), rngSeed: steam.rngSeed, sample: steam.parts.slice(0, 6).map((p) => ({ kind: p.kind, i: p.i, x: +p.x.toFixed(4), y: +p.y.toFixed(4), vx: +p.vx.toFixed(4), vy: +p.vy.toFixed(4), r: +p.r.toFixed(4), max: +p.max.toFixed(4), rot: +(p.rot || 0).toFixed(4) })) }, arcs: steam.arcs.length, arcLog: steam.arcLog.slice(-6), wisps: steam.parts.filter((p) => p.kind !== 'spark').map((p) => p.i), sparks: steam.parts.filter((p) => p.kind === 'spark').length, sweepAt: steam.sweeps.length ? steam.sweeps[0].t0 : null, lastLine: G.lastLine || null, sfx: audio.played.slice(-10) }));
   },
   setState(o) {
