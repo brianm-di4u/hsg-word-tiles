@@ -383,6 +383,12 @@ body.theme-dark .log li .themed-link:hover { filter: brightness(1.12); }
 @media (max-width: 860px), (pointer: coarse) {
   .log li .themed-link { min-height: 44px; padding: 6px 10px; }
 }
+@media (pointer: coarse) {
+  #ledger .ledger-all { min-width: 44px; min-height: 44px; padding: 0 12px; }
+  #turnline .bag-btn, #turnline .bag-link { position: relative; }
+  #turnline .bag-btn { overflow: visible; }
+  #turnline .bag-btn::after, #turnline .bag-link::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
+}
 .log li em { float: right; font: 600 1.05em var(--f-serif); font-style: normal; font-variant-numeric: tabular-nums; }
 .log li small { display: block; color: var(--muted); }
 
@@ -856,7 +862,7 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   /* ...and 44 px of it: up over the scores, which take no taps, so the line and the board stay where they are and the Featured Springs bar below keeps its own taps */
   #turnline .bag-btn, #turnline .bag-link { position: relative; }
   #turnline .bag-btn { overflow: visible; }
-  #turnline .bag-btn::after, #turnline .bag-link::after { content: ""; position: absolute; left: 50%; bottom: 6px; width: max(100%, 44px); height: 44px; transform: translateX(-50%); }
+  #turnline .bag-btn::after, #turnline .bag-link::after { content: ""; position: absolute; left: 50%; top: auto; bottom: 6px; width: max(100%, 44px); height: 44px; transform: translateX(-50%); }
   #turnline .daily-bag { white-space: nowrap; }
   #turnline .bag.phase-final, #turnline .bag.phase-empty { align-self: center; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; padding: 1px 7px; }
   #turnline .daily-turn { font-size: 0.78rem; padding: 2px 8px; }
