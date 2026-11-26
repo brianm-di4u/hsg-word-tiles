@@ -66,8 +66,12 @@ export const tests = [
             coachOverflowY: ccs.overflowY,
             coachTop: cr.top,
             coachBottom: cr.bottom,
+            coachRight: cr.right,
             coachScrollH: coach.scrollHeight,
             coachClientH: coach.clientHeight,
+            coachCardFlex: card ? getComputedStyle(card).display : '',
+            coachIcDisplay: coach.querySelector('.coach-ic') ? getComputedStyle(coach.querySelector('.coach-ic')).display : 'none',
+            springsTitleH: document.querySelector('#springs .springs-title')?.getBoundingClientRect().height || 0,
             previewTop: pr.top,
             previewBottom: pr.bottom,
             previewLeft: pr.left,
@@ -75,12 +79,25 @@ export const tests = [
             boardHeight: bwr.height,
             scoresCols: scs.gridTemplateColumns.split(' ').filter(Boolean).length,
             coachBtnMinH: coachBtns.length ? Math.min(...coachBtns.map((b) => b.getBoundingClientRect().height)) : 0,
+            coachBtns: coachBtns.map((b) => {
+              const r = b.getBoundingClientRect();
+              return { text: b.textContent.trim(), t: r.top, b: r.bottom, r: r.right, h: r.height };
+            }),
             acts: acts.map((b) => ({ act: b.dataset.act, h: b.getBoundingClientRect().height, b: b.getBoundingClientRect().bottom, r: b.getBoundingClientRect().right })),
           };
         });
         t.equal(m.hasCard, true, `${label}: #coach card is visible`);
         t.equal(m.coachOverflowY, 'auto', `${label}: #coach uses overflow-y: auto`);
+        t.equal(m.coachCardFlex, 'flex', `${label}: W6-S4-05 short-desktop #coach .coach-card uses inline flex strip`);
+        t.equal(m.coachIcDisplay, 'none', `${label}: W6-S4-05 short-desktop hides .coach-ic`);
+        t.expect(m.springsTitleH <= 26, `${label}: W6-S4-05 .springs-title stays single-line (${m.springsTitleH.toFixed(1)} px)`);
         t.expect(m.coachBottom <= m.previewTop + 0.5, `${label}: #coach bottom (${m.coachBottom.toFixed(1)}) does not collide over #preview top (${m.previewTop.toFixed(1)})`);
+        t.expect(m.coachScrollH <= m.coachClientH + 1, `${label}: W6-S4-05 #coach fits without internal overflow (scrollHeight ${m.coachScrollH} <= clientHeight ${m.coachClientH})`);
+        t.expect(m.coachBtns.length >= 2, `${label}: #coach renders Got it & Skip tips buttons`);
+        for (const cb of m.coachBtns) {
+          t.expect(cb.h >= 44, `${label}: #coach button "${cb.text}" >= 44 px (${cb.h.toFixed(1)} px)`);
+          t.expect(cb.t >= m.coachTop - 0.5 && cb.b <= m.coachBottom + 0.5 && cb.r <= m.coachRight + 0.5, `${label}: W6-S4-05 #coach button "${cb.text}" fully contained (bottom ${cb.b.toFixed(1)} <= coachBottom ${m.coachBottom.toFixed(1)})`);
+        }
         t.expect(m.coachBtnMinH >= 44, `${label}: #coach buttons >= 44 px (${m.coachBtnMinH.toFixed(1)} px)`);
         t.equal(m.scoresCols, 2, `${label}: desktop 1024x600 #scores stays 2-column grid`);
         t.expect(m.previewLeft >= m.boardRight - 1, `${label}: CD-WF5-01 #preview stays in right sidebar`);

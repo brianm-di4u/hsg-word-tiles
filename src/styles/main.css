@@ -927,8 +927,9 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   #scores .pcard .pmeta b { font-size: 0.88em; }
   #scores .pcard .pmeta small { display: none; }
   #scores .pcard .score { font-size: 1.15em; }
-  .springs-title { margin-bottom: 3px; font-size: 0.86rem; }
-  .springs-title small { font-size: 0.72rem; }
+  .springs-title { margin-bottom: 3px; font-size: clamp(12.5px, 0.86rem, 15px); gap: 6px; white-space: nowrap; }
+  .springs-title span { flex: none; }
+  .springs-title small { font-size: clamp(10.5px, 0.72rem, 12.5px); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .plaques { gap: 4px; }
   .plaque { min-height: 44px; padding: 3px 8px; gap: 6px; }
   .pword b { width: 19px; height: 22px; font-size: 0.84em; }
@@ -1060,10 +1061,11 @@ body.theme-dark .coach-card { background: linear-gradient(160deg, #2E2A44, #3A34
 .coach-card .btn { min-height: 44px; padding: 6px 14px; color: inherit; border-color: currentColor; background: transparent; }
 @media (min-width: 861px) and (max-height: 700px) and (min-aspect-ratio: 1/1) {
   #coach { max-height: 100%; overflow-y: auto; }
-  #coach .coach-card { gap: 3px 8px; padding: 4px 10px; border-radius: 10px; }
-  #coach .coach-ic svg { width: 22px; height: 22px; }
-  #coach .coach-card p { font-size: 0.88em; line-height: 1.2; }
-  #coach .coach-card .btn { min-height: 44px; padding: 2px 10px; font-size: 0.85em; }
+  #coach .coach-card { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 10px; }
+  #coach .coach-ic { display: none; }
+  #coach .coach-card p { flex: 1 1 0; min-width: 0; font-size: clamp(12px, 0.8rem, 14px); line-height: 1.18; }
+  #coach .coach-btns { flex: none; display: flex; gap: 4px; align-items: center; }
+  #coach .coach-card .btn { min-height: 44px; padding: 2px 8px; font-size: clamp(11.5px, 0.76rem, 13px); letter-spacing: 0; white-space: nowrap; }
 }
 /* portrait mobile: anchor #coach cleanly directly beneath the board above #preview instead of below #actions (W2-S4-02) */
 @media (max-width: 860px) and (min-height: 521px), (max-aspect-ratio: 1/1) {
