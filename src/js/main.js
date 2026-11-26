@@ -51,7 +51,7 @@ const G = {
   staged: [], order: [], selected: null, cursor: { i: CENTER, dir: 1, on: false }, inspect: -1,
   preview: null, hint: null, last: new Set(), lastPulse: null, badPulse: null, anim: new Map(), animUntil: 0, aiClack: null,
   breakdown: false, settle: new Map(), settleUntil: 0, chainAt: 0, aiBusy: false, aiTimer: 0, aiToken: 0, overTimer: 0, releaseAiTimer: 0, turnTimers: new Set(), privacy: false, revealed: -1, dialog: null, toastQ: [], helpTab: 'rules',
-  drag: null, returning: null, returningCell: null, returnTimer: 0, pointers: new Map(), pinch: null, fxFrozen: null, pendingVfx: null, busyUntil: 0, lastHuman: -1,
+  drag: null, returning: null, returningCell: null, returnTimer: 0, returnOnLand: null, pointers: new Map(), pinch: null, fxFrozen: null, pendingVfx: null, busyUntil: 0, lastHuman: -1,
   errFlash: false, scoreHi: null, scoreRollRaf: 0, flipTimer: 0, plaqueSnap: null, plaqueHi: new Set(), plaqueTimer: 0, plaqueFx: null, plaqueFxTimer: 0, springsOpen: false,
   returnFocus: null, parCache: {}, boardTap: null, houseOpen: false,
 };
@@ -1115,7 +1115,7 @@ function flushSettle() {
   if (!G.settle.size) return;
   G.settle.clear(); G.settleUntil = 0; draw();
 }
-function stage(k, i, letter) {
+function stage(k, i, letter, opts = null) {
   const s = G.s;
   if (!s || s.over || cur().kind !== 'human') return false;
   const l = cur().rack[k];
@@ -1128,9 +1128,11 @@ function stage(k, i, letter) {
   G.selected = null; G.hint = null; G.badPulse = null;
   forgetHint(s);
   clearToasts();
-  if (animOn()) { const now = performance.now(); G.settle.set(i, now); G.settleUntil = Math.max(G.settleUntil, now + R.SETTLE_MS + 10); }
-  const sq = SQUARES[i];
-  sfx('place', { pan: colPan(i), step: G.staged.length - 1, ...(sq && sq !== '.' && sq !== '*' ? { sq } : {}) }); buzz('stage');
+  if (!(opts && opts.deferPlace)) {
+    if (animOn()) { const now = performance.now(); G.settle.set(i, now); G.settleUntil = Math.max(G.settleUntil, now + R.SETTLE_MS + 10); }
+    const sq = SQUARES[i];
+    sfx('place', { pan: colPan(i), step: G.staged.length - 1, ...(sq && sq !== '.' && sq !== '*' ? { sq } : {}) }); buzz('stage');
+  }
   updatePreview(); renderStaging();
   return true;
 }
@@ -2755,6 +2757,7 @@ function flyGhost(tile, fromBox, toBox, ms = 130, opts = null) {
   if (!animOn() || !fromBox || !toBox) return;
   const hideRackK = typeof opts === 'number' ? opts : (opts && opts.rackK != null ? opts.rackK : null);
   const hideCellI = opts && typeof opts === 'object' && opts.cellI != null ? opts.cellI : null;
+  const onLand = opts && typeof opts === 'object' && typeof opts.onLand === 'function' ? opts.onLand : null;
   const gh = $('#ghost');
   const sz = Math.max(22, Math.round(Math.max(fromBox.width, toBox.width)));
   gh.classList.remove('over-target', 'over-blocked');
@@ -2772,12 +2775,13 @@ function flyGhost(tile, fromBox, toBox, ms = 130, opts = null) {
     const dest = document.querySelector(`#rack .rtile[data-k="${hideRackK}"]`);
     if (dest) dest.style.visibility = 'hidden';
   }
-  if (hideCellI != null) G.returningCell = hideCellI;
+  if (hideCellI != null) { G.returningCell = hideCellI; draw(); }
+  G.returnOnLand = onLand;
   void gh.offsetWidth;
   gh.style.transition = `transform ${ms}ms cubic-bezier(0.22, 1, 0.36, 1), scale ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)`;
   gh.style.transform = `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
   gh.style.scale = String((toBox.width / sz).toFixed(3));
-  G.returnTimer = setTimeout(endReturn, ms + 15);
+  G.returnTimer = setTimeout(() => endReturn(true), ms + 15);
 }
 // a tile that missed the board flies back to its place on the rack
 function returnToRack(d) {
@@ -2807,13 +2811,16 @@ function returnToBoard(d) {
   flyGhost(d.tile, fromBox, toBox, 140, { cellI: d.i });
   updatePreview(); renderStaging();
 }
-function endReturn() {
+function endReturn(landed = false) {
   clearTimeout(G.returnTimer); G.returnTimer = 0;
+  const onLand = landed ? G.returnOnLand : null;
+  G.returnOnLand = null;
   const gh = $('#ghost');
   gh.classList.remove('over-target', 'over-blocked');
   gh.hidden = true;
   const hadRack = G.returning != null, hadCell = G.returningCell != null;
   G.returning = null; G.returningCell = null;
+  if (onLand) onLand();
   if (hadRack) renderRack();
   if (hadCell) draw();
 }
@@ -2983,10 +2990,21 @@ function onUp(e) {
     const selK = G.selected, fromEl = document.querySelector(`#rack .rtile[data-k="${selK}"]`);
     const fromBox = animOn() && fromEl ? fromEl.getBoundingClientRect() : null;
     const rawL = cur().rack[selK];
-    if (stage(selK, i)) {
-      if (fromBox && rawL !== '?') {
-        const toBox = cellScreenBox(i, R.STAGED_LIFT);
-        if (toBox) flyGhost({ l: rawL, blank: false }, fromBox, toBox, 120, null);
+    const toBox = fromBox && rawL !== '?' ? cellScreenBox(i, R.STAGED_LIFT) : null;
+    const willFly = !!(fromBox && toBox && rawL !== '?');
+    if (stage(selK, i, null, willFly ? { deferPlace: true } : null)) {
+      if (willFly) {
+        const s = G.s, sq = SQUARES[i], placeStep = G.staged.length - 1;
+        // W6-S5-02: mask destination cell until #ghost lands and align place audio/settle with touchdown (cancelled cleanly on interrupt).
+        flyGhost({ l: rawL, blank: false }, fromBox, toBox, 120, {
+          cellI: i,
+          onLand: () => {
+            if (G.scene !== 'game' || G.s !== s || !G.staged.some((t) => t.i === i)) return;
+            if (animOn()) { const now = performance.now(); G.settle.set(i, now); G.settleUntil = Math.max(G.settleUntil, now + R.SETTLE_MS + 10); }
+            sfx('place', { pan: colPan(i), step: placeStep, ...(sq && sq !== '.' && sq !== '*' ? { sq } : {}) });
+            buzz('stage');
+          },
+        });
       }
     } else if (G.s.board[i] || G.staged.some((t) => t.i === i)) {
       // W4-S2-05: gentle error nudge when tapping an occupied square with a selected rack tile.

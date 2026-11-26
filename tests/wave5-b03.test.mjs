@@ -1,6 +1,7 @@
 // Wave 5, batch W5-B03:
 // - W6-S2-03: Restrict board-to-plaque comet arcs strictly to claim/row/themed triggers (never passive Daily or bag-depletion clearFog).
 // - W6-S4-01: Toggle #rackbar.has-cue and clear .rack-cue below rack tile canvases across portrait, landscape, and desktop without shifting layout.
+// - W6-S5-02: Tap-to-place masks destination cell during 120 ms #ghost flight via { cellI: i } and fires place audio on touchdown (cancelled cleanly on interrupt).
 import { ctx } from './lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
 import { CENTER } from '../src/js/score.js';
@@ -259,6 +260,137 @@ export const tests = [
         }
       }
       await t.page.setViewportSize({ width: t.vp.width, height: t.vp.height });
+    },
+  },
+  // ---------- W6-S5-02 ----------
+  {
+    name: 'W6-S5-02 tap-to-place masks destination cell during 120 ms #ghost flight, fires place audio at touchdown, and cancels cleanly on interrupt',
+    viewports: ['desktop', 'mobile'],
+    url: 'index.html?gl=0',
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-settings-v1')) {
+        localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: true, fx: true, music: false, amb: false, motion: 'full', theme: 'light' }));
+      }
+    },
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 3, seats: [{ kind: 'human', name: 'You' }, { kind: 'human', name: 'Player 2' }] });
+      await t.waitIdle(6000);
+      await t.game('act', 'reveal');
+      const st = await t.state();
+      st.game.players[0].rack = ['S', 'P', 'R', 'I', 'N', 'G', 'E'];
+      await t.game('setState', { game: st.game });
+      await t.waitFrames(2);
+
+      // Neutral empty cell adjacent to center (row 7 col 8 = CENTER + 1) so empty marble vs landed ceramic tile has clear pixel diff
+      const targetCell = CENTER + 1;
+      const sampleCell = async (cellIdx) => {
+        const [cx, cy] = await t.game('act', 'cell', cellIdx);
+        return t.page.evaluate(([x, y]) => {
+          const cv = document.querySelector('#board'), dpr = cv.width / cv.getBoundingClientRect().width;
+          const r = Math.max(4, Math.round(5 * dpr));
+          const px = Math.round(x * dpr) - r, py = Math.round(y * dpr) - r;
+          const data = cv.getContext('2d').getImageData(px, py, r * 2, r * 2).data;
+          let sum = 0;
+          const out = [];
+          for (let k = 0; k < data.length; k += 4) { sum += data[k] + data[k + 1] + data[k + 2]; out.push(data[k], data[k + 1], data[k + 2]); }
+          return { mean: +(sum / (data.length / 4 * 3)).toFixed(2), pixels: out };
+        }, [cx, cy]);
+      };
+      const patchDiff = (a, b) => {
+        let tot = 0;
+        for (let k = 0; k < a.pixels.length; k++) tot += Math.abs(a.pixels[k] - b.pixels[k]);
+        return +(tot / a.pixels.length).toFixed(2);
+      };
+
+      const emptyBefore = await sampleCell(targetCell);
+
+      // Select rack tile 0 (also unlocks AudioContext via user gesture)
+      const r0 = await t.game('act', 'rackTile', 0);
+      const cellPt = await t.game('act', 'screen', targetCell);
+      await t.page.mouse.click(r0[0], r0[1]);
+      await t.page.waitForFunction(() => window.__game.audioState().ctx === 'running', null, { timeout: 5000 });
+      const placesBefore = await t.page.evaluate(() => window.__game.audioState().played.filter((x) => x === 'place').length);
+
+      // Tap target board square -> 120 ms #ghost flight with destination cell masked
+      await t.page.mouse.click(cellPt[0], cellPt[1]);
+      await t.waitFrames(1);
+      const mid = await t.page.evaluate(() => {
+        const gh = document.querySelector('#ghost');
+        return {
+          ghostVisible: !gh.hidden,
+          tr: gh.style.transition,
+          returningCell: window.__G.returningCell,
+          hasOnLand: typeof window.__G.returnOnLand === 'function',
+          places: window.__game.audioState().played.filter((x) => x === 'place').length,
+          stagedCount: window.__G.staged.length,
+        };
+      });
+      const duringFlight = await sampleCell(targetCell);
+      const diffMid = patchDiff(emptyBefore, duringFlight);
+
+      t.equal(mid.ghostVisible, true, 'tap-to-place shows #ghost during flight');
+      t.expect(/120ms/.test(mid.tr), `tap-to-place runs 120 ms #ghost flight (${mid.tr})`);
+      t.equal(mid.returningCell, targetCell, 'G.returningCell masks destination cell during flight');
+      t.equal(mid.hasOnLand, true, 'touchdown audio callback queued on G.returnOnLand');
+      t.equal(mid.stagedCount, 1, 'tile is logically staged immediately');
+      t.equal(mid.places, placesBefore, 'place audio does NOT fire early before touchdown');
+      t.expect(diffMid < 4, `destination cell on #board stays masked (no duplicate tile rendered) during flight (pixel diff=${diffMid})`);
+
+      // Wait for #ghost touchdown (state-driven wait)
+      await t.page.waitForFunction(() => document.querySelector('#ghost').hidden && window.__G.returningCell === null, null, { timeout: 4000 });
+      await t.waitFrames(1);
+      const landed = await t.page.evaluate(() => ({
+        places: window.__game.audioState().played.filter((x) => x === 'place').length,
+        hasOnLand: window.__G.returnOnLand !== null,
+      }));
+      const afterLand = await sampleCell(targetCell);
+      const diffLand = patchDiff(emptyBefore, afterLand);
+
+      t.equal(landed.places, placesBefore + 1, 'place audio fires once at touchdown');
+      t.equal(landed.hasOnLand, false, 'G.returnOnLand cleared after touchdown');
+      t.expect(diffLand > 15, `destination cell renders landed ceramic tile after endReturn() (pixel diff=${diffLand})`);
+
+      // 2) Interruption mid-flight cancels pending touchdown audio cleanly (no phantom delayed place cue)
+      const cell2 = CENTER + 2;
+      const rNext = await t.game('act', 'rackTile', 0);
+      const pt2 = await t.game('act', 'screen', cell2);
+      await t.page.mouse.click(rNext[0], rNext[1]);
+      const placesPreInt = await t.page.evaluate(() => window.__game.audioState().played.filter((x) => x === 'place').length);
+      await t.page.mouse.click(pt2[0], pt2[1]); // starts 120 ms flight to cell2
+      // Immediately tap cell2 again to interrupt flight and unstage it
+      await t.page.mouse.click(pt2[0], pt2[1]);
+      const afterInt = await t.page.evaluate(() => ({
+        returningCell: window.__G.returningCell,
+        hasOnLand: window.__G.returnOnLand !== null,
+        places: window.__game.audioState().played.filter((x) => x === 'place').length,
+      }));
+      t.equal(afterInt.returningCell, null, 'interrupting flight clears G.returningCell immediately');
+      t.equal(afterInt.hasOnLand, false, 'interrupting flight cancels pending onLand callback');
+      t.equal(afterInt.places, placesPreInt, 'interrupted flight fires zero phantom place audio');
+
+      // Wait for unstage flight to finish (state-driven) and verify still zero phantom place cue
+      await t.page.waitForFunction(() => document.querySelector('#ghost').hidden && window.__G.returning === null, null, { timeout: 4000 });
+      const placesPostInt = await t.page.evaluate(() => window.__game.audioState().played.filter((x) => x === 'place').length);
+      t.equal(placesPostInt, placesPreInt, 'no delayed place cue leaked after interrupted flight');
+
+      // 3) Reduced motion: skips #ghost flight and fires place audio immediately
+      await t.game('scene', 'settings');
+      await t.page.click('[data-set="motion"][data-val="reduce"]');
+      await t.game('scene', 'game');
+      const rRed = await t.game('act', 'rackTile', 0);
+      await t.page.mouse.click(rRed[0], rRed[1]);
+      const placesPreRed = await t.page.evaluate(() => window.__game.audioState().played.filter((x) => x === 'place').length);
+      await t.page.mouse.click(pt2[0], pt2[1]);
+      const afterRed = await t.page.evaluate(() => ({
+        ghostHidden: document.querySelector('#ghost').hidden,
+        returningCell: window.__G.returningCell,
+        places: window.__game.audioState().played.filter((x) => x === 'place').length,
+      }));
+      t.equal(afterRed.ghostHidden, true, 'reduced motion skips #ghost flight');
+      t.equal(afterRed.returningCell, null, 'reduced motion leaves G.returningCell null');
+      t.equal(afterRed.places, placesPreRed + 1, 'reduced motion fires place audio immediately');
     },
   },
 ];
