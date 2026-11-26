@@ -1449,7 +1449,14 @@ function renderRack() {
     c.getContext('2d').drawImage(R.tileSprite(l === '?' ? '' : l, l === '?', px, 'rack', th), 0, 0);
     b.append(c);
     if (!dim || wait) b.addEventListener('pointerdown', (e) => rackDown(e, k));
-    b.addEventListener('click', (e) => { if (e.detail === 0 && !dim) { G.selected = G.selected === k ? null : k; renderRack(); } }); // keyboard activation
+    b.addEventListener('click', (e) => {
+      if (e.detail === 0 && !dim) {
+        const deselect = G.selected === k;
+        G.selected = deselect ? null : k;
+        sfx(deselect ? 'unpick' : 'pick');
+        renderRack();
+      }
+    }); // keyboard activation
     return b;
   };
   const seq = order.map((k, pos) => {
@@ -2426,11 +2433,15 @@ function rackDown(e, k) {
   unlock();
   clearToasts(); closeBreakdown();
   e.preventDefault();
-  G.drag = { from: 'rack', k, move: G.s.move, x0: e.clientX, y0: e.clientY, id: e.pointerId, touch: e.pointerType === 'touch', active: false, tile: tileOf(k) };
+  const wasSelected = !waitSeat() && G.selected === k;
+  const coarse = coarseInput(e);
+  G.drag = { from: 'rack', k, move: G.s.move, x0: e.clientX, y0: e.clientY, id: e.pointerId, touch: e.pointerType === 'touch', coarse, wasSelected, active: false, tile: tileOf(k) };
   // #app outlasts every re-render, so the rest of the drag reaches us even if the tile's button goes
   capture($('#app'), e.pointerId);
-  sfx('pick');
-  if (coarseInput(e)) buzz('pick');
+  if (!wasSelected) {
+    sfx('pick');
+    if (coarse) buzz('pick');
+  }
 }
 const tileOf = (k) => { const l = (waitSeat() || cur()).rack[k]; return { l: l === '?' ? '' : l, blank: l === '?' }; };
 
@@ -2705,7 +2716,7 @@ function onMove(e) {
     clearToasts(); G.breakdown = false;
     if (G.springsOpen) syncSpringsDrawer(false);
     if (d.from === 'board') { G.staged = G.staged.filter((t) => t.i !== d.i); if (coarseInput(e)) buzz('pick'); }
-    else { d.pos0 = G.order.indexOf(d.k); G.order = G.order.filter((x) => x !== d.k); }
+    else { d.pos0 = G.order.indexOf(d.k); G.order = G.order.filter((x) => x !== d.k); if (d.wasSelected) { sfx('pick'); if (d.coarse) buzz('pick'); } }
     endReturn();
     Object.assign(d, dragGeom(d), { hover: -1, target: null, blocked: null });
     const gh = $('#ghost');
@@ -2776,8 +2787,10 @@ function onUp(e) {
     }
     // back to the rack, at the drop position when dropped on the rack
     const pos = rackPosAt(e.clientX, e.clientY);
-    if (d.from === 'board' || d.blocked != null) sfx(d.blocked != null ? 'error' : 'recall');
-    if (pos != null) { const gh = $('#ghost'); gh.classList.remove('over-target', 'over-blocked'); gh.hidden = true; G.order.splice(pos, 0, d.k); if (d.from === 'rack') sfx('pick'); updatePreview(); renderStaging(); }   // a tile set down in a new place on the rack
+    if (d.blocked != null) oops();
+    else if (d.from === 'board') sfx('recall');
+    else if (pos == null) sfx('recall', { gain: 0.65 });
+    if (pos != null) { const gh = $('#ghost'); gh.classList.remove('over-target', 'over-blocked'); gh.hidden = true; G.order.splice(pos, 0, d.k); if (d.from === 'rack' && d.blocked == null) sfx('pick'); updatePreview(); renderStaging(); }   // a tile set down in a new place on the rack
     // a staged tile dropped on a taken square goes back to its own square
     else if (d.from === 'board' && d.blocked != null) { G.drag = d; cancelDrag(); }
     else returnToRack(d);
@@ -2786,7 +2799,13 @@ function onUp(e) {
   }
   if (d.active) { layout(); return; } // pan ended
   // a tap
-  if (d.from === 'rack') { if (!waitSeat()) G.selected = G.selected === d.k ? null : d.k; renderRack(); return; }
+  if (d.from === 'rack') {
+    if (!waitSeat()) {
+      if (G.selected === d.k) { G.selected = null; sfx('unpick'); }
+      else G.selected = d.k;
+    }
+    renderRack(); return;
+  }
   if (d.from === 'board') { unstage(d.i); return; }
   const [x, y] = boardPoint(e);
   const i = pick(x, y);
@@ -2909,12 +2928,12 @@ function onKey(e) {
   if (k === 'Escape' && $('#toast')?.classList.contains('on')) { e.preventDefault(); hideToast(); if (!G.staged.length) openDialog('pause'); return; }
   if (!humanCanAct()) { if (k === 'Escape') { e.preventDefault(); openDialog('pause'); } return; }
   const c = G.cursor;
-  const move = (dr, dc) => { const r = Math.floor(c.i / N) + dr, col = (c.i % N) + dc; if (r >= 0 && r < N && col >= 0 && col < N) c.i = r * N + col; c.on = true; $('#board').focus({ preventScroll: true }); ensureVisible(c.i); draw(); sayCursor(c.i); };   // the focus goes with the cursor, so Enter plays instead of pressing a button left focused
+  const move = (dr, dc) => { const prev = c.i, wasOn = c.on; const r = Math.floor(c.i / N) + dr, col = (c.i % N) + dc; if (r >= 0 && r < N && col >= 0 && col < N) c.i = r * N + col; c.on = true; $('#board').focus({ preventScroll: true }); ensureVisible(c.i); draw(); sayCursor(c.i); if (c.i !== prev || !wasOn) sfx('tick', { pan: colPan(c.i) }); };   // the focus goes with the cursor, so Enter plays instead of pressing a button left focused
   if (k === 'ArrowLeft' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(0, -1); }
   else if (k === 'ArrowRight' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(0, 1); }
   else if (k === 'ArrowUp' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(-1, 0); }
   else if (k === 'ArrowDown' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(1, 0); }
-  else if (k === ' ') { e.preventDefault(); c.dir = c.dir === 1 ? N : 1; c.on = true; draw(); liveSay(`Direction: ${c.dir === 1 ? 'across' : 'down'}.`); }
+  else if (k === ' ') { e.preventDefault(); c.dir = c.dir === 1 ? N : 1; c.on = true; draw(); sfx('tick', { pan: colPan(c.i), rotate: true }); liveSay(`Direction: ${c.dir === 1 ? 'across' : 'down'}.`); }
   else if (k === 'Enter') {
     e.preventDefault();
     if (G.selected != null && G.order.includes(G.selected)) {

@@ -164,4 +164,96 @@ export const tests = [
       await t.page.mouse.up();
     },
   },
+  // ---------- W4-S4-14 ----------
+  {
+    name: 'W4-S4-14 keyboard cursor/rotate wooden tick, soft recall on returnToRack, blocked-drop haptics, and gentle downward deselect tap',
+    viewports: ['desktop', 'mobile'],
+    initScript: withVibrate(),
+    async run(t) {
+      await start(t, 'SPRINGE');
+      // 1. Offline acoustic calibration of new cues (tick ~-12 dB wooden tick, unpick gentler downward tap, zero full-vol clipping)
+      if (t.viewport === 'desktop') {
+        const placePeaks = [], pickPeaks = [], tickPeaks = [], unpickPeaks = [];
+        for (let k = 0; k < 10; k++) {
+          placePeaks.push((await t.game('act', 'renderSfx', 'place', 0.35)).peak);
+          pickPeaks.push(await t.game('act', 'renderSfx', 'pick', 0.35));
+          tickPeaks.push(await t.game('act', 'renderSfx', 'tick', 0.35));
+          unpickPeaks.push(await t.game('act', 'renderSfx', 'unpick', 0.35));
+        }
+        const med = (xs) => [...xs].sort((a, b) => a - b)[xs.length >> 1];
+        const mPlace = med(placePeaks);
+        const mPick = med(pickPeaks.map((r) => r.peak));
+        const mTick = med(tickPeaks.map((r) => r.peak));
+        const mUnpick = med(unpickPeaks.map((r) => r.peak));
+        const tickDb = 20 * Math.log10(mTick / mPlace);
+        const tickFull = await t.game('act', 'renderSfx', 'tick', 1);
+        const unpickFull = await t.game('act', 'renderSfx', 'unpick', 1);
+        const rotTick = await t.game('act', 'renderSfx', 'tick', 0.35, { rotate: true });
+        t.log(`W4-S4-14 peaks@0.35: place=${mPlace.toFixed(3)}, pick=${mPick.toFixed(3)}, tick=${mTick.toFixed(3)} (${tickDb.toFixed(1)} dB vs place), unpick=${mUnpick.toFixed(3)}; full prePeak: tick=${tickFull.prePeak}, unpick=${unpickFull.prePeak}`);
+        t.expect(mTick >= 0.04 && mTick <= 0.16, `tick is whisper-quiet wooden cue at default vol (${mTick})`);
+        t.expect(tickDb <= -8 && tickDb >= -18, `tick sits ~-12 dB below place (${tickDb.toFixed(1)} dB)`);
+        t.expect(rotTick.peak >= 0.04 && rotTick.peak <= 0.16, `rotate tick is audible and quiet (${rotTick.peak})`);
+        t.expect(mUnpick >= 0.06 && mUnpick < mPick, `unpick (${mUnpick}) is gentler than pick (${mPick})`);
+        t.expect(med(unpickPeaks.map((r) => r.zc)) < med(pickPeaks.map((r) => r.zc)), 'unpick pitches lower/downward than pick');
+        t.expect(tickFull.prePeak < 0.5 && unpickFull.prePeak < 0.7, `no clipping at full volume (tick=${tickFull.prePeak}, unpick=${unpickFull.prePeak})`);
+      }
+      // 2. Keyboard Arrow movement and Space rotate emit wooden 'tick' cues
+      await t.page.focus('#board');
+      const n0 = await t.page.evaluate(() => window.__game.audioState().total);
+      await t.page.keyboard.press('ArrowRight');
+      await t.page.keyboard.press('Space');
+      const keyCues = await t.page.evaluate((n) => {
+        const a = window.__game.audioState();
+        return { delta: a.total - n, last: a.played.slice(-2) };
+      }, n0);
+      t.equal(keyCues.delta, 2, `arrow + Space emitted 2 cues (got ${keyCues.delta}: ${keyCues.last.join(',')})`);
+      t.equal(keyCues.last.join(','), 'tick,tick', `arrow + Space both emitted tick (${keyCues.last.join(',')})`);
+      // 3. Tapping a selected rack tile to deselect does NOT fire 'pick' on pointerdown; plays 'unpick' on release
+      const r0 = await t.game('act', 'rackTile', 0);
+      if (t.viewport === 'mobile') await t.tap([r0[0], r0[1]]);
+      else await t.page.mouse.click(r0[0], r0[1]);
+      await t.page.waitForFunction(() => window.__G.selected != null, null, { timeout: 2000 });
+      const beforeDeselect = await t.page.evaluate(() => window.__game.audioState().total);
+      if (t.viewport === 'mobile') await t.tap([r0[0], r0[1]]);
+      else await t.page.mouse.click(r0[0], r0[1]);
+      await t.page.waitForFunction(() => window.__G.selected === null, null, { timeout: 2000 });
+      const deselectCues = await t.page.evaluate((n) => {
+        const a = window.__game.audioState();
+        return a.played.slice(-(a.total - n));
+      }, beforeDeselect);
+      t.equal(deselectCues.join(','), 'unpick', `deselecting played only unpick, not pick (${deselectCues.join(',')})`);
+      // 4. Missed drag from rack flies back with a soft 'recall' cue
+      const t0 = await t.game('act', 'rackTile', 0);
+      const mid = await t.game('act', 'screen', CENTER);
+      const beforeMiss = await t.page.evaluate(() => window.__game.audioState().total);
+      await t.page.mouse.move(t0[0], t0[1]);
+      await t.page.mouse.down();
+      await t.page.mouse.move(mid[0], mid[1], { steps: 6 });
+      await t.page.mouse.move(4, 4, { steps: 4 });
+      await t.page.mouse.up();
+      await t.page.waitForFunction(() => document.querySelector('#ghost').hidden, null, { timeout: 3000 });
+      const missCues = await t.page.evaluate((n) => {
+        const a = window.__game.audioState();
+        return a.cues.slice(-(a.total - n));
+      }, beforeMiss);
+      const softRecall = missCues.find((c) => c.name === 'recall');
+      t.expect(!!softRecall && softRecall.gain < 0.85, `missed rack drag played soft recall (${JSON.stringify(missCues)})`);
+      // 5. Blocked drop onto an occupied square pairs buzz('error') with sfx('error')
+      await t.game('act', 'stage', [{ l: 'S', i: CENTER }]);
+      const t1 = await t.game('act', 'rackTile', 0);
+      await t.page.evaluate(() => { window.__vib.length = 0; });
+      const beforeBlocked = await t.page.evaluate(() => window.__game.audioState().total);
+      await t.page.mouse.move(t1[0], t1[1]);
+      await t.page.mouse.down();
+      await t.page.mouse.move(mid[0], mid[1], { steps: 8 });
+      await t.page.mouse.up();
+      await t.page.waitForFunction(() => document.querySelector('#ghost').hidden, null, { timeout: 3000 });
+      const blockedRes = await t.page.evaluate((n) => {
+        const a = window.__game.audioState();
+        return { played: a.played.slice(-(a.total - n)), vibs: window.__vib.slice() };
+      }, beforeBlocked);
+      t.expect(blockedRes.played.includes('error'), `blocked drop played error cue (${blockedRes.played.join(',')})`);
+      t.expect(blockedRes.vibs.some((p) => JSON.stringify(p) === '[30,40,30]'), `blocked drop pulsed error haptic (${JSON.stringify(blockedRes.vibs)})`);
+    },
+  },
 ];
