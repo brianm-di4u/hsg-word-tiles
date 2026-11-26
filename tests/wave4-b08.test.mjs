@@ -101,4 +101,45 @@ export const tests = [
       t.expect((await ring(t)).band < on.cell * 0.5, 'and is gone with the tip');
     },
   },
+  // ---------- W2-S3-14 ----------
+  {
+    name: 'W2-S3-14 the zoomed minimap shows each open Bathhouse Row square as a brass stud and the open Display Spring as a teal beacon; a covered one shows its tile',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await table(t);
+      await t.game('act', 'zoom', 1.7, 4, 4);
+      await t.waitFrames(4);
+      const mm = await t.game('act', 'minimap');
+      t.expect(mm.on, 'the minimap is up');
+      const px = (cells) => t.page.evaluate(([cells, b]) => {
+        const cv = document.querySelector('#board'), k = cv.width / cv.getBoundingClientRect().width, c = b.S / 15, g = cv.getContext('2d');
+        return cells.map((i) => [...g.getImageData(Math.floor((b.x0 + (i % 15 + 0.5) * c) * k), Math.floor((b.y0 + (Math.floor(i / 15) + 0.5) * c) * k), 1, 1).data]);
+      }, [cells, mm.box]);
+      const rows = Object.keys(BATHHOUSES).map(Number);
+      t.equal(rows.length, 8, 'eight Bathhouse Row squares');
+      const isBrass = ([r, g, b]) => r > 200 && g > 160 && g < 210 && b < 120;
+      const isTeal = ([r, g, b]) => g > 180 && b > 170 && r < 160;
+      const isTile = ([r, g, b]) => Math.abs(r - 0x8C) < 20 && Math.abs(g - 0x6A) < 20 && Math.abs(b - 0x1E) < 20;
+      const got = await px([...rows, CENTER]);
+      rows.forEach((i, k) => t.expect(isBrass(got[k]), `Row square ${i}: brass (${got[k].slice(0, 3)})`));
+      t.expect(isTeal(got[8]), `the Display Spring: teal (${got[8].slice(0, 3)})`);
+      await t.shot('w4-b08-minimap-landmarks');
+      // a placed tile on a Row square and a staged tile on the Display Spring cover their markers
+      const g = (await t.state()).game;
+      g.board[rows[0]] = { l: 'A', blank: false, p: 0, t: 0 };
+      await t.game('setState', { game: g });
+      await t.waitIdle(8000);
+      await t.game('act', 'reveal');
+      const l = (await t.state()).game.players[0].rack.find((x) => x !== '?');
+      t.equal((await t.game('act', 'stage', [{ i: CENTER, l }])).ok, true, 'a tile staged on the Display Spring');
+      await t.game('act', 'zoom', 1.7, 4, 4);
+      await t.waitFrames(4);
+      const after = await px([rows[0], rows[1], CENTER]);
+      t.expect(isTile(after[0]) && !isBrass(after[0]), `a covered Row square shows its tile (${after[0].slice(0, 3)})`);
+      t.expect(isBrass(after[1]), 'the open ones keep their studs');
+      t.expect(!isTeal(after[2]), `a covered Display Spring has no beacon (${after[2].slice(0, 3)})`);
+    },
+  },
 ];

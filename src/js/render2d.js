@@ -924,6 +924,21 @@ export function drawMinimap(ctx, board, staged, vp) {
     if (board[i]) { ctx.fillStyle = '#8C6A1E'; ctx.fillRect(x + 0.4, y + 0.4, c - 0.8, c - 0.8); }
     else if (PREMIUM[k]) { ctx.fillStyle = PREMIUM[k].glass[1]; ctx.globalAlpha = 0.55; ctx.fillRect(x + 1, y + 1, c - 2, c - 2); ctx.globalAlpha = 1; }
   }
+  // W2-S3-14: the open Bathhouse Row squares as brass studs and the open Display Spring as a teal beacon, so the board's landmarks
+  // stay in sight when zoomed in (a covered one shows as its tile)
+  const open = (i) => !board[i] && !(staged || []).some((t) => t.i === i);
+  for (const i of Object.keys(BATHHOUSES).map(Number)) {
+    if (!open(i)) continue;
+    const x = x0 + (i % N + 0.5) * c, y = y0 + (Math.floor(i / N) + 0.5) * c;
+    ctx.fillStyle = '#4A2E10'; ctx.beginPath(); ctx.arc(x, y, c * 0.52, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#E2B85A'; ctx.beginPath(); ctx.arc(x, y, c * 0.3, 0, Math.PI * 2); ctx.fill();
+  }
+  if (open(CENTER)) {
+    const x = x0 + (CENTER % N + 0.5) * c, y = y0 + (Math.floor(CENTER / N) + 0.5) * c;
+    ctx.fillStyle = 'rgba(42,157,143,0.35)'; ctx.beginPath(); ctx.arc(x, y, c * 1.05, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#16655E'; ctx.beginPath(); ctx.arc(x, y, c * 0.58, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#7FD3C4'; ctx.beginPath(); ctx.arc(x, y, c * 0.3, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.fillStyle = '#D9A23A';
   for (const t of staged || []) ctx.fillRect(x0 + (t.i % N) * c, y0 + Math.floor(t.i / N) * c, c, c);
   // vp: either { kind: 'poly', pts: [[bx, by], ...] } from 3D B3.boardAt() frustum corners,
