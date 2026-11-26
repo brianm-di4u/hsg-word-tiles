@@ -100,7 +100,13 @@ export const tests = [
       t.expect(sigs.size >= 29, `30 renders of place are all different (${sigs.size})`);
       t.expect(zc.size >= 12, `they differ in timbre (${zc.size} zero-crossing counts)`);
       t.expect(spreadDb >= 1, `the level varies by at least 1 dB (${spreadDb.toFixed(1)})`);
-      t.expect(mean(high.map((r) => r.zc)) > mean(flat.map((r) => r.zc)) * 1.1, 'ten tiles up a word the sound is higher');
+      // The climb is measured on the dry cue (no early-reflection send): since 8cf5af6 (W4-S4-01) the 0.24 s reverb tail adds about 700
+      // pitch-independent zero crossings to the 2 s render, below 0.001 for most of it, which hide the climb from a whole-buffer count
+      // (heard: x1.02; dry: about x2; heard up to the last audible sample: about x1.65). The 1.1 factor is unchanged (W4-B33-hotfix).
+      const dflat = [], dhigh = [];
+      for (let k = 0; k < 30; k++) { dflat.push(await t.game('act', 'renderSfx', 'place', 0.35, { dry: true })); dhigh.push(await t.game('act', 'renderSfx', 'place', 0.35, { dry: true, step: 10 })); }
+      t.log(`dry place: step 10 averages ${mean(dhigh.map((r) => r.zc)).toFixed(0)} crossings, step 0 ${mean(dflat.map((r) => r.zc)).toFixed(0)}`);
+      t.expect(mean(dhigh.map((r) => r.zc)) > mean(dflat.map((r) => r.zc)) * 1.1, 'ten tiles up a word the sound is higher');
       for (const n of ['pick', 'recall', 'turn', 'error']) {
         const a = [];
         for (let k = 0; k < 8; k++) a.push((await t.game('act', 'renderSfx', n, 0.35)).sig);
