@@ -62,7 +62,8 @@ const reduced = () => G.settings.motion === 'reduce' || (G.settings.motion === '
 const animOn = () => !reduced() && !G.fast;
 // Haptics (S2-22): short pulses on the player's own moves, where the browser has navigator.vibrate. Off with the Vibration switch
 // and whenever motion is reduced. Never on the computer's moves.
-const HAP = { stage: 10, play: 20, error: [30, 40, 30], big: [20, 40, 20, 40, 40] };
+const HAP = { pick: 6, stage: 10, play: 20, error: [30, 40, 30], big: [20, 40, 20, 40, 40] };
+const coarseInput = (e) => (e && e.pointerType === 'touch') || matchMedia('(pointer: coarse)').matches;
 function buzz(kind) {
   if (!G.settings.vibrate || reduced() || typeof navigator.vibrate !== 'function') return;
   try { navigator.vibrate(HAP[kind]); } catch (e) { /* a phone that refuses a pulse is not a problem */ }
@@ -2429,6 +2430,7 @@ function rackDown(e, k) {
   // #app outlasts every re-render, so the rest of the drag reaches us even if the tile's button goes
   capture($('#app'), e.pointerId);
   sfx('pick');
+  if (coarseInput(e)) buzz('pick');
 }
 const tileOf = (k) => { const l = (waitSeat() || cur()).rack[k]; return { l: l === '?' ? '' : l, blank: l === '?' }; };
 
@@ -2702,7 +2704,7 @@ function onMove(e) {
     d.active = true;
     clearToasts(); G.breakdown = false;
     if (G.springsOpen) syncSpringsDrawer(false);
-    if (d.from === 'board') G.staged = G.staged.filter((t) => t.i !== d.i);
+    if (d.from === 'board') { G.staged = G.staged.filter((t) => t.i !== d.i); if (coarseInput(e)) buzz('pick'); }
     else { d.pos0 = G.order.indexOf(d.k); G.order = G.order.filter((x) => x !== d.k); }
     endReturn();
     Object.assign(d, dragGeom(d), { hover: -1, target: null, blocked: null });

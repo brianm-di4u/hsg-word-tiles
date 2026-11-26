@@ -79,4 +79,89 @@ export const tests = [
       await t.page.waitForFunction(() => /Direction: across/i.test(document.querySelector('#live').textContent), null, { timeout: 2000 });
     },
   },
+  // ---------- W4-S3-11 ----------
+  {
+    name: 'W4-S3-11 rackDown/boardDown cancel returnTimer immediately (8d45148) and coarse-pointer pickup emits a 6 ms pick haptic',
+    viewports: ['desktop', 'mobile'],
+    initScript: withVibrate(),
+    async run(t) {
+      await start(t, 'SPRINGE');
+      // 1. Touch/coarse-pointer pickup emits 6 ms haptic; fine-pointer desktop mouse does not
+      const r0 = await t.game('act', 'rackTile', 0);
+      await t.page.evaluate(() => { window.__vib.length = 0; });
+      if (t.viewport === 'mobile') {
+        await t.tap([r0[0], r0[1]]);
+        const vTouch = await t.page.evaluate(() => window.__vib.slice());
+        t.expect(vTouch.includes(6), `touch pickup emitted 6 ms pick pulse (${JSON.stringify(vTouch)})`);
+        // Vibration off suppresses the 6 ms pick pulse
+        await t.page.evaluate(() => { window.__G.settings.vibrate = false; window.__vib.length = 0; });
+        const r1 = await t.game('act', 'rackTile', 1);
+        await t.tap([r1[0], r1[1]]);
+        t.equal((await t.page.evaluate(() => window.__vib.length)), 0, 'no pick pulse when vibrate is off');
+        // Reduced motion suppresses the 6 ms pick pulse
+        await t.page.evaluate(() => { window.__G.settings.vibrate = true; window.__G.settings.motion = 'reduce'; window.__vib.length = 0; });
+        const r2 = await t.game('act', 'rackTile', 2);
+        await t.tap([r2[0], r2[1]]);
+        t.equal((await t.page.evaluate(() => window.__vib.length)), 0, 'no pick pulse under reduced motion');
+        await t.page.evaluate(() => { window.__G.settings.motion = 'full'; window.__G.selected = null; });
+      } else {
+        // Desktop mouse (fine pointer) does not fire coarse-pointer pick haptic
+        await t.page.mouse.click(r0[0], r0[1]);
+        t.equal((await t.page.evaluate(() => window.__vib.length)), 0, 'fine-pointer mouse click does not emit coarse pick pulse');
+        // Synthetic touch pointerdown on desktop still emits 6 ms pick pulse when vibrate is enabled
+        await t.page.evaluate(() => {
+          window.__G.selected = null;
+          window.__vib.length = 0;
+          const b = document.querySelector('#rack .rtile[data-pos="1"]');
+          const rc = b.getBoundingClientRect();
+          b.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 91, pointerType: 'touch', isPrimary: true, clientX: rc.left + rc.width / 2, clientY: rc.top + rc.height / 2, bubbles: true }));
+          window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 91, pointerType: 'touch', isPrimary: true, clientX: rc.left + rc.width / 2, clientY: rc.top + rc.height / 2, bubbles: true }));
+        });
+        const vSynth = await t.page.evaluate(() => window.__vib.slice());
+        t.expect(vSynth.includes(6), `touch pointerdown emitted 6 ms pick pulse (${JSON.stringify(vSynth)})`);
+      }
+      // 2. Quick rackDown / boardDown within 210 ms of returnToRack() cancels returnTimer so #ghost stays visible on the new drag
+      await t.page.clock.install();
+      await t.reload();
+      await start(t, 'SPRINGE');
+      const now0 = await t.page.evaluate(() => Date.now());
+      await t.page.clock.pauseAt(now0 + 500);
+      const t0 = await t.game('act', 'rackTile', 0);
+      const mid = await t.game('act', 'screen', CENTER);
+      // Drag tile 0 off the board into dead space so returnToRack() starts its 210 ms returnTimer
+      await t.page.mouse.move(t0[0], t0[1]);
+      await t.page.mouse.down();
+      await t.page.mouse.move(mid[0], mid[1], { steps: 6 });
+      await t.page.mouse.move(4, 4, { steps: 4 });
+      await t.page.mouse.up();
+      const returningNow = await t.page.evaluate(() => ({ timer: window.__G.returnTimer, returning: window.__G.returning }));
+      t.expect(returningNow.timer > 0 && returningNow.returning != null, 'returnToRack scheduled returnTimer');
+      // 50 ms later (< 210 ms), press another rack tile before exceeding DRAG_PX: rackDown must cancel returnTimer immediately
+      await t.page.clock.runFor(50);
+      const t1 = await t.game('act', 'rackTile', 1);
+      await t.page.mouse.move(t1[0], t1[1]);
+      await t.page.mouse.down();
+      const afterDown = await t.page.evaluate(() => ({ timer: window.__G.returnTimer, returning: window.__G.returning }));
+      t.equal(afterDown.timer, 0, 'rackDown immediately cancelled stale returnTimer before DRAG_PX');
+      t.equal(afterDown.returning, null, 'rackDown immediately cleared G.returning');
+      // Drag past DRAG_PX and advance 250 ms past the old timer window: #ghost must stay visible
+      await t.page.mouse.move(mid[0], mid[1], { steps: 8 });
+      await t.page.clock.runFor(250);
+      const ghostDuringDrag = await t.page.evaluate(() => ({ active: !!(window.__G.drag && window.__G.drag.active), hidden: document.querySelector('#ghost').hidden }));
+      t.expect(ghostDuringDrag.active && !ghostDuringDrag.hidden, 'stale returnTimer never hid fresh drag #ghost');
+      await t.page.mouse.up();
+      // Same check for boardDown cancelling a pending returnTimer immediately
+      await t.page.clock.runFor(50);
+      const t2 = await t.game('act', 'rackTile', 0);
+      await t.page.mouse.move(t2[0], t2[1]); await t.page.mouse.down();
+      await t.page.mouse.move(mid[0], mid[1], { steps: 6 });
+      await t.page.mouse.move(4, 4, { steps: 4 }); await t.page.mouse.up();
+      t.expect((await t.page.evaluate(() => window.__G.returnTimer)) > 0, 'second returnToRack scheduled returnTimer');
+      await t.page.clock.runFor(40);
+      const stPt = await t.game('act', 'screen', CENTER);
+      await t.page.mouse.move(stPt[0], stPt[1]); await t.page.mouse.down();
+      t.equal(await t.page.evaluate(() => window.__G.returnTimer), 0, 'boardDown immediately cancelled stale returnTimer');
+      await t.page.mouse.up();
+    },
+  },
 ];
