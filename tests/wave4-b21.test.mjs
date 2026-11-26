@@ -97,4 +97,54 @@ export const tests = [
       t.equal(gameLm.h1Text, 'Bathhouse Letters', 'Active game exposes sr-only <h1>Bathhouse Letters</h1>');
     },
   },
+  {
+    name: 'W5-S2-22 icon-only topbar controls mirror aria-label into title tooltips and sync on sound/zoom toggle',
+    viewports: ['desktop', 'mobile'],
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false }));
+    },
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 2 });
+      await t.waitIdle(6000);
+      const readControls = () => t.page.evaluate(() => {
+        const out = {};
+        for (const id of ['b-menu', 'b-zoomin', 'b-zoom', 'b-sound']) {
+          const el = document.getElementById(id);
+          out[id] = el ? { aria: el.getAttribute('aria-label'), title: el.getAttribute('title') } : null;
+        }
+        return out;
+      });
+      const initial = await readControls();
+      t.equal(initial['b-menu'].title, 'Menu (Esc)', '#b-menu title matches Menu (Esc)');
+      t.equal(initial['b-menu'].title, initial['b-menu'].aria, '#b-menu title mirrors aria-label');
+      t.equal(initial['b-zoom'].title, 'Show the whole board', '#b-zoom title matches Show the whole board');
+      t.equal(initial['b-zoom'].title, initial['b-zoom'].aria, '#b-zoom title mirrors aria-label');
+      t.equal(initial['b-zoomin'].title, 'Zoom in on the board', '#b-zoomin initial title matches Zoom in on the board');
+      t.equal(initial['b-zoomin'].title, initial['b-zoomin'].aria, '#b-zoomin initial title mirrors aria-label');
+      t.equal(initial['b-sound'].title, 'Sound off (click to unmute)', '#b-sound initial title reflects muted state');
+      t.equal(initial['b-sound'].title, initial['b-sound'].aria, '#b-sound initial title mirrors aria-label');
+
+      // Toggle sound on -> title and aria-label both update
+      await t.page.click('#b-sound');
+      const soundOn = await readControls();
+      t.equal(soundOn['b-sound'].title, 'Sound on (click to mute)', '#b-sound title updates when unmuted');
+      t.equal(soundOn['b-sound'].title, soundOn['b-sound'].aria, '#b-sound title mirrors aria-label after toggle on');
+      await t.page.click('#b-sound');
+      const soundOff = await readControls();
+      t.equal(soundOff['b-sound'].title, 'Sound off (click to unmute)', '#b-sound title updates when muted again');
+
+      // Toggle zoom -> #b-zoomin title and aria-label both update
+      await t.game('act', 'zoom', 1.7);
+      const zoomedIn = await readControls();
+      t.equal(zoomedIn['b-zoomin'].title, 'Show the whole board', '#b-zoomin title updates to Show the whole board when zoomed');
+      t.equal(zoomedIn['b-zoomin'].title, zoomedIn['b-zoomin'].aria, '#b-zoomin title mirrors aria-label when zoomed');
+      t.equal(zoomedIn['b-zoom'].title, 'Show the whole board', '#b-zoom keeps Show the whole board title when visible');
+      await t.game('act', 'zoom', 1);
+      const zoomedOut = await readControls();
+      t.equal(zoomedOut['b-zoomin'].title, 'Zoom in on the board', '#b-zoomin title returns to Zoom in on the board at 1x');
+      t.equal(zoomedOut['b-zoomin'].title, zoomedOut['b-zoomin'].aria, '#b-zoomin title mirrors aria-label at 1x');
+    },
+  },
 ];

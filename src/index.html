@@ -12,10 +12,10 @@
 <main id="app" hidden>
   <h1 class="sr-only">Bathhouse Letters</h1>
   <header id="topbar">
-    <button id="b-menu" class="iconbtn" aria-label="Menu (Esc)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+    <button id="b-menu" class="iconbtn" aria-label="Menu (Esc)" title="Menu (Esc)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
     <div id="turnline" aria-live="off"></div>
-    <button id="b-zoomin" class="iconbtn" aria-label="Zoom in on the board" data-mode="in"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path class="zin" d="M10.5 7.5v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-    <button id="b-sound" class="iconbtn" aria-label="Sound"></button>
+    <button id="b-zoomin" class="iconbtn" aria-label="Zoom in on the board" title="Zoom in on the board" data-mode="in"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path class="zin" d="M10.5 7.5v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <button id="b-sound" class="iconbtn" aria-label="Sound" title="Sound"></button>
   </header>
   <section id="scores" aria-label="Scores"></section>
   <section id="springs" aria-label="Featured Springs"></section>
@@ -23,7 +23,7 @@
     <canvas id="gl" aria-hidden="true" hidden></canvas>
     <canvas id="board" tabindex="0" role="application" aria-label="Game board, 15 by 15 squares. Use the arrow keys to move the cursor, type letters to place tiles, Space to switch direction and Enter to play."></canvas>
     <canvas id="fx" aria-hidden="true"></canvas>
-    <button id="b-zoom" class="iconbtn small" aria-label="Show the whole board" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <button id="b-zoom" class="iconbtn small" aria-label="Show the whole board" title="Show the whole board" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
   </div>
   <div id="preview"></div>
   <div id="toast" aria-hidden="true"></div>

@@ -113,7 +113,13 @@ function applySettings() {
     cancelScoreRoll(); endFlip(); endReturn(); clearPlaqueFx();
     if (G.viewAnim) { R.view.zoom = G.viewAnim.to.zoom; R.view.cx = G.viewAnim.to.cx; R.view.cy = G.viewAnim.to.cy; G.viewAnim = null; R.clampView(); }
   }
-  const sb = $('#b-sound'); if (sb) { sb.innerHTML = UI.ICON.sound(st.sound); sb.setAttribute('aria-label', st.sound ? 'Sound on (click to mute)' : 'Sound off (click to unmute)'); }
+  const sb = $('#b-sound');
+  if (sb) {
+    const lbl = st.sound ? 'Sound on (click to mute)' : 'Sound off (click to unmute)';
+    sb.innerHTML = UI.ICON.sound(st.sound);
+    sb.setAttribute('aria-label', lbl);
+    sb.setAttribute('title', lbl);
+  }
   R.invalidateBoardTexture();
   R.invalidateTileCache();
   if (B3.B3.on) B3.setTheme(dark() ? 'dark' : 'light');
@@ -2151,7 +2157,9 @@ function syncZoomBtn() {
   const out = R.view.zoom > 1.01, b = $('#b-zoomin');
   $('#b-zoom').hidden = !out || isNarrow();
   b.dataset.mode = out ? 'out' : 'in';
-  b.setAttribute('aria-label', out ? 'Show the whole board' : 'Zoom in on the board');
+  const lbl = out ? 'Show the whole board' : 'Zoom in on the board';
+  b.setAttribute('aria-label', lbl);
+  b.setAttribute('title', lbl);
 }
 // zoom in on what the player is working on: the tiles they have placed, else the last play, else the Display Spring
 function zoomInAt() {
