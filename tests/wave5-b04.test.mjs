@@ -36,6 +36,8 @@ export const tests = [
       t.equal(report.includes('Nobody has listened to the sound'), false, 'REPORT.md drops stale nobody-listened note');
       t.expect(report.includes('OQ-WF7-W3-06'), 'REPORT.md cites owner music approval OQ-WF7-W3-06');
       t.expect(report.includes('X4122'), 'REPORT.md retains CD-WF6-01 Windows ANGLE X4122 note');
+      // W5-B05-hotfix follow-up 4 (OQ-WF7-W5-03): REPORT.md keeps measured facts; pipeline audit scores stay in the run folder
+      t.equal(/WF-6[^\n]*audit|`PASS` on Vision|Agency \(`?\d/.test(report), false, 'REPORT.md quotes no WF-6 audit scores or verdicts');
 
       // PRD.md: honed travertine / twilight Night marble and 18 vignettes
       t.expect(/honed warm travertine marble/i.test(prd) && /twilight/i.test(prd), 'PRD.md describes honed travertine and twilight Night marble');

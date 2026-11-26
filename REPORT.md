@@ -76,8 +76,7 @@ Hot Springs bonuses come to 3.5–7.2 % of AI points under tier-scaled lexicon f
 An early six-loop review against Bathhouse Barons took the initial baseline from 43 to **52.5/80** (`VISUAL-REPORT.md`,
 `reviews/HISTORY.md`). Subsequent pipeline Waves 1–5 superseded that baseline with honed warm travertine and twilight Night
 marble, brass-bezel painted Bathhouse Row medallions, tightened 3D desktop framing, collapsible mobile Featured Springs
-bar, and owner-approved OpenAI/Gemini art updates (`title.webp`, `card-club.webp`, and seamless `terrazzo.webp`), earning
-`PASS` on Vision (`8.5`), Agency (`8.0`), and Discovery (`8.0`) in the WF-6 round-2 audit.
+bar, and owner-approved OpenAI/Gemini art updates (`title.webp`, `card-club.webp`, and seamless `terrazzo.webp`).
 
 ## v1.1.1: stuck tiles
 Players on iPhone and iPad reported tiles that got stuck: lifted but never landing, or gone from the rack. A new
