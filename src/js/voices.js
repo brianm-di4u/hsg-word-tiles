@@ -85,3 +85,8 @@ export function endBark(s, seat) {
   const event = s.result.winners.includes(seat) ? 'win' : 'lose', list = lines[event];
   return { event, text: list[base(s, p, event) % list.length] };
 }
+// Persona sonic micro-touchpoint (W4-S5-06): returns the persona id when an opponent speaks a big, themed, or Full Soak bark.
+export function barkCue(bark) {
+  if (!bark || !bark.persona || !BARKS[bark.persona]) return null;
+  return bark.event === 'big' || bark.event === 'themed' || bark.event === 'soak' ? bark.persona : null;
+}

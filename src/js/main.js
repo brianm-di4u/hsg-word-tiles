@@ -10,7 +10,7 @@ import { art, loadArt } from './art.js';
 import { store, KEYS, createGameSaves, validRegister, validDaily, pruneDays } from './storage.js';
 import { startAi, aiMove, aiHint, aiReview, aiDailyPar, aiClient } from './aiclient.js';
 import { PERSONAS, PERSONA_MOTION, persona, personaMotion, LEVEL_NAME, seatLevel } from './personas.js';
-import { barkFor, endBark, greeting, SHORT } from './voices.js';
+import { barkFor, barkCue, endBark, greeting, SHORT } from './voices.js';
 import { cleanStats, applyGame, applyDaily, nextStreak, dayNumber } from './stats.js';
 import * as B3 from './board3d.js';
 import * as UI from './ui.js';
@@ -1031,6 +1031,8 @@ function celebrate(e, bark, wait = 0, prevPlaqueSnap = null, extra = {}) {
   if (themed.length && !e.featured) cue('steam');
   if (extra.fogRevealed) cue('reveal', { delay: 0.14 });
   if (extra.bagJustEmptied) cue('bagempty', { delay: 0.22 });
+  const barkWho = barkCue(bark);
+  if (barkWho) cue('bark', { persona: barkWho, delay: 0.12 });
   if (e.full) { tell({ kind: 'soak', who, title: `Full Soak! +${FULL_SOAK}`, sub: quote('soak') || `${p.name} used all seven tiles.` }); cue('chime', { delay: STING_LAG }); }   // the chime follows the play (and a Featured Spring's bell) by a beat, so they do not stack at full volume
   // one sting a play: a Featured Spring or a Full Soak has its own, then a word new to the Register, then the size of the score
   const done = p.kind === 'human' ? UI.categoriesCompleted(G.lex, register(), e.words) : [];

@@ -3,7 +3,9 @@
 //   covering menu/Setup/Help tabs/plaque/Breakdown clicks, Swap tile toggles, Blank letter picks, and closeDialog()/back().
 // - W4-S5-05: independent Ambience level slider via kit.amb.level(st.ambVol) (OQ-WF6-03, default 100%) and Night-theme
 //   amb.set('night', dark() ? 1 : 0, 2) low-pass warmth, softened drip/steam cadence, and ultra-faint <=2800 Hz transom pulse (CD-WF4-05).
+// - W4-S5-06: whisper-quiet persona-colored grace cues on big/themed/soak opponent barks (completing 6ed2eb1 W2-S3-05 and d83c153 W4-S1-06 for B3.bell).
 import { makeAudioKit, SCENES } from '../src/js/music.js';
+import { barkCue } from '../src/js/voices.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const seeded = (seed) => new Function(`
@@ -311,6 +313,87 @@ export const tests = [
         t.expect(nightBed.peak < 0.07 && nightBed.rmsDb >= -54 && nightBed.rmsDb <= -38, `Night bed stays quiet and warm (peak=${nightBed.peak}, rms=${nightBed.rmsDb} dB)`);
         t.expect(nightFull.peak < 0.88, `Night bed stays unclipped at full volume (peak=${nightFull.peak})`);
       }
+    },
+  },
+
+  // ---------- W4-S5-06 ----------
+  {
+    name: 'W4-S5-06 barkCue gates persona grace cues strictly to big/themed/soak barks of the four town opponents (Node)',
+    node: true,
+    async run(t) {
+      for (const p of ['opal', 'hollis', 'lucky', 'julian']) {
+        for (const ev of ['big', 'themed', 'soak']) t.equal(barkCue({ persona: p, event: ev }), p, `${p} ${ev} triggers persona grace cue`);
+        for (const ev of ['open', 'pass', 'out', 'win', 'lose']) t.equal(barkCue({ persona: p, event: ev }), null, `${p} ${ev} stays quiet`);
+      }
+      t.equal(barkCue(null), null, 'null bark returns null');
+      t.equal(barkCue({ persona: 'unknown', event: 'big' }), null, 'unknown persona returns null');
+    },
+  },
+  {
+    name: 'W4-S5-06 all four opponent persona bark cues are whisper-quiet, distinct, unclipped in full-volume mixes, and fire on live AI themed/big barks (completing 6ed2eb1/d83c153)',
+    viewports: ['desktop'],
+    initScript: seeded(29),
+    async run(t) {
+      await ready(t);
+      const med = (xs) => [...xs].sort((a, b) => a - b)[xs.length >> 1];
+      const byPersona = {};
+      const lines = [];
+      for (const persona of ['opal', 'hollis', 'lucky', 'julian']) {
+        const defs = [], fulls = [];
+        for (let k = 0; k < 10; k++) {
+          defs.push(await t.game('act', 'renderSfx', 'bark', 0.35, { persona }));
+          fulls.push(await t.game('act', 'renderSfx', 'bark', 1.0, { persona }));
+        }
+        const mDef = med(defs.map((r) => r.peak));
+        const mZc = med(defs.map((r) => r.zc));
+        const maxPre = Math.max(...fulls.map((r) => r.prePeak));
+        const maxMs = Math.max(...defs.map((r) => r.ms));
+        byPersona[persona] = { mDef, mZc, maxPre, maxMs };
+        lines.push(`${persona}: med=${mDef.toFixed(3)}, zc=${mZc}, fullPre=${maxPre}, ${maxMs}ms`);
+        t.expect(mDef >= 0.06 && mDef <= 0.16, `${persona} bark grace peak in [0.06, 0.16] (${mDef.toFixed(3)})`);
+        t.expect(maxPre < 0.88, `${persona} bark solo full-volume prePeak < 0.88 (${maxPre})`);
+        t.expect(maxMs < 450, `${persona} bark grace is brief (${maxMs} ms)`);
+      }
+      t.log(lines.join(' | '));
+      // Spectral distinction across personas: Hollis's low wooden trail-block has clearly lower zc than Opal's porcelain droplet & Julian's 3-note turn
+      t.expect(byPersona.hollis.mZc < byPersona.opal.mZc * 0.75, `Hollis (${byPersona.hollis.mZc} zc) is warmer/lower than Opal (${byPersona.opal.mZc} zc)`);
+      t.expect(byPersona.hollis.mZc < byPersona.julian.mZc * 0.85, `Hollis (${byPersona.hollis.mZc} zc) is distinct from Julian (${byPersona.julian.mZc} zc)`);
+      t.expect(new Set(Object.values(byPersona).map((x) => Math.round(x.mZc / 15))).size >= 3, 'four personas span distinct spectral signatures');
+
+      // Full-volume busy gameplay mixes with persona bark stay strictly under 0.95 prePeak
+      for (const combo of ['play+featured@0.28+steam+bark@0.12', 'play+big@0.28+steam+bark@0.12', 'play+chime@0.28+steam+bark@0.12']) {
+        let worst = 0;
+        for (const persona of ['opal', 'hollis', 'lucky', 'julian']) {
+          const r = await t.game('act', 'renderSfx', combo, 1.0, { persona });
+          worst = Math.max(worst, r.prePeak);
+        }
+        t.expect(worst < 0.95, `full-volume mix ${combo} stays under 0.95 prePeak (worst=${worst})`);
+      }
+
+      // Live gameplay integration: Opal plays themed word SPRING -> emits bark{persona:'opal'} after place clacks & before yourturn; pass emits no bark
+      await t.page.click('#screen [data-go="setup"]');
+      await t.page.waitForFunction(() => window.__game.audioState().ctx === 'running', null, { timeout: 5000 });
+      t.expect((await t.game('audioState')).reverb.sends.bark <= 0.05, 'bark reverb send <= 5% (CD-WF4-01)');
+
+      await t.game('newGame', { seed: 3, seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'hard' }] });
+      await t.waitIdle(8000);
+      const st = await t.state();
+      st.game.players[1].rack = 'SPRINGX'.split('');
+      await t.game('setState', { game: st.game });
+      await t.waitIdle(5000);
+      const startTot = (await t.game('audioState')).total;
+      await t.game('act', 'pass');
+      await t.page.waitForFunction((n) => {
+        const a = window.__game.audioState();
+        return a.total > n && a.played.slice(a.played.length - (a.total - n)).includes('yourturn');
+      }, startTot, { timeout: 12000 });
+      const a = await t.game('audioState');
+      const delta = a.cues.slice(a.cues.length - (a.total - startTot));
+      const names = delta.map((c) => c.name);
+      const barkEntry = delta.find((c) => c.name === 'bark');
+      t.expect(!!barkEntry && barkEntry.persona === 'opal', `Opal themed play emitted bark{persona:'opal'} (${JSON.stringify(delta)})`);
+      t.expect(names.indexOf('bark') > names.lastIndexOf('place') && names.indexOf('bark') < names.lastIndexOf('yourturn'),
+        `bark fires after tile landing and before yourturn (${names.join(',')})`);
     },
   },
 ];

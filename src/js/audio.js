@@ -11,7 +11,7 @@ const DEFAULT_VOL = 0.35;
 const CUE_GAIN = 6;
 // bells and steam are the loudest cues: a little less so they do not outrun the tile sounds (featured was 0.6: a play
 // that finds a Featured Spring peaked at up to 0.98 with the volume at full, so the bell is 3 dB quieter)
-const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, unpick: 1.4, tick: 1.05, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 1.1, hint: 0.92, yourturn: 1.3, good: 1.8, big: 0.57, discover: 0.6, defeat: 0.9, prompt: 1.2, reveal: 0.85, bagempty: 0.5, bell: 0.5, uiTap: 1.0, uiTile: 1.0, uiClose: 1.0 };
+const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, unpick: 1.4, tick: 1.05, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 1.1, hint: 0.92, yourturn: 1.3, good: 1.8, big: 0.57, discover: 0.6, defeat: 0.9, prompt: 1.2, reveal: 0.85, bagempty: 0.5, bell: 0.5, uiTap: 1.0, uiTile: 1.0, uiClose: 1.0, bark: 1.0 };
 const masterMus = (vol = audio.vol) => Math.min(1.5, vol / DEFAULT_VOL);   // the Volume slider moves the music and bed together; their own sliders move kit.music.level and kit.amb.level independently
 // Above the shipped volume the cues rise more gently than the slider: to about twice the shipped level at full, not
 // 2.9 times. With the slider at full the loudest repeats of steam and place overshot the limiter and clipped (peaks
@@ -30,7 +30,7 @@ const REV_SEC = 0.24;
 export const REV_SEND = {
   steam: 0,
   open: 0.02, tick: 0.02, uiTap: 0.02, uiTile: 0.03, uiClose: 0.02, swap: 0.04, turn: 0.04, yourturn: 0.04, prompt: 0.04,
-  good: 0.05, big: 0.05, reveal: 0.05,
+  good: 0.05, big: 0.05, reveal: 0.05, bark: 0.05,
   place: 0.08, play: 0.09, pick: 0.09, unpick: 0.09, recall: 0.09, shuffle: 0.09, error: 0.09,
   chime: 0.18, featured: 0.18, discover: 0.18, fanfare: 0.18, hint: 0.17, bell: 0.18, bagempty: 0.16, defeat: 0.16,
 };
@@ -223,6 +223,7 @@ export function sfx(name, opts = {}) {
     if (opts.tiles != null) entry.tiles = opts.tiles;
     if (opts.sq) entry.sq = opts.sq;
     if (opts.step) entry.step = opts.step;
+    if (opts.persona) entry.persona = opts.persona;
     audio.played.push(name); audio.cues.push(entry); audio.total++;
     if (audio.played.length > 30) { audio.played.shift(); audio.cues.shift(); }
   }
@@ -335,6 +336,28 @@ export function sfx(name, opts = {}) {
       case 'big': [523, 659, 784, 1047].forEach((f, k) => tone(f, t + k * 0.065, 0.28, 'triangle', 0.05)); tone(98, t, 0.3, 'sine', 0.16, -30); break;
       // the first time a person signs a Hot Springs word into the Register: two bells, the second a fifth above
       case 'discover': bell(t, 784, 0.08); bell(t + 0.16, 1175, 0.08); break;
+      // Whisper-quiet diegetic persona grace cues on big/themed/soak opponent barks (W4-S5-06):
+      // opal: warm bath droplet/porcelain; hollis: low wooden trail-block; lucky: ticket snap + muted brass fifth; julian: 3-note parlor jazz turn.
+      case 'bark': {
+        const who = opts.persona || 'opal';
+        if (who === 'hollis') {
+          tone(294, t, 0.095, 'triangle', 0.058, 0, { a: 0.004, d: 0.03, s: 0.35, lp: 920, lpTo: 420 });
+          tone(440, t + 0.08, 0.13, 'triangle', 0.052, 0, { a: 0.004, d: 0.04, s: 0.3, lp: 1050, lpTo: 480 });
+        } else if (who === 'lucky') {
+          noise(t, 0.018, 0.055, 3100, 2.8, 'bandpass', 0.002);
+          tone(392, t + 0.014, 0.065, 'sawtooth', 0.034, 0, { a: 0.004, lp: 1700, lpTo: 900 });
+          tone(587, t + 0.068, 0.12, 'sawtooth', 0.038, 0, { a: 0.005, lp: 2100, lpTo: 1050 });
+        } else if (who === 'julian') {
+          tone(440, t, 0.065, 'triangle', 0.044, 0, { a: 0.005, lp: 1750 });
+          tone(554, t + 0.058, 0.07, 'triangle', 0.046, 0, { a: 0.005, lp: 1850 });
+          tone(659, t + 0.118, 0.145, 'sine', 0.048, 0, { a: 0.006, lp: 2100 });
+        } else {
+          tone(1180, t, 0.045, 'sine', 0.042, -260, { a: 0.004, lp: 2200 });
+          tone(880, t + 0.055, 0.14, 'sine', 0.048, 0, { a: 0.006, lp: 1800 });
+          tone(1320, t + 0.085, 0.12, 'sine', 0.026, 0, { a: 0.006, lp: 2200 });
+        }
+        break;
+      }
       case 'fanfare': [523, 659, 784, 1047].forEach((f, k) => bell(t + k * 0.14, f, 0.08)); break;
     }
     if (DUCK[name] && audio.kit && c === audio.live) audio.kit.music.duck(DUCK[name][0], DUCK[name][1], opts.delay || 0);
