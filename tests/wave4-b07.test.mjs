@@ -1,4 +1,5 @@
-// Wave 4, batch W4-B07 (WF-2 agency funnels): W2-S1-15 (the live strip raised over a resting ledger). W2-S2-13 (square tips while staging, 2140f72) and W2-S4-03 (the table's greeting, 9027d7d) were already built and keep their tests.
+// Wave 4, batch W4-B07 (WF-2 agency funnels): W2-S1-15 (the live strip raised over a resting ledger) and W2-S3-11 (double-tap zoom on
+// touch). W2-S2-13 (square tips while staging, 2140f72) and W2-S4-03 (the table's greeting, 9027d7d) were already built and keep their tests.
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => {
   window.__TEST_TIPS__ = false;
@@ -75,6 +76,74 @@ export const tests = [
         await t.game('act', 'recall');
       }
       await t.page.emulateMedia({ colorScheme: 'light' });
+    },
+  },
+  {
+    name: 'W2-S3-11 two quick taps on an empty square zoom in there and two more show the whole board; never with a tile picked or placed, nor for a mouse',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await table(t, 'SPRINGE');
+      const view = async () => (await t.state()).view;
+      const zoomIs = (z) => t.page.waitForFunction((z) => Math.abs(window.__game.getState().view.zoom - z) < 0.001, z, { timeout: 4000 });
+      const pt = (i) => t.game('act', 'screen', i);
+      if (t.viewport === 'desktop') {
+        const [x, y] = await pt(CENTER);
+        await t.page.mouse.dblclick(x, y);
+        await t.waitIdle(3000);
+        t.equal((await view()).zoom, 1, 'a mouse double-click does not zoom');
+        return;
+      }
+      // both taps in one touch session, so they come as quickly as a thumb's
+      const taps = async (a, b = a) => {
+        const cdp = await t.page.context().newCDPSession(t.page);
+        for (const [x, y] of [a, b]) {
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1, radiusX: 4, radiusY: 4, force: 1 }] });
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        }
+        await cdp.detach();
+      };
+      const onBoard = (p) => t.page.evaluate(([x, y]) => { const r = document.querySelector('#board').getBoundingClientRect(); return [x - r.left, y - r.top]; }, p);
+      const cell = CENTER - 3 * 15 - 4;   // an empty square up and to the left of the centre
+      t.equal(await t.game('act', 'cellAt', ...(await onBoard(await pt(cell)))), cell, 'the taps land on the chosen square');
+      await taps(await pt(cell));
+      await zoomIs(1.7);
+      const v = await view(), U = 15 + 2 * 0.38;
+      t.expect(v.cx < U / 2 - 1 && v.cy < U / 2 - 1, `zoomed in toward the tapped square, up and to the left (view centre ${v.cx.toFixed(2)},${v.cy.toFixed(2)}; the board's ${(U / 2).toFixed(2)})`);
+      const [x, y] = await onBoard(await pt(cell)), box = await t.page.evaluate(() => { const r = document.querySelector('#board').getBoundingClientRect(); return [r.width, r.height]; });
+      t.expect(x > 0 && y > 0 && x < box[0] && y < box[1], `and the square is in view (${x.toFixed(0)},${y.toFixed(0)} in ${box[0].toFixed(0)}x${box[1].toFixed(0)})`);
+      await t.page.waitForFunction(() => /zoomed to 170 percent/.test(document.querySelector('#live').textContent), null, { timeout: 3000 });
+      await t.shot('w4-b07-double-tap-in');
+      await taps(await pt(cell));
+      await zoomIs(1);
+      await t.page.waitForFunction(() => /Whole board shown/.test(document.querySelector('#live').textContent), null, { timeout: 3000 });
+
+      // two quick taps four squares apart, and then a single tap, do not zoom
+      await taps(await pt(cell), await pt(cell + 4));
+      await t.waitIdle(3000);
+      t.equal((await view()).zoom, 1, 'two quick taps on different squares do not zoom');
+      await t.tap(await pt(cell));
+      await t.waitIdle(3000);
+      t.equal((await view()).zoom, 1, 'nor does a single tap');
+
+      // a picked-up rack tile: the first tap places it, the second picks it back up; the board never zooms
+      const r = await t.game('act', 'rackTile', 0);
+      await t.tap([r[0], r[1]]);
+      t.equal(await t.page.locator('#rack .rtile.sel').count(), 1, 'a rack tile is picked up');
+      await taps(await pt(CENTER));
+      await t.waitIdle(3000);
+      t.equal((await view()).zoom, 1, 'a double-tap with a tile picked up does not zoom');
+      await t.game('act', 'recall');
+
+      // tiles placed: a double-tap on an empty square only says what it is
+      await t.game('act', 'stage', [{ i: CENTER, l: 'S' }, { i: CENTER + 1, l: 'P' }]);
+      await taps(await pt(62));   // a Warm spring, beside the square zoomed on above
+      await t.waitIdle(3000);
+      const s = await t.state();
+      t.equal(s.view.zoom, 1, 'a double-tap while tiles are placed does not zoom');
+      t.equal(s.staged.length, 2, 'and leaves the placed tiles alone');
+      await t.page.waitForFunction(() => document.querySelector('#preview .sq-tip'), null, { timeout: 3000 });
     },
   },
 ];

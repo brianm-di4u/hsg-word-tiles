@@ -2088,6 +2088,20 @@ function zoomInAt() {
   const [cx, cy] = cells.length ? [cells.reduce((a, i) => a + (i % N), 0) / cells.length, cells.reduce((a, i) => a + Math.floor(i / N), 0) / cells.length] : [CENTER % N, Math.floor(CENTER / N)];
   animateView(ZOOM_IN, R.FRAME + cx + 0.5, R.FRAME + cy + 0.5);
 }
+// W2-S3-11: on a touch screen two quick taps on the same empty square zoom in there, or show the whole board again. Never
+// while a rack tile is picked up or tiles are placed, so placing a word cannot zoom by accident.
+const DOUBLE_TAP_MS = 350, DOUBLE_TAP_PX = 24;
+let lastTap = null;
+function doubleTapZoom(d, e, i) {
+  if (!d.touch || i < 0 || !G.s || G.s.board[i] || G.selected != null || G.staged.length || G.dialog || G.privacy) { lastTap = null; return false; }
+  const now = performance.now(), p = lastTap;
+  lastTap = { t: now, x: e.clientX, y: e.clientY };
+  if (!p || now - p.t > DOUBLE_TAP_MS || Math.hypot(e.clientX - p.x, e.clientY - p.y) > DOUBLE_TAP_PX) return false;
+  lastTap = null;
+  if (R.view.zoom > 1.01) { animateView(1, R.U / 2, R.U / 2); liveSay('Whole board shown.'); }
+  else { animateView(ZOOM_IN, R.FRAME + (i % N) + 0.5, R.FRAME + Math.floor(i / N) + 0.5); liveSay(`Board zoomed to ${Math.round(ZOOM_IN * 100)} percent.`); }
+  return true;
+}
 // smooth zoom/pan
 function animateView(zoom, cx, cy, ms = 220) {
   if (!animOn() || G.fast) { R.view.zoom = zoom; R.view.cx = cx; R.view.cy = cy; R.clampView(); layout(); return; }
@@ -2731,6 +2745,7 @@ function onUp(e) {
   if (d.from === 'board') { unstage(d.i); return; }
   const [x, y] = boardPoint(e);
   const i = pick(x, y);
+  if (doubleTapZoom(d, e, i)) return;
   if (G.selected != null && humanCanAct() && i >= 0) {
     const selK = G.selected, fromEl = document.querySelector(`#rack .rtile[data-k="${selK}"]`);
     const fromBox = animOn() && fromEl ? fromEl.getBoundingClientRect() : null;
