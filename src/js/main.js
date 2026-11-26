@@ -2338,8 +2338,6 @@ function plaqueArc(fromCell, plaqueIdx, reason = 'clear') {
 function emitPlaqueArcs(s, entry, prevSnap) {
   if (!s || !entry || entry.kind !== 'play' || !entry.tiles.length || !s.featured.length) return;
   const bathCells = entry.tiles.filter((t) => SQUARES[t.i] === 'B').map((t) => t.i);
-  const themedWords = (entry.words || []).filter((w) => w.themed);
-  const themedCats = new Set(themedWords.map((w) => G.lex.byId.get(w.themed)?.cat).filter(Boolean));
   const midCell = entry.tiles[Math.floor(entry.tiles.length / 2)].i;
   const originFor = (preferRow) => (preferRow && bathCells.length ? bathCells[0] : midCell);
   const fired = new Set();
@@ -2347,11 +2345,23 @@ function emitPlaqueArcs(s, entry, prevSnap) {
     s.featured.forEach((f, k) => {
       const p = prevSnap[k]; if (!p) return;
       if (f.by != null && p.by == null) { fired.add(k); plaqueArc(originFor(false), k, 'claim'); }
-      else if (f.shown.length > p.shown) { fired.add(k); plaqueArc(originFor(bathCells.length > 0), k, bathCells.length ? 'row' : themedCats.has(f.cat) ? 'themed' : 'clear'); }
     });
+  } else {
+    const claimedFeats = Array.isArray(entry.featuredAll) && entry.featuredAll.length ? entry.featuredAll : (entry.featured ? [entry.featured] : []);
+    for (const fw of claimedFeats) {
+      const k = s.featured.findIndex((f) => f.word === fw);
+      if (k >= 0 && !fired.has(k)) { fired.add(k); plaqueArc(originFor(false), k, 'claim'); }
+    }
   }
-  if (!fired.size && bathCells.length) { const k = s.featured.findIndex((f) => f.by == null); if (k >= 0) { fired.add(k); plaqueArc(bathCells[0], k, 'row'); } }
-  if (!fired.size && themedCats.size) s.featured.forEach((f, k) => { if (f.by == null && themedCats.has(f.cat) && !fired.has(k)) { fired.add(k); plaqueArc(midCell, k, 'themed'); } });
+  // W6-S2-03: board-origin arcs fire strictly for player-caused claim/row/themed triggers; passive clearFog() animates locally via .fog-clear.
+  if (Array.isArray(entry.revealed)) {
+    for (const rev of entry.revealed) {
+      if (rev.k < 0 || rev.k >= s.featured.length || fired.has(rev.k)) continue;
+      if (rev.reason !== 'row' && rev.reason !== 'themed') continue;
+      fired.add(rev.k);
+      plaqueArc(originFor(rev.reason === 'row'), rev.k, rev.reason);
+    }
+  }
 }
 function plaqueTargetPoint(plaqueIdx) {
   const fx = $('#fx'); if (!fx) return [R.view.W - 14, 24];

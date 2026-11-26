@@ -152,7 +152,9 @@ export function apply(s, action, ctx) {
     s.scoreless = ev.score > 0 ? 0 : s.scoreless + 1;
     draw(s, p);
     // W1-S4-01: playing any Hot Springs word in an unclaimed plaque's category immediately clears +1 fogged letter on that plaque.
+    // W6-S2-03: record player-caused plaque reveals explicitly so board-to-plaque arcs fire only for claim/row/themed, never passive clearFog().
     const revealedThisPlay = new Set();
+    const revealed = [];
     if (ctx.lex && s.featured.length) {
       const cats = new Set();
       for (const w of ev.words) {
@@ -160,9 +162,12 @@ export function apply(s, action, ctx) {
         const en = ctx.lex.byId.get(w.themed);
         if (en && en.cat) cats.add(en.cat);
       }
-      for (const f of s.featured) {
-        if (f.by == null && cats.has(f.cat) && revealOneLetter(s, f)) revealedThisPlay.add(f);
-      }
+      s.featured.forEach((f, k) => {
+        if (f.by == null && cats.has(f.cat) && revealOneLetter(s, f)) {
+          revealedThisPlay.add(f);
+          revealed.push({ k, reason: 'themed' });
+        }
+      });
     }
     // W1-S2-11: covering an uncovered Bathhouse Row medallion with any valid word (non-scoring on plain words per CD-WF1-03;
     // Hot Springs words keep their +20 ROW_BONUS per CD-WF0-09) clears +1 fogged letter on an unclaimed Featured Spring plaque.
@@ -174,10 +179,15 @@ export function apply(s, action, ctx) {
         if (!eligible.length) break;
         const fresh = eligible.filter((f) => !revealedThisPlay.has(f));
         const pool = (fresh.length ? fresh : eligible).slice().sort((a, b) => (b.shown.length / b.word.length) - (a.shown.length / a.word.length));
-        if (revealOneLetter(s, pool[0])) { rowReveals++; revealedThisPlay.add(pool[0]); }
+        if (revealOneLetter(s, pool[0])) {
+          rowReveals++;
+          revealedThisPlay.add(pool[0]);
+          revealed.push({ k: s.featured.indexOf(pool[0]), reason: 'row' });
+        }
       }
     }
     if (rowReveals > 0) entry.rowReveal = rowReveals;
+    if (revealed.length) entry.revealed = revealed;
   } else if (action.type === 'swap') {
     const letters = action.letters || [];
     if (!letters.length) return { ok: false, error: 'Choose tiles to swap.' };
