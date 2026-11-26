@@ -257,4 +257,115 @@ export const tests = [
       }
     },
   },
+
+  // ---------- W5-S4-06 ----------
+  {
+    name: 'W5-S4-06 damped 260ms walnut-knock #preview.shake decay (-5/+4/-2.5/+1/0), skippable finishGame overTimer (138cd53), and zero-border #boardwrap.coach-target',
+    viewports: ['desktop', 'mobile'],
+    initScript: () => {
+      window.__TEST_TIPS__ = true;
+      localStorage.clear();
+      localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false, motion: 'full', tipsSeen: false }));
+    },
+    async run(t) {
+      await ready(t);
+      await t.seed(7);
+      await t.game('newGame', { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(6000);
+
+      // 1) Coarse #boardwrap.coach-target border/pulse stays removed (W2-S5-01)
+      const coach = await t.page.evaluate(() => {
+        const bw = document.querySelector('#boardwrap');
+        const cs = getComputedStyle(bw);
+        return {
+          hasClass: bw.classList.contains('coach-target'),
+          outlineW: parseFloat(cs.outlineWidth) || 0,
+          anim: cs.animationName,
+        };
+      });
+      t.equal(coach.hasClass, true, 'coach still marks #boardwrap for S2-01 semantics');
+      t.equal(coach.outlineW, 0, '#boardwrap.coach-target has zero coarse outer outline');
+      t.equal(coach.anim, 'none', '#boardwrap.coach-target has zero whole-board pulse');
+
+      // 2) Invalid play triggers 260ms damped walnut-knock shake (-5px / +4px / -2.5px / +1px / 0)
+      const s = await t.state();
+      s.game.players[0].rack = 'QXZBCDE'.split('');
+      await t.game('setState', { game: s.game });
+      await t.waitIdle(4000);
+      await t.game('act', 'stage', [{ i: 111, l: 'Q' }, { i: 112, l: 'X' }, { i: 113, l: 'Z' }]);
+      await t.game('act', 'play');
+
+      const shakeSamples = await t.page.evaluate(() => {
+        const el = document.querySelector('#preview');
+        const cs = getComputedStyle(el);
+        const anim = el.getAnimations().find((a) => a.animationName === 'shake');
+        if (!anim) return { hasShake: el.classList.contains('shake'), dur: cs.animationDuration, found: false };
+        anim.pause();
+        const ms = parseFloat(cs.animationDuration) * 1000;
+        const txAt = (frac) => {
+          anim.currentTime = ms * frac;
+          const m = getComputedStyle(el).transform;
+          if (!m || m === 'none') return 0;
+          const parts = m.match(/matrix\(([^)]+)\)/);
+          return parts ? +parseFloat(parts[1].split(',')[4]).toFixed(2) : 0;
+        };
+        const out = {
+          hasShake: el.classList.contains('shake'),
+          dur: cs.animationDuration,
+          found: true,
+          p0: txAt(0),
+          p18: txAt(0.18),
+          p40: txAt(0.40),
+          p62: txAt(0.62),
+          p82: txAt(0.82),
+          p100: txAt(1),
+        };
+        anim.finish();
+        return out;
+      });
+      t.equal(shakeSamples.hasShake, true, '#preview received .shake on invalid play');
+      t.equal(shakeSamples.dur, '0.26s', '#preview.shake duration is 260ms (0.26s)');
+      t.expect(shakeSamples.found, 'Web Animations captured shake keyframes');
+      t.expect(Math.abs(shakeSamples.p0) < 0.1 && Math.abs(shakeSamples.p100) < 0.1, `shake starts and settles at 0px (${shakeSamples.p0}, ${shakeSamples.p100})`);
+      t.expect(shakeSamples.p18 <= -4.5 && shakeSamples.p18 >= -5.5, `18% peak is ~-5px (got ${shakeSamples.p18})`);
+      t.expect(shakeSamples.p40 >= 3.5 && shakeSamples.p40 <= 4.5, `40% peak is ~+4px (got ${shakeSamples.p40})`);
+      t.expect(shakeSamples.p62 <= -2.0 && shakeSamples.p62 >= -3.0, `62% peak is ~-2.5px (got ${shakeSamples.p62})`);
+      t.expect(shakeSamples.p82 >= 0.5 && shakeSamples.p82 <= 1.5, `82% peak is ~+1px (got ${shakeSamples.p82})`);
+      t.expect(Math.abs(shakeSamples.p18) > Math.abs(shakeSamples.p40) && Math.abs(shakeSamples.p40) > Math.abs(shakeSamples.p62) && Math.abs(shakeSamples.p62) > Math.abs(shakeSamples.p82),
+        `strictly damped decay (|${shakeSamples.p18}| > |${shakeSamples.p40}| > |${shakeSamples.p62}| > |${shakeSamples.p82}|)`);
+
+      // Under reduced motion, shake animation is disabled
+      await t.page.evaluate(() => document.body.classList.add('reduce'));
+      t.equal(await t.page.$eval('#preview', (el) => getComputedStyle(el).animationName), 'none', '#preview.shake disabled under body.reduce');
+      await t.page.evaluate(() => document.body.classList.remove('reduce'));
+
+      // 3) finishGame() 900ms overTimer stays cancellable & skippable via Space (138cd53 still holds)
+      await t.game('act', 'recall');
+      await t.page.clock.install();
+      await t.reload();
+      await ready(t);
+      await t.seed(7);
+      await t.game('newGame', { seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }] });
+      await t.waitIdle(6000);
+      const st2 = await t.state();
+      const g = st2.game;
+      g.board = g.board.map(() => null);
+      g.board[111] = { l: 'C', blank: false }; g.board[112] = { l: 'A', blank: false }; g.board[113] = { l: 'T', blank: false };
+      g.bag = []; g.move = 10; g.cur = 0;
+      g.players[0].rack = ['S']; g.players[0].score = 100;
+      g.players[1].rack = ['E']; g.players[1].score = 80;
+      await t.game('setState', { game: g });
+      await t.waitIdle(4000);
+      const now0 = await t.page.evaluate(() => Date.now());
+      await t.page.clock.pauseAt(now0 + 500);
+      await t.game('act', 'stage', [{ i: 114, l: 'S' }]);
+      await t.game('act', 'play');
+      await t.page.clock.runFor(200);
+      t.equal(await t.page.evaluate(() => window.__G.scene === 'game' && !!window.__G.overTimer), true, 'finishGame scheduled cancellable 900ms overTimer');
+      await t.page.keyboard.press('Space');
+      t.equal((await t.state()).scene, 'over', 'Space skipped 900ms overTimer straight to Game Over');
+      t.equal(await t.page.evaluate(() => window.__G.overTimer), 0, 'overTimer cleared cleanly');
+      await t.page.clock.resume();
+    },
+  },
 ];
