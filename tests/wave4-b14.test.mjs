@@ -1,5 +1,5 @@
-// Wave 4, batch W4-B14 (WF-3 modular_economy): W3-S4-04 (stained-glass Smart Transforms).
-import { SQUARE, N } from '../src/js/score.js';
+// Wave 4, batch W4-B14 (WF-3 modular_economy): W3-S4-04 (stained-glass Smart Transforms) & W3-S4-05 (2x DPR cap, bucketed 2D tileCache, idle steamLoop RAF halt).
+import { SQUARE, N, CENTER } from '../src/js/score.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => {
@@ -154,6 +154,101 @@ export const tests = [
       t.expect(audit.pixelVariety.s.variedPeers >= 6 && audit.pixelVariety.s.maxDiff >= 25, `Steam (s) outer glass ring pixels vary across squares (${audit.pixelVariety.s.variedPeers}/11 peers differ, maxDiff=${audit.pixelVariety.s.maxDiff})`);
 
       await t.shot('w4-b14-glass-transforms', { timeout: 15000 });
+    },
+  },
+  // ---------- W3-S4-05 ----------
+  {
+    name: 'W3-S4-05 caps #board/#fx/rack canvas DPR at 2x on 3x phones, allocates zero new 2D tileCache sprites during drop/settle animations, and halts idle steamLoop RAF',
+    viewports: ['mobile'],
+    url: 'index.html?gl=0',
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      Object.defineProperty(window, 'devicePixelRatio', { value: 3, configurable: true });
+      if (!localStorage.getItem('hs-letters-settings-v1')) {
+        localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false, motion: 'full' }));
+      }
+    },
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 41, seats: [{ kind: 'human', name: 'You' }, { kind: 'human', name: 'P2' }] });
+      await t.waitIdle(8000);
+      await t.game('act', 'reveal');
+
+      // 1) Verify 2x DPR cap on 3x devicePixelRatio phone (#board, #fx, and #rack tiles all capped at 2x matching board3d.js)
+      const dprCheck = await t.page.evaluate(() => {
+        const bw = document.getElementById('boardwrap');
+        const bd = document.getElementById('board');
+        const fx = document.getElementById('fx');
+        const rc = document.querySelector('#rack .rtile canvas');
+        const rb = document.querySelector('#rack .rtile');
+        return {
+          winDpr: window.devicePixelRatio,
+          wrapW: bw.clientWidth,
+          wrapH: bw.clientHeight,
+          boardW: bd.width,
+          boardH: bd.height,
+          fxW: fx.width,
+          fxH: fx.height,
+          effDprX: +(bd.width / bw.clientWidth).toFixed(2),
+          effDprY: +(bd.height / bw.clientHeight).toFixed(2),
+          rackCanvasW: rc ? rc.width : 0,
+          rackCssW: rb ? Math.round(rb.getBoundingClientRect().width) : 0,
+        };
+      });
+      t.equal(dprCheck.winDpr, 3, 'test emulates a 3x DPR phone');
+      t.equal(dprCheck.boardW, Math.round(dprCheck.wrapW * 2), `#board width capped at 2x DPR (${dprCheck.boardW} === ${Math.round(dprCheck.wrapW * 2)}, not 3x)`);
+      t.equal(dprCheck.boardH, Math.round(dprCheck.wrapH * 2), `#board height capped at 2x DPR (${dprCheck.boardH} === ${Math.round(dprCheck.wrapH * 2)}, not 3x)`);
+      t.equal([dprCheck.fxW, dprCheck.fxH], [dprCheck.boardW, dprCheck.boardH], '#fx matches 2x-capped #board dimensions');
+      t.expect(dprCheck.effDprX <= 2.01 && dprCheck.effDprY <= 2.01, `effective canvas DPR capped at <= 2 (${dprCheck.effDprX}x${dprCheck.effDprY})`);
+      t.expect(dprCheck.rackCanvasW > 0 && dprCheck.rackCanvasW <= dprCheck.rackCssW * 2 + 2, `rack tile canvas capped at 2x DPR (${dprCheck.rackCanvasW}px for ${dprCheck.rackCssW}px tile)`);
+
+      // 2) Verify zero per-frame tileCache canvas allocations during 2D drop & settle scale animations (sc sweeping through tileAnimPose / stageSettlePose)
+      const st = await t.state();
+      st.game.board[CENTER - 1] = { l: 'S', blank: false };
+      st.game.board[CENTER] = { l: 'P', blank: false };
+      st.game.board[CENTER + 1] = { l: 'A', blank: false };
+      st.game.players[0].rack = ['S', 'P', 'A', 'T', 'E', 'R', 'N'];
+      await t.game('setState', { game: st.game });
+      await t.waitFrames(3);
+      // Warm up staged bucket for 'S' once, then recall
+      await t.game('act', 'stage', [{ i: CENTER + N, l: 'S' }]);
+      await t.waitFrames(3);
+      await t.game('act', 'recall');
+      await t.waitFrames(2);
+
+      // Drive real animated drop (G.anim) + stage settle (G.settle) frames and count canvas allocations
+      const animAllocs = await t.page.evaluate(async (cIdx) => {
+        let made = 0;
+        const real = document.createElement;
+        document.createElement = function (name, ...a) {
+          if (name === 'canvas') made++;
+          return real.call(document, name, ...a);
+        };
+        try {
+          const G = window.__G;
+          const now = performance.now();
+          G.anim.set(cIdx - 1, { t0: now, dur: 220, kind: 'ai', lift: 2.0, roll: 0.08, clacked: true });
+          G.anim.set(cIdx, { t0: now, dur: 220, kind: 'ai', lift: 2.0, roll: -0.06, clacked: true });
+          G.anim.set(cIdx + 1, { t0: now, dur: 220, kind: 'commit' });
+          G.animUntil = now + 240;
+          await window.__game.act('stage', [{ i: cIdx + 15, l: 'S' }]);
+          for (let f = 0; f < 16; f++) {
+            await new Promise((r) => requestAnimationFrame(r));
+          }
+        } finally {
+          document.createElement = real;
+        }
+        return made;
+      }, CENTER);
+      t.equal(animAllocs, 0, `zero offscreen <canvas> allocations during 16 frames of 2D drop + settle scale animations (got ${animAllocs})`);
+
+      // 3) Verify idle steamLoop RAF halts when no particles/sweeps/flashes/arcs are active and all wisp cells are covered
+      await t.page.evaluate(() => {
+        const s = window.__G.s;
+        for (let i = 0; i < 225; i++) if (!s.board[i]) s.board[i] = { l: 'A', blank: false };
+      });
+      await t.page.waitForFunction(() => !window.__game.getState().fx.on && window.__game.getState().fx.parts === 0, null, { timeout: 6000 });
+      t.equal((await t.state()).fx.on, false, 'steamLoop RAF halts cleanly when idle');
     },
   },
 ];

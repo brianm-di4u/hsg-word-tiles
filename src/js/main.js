@@ -1924,7 +1924,7 @@ async function openReview() {
 }
 
 // ---------- layout and drawing ----------
-const dpr = () => Math.min(3, window.devicePixelRatio || 1);
+const dpr = () => Math.min(2, window.devicePixelRatio || 1);
 const isNarrow = () => matchMedia('(max-width: 860px), (max-aspect-ratio: 1/1), (max-height: 520px)').matches;
 // From the width of the grid column the rack sits in, not the rackbar's own width: the rackbar is as wide as the
 // tiles, so measuring it fed the size back into itself and phones crept down to the minimum.
