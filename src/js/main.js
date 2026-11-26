@@ -867,7 +867,8 @@ function aiTileSchedule(tiles, personaId, scale) {
 
 function afterAction(entry, fromAi) {
   const s = G.s;
-  if (G.pendingVfx && G.pendingVfx.say && G.pendingVfx.s === s) G.pendingVfx.say();   // a play made while the last one's tiles were in the air: its banners still show
+  clearToasts();
+  if (G.pendingVfx && G.pendingVfx.say && G.pendingVfx.s === s) G.pendingVfx.say(entry.n);   // a play made while the last one's tiles were in the air: its banners still show
   G.pendingVfx = null;
   cancelTurnTimers();
   const prevPlaqueSnap = G.plaqueSnap && G.plaqueSnap.s === s ? G.plaqueSnap.list : null;
@@ -1004,7 +1005,7 @@ function scoredWordCells(board, tiles, words) {
 // Toasts and effects for a play: Full Soak, Hot Springs words, a Featured Spring.
 // `wait` is the seconds the computer's tiles take to land: audio cues, board VFX, the score pop and the banners hold back until touchdown (W4-S5-13, W5-S3-16).
 function celebrate(e, bark, wait = 0, prevPlaqueSnap = null, extra = {}) {
-  const held = [], tell = (t) => { if (wait > 0) held.push(t); else toast(t); }, say = () => { for (const t of held.splice(0)) toast(t); };
+  const held = [], tell = (t) => { const item = t.turn == null ? { ...t, turn: e.n } : t; if (wait > 0) held.push(item); else toast(item); }, say = (turn) => { for (const t of held.splice(0)) toast(turn == null ? t : { ...t, turn }); };
   if (wait > 0) later(G.s, wait * 1000, () => landClacks(Infinity));   // first in line, so a late frame cannot put the last tile's clack after its own sting
   const s = G.s, cue = (name, opts) => later(s, wait * 1000, () => sfx(name, opts));
   const p = G.s.players[e.p];
@@ -1751,8 +1752,11 @@ function scorePop(e, themed) {
   setTimeout(() => el.remove(), ms + 100);
 }
 
-// Toasts: one at a time, newest on top of the queue; every toast is click/tap-dismissible (fact toasts open the card or dismiss via ×).
+// Toasts: one at a time; newer-turn transient toasts retire/preempt older active non-keep toasts so stale banners never outlive their move (W6-P-N02).
 function toast(t) {
+  if (G.fast && !t.keep) return;
+  const sameTurn = t.turn != null && G.toastNow && G.toastNow.turn === t.turn;
+  if (!t.keep && !sameTurn) G.toastQ = G.toastQ.filter((q) => q.keep || (t.turn != null && q.turn === t.turn));
   G.toastQ.push(t);
   if (G.toastQ.length > 4) G.toastQ.shift();
   showToast();
@@ -1768,7 +1772,11 @@ function syncToastStaging() {
 }
 function showToast() {
   const el = $('#toast');
-  if (el.dataset.busy === '1') return;
+  if (el.dataset.busy === '1') {
+    const newer = G.toastQ.some((q) => !q.keep && (q.turn == null || G.toastNow?.turn !== q.turn));
+    if (newer && G.toastNow && !G.toastNow.keep) hideToastNow();
+    else return;
+  }
   clearTimeout(toastNextTimer); toastNextTimer = 0;
   if (!G.toastQ.length) { G.toastNow = null; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app')?.classList.remove('toasting'); return; }
   const t = G.toastNow = G.toastQ.shift();
@@ -1793,6 +1801,7 @@ function showToast() {
 // A toast marked `keep` (a finished Register category) survives it, but lifts into a slim non-blocking chip above #preview while staging/dragging/inspecting.
 function clearToasts() {
   G.toastQ = G.toastQ.filter((t) => t.keep);
+  if (!G.toastQ.length) { clearTimeout(toastNextTimer); toastNextTimer = 0; }
   if ($('#toast').classList.contains('on') && !(G.toastNow && G.toastNow.keep)) { hideToastNow(); showToast(); }
   syncToastStaging();
 }
@@ -3253,8 +3262,8 @@ window.__game = {
         if (!G.aiBusy) startTurn();
         await new Promise((res) => { const t = setInterval(() => { if (G.s.over || G.s.move - start >= n) { clearInterval(t); res(); } }, 20); });
         for (const p of G.s.players) if (p.wasHuman) { p.kind = 'human'; delete p.wasHuman; }
-        G.fast = false;
         await new Promise((res) => { const t = setInterval(() => { if (!G.aiBusy) { clearInterval(t); res(); } }, 20); });
+        G.fast = false;
         if (!G.s.over) startTurn();
         return { move: G.s.move, over: G.s.over, scores: G.s.players.map((p) => p.score) };
       }

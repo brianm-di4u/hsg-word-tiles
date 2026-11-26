@@ -193,4 +193,123 @@ export const tests = [
       t.expect(after.toast.includes('Featured Spring: STEAM'), `post-commit toast celebrates claimed Featured Spring (${after.toast})`);
     },
   },
+
+  // ---------- W6-P-N02 ----------
+  {
+    name: 'W6-P-N02 stale turn toasts retire on subsequent actions, newer turn toasts preempt older non-keep toasts, keep chips survive, and G.fast skips transient toasts',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', {
+        seed: 12,
+        seats: [{ kind: 'human', name: 'Ann' }, { kind: 'human', name: 'Bo' }],
+      });
+      await t.waitIdle(6000);
+      await t.game('act', 'reveal');
+
+      const s = await t.state();
+      s.game.featured = s.game.featured.filter((f) => f.id !== 'steam');
+      s.game.players[0].rack = 'STEAMXQ'.split('');
+      s.game.players[1].rack = 'AEIOURN'.split('');
+      await t.game('setState', { game: s.game });
+      await t.waitIdle(3000);
+
+      // 1) Turn N (move 0): Ann plays STEAM -> themed toast appears
+      await t.game('act', 'stage', across('STEAM', CENTER - 2));
+      t.equal((await t.game('act', 'play')).ok, true, 'Turn N plays STEAM');
+      await t.page.waitForSelector('#toast.on', { timeout: 3000 });
+      t.expect((await t.page.textContent('#toast')).includes('STEAM'), 'Turn N shows STEAM toast');
+
+      // 2) Turn N+1 (move 1): Bo passes -> afterAction() calls clearToasts(), retiring Turn N's STEAM toast immediately
+      await t.game('act', 'reveal');
+      t.equal(await t.game('act', 'pass'), true, 'Turn N+1 resolves');
+      const afterN1 = await t.page.evaluate(() => ({
+        on: document.querySelector('#toast').classList.contains('on'),
+        text: document.querySelector('#toast').textContent,
+        toasting: document.querySelector('#app').classList.contains('toasting'),
+        qLen: window.__G.toastQ.length,
+      }));
+      t.equal(afterN1.on, false, 'Turn N+1 clears Turn N transient toast');
+      t.equal(afterN1.toasting, false, '#app.toasting cleared so #preview is uncovered');
+      t.equal(afterN1.qLen, 0, 'no stale Turn N toast left queued');
+
+      // 3) Turn N+2 (move 2): Ann passes -> #toast still never resurfaces Turn N's move
+      await t.game('act', 'reveal');
+      t.equal(await t.game('act', 'pass'), true, 'Turn N+2 resolves');
+      const afterN2 = await t.page.evaluate(() => ({
+        on: document.querySelector('#toast').classList.contains('on'),
+        text: document.querySelector('#toast').textContent,
+      }));
+      t.equal(afterN2.on, false, 'Turn N+2 never displays stale Turn N toast');
+      t.expect(!afterN2.text.includes('STEAM'), `Turn N move absent from #toast after Turn N+2 (${afterN2.text})`);
+
+      // 4) Preemption in showToast(): newer non-keep turn toast preempts active older non-keep toast instead of queuing behind it
+      await t.game('act', 'toast', { kind: 'bark', title: 'Maestro Julian Fitch: JAY +47', sub: '“A bar to remember.”', turn: 10 });
+      await t.page.waitForSelector('#toast.on', { timeout: 3000 });
+      await t.game('act', 'toast', { kind: 'bark', title: 'Opal Vance: WEDGED +19', sub: '“Cleanly placed.”', turn: 12 });
+      const preempt = await t.page.evaluate(() => ({
+        text: document.querySelector('#toast').textContent,
+        qLen: window.__G.toastQ.length,
+      }));
+      t.expect(preempt.text.includes('WEDGED +19') && !preempt.text.includes('JAY +47'), `newer turn toast preempted older toast (${preempt.text})`);
+      t.equal(preempt.qLen, 0, 'preempted toast did not remain queued');
+
+      // 5) keep: true Register completion chip survives subsequent afterAction() and is NOT preempted by non-keep toasts
+      await t.game('act', 'toast', { kind: 'themed', title: 'Bathhouse Row: complete', sub: 'All its words are in your Register.', keep: true });
+      // Clear the non-keep WEDGED toast so the keep chip becomes active
+      await t.game('act', 'pass');
+      await t.game('act', 'reveal');
+      const keepBefore = await t.page.evaluate(() => ({
+        on: document.querySelector('#toast').classList.contains('on'),
+        text: document.querySelector('#toast').textContent,
+      }));
+      t.equal(keepBefore.on, true, 'keep: true completion toast promoted and stays visible across afterAction()');
+      t.expect(keepBefore.text.includes('Bathhouse Row: complete'), `keep toast text intact (${keepBefore.text})`);
+      await t.game('act', 'toast', { kind: 'bark', title: 'Opal Vance: TEA +12', sub: '“Nice.”', turn: 20 });
+      const keepAfter = await t.page.textContent('#toast');
+      t.expect(keepAfter.includes('Bathhouse Row: complete'), `non-keep toast did not preempt active keep: true chip (${keepAfter})`);
+      await t.page.click('#toast [data-toast-dismiss]');
+
+      // 6) G.fast skips transient toast enqueueing directly and across multi-turn autoplay
+      const fastDirect = await t.page.evaluate(() => {
+        const beforeQ = window.__G.toastQ.length;
+        window.__G.fast = true;
+        try {
+          window.__game.act('toast', { kind: 'bark', title: 'Fast suppressed', sub: 'Should not enqueue', turn: 21 });
+          return {
+            on: document.querySelector('#toast').classList.contains('on'),
+            qDelta: window.__G.toastQ.length - beforeQ,
+            hasSup: window.__G.toastQ.some((q) => q.title === 'Fast suppressed'),
+          };
+        } finally {
+          window.__G.fast = false;
+        }
+      });
+      t.equal(fastDirect.on, false, 'G.fast skips showing transient toast');
+      t.equal(fastDirect.qDelta, 0, 'G.fast skips enqueueing transient toast');
+      t.equal(fastDirect.hasSup, false, 'suppressed toast absent from queue');
+
+      await t.game('newGame', {
+        seed: 42,
+        seats: [{ kind: 'human', name: 'Ann' }, { kind: 'human', name: 'Bo' }],
+      });
+      await t.waitIdle(6000);
+      await t.game('act', 'reveal');
+      await t.game('act', 'toast', { kind: 'bark', title: 'Maestro Julian Fitch: JAY +47', sub: '“Old turn.”', turn: 0 });
+      await t.page.waitForSelector('#toast.on', { timeout: 3000 });
+      await t.game('act', 'autoplay', 6);
+      await t.waitIdle(8000);
+      const afterFast = await t.page.evaluate(() => ({
+        on: document.querySelector('#toast').classList.contains('on'),
+        text: document.querySelector('#toast').textContent,
+        toasting: document.querySelector('#app').classList.contains('toasting'),
+        qNonKeep: window.__G.toastQ.filter((q) => !q.keep).length,
+      }));
+      t.equal(afterFast.on, false, 'G.fast autoplay leaves zero stale transient toasts pinned over #preview');
+      t.equal(afterFast.toasting, false, '#app.toasting is false after autoplay');
+      t.equal(afterFast.qNonKeep, 0, 'zero transient toasts enqueued during G.fast autoplay');
+      t.expect(!afterFast.text.includes('JAY +47'), `pre-autoplay stale toast retired (${afterFast.text})`);
+    },
+  },
 ];
