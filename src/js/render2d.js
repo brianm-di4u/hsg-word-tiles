@@ -444,8 +444,24 @@ export function paintBoard(size, theme = 'light', mode3d = false) {
     const cx = x + w / 2, cy = y + w / 2;
     if (PREMIUM[k]) {
       if (art.ready('glass-' + k)) {
-        ctx.drawImage(art.img('glass-' + k), x + w * 0.035, y + w * 0.035, w * 0.93, w * 0.93);
-        ctx.strokeStyle = '#B8902F'; ctx.lineWidth = Math.max(1, w * 0.03); ctx.strokeRect(x + w * 0.035, y + w * 0.035, w * 0.93, w * 0.93);
+        // W3-S4-04: deterministic Smart Transforms per stained-glass spring (4x 90-degree rotations + horizontal mirror on radial w/h/b;
+        // horizontal mirror + vertical flip + subtle vertical shift on wavy glass-s so rising steam stays vertical) before upright label().
+        const gx = x + w * 0.035, gy = y + w * 0.035, gw = w * 0.93;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(gx, gy, gw, gw); ctx.clip();
+        ctx.translate(cx, cy);
+        if (k === 's') {
+          const sx = rnd() < 0.5 ? -1 : 1, sy = rnd() < 0.5 ? -1 : 1;
+          const dy = (rnd() - 0.5) * gw * 0.06, pad = gw * 0.035;
+          ctx.scale(sx, sy);
+          ctx.drawImage(art.img('glass-' + k), -gw / 2 - pad, -gw / 2 - pad + dy, gw + pad * 2, gw + pad * 2);
+        } else {
+          ctx.rotate(Math.floor(rnd() * 4) * Math.PI / 2);
+          if (rnd() < 0.5) ctx.scale(-1, 1);
+          ctx.drawImage(art.img('glass-' + k), -gw / 2, -gw / 2, gw, gw);
+        }
+        ctx.restore();
+        ctx.strokeStyle = '#B8902F'; ctx.lineWidth = Math.max(1, w * 0.03); ctx.strokeRect(gx, gy, gw, gw);
       } else leadedGlass(ctx, cx, cy, w * 0.44, PREMIUM[k], rnd);
       label(ctx, cx, cy, cell, PREMIUM[k]);
     } else if (k === '*') {
