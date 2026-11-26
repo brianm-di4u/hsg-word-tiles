@@ -25,6 +25,8 @@
   --focus: #F0D57A; --focus-halo: rgba(20, 14, 8, 0.92); --focus-surface: #1F5F6B; --focus-surface-halo: #FFFDF7;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
   --r: 12px;
+  --dur-press: 60ms; --dur-tile: 140ms; --dur-sheet: 180ms; --dur-roll: 280ms;
+  --ease-ceramic: cubic-bezier(0.22, 1, 0.36, 1); --ease-press: cubic-bezier(0.2, 0, 0, 1);
   color-scheme: light;
 }
 body.theme-dark {
@@ -387,7 +389,7 @@ body.theme-dark .rack-cue { background: #14121F; border-color: rgba(243, 221, 13
   width: var(--tile); min-height: 44px; flex: none;
   display: flex; align-items: center; justify-content: center;
   padding: max(0px, calc((44px - var(--tile)) / 2)) 0;
-  border: 0; background: none; border-radius: 9px; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.45)); transition: transform 0.12s; touch-action: none;
+  border: 0; background: none; border-radius: 9px; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.45)); transition: transform var(--dur-tile) var(--ease-ceramic); touch-action: none;
 }
 .rtile canvas { width: var(--tile); height: var(--tile); flex: none; display: block; pointer-events: none; }
 .rtile:not([disabled]):active canvas { transform: translateY(1.5px) scale(0.97); filter: brightness(0.96); }
@@ -484,9 +486,9 @@ body.theme-dark .pword b.fog { background: #3E3A54; box-shadow: inset 0 1px 2px 
 body.theme-dark .plaque.claimed { background: linear-gradient(160deg, #1F544D, #19433E 55%, #12332F); border-color: #6CC2B4; color: #E8F8F4; }
 .plaque.plaque-updated, .springs-bar.plaque-updated { box-shadow: 0 0 0 2.5px #F3DD8B, inset 0 0 0 2px rgba(255, 250, 220, 0.85), 0 2px 6px rgba(0, 0, 0, 0.4); }
 .plaque.claimed.plaque-updated { box-shadow: 0 0 0 2.5px #7FD3C4, inset 0 0 0 2px #FFFFFF, 0 2px 6px rgba(0, 0, 0, 0.4); }
-.pword b.fog-clear { animation: fog-clear 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.pword b.fog-clear { animation: fog-clear 0.24s var(--ease-ceramic) both; }
 @keyframes fog-clear { 0% { opacity: 0.35; transform: scaleY(0.25); background: #FFFDF5; } 60% { opacity: 1; transform: scaleY(1.08); box-shadow: 0 0 10px rgba(243, 221, 139, 0.85); } 100% { opacity: 1; transform: scaleY(1); } }
-.plaque.just-claimed, .springs-bar.just-claimed { animation: plaque-claim 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.plaque.just-claimed, .springs-bar.just-claimed { animation: plaque-claim 0.24s var(--ease-ceramic) both; }
 @keyframes plaque-claim { 0% { filter: brightness(1.32); transform: scale(1.03); box-shadow: 0 0 0 3px #F3DD8B, 0 0 16px rgba(127, 211, 196, 0.7); } 100% { filter: brightness(1); transform: scale(1); } }
 .pby { margin-left: auto; font: 700 0.8em var(--f-ui); white-space: nowrap; }
 /* collapsible mobile Featured Springs drawer bar (>= 44 px) */
@@ -532,9 +534,9 @@ body.theme-dark #crash { background: linear-gradient(160deg, #2E2A44, #3A3456); 
 
 /* toast: a banner over the preview strip, so it never covers the board or the scores; keep-toasts lift into a slim non-blocking chip above #preview while staging */
 #toast { grid-area: preview; z-index: 6; align-self: stretch; display: none; min-width: 0; }
-#toast.on { display: flex; gap: 4px; align-items: stretch; animation: toastin 0.22s ease-out; }
+#toast.on { display: flex; gap: 4px; align-items: stretch; animation: toastin var(--dur-sheet) var(--ease-ceramic); }
 #toast.on.keep-chip { align-self: start; transform: translateY(calc(-100% - 6px)); animation: none; z-index: 8; }
-@keyframes toastin { from { transform: translateY(8px); } }
+@keyframes toastin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 #app.toasting #preview *, #app.toasting #preview { color: transparent; }
 body.reduce #toast.on { animation: none; }
 #toast button { min-height: 44px; display: flex; gap: 10px; align-items: center; text-align: left; padding: 6px 12px; border-radius: 10px; border: 1.5px solid #6E4B1E; background: linear-gradient(160deg, #FBF3D9, #F0D57A 70%, #D9B85A); color: #2A1E0C; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
@@ -559,7 +561,7 @@ body.theme-dark #toast.featured button { background: linear-gradient(160deg, #1E
 .card.dialog { position: relative; }
 .card.dialog::before, .privacy-card::before { content: ""; position: absolute; inset: 6px; border: 1px solid rgba(184, 144, 47, 0.38); border-radius: 11px; pointer-events: none; }
 body.theme-dark .card.dialog::before, body.theme-dark .privacy-card::before { border-color: rgba(212, 175, 55, 0.42); }
-.dialog { padding: 20px 22px; animation: sheet 0.2s ease-out; }
+.dialog { padding: 20px 22px; animation: sheet var(--dur-sheet) var(--ease-ceramic); }
 body.reduce .dialog, body.reduce .fact { animation: none; }
 @keyframes sheet { from { transform: translateY(14px); opacity: 0; } }
 .dialog h2 { margin: 0 0 6px; font: 400 1.5rem var(--f-display); color: var(--primary); }
@@ -569,7 +571,7 @@ body.reduce .dialog, body.reduce .fact { animation: none; }
 .swap-bag b { color: var(--ink); }
 .swap-stall { margin: 8px 0 0; font-weight: 600; }
 .swap-tiles, .letters { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.stile { position: relative; width: 48px; height: 48px; border-radius: 9px; border: 1.5px solid var(--tile-line); background: var(--tile-bg); color: var(--tile-ink); font: 800 1.4rem var(--f-serif); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
+.stile { position: relative; width: 48px; height: 48px; border-radius: 9px; border: 1.5px solid var(--tile-line); background: var(--tile-bg); color: var(--tile-ink); font: 800 1.4rem var(--f-serif); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); transition: transform 120ms var(--ease-ceramic), background 120ms var(--ease-ceramic), border-color 120ms var(--ease-ceramic), box-shadow var(--dur-press) var(--ease-press); }
 .stile.blank { display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 .stile.blank svg { width: 24px; height: 24px; display: block; }
 .stile.blank:not([aria-pressed="true"]) { background: linear-gradient(#E6F3F0, #CFE6E2); border-color: #5D968D; color: #144B48; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55), 0 2px 0 rgba(0, 0, 0, 0.35); }
@@ -581,7 +583,7 @@ body.theme-dark .stile.blank:not([aria-pressed="true"]) { background: linear-gra
 .letters .stile { width: 44px; height: 44px; font-size: 1.2rem; }
 .boardtext .bt-rack { margin: 8px 0 10px; padding: 6px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); }
 .dialog-wrap { width: 100%; max-width: 560px; }
-.fact { display: grid; grid-template-columns: 210px 1fr; overflow: hidden; animation: sheet 0.2s ease-out; }
+.fact { display: grid; grid-template-columns: 210px 1fr; overflow: hidden; animation: sheet var(--dur-sheet) var(--ease-ceramic); }
 .fact-art { position: relative; min-height: 200px; background: #2A1C12; border-right: 2px solid var(--brass); overflow: hidden; }
 .fact-art::after { content: ""; position: absolute; inset: 7px; border: 1px solid rgba(240, 213, 122, 0.58); border-radius: 6px; box-shadow: inset 0 0 18px rgba(28, 18, 10, 0.26); pointer-events: none; }
 .fact .vig { width: 100%; height: 100%; min-height: 200px; object-fit: cover; display: block; filter: sepia(0.08) saturate(1.04) contrast(1.02); }
@@ -1113,7 +1115,7 @@ body.reduce .coach-target { animation: none; }
 #preview .bd li b { font: 800 1em var(--f-serif); letter-spacing: 0.04em; }
 #preview .bd li span { font-variant-numeric: tabular-nums; }
 body.theme-dark #preview .bd { background: #0C0A16; }
-body:not(.reduce) #preview .bd.unfold { animation: unfold 0.16s cubic-bezier(0.22, 1, 0.36, 1); transform-origin: 50% 100%; }
+body:not(.reduce) #preview .bd.unfold { animation: unfold 0.16s var(--ease-ceramic); transform-origin: 50% 100%; }
 @keyframes unfold { from { opacity: 0; transform: translateY(6px) scaleY(0.92); } }
 #preview .bd li.tot { border-top: 1px solid rgba(255, 255, 255, 0.25); padding-top: 4px; color: #F3DD8B; }
 /* the Daily Soak's last fourteen days */
@@ -1129,7 +1131,7 @@ body:not(.reduce) #preview .bd.unfold { animation: unfold 0.16s cubic-bezier(0.2
 /* wave 3, batch D: results ceremony by outcome, the deciding line, Featured Spring chips that open their card, the stall note */
 .decisive { margin: 6px 0 0; font: 600 0.98rem var(--f-serif); color: var(--ink); }
 /* from the last play: the results come in one after another (buttons and focus are there at once) */
-body:not(.reduce) .over.arrive > :not(.over-art):not(.dlg-btns) { animation: arrive 0.22s cubic-bezier(0.22, 1, 0.36, 1) backwards; animation-delay: calc(var(--n, 0) * 60ms); }
+body:not(.reduce) .over.arrive > :not(.over-art):not(.dlg-btns) { animation: arrive 0.22s var(--ease-ceramic) backwards; animation-delay: calc(var(--n, 0) * 60ms); }
 .over.arrive > .daily-box, .over.arrive > .winner { --n: 1; } .over.arrive > .pbs { --n: 2; } .over.arrive > .final { --n: 3; } .over.arrive > .over-cols { --n: 4; }
 @keyframes arrive { from { opacity: 0; transform: translateY(10px); } }
 .over-win .over-art { filter: saturate(1.2) brightness(1.1) sepia(0.12); background-position: center 40%; }
