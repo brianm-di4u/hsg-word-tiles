@@ -312,4 +312,86 @@ export const tests = [
       t.expect(!afterFast.text.includes('JAY +47'), `pre-autoplay stale toast retired (${afterFast.text})`);
     },
   },
+  // W5-B05-hotfix follow-up 3 of verifier 2 (OQ-WF7-W5-01): the player's own discovery and Featured Spring toasts stay at least
+  // about 2.5 s, or until they act; every other older toast still retires at once when the computer moves.
+  {
+    name: 'W6-P-N02 the player\'s own Register discovery toast stays at least 2.5 s through the computer\'s reply (Normal speed), other older toasts retire at once, and a person acting retires it at once',
+    viewports: ['desktop', 'mobile'],
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'normal', sound: false }));
+    },
+    async run(t) {
+      await ready(t);
+      const seats = [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }];
+      // records, in the page, when #toast shows and hides what, and when the computer's move lands (G.s.move), per animation frame
+      const watch = () => t.page.evaluate(() => {
+        const log = window.__toastLog = { shows: [], moves: [] };
+        const el = document.querySelector('#toast');
+        const note = () => log.shows.push({ at: performance.now(), on: el.classList.contains('on'), text: el.textContent, own: !!(window.__G.toastNow && window.__G.toastNow.own) });
+        note();
+        new MutationObserver(note).observe(el, { attributes: true, attributeFilter: ['class'], childList: true });
+        let last = window.__G.s.move;
+        const tick = () => { const m = window.__G.s.move; if (m !== last) { last = m; log.moves.push({ at: performance.now(), move: m, text: el.classList.contains('on') ? el.textContent : '' }); } requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      });
+      const setRack = async (letters, dropFeatured) => {
+        const s = await t.state();
+        if (dropFeatured) s.game.featured = s.game.featured.filter((f) => f.id !== dropFeatured);
+        s.game.players[0].rack = letters.split('');
+        await t.game('setState', { game: s.game });
+        await t.waitIdle(3000);
+      };
+
+      // 1) You play STEAM, new in your Register; Opal replies at Normal speed well inside 2.5 s
+      await t.page.evaluate(() => localStorage.removeItem('hs-letters-register-v1'));
+      await t.game('newGame', { seed: 12, seats });
+      await t.waitIdle(6000);
+      await setRack('STEAMXQ', 'steam');
+      await watch();
+      await t.game('act', 'stage', across('STEAM', CENTER - 2));
+      t.equal((await t.game('act', 'play')).ok, true, 'you play STEAM');
+      await t.page.waitForFunction(() => window.__toastLog.moves.some((m) => m.move >= 2) && !window.__toastLog.shows.slice(-1)[0].text.includes('STEAM'), null, { timeout: 15000 });
+      const a = await t.page.evaluate(() => window.__toastLog);
+      const shown = a.shows.find((x) => x.on && x.text.includes('STEAM'));
+      const gone = a.shows.find((x) => shown && x.at > shown.at && !x.text.includes('STEAM'));
+      const reply = a.moves.find((m) => m.move === 2);
+      t.expect(shown && /New in your Register/.test(shown.text) && shown.own, `your STEAM toast is a Register discovery, marked as your own (${shown && shown.text})`);
+      t.expect(reply && gone, 'Opal replied and the toast went afterwards');
+      if (reply && shown && gone) {
+        const replyIn = reply.at - shown.at, stayed = gone.at - shown.at;
+        t.log(`own toast: Opal's move ${replyIn.toFixed(0)} ms after it showed; it stayed ${stayed.toFixed(0)} ms (wave 5 before this fix: about 900)`);
+        t.expect(reply.text.includes('STEAM'), `when Opal's move lands your toast is still up (${reply.text})`);
+        t.expect(stayed >= 2450, `your own discovery toast stays at least about 2.5 s (${stayed.toFixed(0)} ms)`);
+        if (replyIn < 2450) t.expect(stayed < 5000, `and, as Opal has moved, it goes when the 2.5 s are up, not at its full 5.2 s (${stayed.toFixed(0)} ms)`);
+      }
+
+      // 2) Any other older toast retires the moment the computer moves (here: a banner from your own pass)
+      await t.waitIdle(8000);
+      await t.page.waitForFunction(() => window.__G.s.cur === 0 && !window.__G.aiBusy, null, { timeout: 15000 });
+      const passTurn = (await t.state()).game.move;
+      t.equal(await t.game('act', 'pass'), true, 'you pass');
+      await t.game('act', 'toast', { kind: 'bark', title: 'An older banner', sub: 'not a discovery', turn: passTurn });
+      t.expect((await t.page.textContent('#toast')).includes('An older banner'), 'the older banner is showing while Opal thinks');
+      await t.page.waitForFunction((m) => window.__toastLog.moves.some((x) => x.move === m), passTurn + 2, { timeout: 15000 });
+      const b = await t.page.evaluate((m) => window.__toastLog.moves.find((x) => x.move === m), passTurn + 2);
+      t.expect(!b.text.includes('An older banner'), `it is gone in the frame Opal's move lands (${JSON.stringify(b.text)})`);
+
+      // 3) A person acting retires your own toast at once: a press on your rack while Opal thinks
+      await t.waitIdle(8000);
+      await t.page.waitForFunction(() => window.__G.s.cur === 0 && !window.__G.aiBusy, null, { timeout: 15000 });
+      await t.page.evaluate(() => localStorage.removeItem('hs-letters-register-v1'));
+      await t.game('newGame', { seed: 12, seats });
+      await t.waitIdle(6000);
+      await setRack('STEAMXQ', 'steam');
+      await t.game('act', 'stage', across('STEAM', CENTER - 2));
+      t.equal((await t.game('act', 'play')).ok, true, 'a new game: you play STEAM again, new in your Register again');
+      await t.page.waitForFunction(() => document.querySelector('#toast').classList.contains('on') && document.querySelector('#toast').textContent.includes('New in your Register'), null, { timeout: 5000 });
+      const r0 = await t.game('act', 'rackTile', 0);
+      t.expect(Array.isArray(r0), 'your rack is there to press while Opal thinks');
+      await t.page.mouse.click(r0[0], r0[1]);
+      const c = await t.page.evaluate(() => ({ on: document.querySelector('#toast').classList.contains('on'), text: document.querySelector('#toast').textContent, ai: window.__G.aiBusy || window.__G.s.cur !== 0 }));
+      t.expect(!c.on || !c.text.includes('STEAM'), `pressing your rack retires your own toast at once (${c.text})`);
+    },
+  },
 ];

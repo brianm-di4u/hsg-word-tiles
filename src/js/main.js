@@ -807,11 +807,13 @@ function skipComputerWait() {
     return false;
   }
   if (G.aiBusy) {
+    endToastGuard();   // the player acted: their own discovery toast no longer holds the computer's move back
     G.aiSkip = true;   // the reply is still being worked out: it lands the moment it is ready
     if (G.aiFire) { clearTimeout(G.aiTimer); G.aiTimer = 0; const f = G.aiFire; G.aiFire = null; f(); }
     return true;
   }
   if (G.turnWait && G.turnWait.fromAi && performance.now() < G.busyUntil) {
+    endToastGuard();
     const snapVfx = G.pendingVfx; G.pendingVfx = null;
     cancelTurnTimers();
     G.anim.clear(); G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null;
@@ -867,7 +869,7 @@ function aiTileSchedule(tiles, personaId, scale) {
 
 function afterAction(entry, fromAi) {
   const s = G.s;
-  clearToasts();
+  clearToasts(fromAi);
   if (G.pendingVfx && G.pendingVfx.say && G.pendingVfx.s === s) G.pendingVfx.say(entry.n);   // a play made while the last one's tiles were in the air: its banners still show
   G.pendingVfx = null;
   cancelTurnTimers();
@@ -1017,7 +1019,7 @@ function celebrate(e, bark, wait = 0, prevPlaqueSnap = null, extra = {}) {
   const who = bark ? { p, k: e.p } : null, quote = (ev) => (bark && bark.event === ev ? `“${bark.text}”` : null);
   const claimedFeats = Array.isArray(e.featuredAll) && e.featuredAll.length ? e.featuredAll : (e.featured ? [e.featured] : []);
   if (claimedFeats.length) {
-    for (const fw of claimedFeats) tell({ kind: 'featured', who, title: `Featured Spring: ${fw}`, sub: `${quote('themed') || `${p.name} found it`} · +${FEATURED_BONUS}`, fact: G.lex.entry(fw)?.id, form: fw });
+    for (const fw of claimedFeats) tell({ kind: 'featured', who, title: `Featured Spring: ${fw}`, sub: `${quote('themed') || `${p.name} found it`} · +${FEATURED_BONUS}`, fact: G.lex.entry(fw)?.id, form: fw, own: p.kind === 'human' });
     cue('featured');
   }
   const reg = register();
@@ -1026,7 +1028,7 @@ function celebrate(e, bark, wait = 0, prevPlaqueSnap = null, extra = {}) {
     const entry = G.lex.byId.get(w.themed);
     const fresh = p.kind === 'human' && !seenNew.has(entry.id) && !entry.forms.some((f) => reg[f]);   // celebrate runs before recordRegister: this is the first time the entry is signed in
     if (fresh) { found = true; seenNew.add(entry.id); }
-    tell({ kind: 'themed', title: `${w.w} +${w.bonus}${w.bath ? ` · Row +${ROW_BONUS}` : ''}`, sub: fresh ? 'New in your Register' : G.lex.categories[entry.cat].name, fact: entry.id, form: w.w });
+    tell({ kind: 'themed', title: `${w.w} +${w.bonus}${w.bath ? ` · Row +${ROW_BONUS}` : ''}`, sub: fresh ? 'New in your Register' : G.lex.categories[entry.cat].name, fact: entry.id, form: w.w, own: fresh });
   }
   const fireVfx = () => {
     if (G.s !== s || G.scene !== 'game') return;
@@ -1761,12 +1763,13 @@ function scorePop(e, themed) {
 function toast(t) {
   if (G.fast && !t.keep) return;
   const sameTurn = t.turn != null && G.toastNow && G.toastNow.turn === t.turn;
-  if (!t.keep && !sameTurn) G.toastQ = G.toastQ.filter((q) => q.keep || (t.turn != null && q.turn === t.turn));
+  if (!t.keep && !sameTurn) G.toastQ = G.toastQ.filter((q) => q.keep || q.own || (t.turn != null && q.turn === t.turn));   // a person's next move clears own toasts first (afterAction)
   G.toastQ.push(t);
   if (G.toastQ.length > 4) G.toastQ.shift();
   showToast();
 }
-let toastTimer = 0, toastNextTimer = 0;
+let toastTimer = 0, toastNextTimer = 0, toastGuardTimer = 0;
+const OWN_TOAST_MS = 2500;   // the player's own discovery and Featured Spring toasts (toastGuarded)
 function syncToastStaging() {
   const el = $('#toast'), app = $('#app');
   if (!el || !app) return;
@@ -1779,8 +1782,8 @@ function showToast() {
   const el = $('#toast');
   if (el.dataset.busy === '1') {
     const newer = G.toastQ.some((q) => !q.keep && (q.turn == null || G.toastNow?.turn !== q.turn));
-    if (newer && G.toastNow && !G.toastNow.keep) hideToastNow();
-    else return;
+    if (newer && G.toastNow && !G.toastNow.keep && !toastGuarded()) hideToastNow();
+    else return;   // a guarded toast shows the newer one when its guard ends (endToastGuard)
   }
   clearTimeout(toastNextTimer); toastNextTimer = 0;
   if (!G.toastQ.length) { G.toastNow = null; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app')?.classList.remove('toasting'); return; }
@@ -1801,13 +1804,25 @@ function showToast() {
   syncToastStaging();
   clearTimeout(toastTimer);
   toastTimer = setTimeout(hideToast, t.kind === 'themed' ? 5200 : 3200);
+  clearTimeout(toastGuardTimer); toastGuardTimer = t.own ? setTimeout(endToastGuard, OWN_TOAST_MS) : 0;
+}
+// The player's own discovery and Featured Spring toasts stay at least OWN_TOAST_MS, or until a person acts (OQ-WF7-W5-01): a
+// computer's move inside that time retires them when it ends, and its own banners wait behind them. Every other toast goes at once.
+function toastGuarded() { return !!(G.toastNow && G.toastNow.own && $('#toast').classList.contains('on')); }
+function endToastGuard() {
+  clearTimeout(toastGuardTimer); toastGuardTimer = 0;
+  const t = G.toastNow;
+  if (!t || !t.own) return;
+  t.own = false;
+  if (t.retire) { hideToastNow(); showToast(); } else if (G.toastQ.length) showToast();
 }
 // the player has gone back to planning: a banner still over the preview strip would hide the score and the errors, so it goes (the ledger keeps the word)
 // A toast marked `keep` (a finished Register category) survives it, but lifts into a slim non-blocking chip above #preview while staging/dragging/inspecting.
-function clearToasts() {
-  G.toastQ = G.toastQ.filter((t) => t.keep);
+function clearToasts(byAi = false) {
+  G.toastQ = G.toastQ.filter((t) => t.keep || (byAi && t.own));
   if (!G.toastQ.length) { clearTimeout(toastNextTimer); toastNextTimer = 0; }
-  if ($('#toast').classList.contains('on') && !(G.toastNow && G.toastNow.keep)) { hideToastNow(); showToast(); }
+  if (byAi && toastGuarded()) G.toastNow.retire = true;   // a computer's move: the player's own discovery keeps its minimum time, then goes
+  else if ($('#toast').classList.contains('on') && !(G.toastNow && G.toastNow.keep)) { hideToastNow(); showToast(); }
   syncToastStaging();
 }
 function blurToastFocus(el) {
@@ -1815,8 +1830,8 @@ function blurToastFocus(el) {
   if (!G.dialog && G.scene === 'game') { const b = $('#board'); if (b) { b.focus({ preventScroll: true }); return; } }
   document.activeElement.blur();
 }
-function hideToastNow() { const el = $('#toast'); clearTimeout(toastTimer); clearTimeout(toastNextTimer); toastNextTimer = 0; blurToastFocus(el); G.toastNow = null; el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); }
-function hideToast() { const el = $('#toast'); clearTimeout(toastTimer); clearTimeout(toastNextTimer); blurToastFocus(el); G.toastNow = null; el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); toastNextTimer = setTimeout(showToast, 200); }
+function hideToastNow() { const el = $('#toast'); clearTimeout(toastTimer); clearTimeout(toastNextTimer); toastNextTimer = 0; clearTimeout(toastGuardTimer); toastGuardTimer = 0; blurToastFocus(el); G.toastNow = null; el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); }
+function hideToast() { const el = $('#toast'); clearTimeout(toastTimer); clearTimeout(toastNextTimer); clearTimeout(toastGuardTimer); toastGuardTimer = 0; blurToastFocus(el); G.toastNow = null; el.dataset.busy = '0'; el.className = ''; el.innerHTML = ''; el.setAttribute('aria-hidden', 'true'); $('#app').classList.remove('toasting'); toastNextTimer = setTimeout(showToast, 200); }
 
 // The strip under the board (or Shift+B) opens how the staged play adds up; the words are read out for a screen reader.
 function toggleBreakdown() {
