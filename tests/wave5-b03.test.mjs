@@ -371,6 +371,8 @@ export const tests = [
       // always comes mid-flight (state, not timing); haptics are recorded through a stub, as a phone has the function.
       await t.page.evaluate(() => {
         window.__vib = []; navigator.vibrate = (p) => { window.__vib.push(p); return true; }; window.__G.settings.vibrate = true;
+        // the settle a landing starts: the interrupting press's own flushSettle() then finishes it at once, as it does any earlier tile's
+        window.__settled = []; const st = window.__G.settle, set0 = st.set.bind(st); st.set = (k, v) => { window.__settled.push(k); return set0(k, v); };
         window.__heldFlights = 0; window.__origSetTimeout = window.setTimeout;
         window.setTimeout = function (fn, ms, ...a) { if (ms === 135) { window.__heldFlights++; return 0; } return window.__origSetTimeout(fn, ms, ...a); };
       });
@@ -391,7 +393,7 @@ export const tests = [
         const after = await t.page.evaluate((c) => ({
           places: window.__game.audioState().played.filter((x) => x === 'place').length,
           vib: window.__vib.length,
-          settle: window.__G.settle.has(c),
+          settle: window.__settled.includes(c),
           staged: window.__G.staged.some((x) => x.i === c),
           pending: window.__G.returnOnLand !== null,
           cell: window.__G.returningCell,
@@ -404,7 +406,7 @@ export const tests = [
         await t.game('act', 'recall');
         await t.page.evaluate(() => { window.__G.selected = null; });   // the rack press above also selected a tile
       }
-      await t.page.evaluate(() => { window.setTimeout = window.__origSetTimeout; window.__G.settings.vibrate = false; });
+      await t.page.evaluate(() => { window.setTimeout = window.__origSetTimeout; window.__G.settings.vibrate = false; delete window.__G.settle.set; });
       await t.waitIdle(3000);
 
       // 2) Interruption mid-flight cancels pending touchdown audio cleanly (no phantom delayed place cue)
