@@ -1,4 +1,5 @@
-// Wave 4, batch W4-B12 (WF-3 tech_art_pipeline): W3-S1-15, W3-S3-14, W3-S5-05.
+// Wave 4, batch W4-B12 (WF-3 tech_art_pipeline): W3-S1-15, W3-S3-14, W3-S5-05, W3-S5-04.
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -192,6 +193,61 @@ export const tests = [
         t.expect(y24 < y0 - 2, `placed TILE_LIFT=0.24 projects visibly above slab y (${y24} < ${y0})`);
         t.expect(y30 < y24 - 0.5, `staged STAGED_LIFT=0.30 projects above placed lift (${y30} < ${y24})`);
       }
+    },
+  },
+  // ---------- W3-S5-04 ----------
+  {
+    name: 'W3-S5-04 check-pipeline enforces pieces-mesh budgets, dead code (FONT_DECO/bathGlyph/tile-glaze/texKey/REVISION) removed, and balance.mjs reports all 4 personas, common-word rates, and --daily-par (Node)',
+    node: true,
+    async run(t) {
+      // 1) check-pipeline.mjs enforces pieces-mesh.js <= 25 KB & peripheral props <= 500 tris each
+      const pipeSrc = fs.readFileSync(path.join(root, 'tools/check-pipeline.mjs'), 'utf8');
+      t.expect(pipeSrc.includes('pieces-mesh.js') && pipeSrc.includes('25 * 1024') && pipeSrc.includes('500'), 'check-pipeline.mjs checks pieces-mesh.js <= 25 KB and peripheral props <= 500 tris');
+      const pipeOut = execFileSync(process.execPath, [path.join(root, 'tools/check-pipeline.mjs'), '--fresh'], { cwd: root, encoding: 'utf8' });
+      t.expect(pipeOut.includes('check-pipeline ok') && pipeOut.includes('pieces-mesh.js'), `check-pipeline --fresh reports pieces-mesh.js ok (${pipeOut.trim()})`);
+
+      // 2) Dead code removed across render2d.js, board3d.js, build-three.mjs, and three-lib.js
+      const r2d = fs.readFileSync(path.join(root, 'src/js/render2d.js'), 'utf8');
+      const b3 = fs.readFileSync(path.join(root, 'src/js/board3d.js'), 'utf8');
+      const buildThree = fs.readFileSync(path.join(root, 'tools/build-three.mjs'), 'utf8');
+      t.equal(/\bFONT_DECO\b/.test(r2d), false, 'unused FONT_DECO removed from render2d.js');
+      t.equal(/\bbathGlyph\b|tile-glaze/.test(r2d), false, 'dead bathGlyph() and tile-glaze absent from render2d.js');
+      t.equal(/\btexKey\b/.test(b3), false, 'write-only B3.texKey removed from board3d.js');
+      t.equal(/['"]REVISION['"]/.test(buildThree), false, 'unused REVISION removed from tools/build-three.mjs');
+      const { THREE } = await import(new URL('../src/js/three-lib.js', import.meta.url).href);
+      t.equal(THREE.REVISION, undefined, 'rebuilt src/js/three-lib.js drops unused THREE.REVISION');
+
+      // 3) balance.mjs reports all 4 personas + commonWordShare and supports --daily-par
+      const balOut = execFileSync(process.execPath, [path.join(root, 'tools/balance.mjs'), '--games', '2', '--daily-par', '5'], { cwd: root, encoding: 'utf8' });
+      const rows = balOut.trim().split(/\r?\n/).map((line) => JSON.parse(line));
+      const matchups = rows.filter((r) => r.matchup);
+      const personasSeen = new Set(matchups.flatMap((r) => Object.keys(r.commonWordShare || {})));
+      for (const id of ['opal', 'hollis', 'lucky', 'julian']) {
+        t.expect(personasSeen.has(id), `balance.mjs reports commonWordShare for persona "${id}" (${[...personasSeen].join(', ')})`);
+      }
+      for (const r of matchups) {
+        const shares = Object.values(r.commonWordShare || {});
+        t.expect(shares.length >= 2 && shares.every((v) => typeof v === 'number' && v >= 0 && v <= 1), `${r.matchup}: valid commonWordShare (${JSON.stringify(r.commonWordShare)})`);
+      }
+      const daily = rows.find((r) => r.kind === 'daily-par');
+      t.expect(!!daily && daily.days === 5, `balance.mjs --daily-par 5 outputs daily-par summary (${JSON.stringify(daily)})`);
+      t.expect(typeof daily.avgMedium === 'number' && typeof daily.avgHard === 'number' && typeof daily.inversionRate === 'number', 'daily-par reports avgMedium, avgHard, and inversionRate');
+    },
+  },
+  {
+    name: 'W3-S5-04 CD-WF3-06 window.__G remains intact alongside window.__game',
+    viewports: ['desktop'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', { seed: 41 });
+      await t.waitIdle(6000);
+      const hooks = await t.page.evaluate(() => ({
+        hasGame: !!window.__game && typeof window.__game.getState === 'function',
+        hasG: !!window.__G && !!window.__G.s && !!window.__G.lex,
+      }));
+      t.equal(hooks.hasGame, true, 'window.__game intact');
+      t.equal(hooks.hasG, true, 'CD-WF3-06: window.__G remains intact for dependent Playwright suites');
     },
   },
 ];

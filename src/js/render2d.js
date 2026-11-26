@@ -8,7 +8,6 @@ export const FRAME = 0.38;           // board border, in cells
 export const U = N + 2 * FRAME;      // board width in cells
 const FONT_TILE = '"Fraunces", Georgia, "Times New Roman", serif';
 const FONT_UI = '"Josefin Sans", "Century Gothic", Futura, "Trebuchet MS", sans-serif';
-const FONT_DECO = '"Limelight", "Fraunces", Georgia, serif';
 
 // Seeded random for repeatable textures.
 function prng(seed) { let s = seed >>> 0 || 1; return () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }

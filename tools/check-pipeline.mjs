@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fresh = process.argv.includes('--fresh');
@@ -69,6 +69,18 @@ for (const f of fs.readdirSync(jsDir).filter((x) => x.endsWith('.js'))) {
   for (const m of code.matchAll(artKeyRe)) {
     if (!manifest[m[1]]) errors.push(`src/js/${f}: references unknown art key "${m[1]}"`);
   }
+}
+
+// 3b) Mesh budget: pieces-mesh.js <= 25 KB and peripheral props (bell, towels) <= 500 tris each (W3-S5-04 / CD-WF3-04)
+const meshPath = path.join(root, 'src', 'js', 'pieces-mesh.js');
+const meshBytes = fs.statSync(meshPath).size;
+if (meshBytes > 25 * 1024) errors.push(`src/js/pieces-mesh.js (${(meshBytes / 1024).toFixed(1)} KB) exceeds 25 KB budget`);
+const { MESHES } = await import(pathToFileURL(meshPath).href);
+for (const prop of ['bell', 'towels']) {
+  const p = MESHES[prop];
+  if (!p || !Array.isArray(p.g)) { errors.push(`src/js/pieces-mesh.js: missing peripheral prop "${prop}"`); continue; }
+  const tris = p.g.reduce((sum, g) => sum + Buffer.from(g.i, 'base64').byteLength / 6, 0);
+  if (tris > 500) errors.push(`src/js/pieces-mesh.js: peripheral prop "${prop}" has ${tris} tris (exceeds 500 tri budget)`);
 }
 
 // 4) data/lexicon.game.json freshness relative to data/thermal-words.json + shared/data/trivia-questions.json
@@ -130,4 +142,4 @@ if (errors.length) {
   console.error('check-pipeline FAILED:\n  - ' + errors.join('\n  - '));
   process.exit(1);
 }
-console.log(`check-pipeline ok (${manifestKeys.length} assets, lexicon.game.json, art-list.js, index.html${workerChecked ? ', worker-src.js' : ''} fresh)`);
+console.log(`check-pipeline ok (${manifestKeys.length} assets, pieces-mesh.js ${(meshBytes / 1024).toFixed(1)} KB, lexicon.game.json, art-list.js, index.html${workerChecked ? ', worker-src.js' : ''} fresh)`);

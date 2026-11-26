@@ -11,7 +11,7 @@ import { art } from './art.js';
 import { N, CENTER } from './score.js';
 
 const U = R.U, HALF = U / 2, TOP = 0.3;   // board face height in world units (1 unit = 1 square)
-export const B3 = { on: false, mode: 'auto', tried: false, reason: '', renderer: null, frames: [], intervals: [], tiles: [], W: 0, H: 0, dpr: 1, dark: false, texKey: '' };
+export const B3 = { on: false, mode: 'auto', tried: false, reason: '', renderer: null, frames: [], intervals: [], tiles: [], W: 0, H: 0, dpr: 1, dark: false };
 export function want(mode) { B3.mode = mode; B3.tried = false; }
 
 // ---------- capability ----------
@@ -498,7 +498,7 @@ export function destroy(opts = {}) {
   B3.tileGeo = null; B3.tileBodyGeo = null; B3.tileTopGeo = null; B3.bodyInst = null; B3.blankInst = null; B3.lastInst = null; B3.stagedInst = null;
   B3.faceAtlasCanvas = null; B3.faceAtlasTex = null; B3.faceAtlasMat = null; B3.faceAtlasKey = '';
   B3.bodyMat = null; B3.blankBodyMat = null; B3.stagedMat = null; B3.lastMat = null; B3.envRT = null; B3.envTheme = ''; B3.envSwaps = 0;
-  B3.boardCanvas = null; B3.boardMode3d = false; B3.tiles = []; B3.frames.length = 0; B3.intervals.length = 0; B3.texKey = '';
+  B3.boardCanvas = null; B3.boardMode3d = false; B3.tiles = []; B3.frames.length = 0; B3.intervals.length = 0;
   R.proj.fn = null;
 }
 
@@ -546,7 +546,6 @@ export function setTheme(theme) {
   if (B3.top) { B3.top.emissive.set(prof.top.emissive); B3.top.emissiveIntensity = prof.top.emissiveIntensity; B3.top.needsUpdate = true; }
   if (B3.preDim) { B3.preDim.material.color.set(prof.preDimColor); B3.preDim.material.needsUpdate = true; }
   invalidateFaceCache();
-  B3.texKey = '';
 }
 
 // ---------- camera ----------
