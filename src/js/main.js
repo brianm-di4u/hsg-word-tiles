@@ -129,6 +129,36 @@ function storageBlocked() {
   if (ok) store.del('hs-letters-probe');
   return !ok;
 }
+function patchTitleArt() {
+  if (G.scene !== 'title') return;
+  const root = $('#screen .title');
+  if (!root) return;
+  const hasArt = art.has('title');
+  root.classList.toggle('painted', hasArt);
+  const el = root.querySelector('.title-art');
+  if (!el) return;
+  if (hasArt) {
+    const src = art.src('title');
+    if (el.tagName === 'IMG') {
+      if (el.getAttribute('src') !== src) el.setAttribute('src', src);
+    } else {
+      const img = document.createElement('img');
+      img.className = 'title-art';
+      img.src = src;
+      img.alt = 'Bathhouse Row at sunset: bronze eagles on the gate piers and the tiled dome beyond';
+      el.replaceWith(img);
+    }
+  } else if (el.tagName === 'IMG') {
+    const div = document.createElement('div');
+    div.className = 'title-art vector';
+    div.setAttribute('aria-hidden', 'true');
+    el.replaceWith(div);
+  }
+}
+function patchTitleReady() {
+  if (G.scene !== 'title') return;
+  $('#screen .loading')?.remove();
+}
 async function boot() {
   // a saved game from a newer version of the game is left alone: this visit writes nothing, under any key, and says so
   G.newerSave = gameSaves.read().kind === 'newer';
@@ -144,7 +174,7 @@ async function boot() {
     if (bw && art.ready('counter')) bw.style.backgroundImage = `url(${art.src('counter')})`;
     if (B3.B3.on) B3.setTheme(dark() ? 'dark' : 'light');
     if (G.scene === 'game') { layout(); renderGame(); }
-    else { draw(); if (G.scene === 'title' && !G.dialog) showScene('title'); }
+    else { draw(); patchTitleArt(); }
   });
   showScene('title');
   const t0 = performance.now();
@@ -153,7 +183,7 @@ async function boot() {
   META.words = G.dict.packed; META.added = G.dict.added.length;
   startAi(DICT_B64, LEXICON, { dict: G.dict, lex: G.lex });
   G.ready = true;
-  if (G.scene === 'title' && !G.dialog) showScene('title');
+  patchTitleReady();
   if (G.afterReady) { const f = G.afterReady; G.afterReady = null; f(); }
 }
 
