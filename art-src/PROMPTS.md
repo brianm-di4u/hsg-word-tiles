@@ -31,7 +31,7 @@ Every prompt carried the same constraints:
 | File | Prompt summary |
 |---|---|
 | `bath-*` (8) | one facade each, centred in a brass-rimmed roundel on cream limestone, bold and simple for small sizes: Superior (green rosettes), Hale (red hip roof, bell gable porch), Maurice (green tile cap, arched sun-parlour windows), Fordyce (lozenge brick, copper marquee), Quapaw (chevron-mosaic dome, copper cupola), Ozark (twin stepped towers), Buckstaff (seven bays, medallion frieze), Lamar (plain stucco, skylight) |
-| `face-*` (4) | round cameo portraits of the fictional opponents: Opal Vance (1920s bath attendant), Hollis Crane (1930s park ranger, no insignia), "Lucky" Delmar (1930s racetrack tout), Maestro Julian Fitch (1920s hotel bandleader) |
+| `face-*` (4) | round cameo portraits of the fictional opponents: Opal Vance (1920s bath attendant), Hollis Crane (1930s park ranger, no insignia), "Lucky" Delmar (1930s racetrack tout), Maestro Julian Fitch (1920s hotel orchestra leader; if ever refreshed, warm ballroom/tuxedo cues while preserving silver hair, mustache, and baton) |
 
 ## Fact cards (styled after `title`; loop 1 of the visual review)
 | File | Prompt summary |

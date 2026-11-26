@@ -3,6 +3,8 @@
 //   B3.blankInst, completing 050386d's frosted sea-glass faces & etched steam curls across 2D/3D and Day/Night.
 // - W3-S2-07: Art Deco brass-beveled double-ring medallion on human badges + reduced-motion-safe expression states
 //   (active/big-play/pass/win/loss) on opponent badges, completing e1ce26f's ?art=0 initials() fix.
+// - W3-S1-05: align Maestro Julian Fitch's role copy to '1920s hotel orchestra leader' matching his white-tie/baton portrait.
+// - W3-S1-04: already solved by 7e3aa7d (poked tile crown) and 6cc8b2f/16745f2 (unified #0F1713 ink & numeral proportions).
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 const quiet = () => {
   window.__TEST_TIPS__ = false;
@@ -185,6 +187,55 @@ export const tests = [
         }, null, { timeout: 3000 });
         await t.shot('w4-b11-over-badges');
       }
+    },
+  },
+  // ---------- W3-S1-05 ----------
+  {
+    name: 'W3-S1-05 Maestro Julian Fitch role copy aligns to 1920s hotel orchestra leader across Setup and personas.js while preserving portrait',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('scene', 'setup');
+      await t.waitFrames(2);
+      const info = await t.page.evaluate(async () => {
+        const { persona } = await import(new URL('src/js/personas.js', location.href).href);
+        const btn = document.querySelector('.opps .opp[data-val="julian"]');
+        const img = btn && btn.querySelector('img');
+        if (img && !img.complete) await img.decode().catch(() => {});
+        const role = btn && btn.querySelector('small');
+        const br = btn && btn.getBoundingClientRect();
+        const rr = role && role.getBoundingClientRect();
+        return {
+          personaRole: persona('julian').role,
+          cardRole: role ? role.textContent.trim() : '',
+          imgLoaded: !!(img && img.complete && img.naturalWidth === 192 && img.naturalHeight === 192),
+          fitsCard: !!(br && rr && rr.right <= br.right + 1 && rr.bottom <= br.bottom + 1),
+        };
+      });
+      t.equal(info.personaRole, '1920s hotel orchestra leader', 'personas.js aligns Julian role copy');
+      t.equal(info.cardRole, '1920s hotel orchestra leader', 'Setup card displays aligned role copy');
+      t.equal(info.imgLoaded, true, 'assets/face-julian.webp silhouette preserved intact (192x192)');
+      t.equal(info.fitsCard, true, 'aligned role copy fits cleanly inside Setup opponent card');
+      await t.page.click('.opps .opp[data-val="julian"]');
+      const note = await t.page.textContent('.seat-note');
+      t.expect(note.includes('1920s hotel orchestra leader.'), `Setup seat-note reflects aligned role (${note})`);
+      if (t.viewport === 'desktop') await t.shot('w4-b11-julian-setup');
+    },
+  },
+  // ---------- W3-S1-04 (already_done guard: 7e3aa7d + 6cc8b2f + 16745f2) ----------
+  {
+    name: 'W3-S1-04 poked 3D tile crown (+0.010 center) and unified #0F1713 typography across paintFace and tileSprite hold',
+    node: true,
+    async run(t) {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const { root } = await import('./lib.mjs');
+      const { MESHES } = await import(new URL('../src/js/pieces-mesh.js', import.meta.url).href);
+      t.equal(MESHES.tile.hi[2], 0.25, `poked tile crown center lifted to z=0.250 (got ${MESHES.tile.hi[2]})`);
+      const r2d = fs.readFileSync(path.join(root, 'src/js/render2d.js'), 'utf8');
+      const inks = r2d.match(/blank \? STEAM_INK : '#0F1713'/g) || [];
+      t.equal(inks.length, 2, `both paintFace() and tileSprite() share unified #0F1713 ink (found ${inks.length})`);
     },
   },
 ];
