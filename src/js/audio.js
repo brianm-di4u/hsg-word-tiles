@@ -11,7 +11,7 @@ const DEFAULT_VOL = 0.35;
 const CUE_GAIN = 6;
 // bells and steam are the loudest cues: a little less so they do not outrun the tile sounds (featured was 0.6: a play
 // that finds a Featured Spring peaked at up to 0.98 with the volume at full, so the bell is 3 dB quieter)
-const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, unpick: 1.4, tick: 1.05, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 1.1, hint: 0.92, yourturn: 1.3, good: 1.8, big: 0.57, discover: 0.6, defeat: 0.9, prompt: 1.2, reveal: 0.85, bagempty: 0.5, bell: 0.5 };
+const TRIM = { featured: 0.42, steam: 0.7, chime: 0.85, fanfare: 0.85, place: 0.9, play: 0.92, pick: 2.1, unpick: 1.4, tick: 1.05, recall: 1.8, turn: 2.5, swap: 1.8, error: 1.5, open: 1.1, hint: 0.92, yourturn: 1.3, good: 1.8, big: 0.57, discover: 0.6, defeat: 0.9, prompt: 1.2, reveal: 0.85, bagempty: 0.5, bell: 0.5, uiTap: 1.0, uiTile: 1.0, uiClose: 1.0 };
 const musicGain = (vol = audio.vol, level = audio.musicVol) => Math.min(1.5, vol / DEFAULT_VOL) * level;   // the Volume slider moves the music with the cues
 // Above the shipped volume the cues rise more gently than the slider: to about twice the shipped level at full, not
 // 2.9 times. With the slider at full the loudest repeats of steam and place overshot the limiter and clipped (peaks
@@ -29,7 +29,7 @@ export const CEILING = Float32Array.from({ length: 4097 }, (_, i) => { const x =
 const REV_SEC = 0.24;
 export const REV_SEND = {
   steam: 0,
-  open: 0.02, tick: 0.02, swap: 0.04, turn: 0.04, yourturn: 0.04, prompt: 0.04,
+  open: 0.02, tick: 0.02, uiTap: 0.02, uiTile: 0.03, uiClose: 0.02, swap: 0.04, turn: 0.04, yourturn: 0.04, prompt: 0.04,
   good: 0.05, big: 0.05, reveal: 0.05,
   place: 0.08, play: 0.09, pick: 0.09, unpick: 0.09, recall: 0.09, shuffle: 0.09, error: 0.09,
   chime: 0.18, featured: 0.18, discover: 0.18, fanfare: 0.18, hint: 0.17, bell: 0.18, bagempty: 0.16, defeat: 0.16,
@@ -299,8 +299,21 @@ export function sfx(name, opts = {}) {
         tone(494, t + 0.105, 0.26, 'triangle', 0.072, 0, { a: 0.004, d: 0.06, s: 0.32, lp: 1300, lpTo: 480 });
         tone(1965, t + 0.105, 0.035, 'sine', 0.012, 0, { a: 0.002 });
         break;
-      // soft furniture sounds, well under the play cues: a paper tick for a card or sheet opening, a small bell for the Spring Guide
+      // soft furniture sounds, well under the play cues: a paper tick for a card or sheet opening, whisper-quiet ceramic/brass/paper UI micro-foley (W4-S5-03), and a small bell for the Spring Guide
       case 'open': noise(t, 0.05, 0.1, 2800, 1.2, 'bandpass', 0.006); tone(740, t, 0.04, 'triangle', 0.03); break;
+      case 'uiTap':
+        noise(t, 0.022, 0.052, 2300, 2.4, 'bandpass', 0.002);
+        tone(960, t, 0.038, 'triangle', 0.044, -120, { a: 0.002, lp: 2100, lpTo: 850 });
+        tone(2520, t, 0.024, 'sine', 0.012, 0, { a: 0.002 });
+        break;
+      case 'uiTile':
+        noise(t, 0.02, 0.064, 3900, 3.0, 'bandpass', 0.002);
+        tone(1440, t, 0.025, 'triangle', 0.044, -220, { a: 0.002, lp: 3200, lpTo: 1300 });
+        break;
+      case 'uiClose':
+        noise(t, 0.042, 0.046, 1500, 1.5, 'bandpass', 0.006);
+        tone(620, t, 0.052, 'triangle', 0.044, -180, { a: 0.004, lp: 1350, lpTo: 500 });
+        break;
       case 'bell': tone(3100, t, 0.018, 'triangle', 0.022); bell(t, 1175, 0.045); break;
       case 'hint': bell(t, 880, 0.05); tone(1320, t + 0.12, 0.2, 'sine', 0.03); break;
       case 'turn': tone(660, t, 0.12, 'sine', 0.05); break;

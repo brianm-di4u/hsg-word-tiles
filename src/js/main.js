@@ -429,6 +429,7 @@ function wireScreen(name) {
   if (name === 'setup') {
     const st = G.setup;
     scr.querySelectorAll('[data-kind]').forEach((b) => b.addEventListener('click', () => {
+      unlock(); sfx('uiTap');
       const k = +b.dataset.k; const seat = st.seats[k];
       if (b.dataset.kind === 'human') { seat.kind = 'human'; seat.name = seat.name || ''; }
       else { if (seat.kind !== 'ai') delete seat.level; seat.kind = 'ai'; seat.persona = seat.persona || PERSONAS[(k + 1) % PERSONAS.length].id; }
@@ -436,19 +437,22 @@ function wireScreen(name) {
     }));
     scr.querySelectorAll('[data-name]').forEach((inp) => inp.addEventListener('input', () => { st.seats[+inp.dataset.name].name = inp.value; }));
     scr.querySelectorAll('[data-persona]').forEach((b) => b.addEventListener('click', () => {
+      unlock(); sfx('uiTap');
       const seat = st.seats[+b.dataset.persona];
       seat.persona = b.dataset.val;
       delete seat.level;
       showScene('setup', { focus: `[data-persona="${b.dataset.persona}"][data-val="${b.dataset.val}"]` });
     }));
-    scr.querySelectorAll('[data-level]').forEach((sel) => sel.addEventListener('change', () => { st.seats[+sel.dataset.level].level = sel.value; G.houseOpen = true; showScene('setup', { focus: `[data-level="${sel.dataset.level}"]` }); }));
+    scr.querySelectorAll('[data-level]').forEach((sel) => sel.addEventListener('change', () => { unlock(); sfx('uiTap'); st.seats[+sel.dataset.level].level = sel.value; G.houseOpen = true; showScene('setup', { focus: `[data-level="${sel.dataset.level}"]` }); }));
     scr.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => {
+      unlock(); sfx('uiTap');
       const k = +b.dataset.remove;
       st.seats.splice(k, 1);
       showScene('setup', { focus: st.seats.length > 2 ? `[data-remove="${Math.min(k, st.seats.length - 1)}"]` : '[data-add]' });
     }));
     const add = scr.querySelector('[data-add]');
     if (add) add.addEventListener('click', () => {
+      unlock(); sfx('uiTap');
       const used = new Set(st.seats.map((x) => x.persona));
       st.seats.push({ kind: 'ai', persona: (PERSONAS.find((p) => !used.has(p.id)) || PERSONAS[0]).id });
       showScene('setup', { focus: st.seats.length < 4 ? '[data-add]' : `[data-remove="${st.seats.length - 1}"]` });
@@ -465,9 +469,10 @@ function wireScreen(name) {
     };
     if (hr) hr.addEventListener('toggle', () => { G.houseOpen = hr.open; });
     let savedHints = null;
-    scr.querySelector('[data-hints]').addEventListener('change', (e) => { st.hints = e.target.checked; scr.querySelector('[data-hints-unl]').disabled = !e.target.checked; });
-    scr.querySelector('[data-hints-unl]').addEventListener('change', (e) => { st.hintsUnl = e.target.value === 'unl'; syncHouseSummary(); });
+    scr.querySelector('[data-hints]').addEventListener('change', (e) => { unlock(); sfx('uiTap'); st.hints = e.target.checked; scr.querySelector('[data-hints-unl]').disabled = !e.target.checked; });
+    scr.querySelector('[data-hints-unl]').addEventListener('change', (e) => { unlock(); sfx('uiTap'); st.hintsUnl = e.target.value === 'unl'; syncHouseSummary(); });
     scr.querySelector('[data-challenge]').addEventListener('change', (e) => {
+      unlock(); sfx('uiTap');
       st.challenge = e.target.checked;
       const hi = scr.querySelector('[data-hints]'), unl = scr.querySelector('[data-hints-unl]');
       if (st.challenge) {
@@ -483,15 +488,17 @@ function wireScreen(name) {
       syncHouseSummary();
     });
     scr.querySelector('[data-start]').addEventListener('click', () => {
+      unlock();
+      if (!loadSave()) sfx('uiTap');
       G.settings.lastSetup = st; saveSettings();
       replaceSave(() => newGame({ mode: 'play', hintsUnl: !!st.hintsUnl && !st.challenge, challenge: !!st.challenge, seats: st.seats.map((x, k) => (x.kind === 'human' ? { kind: 'human', name: (x.name || '').trim() || (st.seats.filter((y) => y.kind === 'human').length > 1 ? `Player ${k + 1}` : 'You') } : { kind: 'ai', persona: x.persona, level: seatLevel(x), name: persona(x.persona).name })), hints: st.hints && !st.challenge }));
     });
   }
   if (name === 'help') {
     const wc = scr.querySelector('[data-wordcheck]');
-    if (wc) wc.addEventListener('submit', (e) => { e.preventDefault(); wc.querySelector('.wc-out').textContent = wordCheck(wc.querySelector('input').value); });
+    if (wc) wc.addEventListener('submit', (e) => { e.preventDefault(); unlock(); sfx('uiTap'); wc.querySelector('.wc-out').textContent = wordCheck(wc.querySelector('input').value); });
   }
-  if (name === 'help') scr.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { G.helpTab = b.dataset.tab; showScene('help', { focus: `[data-tab="${G.helpTab}"]` }); }));
+  if (name === 'help') scr.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { unlock(); sfx('uiTap'); G.helpTab = b.dataset.tab; showScene('help', { focus: `[data-tab="${G.helpTab}"]` }); }));
   if (name === 'settings') {
     scr.querySelectorAll('[data-set]').forEach((b) => b.addEventListener('click', () => {
       const k = b.dataset.set, raw = b.dataset.val;
@@ -499,11 +506,13 @@ function wireScreen(name) {
       saveSettings(); showScene('settings', { focus: `[data-set="${k}"][data-val="${raw}"]` });
       if (['sound', 'fx', 'music', 'amb'].includes(k)) unlock();
       if (k === 'sound' && G.settings.sound) sfx('place');
+      else sfx('uiTap');
       if (k === 'board3d') B3.want(G.settings.board3d);
       if (k === 'vibrate') buzz('stage');
     }));
     const again = scr.querySelector('[data-tips]');
     again.addEventListener('click', () => {
+      unlock(); sfx('uiTap');
       G.settings.tipsSeen = false; G.coach = null; saveSettings();
       again.textContent = 'Tips will show in a game'; liveSay('The tips will show again in your game.');
     });
@@ -518,6 +527,7 @@ function wireScreen(name) {
     scr.querySelectorAll('[data-reg]').forEach((b) => b.addEventListener('click', () => openFact(b.dataset.reg)));
     const nudge = scr.querySelector('.reg-nudge');
     scr.querySelectorAll('[data-reg-locked]').forEach((b) => b.addEventListener('click', () => {
+      unlock(); sfx('uiTap');
       const cat = G.lex.categories[b.dataset.cat];
       const msg = `Not found yet: ${b.dataset.len}-letter ${cat ? cat.name : ''} word (+${b.dataset.tier} Hot Springs bonus). Form it on the board to unlock its history card.`;
       scr.querySelectorAll('.reg-lock.active').forEach((x) => x.classList.remove('active'));
@@ -552,8 +562,8 @@ function wireScreen(name) {
 
 function go(where) {
   unlock();
-  if (where === 'continue') { const record = gameSaves.read(); if (record.game) resumeGame(record); return; }
-  if (where === 'setup') { G.setup = defaultSetup(); G.houseOpen = false; showScene('setup'); return; }
+  if (where === 'continue') { const record = gameSaves.read(); if (record.game) { sfx('uiTap'); resumeGame(record); } return; }
+  if (where === 'setup') { sfx('uiTap'); G.setup = defaultSetup(); G.houseOpen = false; showScene('setup'); return; }
   if (where === 'daily') {
     const launch = () => {
       const di = dailyInfo();
@@ -567,6 +577,7 @@ function go(where) {
         );
         return;
       }
+      sfx('uiTap');
       startDaily();
     };
     replaceSave(launch);
@@ -576,6 +587,7 @@ function go(where) {
     confirmDialog('Leave without saving?', 'This tab could not save its game. Stay here to keep playing, or leave without saving this game.', 'Leave', () => showScene('title'));
     return;
   }
+  sfx('uiTap');
   showScene(where);
 }
 // the single save slot holds one game: starting another (New game, Daily Soak) ends the one in progress, so ask first
@@ -585,7 +597,7 @@ function replaceSave(start) {
   const what = sv.mode === 'daily' ? 'your Daily Soak' : `your game with ${sv.players.map((p) => p.name).join(' and ')}`;
   confirmDialog('Replace your game in progress?', `Starting a new game ends ${what} (move ${sv.move + 1}). It cannot be continued afterwards.`, 'Start new', start);
 }
-function back() { showScene(G.back && G.back !== G.scene ? G.back : 'title'); }
+function back() { unlock(); sfx('uiClose'); showScene(G.back && G.back !== G.scene ? G.back : 'title'); }
 
 // ---------- starting games ----------
 function whenReady(f) { if (G.ready) f(); else { G.afterReady = f; showScene('title'); } }
@@ -1315,6 +1327,7 @@ function renderGame() {
     if (G.plaqueHi.size) toggle.classList.add('plaque-updated');
     if (G.plaqueFx && G.plaqueFx.claimed.size) fxOn(toggle, 'just-claimed');
     toggle.addEventListener('click', () => {
+      unlock(); sfx('uiTap');
       if (G.coach && coachBeat(G.coach) === 'plaques') coachDismiss('plaques');
       syncSpringsDrawer(!G.springsOpen);
     });
@@ -1334,7 +1347,7 @@ function renderGame() {
       const f = s.featured[pk];
       if (G.coach && coachBeat(G.coach) === 'plaques') coachDismiss('plaques');
       if (f.by != null) { syncSpringsDrawer(false); openFact(G.lex.entry(f.word).id, f.word); }
-      else flash(`Featured Spring: ${f.word.length} letters, ${G.lex.categories[f.cat].name}. Form any form of it to claim +${FEATURED_BONUS}.`);
+      else { unlock(); sfx('uiTap'); flash(`Featured Spring: ${f.word.length} letters, ${G.lex.categories[f.cat].name}. Form any form of it to claim +${FEATURED_BONUS}.`); }
     });
   });
   $('#log').innerHTML = UI.logHtml(s, G.lex) || '<li class="empty">Every play is written here: the words, the points, and any Hot Springs bonus.</li>';
@@ -1740,13 +1753,17 @@ function hideToast() { const el = $('#toast'); clearTimeout(toastTimer); clearTi
 // The strip under the board (or Shift+B) opens how the staged play adds up; the words are read out for a screen reader.
 function toggleBreakdown() {
   if (!G.preview || !G.preview.ok || !G.staged.length || G.aiBusy || G.flash) return;
-  G.breakdown = !G.breakdown; renderPreview();
+  G.breakdown = !G.breakdown;
+  unlock(); sfx(G.breakdown ? 'uiTap' : 'uiClose');
+  renderPreview();
   if (G.breakdown) { const bd = $('#preview .bd'); if (bd && animOn()) bd.classList.add('unfold'); if (bd) liveSay(bd.textContent.replace(/\s+/g, ' ').trim()); }
 }
 
-function closeBreakdown() {
+function closeBreakdown(silent = false) {
   if (!G.breakdown) return false;
-  G.breakdown = false; renderPreview();
+  G.breakdown = false;
+  if (!silent) { unlock(); sfx('uiClose'); }
+  renderPreview();
   return true;
 }
 
@@ -1877,13 +1894,14 @@ function openDialog(name, arg) {
   if (name === 'swap') {
     const picked = new Set();
     m.querySelectorAll('[data-sw]').forEach((b) => b.addEventListener('click', () => {
+      unlock(); sfx('uiTile');
       const k = +b.dataset.sw; if (picked.has(k)) picked.delete(k); else picked.add(k);
       b.setAttribute('aria-pressed', picked.has(k)); m.querySelector('[data-swap-go]').disabled = !picked.size;
       m.querySelector('[data-swap-go]').textContent = picked.size ? `Swap ${UI.plural(picked.size, 'tile')}` : 'Swap';
     }));
     m.querySelector('[data-swap-go]').addEventListener('click', () => {
       const letters = [...picked].map((k) => cur().rack[k]);
-      closeDialog();
+      closeDialog(false, true);
       const r = E.apply(G.s, { type: 'swap', letters }, ctx());
       if (r.ok) afterAction(r.entry, false); else flash(r.error);
     });
@@ -1891,17 +1909,18 @@ function openDialog(name, arg) {
   if (name === 'ledger') {
     m.querySelectorAll('[data-fact]').forEach((b) => b.addEventListener('click', () => openFact(b.dataset.fact, b.dataset.form)));
   }
-  if (name === 'blank') m.querySelectorAll('[data-letter]').forEach((b) => b.addEventListener('click', () => { const f = G.blankCb; closeDialog(); if (f) f(b.dataset.letter); }));
-  if (name === 'confirm') m.querySelector('[data-ok]').addEventListener('click', () => { closeDialog(); arg.onOk(); });
+  if (name === 'blank') m.querySelectorAll('[data-letter]').forEach((b) => b.addEventListener('click', () => { unlock(); sfx('uiTile'); const f = G.blankCb; closeDialog(false, true); if (f) f(b.dataset.letter); }));
+  if (name === 'confirm') m.querySelector('[data-ok]').addEventListener('click', () => { closeDialog(false, true); arg.onOk(); });
   const f = m.querySelector('.primary, [data-letter], button'); if (f) f.focus({ preventScroll: true });
   if (G.scene === 'game') renderPreview();
 }
-function closeDialog(silent) {
+function closeDialog(silent, quiet) {
   const m = $('#modal');
   if (!G.dialog && m.hidden) return;
   if (G.dialog === 'pause') releaseAudio('pause');
   G.dialog = null; G.blankCb = null; G.boardTap = null; m.hidden = true; m.innerHTML = '';
   syncInert();
+  if (!silent && !quiet) sfx('uiClose');
   const ret = G.returnFocus; G.returnFocus = null;
   if (!silent) {
     if (G.scene === 'game' && G.privacy) $('#privacy [data-reveal]')?.focus({ preventScroll: true });
@@ -2432,7 +2451,7 @@ function rackDown(e, k) {
   endReturn(); endFlip(); flushSettle();
   if (!claimPointer(e)) return;
   unlock();
-  clearToasts(); closeBreakdown();
+  clearToasts(); closeBreakdown(true);
   e.preventDefault();
   const wasSelected = !waitSeat() && G.selected === k;
   const coarse = coarseInput(e);
@@ -2907,7 +2926,7 @@ function onKey(e) {
   if (G.dialog) {
     if (e.key === 'Tab') { trapTab(e, $('#modal')); return; }
     if (e.key === 'Escape') { e.preventDefault(); closeDialog(); }
-    if (G.dialog === 'blank' && /^[a-z]$/i.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); const f = G.blankCb; closeDialog(); f && f(e.key.toUpperCase()); }
+    if (G.dialog === 'blank' && /^[a-z]$/i.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); unlock(); sfx('uiTile'); const f = G.blankCb; closeDialog(false, true); f && f(e.key.toUpperCase()); }
     return;
   }
   const field = !!e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName);
