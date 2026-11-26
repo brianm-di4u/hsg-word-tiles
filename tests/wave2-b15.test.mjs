@@ -328,8 +328,9 @@ export const tests = [
       t.expect(b3.faceAtlas.slots >= 12, `faceAtlas populated multiple regular+blank glyphs (${b3.faceAtlas.slots})`);
 
       t.equal(b3.bodyInstanced, true, 'tilebody pools use standard THREE.InstancedMesh');
-      t.expect(b3.bodyDrawCalls >= 1 && b3.bodyDrawCalls <= 3, `tilebody renders in <= 3 instanced draw calls (got ${b3.bodyDrawCalls})`);
-      const instTotal = b3.bodyCounts.board + b3.bodyCounts.last + b3.bodyCounts.staged;
+      // W3-S1-02 adds dedicated frosted sea-glass B3.blankInst pool (roughness 0.62) alongside board/last/staged (<= 4 draw calls total).
+      t.expect(b3.bodyDrawCalls >= 1 && b3.bodyDrawCalls <= 4, `tilebody renders in <= 4 instanced draw calls (got ${b3.bodyDrawCalls})`);
+      const instTotal = b3.bodyCounts.board + (b3.bodyCounts.blank || 0) + b3.bodyCounts.last + b3.bodyCounts.staged;
       t.equal(instTotal, b3.tiles, `instanced tilebody count (${instTotal}) matches visible tile count (${b3.tiles})`);
       t.expect(b3.bodyCounts.staged >= 2, `staged instanced pool active (staged=${b3.bodyCounts.staged})`);
       t.equal(b3.tileTopCastShadow, false, 'zero flat tiletop meshes cast redundant shadows');

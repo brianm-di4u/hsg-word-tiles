@@ -295,7 +295,7 @@ export const LIGHTING_PROFILES = {
         [0x3a2414, 0, -8, 0, 16],
       ],
     },
-    tile: { emissive: 0xffffff, emissiveIntensity: 0.14, bodyColor: 0xeadfc4 },
+    tile: { emissive: 0xffffff, emissiveIntensity: 0.14, bodyColor: 0xeadfc4, blankBodyColor: 0xcfe6e2 },
     towel: { cloth: 0xb5a892, stripe: 0x3b7870 },
     top: { emissive: 0x000000, emissiveIntensity: 0 },
     preDimColor: 0x1e140a,
@@ -314,7 +314,7 @@ export const LIGHTING_PROFILES = {
         [0x141222, 0, -8, 0, 16],
       ],
     },
-    tile: { emissive: 0xffe4be, emissiveIntensity: 0.11, bodyColor: 0xd8cdb6 },
+    tile: { emissive: 0xffe4be, emissiveIntensity: 0.11, bodyColor: 0xd8cdb6, blankBodyColor: 0xc3d8d4 },
     towel: { cloth: 0x524b61, stripe: 0x26444a },
     top: { emissive: 0xcabfd2, emissiveIntensity: 0.9 },   // through the board's own picture (emissiveMap), so dark ink stays dark
     preDimColor: 0x14121f,
@@ -448,7 +448,7 @@ export function init(canvas, theme, hooks = {}) {
   B3.bell = piece('bell'); B3.bell.position.set(FRAME_EXTENT + 1.24, 0, -HALF + 1.9); scene.add(B3.bell);
   B3.bellBrass = B3.bell.children.find((m) => m.name === 'brass') || null;
   B3.bellBob = null; B3.bellLastRing = 0; B3.bellRings = 0;
-  // tile pool (W3-S4-01 / CD-WF3-05): static tilebody batched into 3 standard THREE.InstancedMesh pools (board/last/staged),
+  // tile pool (W3-S4-01 / CD-WF3-05 / W3-S1-02): static tilebody batched into standard THREE.InstancedMesh pools (board/blank/last/staged),
   // flat tiletop crowns share one 2048x1024 256px-per-glyph atlas material with castShadow = false.
   B3.tileGeo = geometries('tile');
   const bodyPart = B3.tileGeo.find((g) => g.mat.name === 'tilebody');
@@ -456,6 +456,7 @@ export function init(canvas, theme, hooks = {}) {
   B3.tileBodyGeo = bodyPart.geo;
   B3.tileTopGeo = topPart.geo;
   B3.bodyMat = stdMaterial(bodyPart.mat);
+  B3.blankBodyMat = new THREE.MeshStandardMaterial({ color: 0xcfe6e2, metalness: 0, roughness: 0.62 });
   B3.stagedMat = B3.bodyMat.clone(); B3.stagedMat.emissive = new THREE.Color(0xd9a23a); B3.stagedMat.emissiveIntensity = 0.35;
   B3.lastMat = B3.bodyMat.clone(); B3.lastMat.color = new THREE.Color(0xF0D57A); B3.lastMat.emissive = new THREE.Color(0xD9A23A); B3.lastMat.emissiveIntensity = 0.3;
   const makeBodyInst = (mat, cap) => {
@@ -465,6 +466,7 @@ export function init(canvas, theme, hooks = {}) {
     return im;
   };
   B3.bodyInst = makeBodyInst(B3.bodyMat, 112);
+  B3.blankInst = makeBodyInst(B3.blankBodyMat, 16);
   B3.lastInst = makeBodyInst(B3.lastMat, 112);
   B3.stagedInst = makeBodyInst(B3.stagedMat, 16);
   B3.tiles = [];
@@ -515,9 +517,10 @@ export function destroy(opts = {}) {
   collectMat(B3.top);
   collectMat(B3.table && B3.table.material);
   collectMat(B3.bodyMat);
+  collectMat(B3.blankBodyMat);
   collectMat(B3.stagedMat);
   collectMat(B3.lastMat);
-  for (const inst of [B3.bodyInst, B3.lastInst, B3.stagedInst]) if (inst && typeof inst.dispose === 'function') inst.dispose();
+  for (const inst of [B3.bodyInst, B3.blankInst, B3.lastInst, B3.stagedInst]) if (inst && typeof inst.dispose === 'function') inst.dispose();
   for (const t of texs) t.dispose();
   if (B3.envRT && typeof B3.envRT.dispose === 'function') B3.envRT.dispose();
   for (const m of mats) if (typeof m.dispose === 'function') m.dispose();
@@ -529,9 +532,9 @@ export function destroy(opts = {}) {
   B3.hemi = null; B3.key = null; B3.fill = null;
   B3.table = null; B3.top = null; B3.board = null; B3.preDim = null; B3.dimIdx = null;
   B3.frame = null; B3.frameWalnut = null; B3.frameWalnutFromCounter = false; B3.towels = null; B3.bell = null; B3.bellBrass = null; B3.bellBob = null; B3.bellLastRing = 0; B3.bellRings = 0; B3.towelCloth = null; B3.towelStripe = null;
-  B3.tileGeo = null; B3.tileBodyGeo = null; B3.tileTopGeo = null; B3.bodyInst = null; B3.lastInst = null; B3.stagedInst = null;
+  B3.tileGeo = null; B3.tileBodyGeo = null; B3.tileTopGeo = null; B3.bodyInst = null; B3.blankInst = null; B3.lastInst = null; B3.stagedInst = null;
   B3.faceAtlasCanvas = null; B3.faceAtlasTex = null; B3.faceAtlasMat = null; B3.faceAtlasKey = '';
-  B3.bodyMat = null; B3.stagedMat = null; B3.lastMat = null; B3.envRT = null; B3.envTheme = ''; B3.envSwaps = 0;
+  B3.bodyMat = null; B3.blankBodyMat = null; B3.stagedMat = null; B3.lastMat = null; B3.envRT = null; B3.envTheme = ''; B3.envSwaps = 0;
   B3.boardCanvas = null; B3.boardMode3d = false; B3.tiles = []; B3.frames.length = 0; B3.intervals.length = 0; B3.texKey = '';
   R.proj.fn = null;
 }
@@ -576,6 +579,7 @@ export function setTheme(theme) {
   B3.fill.intensity = prof.fill.intensity; B3.fill.color.set(prof.fill.color);
   B3.scene.environmentIntensity = prof.envIntensity;
   if (B3.bodyMat) { B3.bodyMat.color.set(prof.tile.bodyColor); B3.bodyMat.needsUpdate = true; }
+  if (B3.blankBodyMat) { B3.blankBodyMat.color.set(prof.tile.blankBodyColor); B3.blankBodyMat.needsUpdate = true; }
   if (B3.top) { B3.top.emissive.set(prof.top.emissive); B3.top.emissiveIntensity = prof.top.emissiveIntensity; B3.top.needsUpdate = true; }
   if (B3.preDim) { B3.preDim.material.color.set(prof.preDimColor); B3.preDim.material.needsUpdate = true; }
   invalidateFaceCache();
@@ -726,7 +730,7 @@ export function render(d) {
   for (let i = 0; i < N * N; i++) if (d.board[i]) want.push({ i, t: d.board[i], kind: d.last && d.last.has(i) ? 'last' : 'board' });
   for (const t of d.staged || []) if (d.dragFrom !== t.i) want.push({ i: t.i, t, kind: 'staged' });
   while (B3.tiles.length < want.length) B3.tiles.push(tileFaceMesh());
-  let nBoard = 0, nLast = 0, nStaged = 0;
+  let nBoard = 0, nBlank = 0, nLast = 0, nStaged = 0;
   for (let k = 0; k < B3.tiles.length; k++) {
     const mf = B3.tiles[k];
     const w = want[k];
@@ -749,13 +753,14 @@ export function render(d) {
     _tileMat4.set(cr * sx, -sr * sy, 0, x, sr * sx, cr * sy, 0, TOP + lift, 0, 0, sx, z, 0, 0, 0, 1);
     if (w.kind === 'staged' && nStaged < 16) B3.stagedInst.setMatrixAt(nStaged++, _tileMat4);
     else if (w.kind === 'last' && nLast < 112) B3.lastInst.setMatrixAt(nLast++, _tileMat4);
+    else if (w.t.blank && nBlank < 16) B3.blankInst.setMatrixAt(nBlank++, _tileMat4);
     else if (nBoard < 112) B3.bodyInst.setMatrixAt(nBoard++, _tileMat4);
     mf.visible = true;
     mf.position.set(x, TOP + lift, z); mf.rotation.set(0, 0, roll); mf.scale.set(sx, sy, sx);
     mf.geometry = faceGeometry(w.t.l, w.t.blank, B3.dark);
     mf.material = B3.faceAtlasMat;
   }
-  for (const [inst, n] of [[B3.bodyInst, nBoard], [B3.lastInst, nLast], [B3.stagedInst, nStaged]]) {
+  for (const [inst, n] of [[B3.bodyInst, nBoard], [B3.blankInst, nBlank], [B3.lastInst, nLast], [B3.stagedInst, nStaged]]) {
     if (!inst) continue;
     inst.count = n;
     inst.visible = n > 0;
@@ -873,9 +878,10 @@ export function debug() {
       cell: ATLAS_CELL, slots: faceCache.size, textures: B3.faceAtlasTex ? 1 : 0,
       sharedMaterial: !!(B3.faceAtlasMat && B3.tiles.every((m) => !m.visible || m.material === B3.faceAtlasMat)),
     } : null,
-    bodyInstanced: !!(B3.bodyInst && B3.bodyInst.isInstancedMesh && B3.lastInst && B3.lastInst.isInstancedMesh && B3.stagedInst && B3.stagedInst.isInstancedMesh),
-    bodyDrawCalls: (B3.bodyInst?.visible ? 1 : 0) + (B3.lastInst?.visible ? 1 : 0) + (B3.stagedInst?.visible ? 1 : 0),
-    bodyCounts: { board: B3.bodyInst?.count || 0, last: B3.lastInst?.count || 0, staged: B3.stagedInst?.count || 0 },
+    bodyInstanced: !!(B3.bodyInst && B3.bodyInst.isInstancedMesh && B3.blankInst && B3.blankInst.isInstancedMesh && B3.lastInst && B3.lastInst.isInstancedMesh && B3.stagedInst && B3.stagedInst.isInstancedMesh),
+    bodyDrawCalls: (B3.bodyInst?.visible ? 1 : 0) + (B3.blankInst?.visible ? 1 : 0) + (B3.lastInst?.visible ? 1 : 0) + (B3.stagedInst?.visible ? 1 : 0),
+    bodyCounts: { board: B3.bodyInst?.count || 0, blank: B3.blankInst?.count || 0, last: B3.lastInst?.count || 0, staged: B3.stagedInst?.count || 0 },
+    blankBodyMat: B3.blankBodyMat ? { type: B3.blankBodyMat.type, color: B3.blankBodyMat.color.getHexString(), roughness: B3.blankBodyMat.roughness } : null,
     tileTopCastShadow: B3.tiles.some((m) => m.castShadow),
     drawCalls: B3.renderer ? B3.renderer.info.render.calls : 0,
     gpuTextures: B3.renderer ? B3.renderer.info.memory.textures : 0,
