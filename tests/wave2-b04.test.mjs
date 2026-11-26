@@ -288,6 +288,8 @@ export const tests = [
       t.expect(!!clubId, 'found a club-category entry rendered with card-club.webp');
       await t.game('act', 'fact', clubId.id, clubId.form);
       await t.waitFrames(2);
+      // wait for the image's own state, not for frames: complete is true once it has loaded or failed, so a broken file still fails below (ruling 33)
+      await t.page.waitForFunction(() => { const im = document.querySelector('#modal .fact-art img.vig'); return !!im && im.complete; }, null, { timeout: 10000 });
       const clubCard = await t.page.evaluate(() => {
         const wrap = document.querySelector('#modal .fact-art');
         const img = wrap && wrap.querySelector('img.vig');
