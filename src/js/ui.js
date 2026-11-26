@@ -21,6 +21,7 @@ export const ICON = {
   pass: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12m-4-5 5 5-5 5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   hint: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3zM9.5 19h5M10.5 21.5h3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>',
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  zoomIn: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path class="zin" d="M10.5 7.5v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   zoomOut: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
   steam: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20c-2-3 2-5 0-8s2-5 0-8M12 20c-2-3 2-5 0-8s2-5 0-8M16 20c-2-3 2-5 0-8s2-5 0-8" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>',
@@ -525,7 +526,7 @@ export function settingsHtml(st, canVibrate = false) {
   const seg = (key, opts, label) => `<div class="setrow"><span id="set-${key}">${label}</span><div class="seg" role="radiogroup" aria-labelledby="set-${key}">${opts.map(([v, t], i) => `<button role="radio" aria-checked="${st[key] === v}" tabindex="${i === Math.max(0, opts.findIndex((o) => o[0] === st[key])) ? 0 : -1}" data-set="${key}" data-val="${v}">${t}</button>`).join('')}</div></div>`;
   const slider = (id, attr, val, label, aria) => {
     const text = pct(val);
-    return `<div class="setrow"><span>${label}</span><div class="set-range"><input id="${id}" type="range" min="0" max="1" step="0.05" value="${val}" ${attr} aria-label="${aria}" aria-valuetext="${text}"><output for="${id}" data-out="${attr}">${text}</output></div></div>`;
+    return `<div class="setrow"><span>${label}</span><div class="set-range"><input id="${id}" type="range" min="0" max="1" step="0.05" value="${val}" style="--p:${text}" ${attr} aria-label="${aria}" aria-valuetext="${text}"><output for="${id}" data-out="${attr}">${text}</output></div></div>`;
   };
   return `<div class="sheet settings">
     ${band()}

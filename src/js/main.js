@@ -561,6 +561,7 @@ function wireScreen(name) {
       const out = scr.querySelector(`[data-out="${attr}"]`);
       const syncRange = (v) => {
         const txt = `${Math.round(Math.max(0, Math.min(1, v)) * 100)}%`;
+        r.style.setProperty('--p', txt);
         r.setAttribute('aria-valuetext', txt);
         if (out) out.textContent = txt;
       };
@@ -3091,6 +3092,9 @@ function ensureVisible(i) {
 
 // ---------- wiring ----------
 function wireStatic() {
+  $('#b-menu').innerHTML = UI.ICON.menu;
+  $('#b-zoomin').innerHTML = UI.ICON.zoomIn;
+  $('#b-zoom').innerHTML = UI.ICON.zoomOut;
   $('#b-menu').addEventListener('click', () => { unlock(); openDialog('pause'); });
   $('#turnline').addEventListener('click', (e) => {
     if (!e.target.closest('[data-open-tracker]') || trackerSeat() < 0) return;
