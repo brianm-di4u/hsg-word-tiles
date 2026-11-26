@@ -678,7 +678,7 @@ function beginGame(s, intent) {
   G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; G.badPulse = null; G.pendingVfx = null; G.inspect = -1;
   cancelTurnTimers();
   clearTimeout(errFlashTimer); G.errFlash = false;
-  clearTimeout(scoreHiTimer); G.scoreHi = null; cancelScoreRoll(); endFlip(); endReturn();
+  clearTimeout(scoreHiTimer); G.scoreHi = null; cancelScoreRoll(); endFlip(); dropLanding(); endReturn();
   clearTimeout(G.plaqueTimer); G.plaqueHi.clear(); G.plaqueSnap = null; clearPlaqueFx(); G.springsOpen = false;
   B3.stopBell();
   clearFx(); steam.arcLog.length = 0;
@@ -875,7 +875,7 @@ function afterAction(entry, fromAi) {
   const fogRevealed = !!(prevPlaqueSnap && s.featured.some((f, k) => f.by == null && prevPlaqueSnap[k] && f.shown.length > prevPlaqueSnap[k].shown));
   const bagJustEmptied = s.mode !== 'daily' && !s.over && G.bagLen > 0 && s.bag.length === 0;
   G.bagLen = s.bag.length;
-  cancelDrag(); endReturn(); endFlip();
+  dropLanding(); cancelDrag(); endReturn(); endFlip();   // a Play already landed its tiles (doPlay); a pass or swap takes them back
   G.flash = null; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer); G.inspect = -1; clearTimeout(inspectTimer);
   const said = s.players[entry.p].kind === 'ai' ? barkFor(s, entry) : null;
   G.bark = said ? { ...said, persona: s.players[entry.p].persona } : null;
@@ -1145,6 +1145,7 @@ function cellScreenBox(i, lift = R.STAGED_LIFT) {
 function unstage(i, toPos) {
   const t = G.staged.find((x) => x.i === i);
   if (!t) return;
+  if (G.returningCell === i) dropLanding();
   endReturn(); endFlip(); flushSettle();
   const fromBox = animOn() && !G.drag && toPos == null && G.scene === 'game' ? cellScreenBox(i, R.STAGED_LIFT) : null;
   const flyTile = fromBox ? { l: t.blank ? '' : t.l, blank: t.blank } : null;
@@ -1162,7 +1163,7 @@ function unstage(i, toPos) {
 }
 // a paid hint comes back after a reload only while its tiles are untouched: taking them back, or staging another tile, ends it
 function forgetHint(s) { if (s && s.hintStaged) { delete s.hintStaged; save(s); } }
-function recallAll() { G.breakdown = false; if (!G.staged.length) return; endReturn(); endFlip(); flushSettle(); for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer); forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
+function recallAll() { G.breakdown = false; if (!G.staged.length) return; dropLanding(); endReturn(); endFlip(); flushSettle(); for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer); forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
 function endFlip() {
   clearTimeout(G.flipTimer); G.flipTimer = 0;
   document.querySelectorAll('#rack .rtile').forEach((el) => {
@@ -1248,7 +1249,7 @@ async function doHint() {
   if (!humanCanAct() || G.s.challenge) return;
   const p = cur();
   if (p.hints == null || (p.hints <= 0 && !p.unl)) return;
-  cancelDrag(); endReturn(); endFlip();
+  dropLanding(); cancelDrag(); endReturn(); endFlip();
   recallAll();
   // staging is locked (humanCanAct) until the hint arrives, so it can't land on top of new tiles
   const s = G.s, move = s.move;
@@ -2587,6 +2588,8 @@ function minimapPanTo(x, y) {
 }
 function boardDown(e) {
   if (G.scene !== 'game') return;
+  // a press on the tile still in flight takes it back (a tap) or lifts it (a drag): that tile does not land
+  if (G.returnOnLand && G.returningCell != null && e.isPrimary && humanCanAct()) { const [bx, by] = boardPoint(e); if (pick(bx, by) === G.returningCell) dropLanding(); }
   endReturn(); flushSettle();
   if (e.isPrimary) claimPointer(e);
   else if (G.pinch || (G.drag && G.drag.from !== 'pan')) return;   // a tile is in hand, or a pinch is on: ignore more fingers
@@ -2781,7 +2784,7 @@ function flyGhost(tile, fromBox, toBox, ms = 130, opts = null) {
   gh.style.transition = `transform ${ms}ms cubic-bezier(0.22, 1, 0.36, 1), scale ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)`;
   gh.style.transform = `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
   gh.style.scale = String((toBox.width / sz).toFixed(3));
-  G.returnTimer = setTimeout(() => endReturn(true), ms + 15);
+  G.returnTimer = setTimeout(endReturn, ms + 15);
 }
 // a tile that missed the board flies back to its place on the rack
 function returnToRack(d) {
@@ -2811,9 +2814,12 @@ function returnToBoard(d) {
   flyGhost(d.tile, fromBox, toBox, 140, { cellI: d.i });
   updatePreview(); renderStaging();
 }
-function endReturn(landed = false) {
+// A flight cut short by anything that leaves the tile on its square (the next rack tile, a board tap, Play, shuffle, a dialog)
+// lands it at once, with its clack, settle and haptic (W6-S5-02); only taking the tile back drops the landing first (dropLanding).
+function dropLanding() { G.returnOnLand = null; }
+function endReturn() {
   clearTimeout(G.returnTimer); G.returnTimer = 0;
-  const onLand = landed ? G.returnOnLand : null;
+  const onLand = G.returnOnLand;
   G.returnOnLand = null;
   const gh = $('#ghost');
   gh.classList.remove('over-target', 'over-blocked');

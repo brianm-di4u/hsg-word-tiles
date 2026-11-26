@@ -366,6 +366,47 @@ export const tests = [
       t.equal(landed.hasOnLand, false, 'G.returnOnLand cleared after touchdown');
       t.expect(diffLand > 15, `destination cell renders landed ceramic tile after endReturn() (pixel diff=${diffLand})`);
 
+      // 1b) W5-B05-hotfix follow-up 3: a tap that cuts the flight short but keeps the tile staged (the next rack tile, a tap on
+      // another square) lands it at once, with its clack, settle and haptic. The 135 ms flight timer is held so the interrupt
+      // always comes mid-flight (state, not timing); haptics are recorded through a stub, as a phone has the function.
+      await t.page.evaluate(() => {
+        window.__vib = []; navigator.vibrate = (p) => { window.__vib.push(p); return true; }; window.__G.settings.vibrate = true;
+        window.__heldFlights = 0; window.__origSetTimeout = window.setTimeout;
+        window.setTimeout = function (fn, ms, ...a) { if (ms === 135) { window.__heldFlights++; return 0; } return window.__origSetTimeout(fn, ms, ...a); };
+      });
+      const keepCases = [
+        { cell: CENTER + 3, label: 'the next rack tile', interrupt: async () => { const r = await t.game('act', 'rackTile', 0); await t.page.mouse.click(r[0], r[1]); } },
+        { cell: CENTER + 15, label: 'a tap on another square', interrupt: async () => { const p = await t.game('act', 'screen', CENTER - 15); await t.page.mouse.click(p[0], p[1]); } },
+      ];
+      for (const kc of keepCases) {
+        const rk = await t.game('act', 'rackTile', 0);
+        const pk = await t.game('act', 'screen', kc.cell);
+        await t.page.mouse.click(rk[0], rk[1]);
+        const pre = await t.page.evaluate(() => ({ places: window.__game.audioState().played.filter((x) => x === 'place').length, vib: window.__vib.length, held: window.__heldFlights }));
+        await t.page.mouse.click(pk[0], pk[1]);
+        const flying = await t.page.evaluate((c) => ({ pending: typeof window.__G.returnOnLand === 'function', cell: window.__G.returningCell, held: window.__heldFlights, places: window.__game.audioState().played.filter((x) => x === 'place').length }), kc.cell);
+        t.expect(flying.pending && flying.cell === kc.cell && flying.held === pre.held + 1, `${kc.label}: the tile is in flight to its square with its landing pending (${JSON.stringify(flying)})`);
+        t.equal(flying.places, pre.places, `${kc.label}: no clack before touchdown`);
+        await kc.interrupt();
+        const after = await t.page.evaluate((c) => ({
+          places: window.__game.audioState().played.filter((x) => x === 'place').length,
+          vib: window.__vib.length,
+          settle: window.__G.settle.has(c),
+          staged: window.__G.staged.some((x) => x.i === c),
+          pending: window.__G.returnOnLand !== null,
+          cell: window.__G.returningCell,
+        }), kc.cell);
+        t.equal(after.staged, true, `${kc.label}: the tile stays staged on its square`);
+        t.equal(after.places, pre.places + 1, `${kc.label}: the interrupted flight still gives its touchdown clack, once`);
+        t.equal(after.settle, true, `${kc.label}: and its settle`);
+        t.expect(after.vib >= pre.vib + 1, `${kc.label}: and its haptic (${pre.vib} -> ${after.vib})`);
+        t.expect(!after.pending && after.cell === null, `${kc.label}: nothing is left pending`);
+        await t.game('act', 'recall');
+        await t.page.evaluate(() => { window.__G.selected = null; });   // the rack press above also selected a tile
+      }
+      await t.page.evaluate(() => { window.setTimeout = window.__origSetTimeout; window.__G.settings.vibrate = false; });
+      await t.waitIdle(3000);
+
       // 2) Interruption mid-flight cancels pending touchdown audio cleanly (no phantom delayed place cue)
       const cell2 = CENTER + 2;
       const rNext = await t.game('act', 'rackTile', 0);

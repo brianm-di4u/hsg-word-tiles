@@ -11703,7 +11703,7 @@ function beginGame(s, intent) {
   G.animUntil = 0; G.busyUntil = 0; G.lastPulse = null; G.badPulse = null; G.pendingVfx = null; G.inspect = -1;
   cancelTurnTimers();
   clearTimeout(errFlashTimer); G.errFlash = false;
-  clearTimeout(scoreHiTimer); G.scoreHi = null; cancelScoreRoll(); endFlip(); endReturn();
+  clearTimeout(scoreHiTimer); G.scoreHi = null; cancelScoreRoll(); endFlip(); dropLanding(); endReturn();
   clearTimeout(G.plaqueTimer); G.plaqueHi.clear(); G.plaqueSnap = null; clearPlaqueFx(); G.springsOpen = false;
   B3.stopBell();
   clearFx(); steam.arcLog.length = 0;
@@ -11882,7 +11882,7 @@ function afterAction(entry, fromAi) {
   const fogRevealed = !!(prevPlaqueSnap && s.featured.some((f, k) => f.by == null && prevPlaqueSnap[k] && f.shown.length > prevPlaqueSnap[k].shown));
   const bagJustEmptied = s.mode !== 'daily' && !s.over && G.bagLen > 0 && s.bag.length === 0;
   G.bagLen = s.bag.length;
-  cancelDrag(); endReturn(); endFlip();
+  dropLanding(); cancelDrag(); endReturn(); endFlip();   // a Play already landed its tiles (doPlay); a pass or swap takes them back
   G.flash = null; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer); G.inspect = -1; clearTimeout(inspectTimer);
   const said = s.players[entry.p].kind === 'ai' ? barkFor(s, entry) : null;
   G.bark = said ? { ...said, persona: s.players[entry.p].persona } : null;
@@ -12133,6 +12133,7 @@ function cellScreenBox(i, lift = R.STAGED_LIFT) {
 function unstage(i, toPos) {
   const t = G.staged.find((x) => x.i === i);
   if (!t) return;
+  if (G.returningCell === i) dropLanding();
   endReturn(); endFlip(); flushSettle();
   const fromBox = animOn() && !G.drag && toPos == null && G.scene === 'game' ? cellScreenBox(i, R.STAGED_LIFT) : null;
   const flyTile = fromBox ? { l: t.blank ? '' : t.l, blank: t.blank } : null;
@@ -12149,7 +12150,7 @@ function unstage(i, toPos) {
   }
 }
 function forgetHint(s) { if (s && s.hintStaged) { delete s.hintStaged; save(s); } }
-function recallAll() { G.breakdown = false; if (!G.staged.length) return; endReturn(); endFlip(); flushSettle(); for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer); forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
+function recallAll() { G.breakdown = false; if (!G.staged.length) return; dropLanding(); endReturn(); endFlip(); flushSettle(); for (const t of [...G.staged]) G.order.push(t.k); G.staged = []; G.badPulse = null; G.hoverInfo = null; G.hoverBath = null; clearTimeout(hoverTapTimer); forgetHint(G.s); sfx('recall'); updatePreview(); renderStaging(); }
 function endFlip() {
   clearTimeout(G.flipTimer); G.flipTimer = 0;
   document.querySelectorAll('#rack .rtile').forEach((el) => {
@@ -12232,7 +12233,7 @@ async function doHint() {
   if (!humanCanAct() || G.s.challenge) return;
   const p = cur();
   if (p.hints == null || (p.hints <= 0 && !p.unl)) return;
-  cancelDrag(); endReturn(); endFlip();
+  dropLanding(); cancelDrag(); endReturn(); endFlip();
   recallAll();
   const s = G.s, move = s.move;
   G.hintBusy = true; renderStaging();
@@ -13517,6 +13518,7 @@ function minimapPanTo(x, y) {
 }
 function boardDown(e) {
   if (G.scene !== 'game') return;
+  if (G.returnOnLand && G.returningCell != null && e.isPrimary && humanCanAct()) { const [bx, by] = boardPoint(e); if (pick(bx, by) === G.returningCell) dropLanding(); }
   endReturn(); flushSettle();
   if (e.isPrimary) claimPointer(e);
   else if (G.pinch || (G.drag && G.drag.from !== 'pan')) return;   // a tile is in hand, or a pinch is on: ignore more fingers
@@ -13697,7 +13699,7 @@ function flyGhost(tile, fromBox, toBox, ms = 130, opts = null) {
   gh.style.transition = `transform ${ms}ms cubic-bezier(0.22, 1, 0.36, 1), scale ${ms}ms cubic-bezier(0.22, 1, 0.36, 1)`;
   gh.style.transform = `translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
   gh.style.scale = String((toBox.width / sz).toFixed(3));
-  G.returnTimer = setTimeout(() => endReturn(true), ms + 15);
+  G.returnTimer = setTimeout(endReturn, ms + 15);
 }
 function returnToRack(d) {
   G.order.splice(d.from === 'rack' ? slot(d) : G.order.length, 0, d.k);
@@ -13725,9 +13727,10 @@ function returnToBoard(d) {
   flyGhost(d.tile, fromBox, toBox, 140, { cellI: d.i });
   updatePreview(); renderStaging();
 }
-function endReturn(landed = false) {
+function dropLanding() { G.returnOnLand = null; }
+function endReturn() {
   clearTimeout(G.returnTimer); G.returnTimer = 0;
-  const onLand = landed ? G.returnOnLand : null;
+  const onLand = G.returnOnLand;
   G.returnOnLand = null;
   const gh = $('#ghost');
   gh.classList.remove('over-target', 'over-blocked');
