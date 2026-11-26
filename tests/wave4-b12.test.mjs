@@ -1,4 +1,4 @@
-// Wave 4, batch W4-B12 (WF-3 tech_art_pipeline): W3-S1-15, W3-S3-14.
+// Wave 4, batch W4-B12 (WF-3 tech_art_pipeline): W3-S1-15, W3-S3-14, W3-S5-05.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -129,6 +129,69 @@ export const tests = [
       t.expect(buildLayout.includes('adds a flat +20 to a Hot Springs word'), 'tools/build-layout.mjs states flat +20 Bathhouse Row scoring');
       t.expect(layoutJs.includes('adds a flat +20 to a Hot Springs word'), 'src/js/layout.js states flat +20 Bathhouse Row scoring');
       t.expect(guide.includes('46 painted `.webp` files'), 'research/visual-style-guide.md keeps verified 46 painted .webp files count (P-F08)');
+    },
+  },
+  // ---------- W3-S5-05 ----------
+  {
+    name: 'W3-S5-05 3D lift projection forwards elevation (0.24/0.30/0.25), clothTexture uses seeded PRNG, and steam/spark VFX are deterministic under __TEST__ and freezeFx',
+    viewports: ['desktop'],
+    initScript: quiet,
+    async run(t) {
+      // Static guard: zero Math.random() in board3d.js (clothTexture seeded) and zero Math.random() inside steam/spark FX in main.js
+      const b3Src = fs.readFileSync(path.join(root, 'src/js/board3d.js'), 'utf8');
+      const mainSrc = fs.readFileSync(path.join(root, 'src/js/main.js'), 'utf8');
+      t.equal(/Math\.random/.test(b3Src), false, 'board3d.js has zero unseeded Math.random() calls');
+      t.expect(/R\.proj\.fn\s*=\s*\(bx,\s*by,\s*lift\s*=\s*0\)\s*=>\s*screenOf\(bx,\s*by,\s*lift\)/.test(b3Src), 'board3d.js forwards lift through R.proj.fn');
+      const fxSlice = mainSrc.slice(mainSrc.indexOf('function wispAt()'), mainSrc.indexOf('function goldSweep('));
+      t.equal(/Math\.random/.test(fxSlice), false, 'main.js steam/spark emitters use seeded fxRand() instead of Math.random()');
+
+      await ready(t);
+      const runSteamPlay = async (seed, testFlag = true) => {
+        await t.page.evaluate((flag) => { window.__TEST__ = flag; }, testFlag);
+        await t.game('seed', seed);
+        await t.game('act', 'freezeFx', 1000);
+        await t.game('newGame', { seed, seats: [{ kind: 'human', name: 'You' }, { kind: 'human', name: 'P2' }] });
+        await t.waitIdle(6000);
+        await t.game('act', 'reveal');
+        const st = await t.state();
+        st.game.players[0].rack = 'STEAMQQ'.split('');
+        await t.game('setState', { game: st.game });
+        await t.game('act', 'stage', [...'STEAM'].map((l, k) => ({ i: 7 * 15 + 5 + k, l })));
+        await t.game('act', 'play');
+        await t.waitFrames(2);
+        const after = await t.state();
+        await t.game('act', 'freezeFx', null);
+        return after.fx;
+      };
+
+      // 1) Same seed under __TEST__ produces byte-for-byte identical steam particle vectors
+      const fxA = await runSteamPlay(41, true);
+      const fxB = await runSteamPlay(41, true);
+      t.equal(fxA.seeded, true, 'steam FX reports seeded mode under __TEST__');
+      t.equal(fxA.rngSeed, 41, 'steam FX seeds from game seed 41');
+      t.expect(fxA.sample.length >= 4, `captured >= 4 steam particles (got ${fxA.sample.length})`);
+      t.equal(JSON.stringify(fxA.sample), JSON.stringify(fxB.sample), 'same seed produces identical deterministic steam particles across runs');
+
+      // 2) Different seed produces a different particle sequence
+      const fxC = await runSteamPlay(99, true);
+      t.equal(fxC.rngSeed, 99, 'steam FX seeds from game seed 99');
+      t.expect(JSON.stringify(fxC.sample) !== JSON.stringify(fxA.sample), 'different seed yields a distinct steam particle sequence');
+
+      // 3) freezeFx alone (even when __TEST__ is false) still runs deterministically
+      const fxFreezeA = await runSteamPlay(47, false);
+      const fxFreezeB = await runSteamPlay(47, false);
+      await t.page.evaluate(() => { window.__TEST__ = true; });
+      t.equal(JSON.stringify(fxFreezeA.sample), JSON.stringify(fxFreezeB.sample), 'freezeFx keeps steam particles deterministic even without __TEST__');
+
+      // 4) On GPU, 3D lift projection elevates placed (0.24) and staged (0.30) overlays above board slab (0)
+      const b3 = await t.game('act', 'b3');
+      if (t.gpu && b3 && b3.on) {
+        const [, y0] = await t.game('act', 'cell', 112, 0);
+        const [, y24] = await t.game('act', 'cell', 112, 0.24);
+        const [, y30] = await t.game('act', 'cell', 112, 0.30);
+        t.expect(y24 < y0 - 2, `placed TILE_LIFT=0.24 projects visibly above slab y (${y24} < ${y0})`);
+        t.expect(y30 < y24 - 0.5, `staged STAGED_LIFT=0.30 projects above placed lift (${y30} < ${y24})`);
+      }
     },
   },
 ];
