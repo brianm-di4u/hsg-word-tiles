@@ -546,7 +546,7 @@ export function settingsHtml(st, canVibrate = false) {
     ${seg('board3d', [['auto', 'Auto'], ['on', '3D'], ['off', 'Flat']], 'Board')}
     ${seg('ai', [['normal', 'Normal'], ['fast', 'Fast'], ['instant', 'Instant']], 'Computer speed')}
     ${seg('townCue', [[true, 'On'], [false, 'Off']], 'Hot Springs rack cue')}
-    <div class="setrow"><span>Tips</span><button class="btn quiet" data-tips>${st.tipsSeen ? 'Show tips again' : 'Tips will show in a game'}</button></div>
+    <div class="setrow"><span>Tips</span><button class="btn quiet" data-tips${st.tipsSeen ? '' : ' disabled'}>${st.tipsSeen ? 'Show tips again' : 'Tips will show in a game'}</button></div>
   </div>`;
 }
 

@@ -553,7 +553,8 @@ function wireScreen(name) {
     again.addEventListener('click', () => {
       unlock(); sfx('uiTap');
       G.settings.tipsSeen = false; G.coach = null; saveSettings();
-      again.textContent = 'Tips will show in a game'; liveSay('The tips will show again in your game.');
+      again.textContent = 'Tips will show in a game'; again.disabled = true;
+      liveSay('The tips will show again in your game.');
     });
     // Volume is the master; the effects, music and ambience levels sit under it independently (OQ-WF6-03)
     for (const [attr, key] of [['data-vol', 'vol'], ['data-fxvol', 'fxVol'], ['data-musicvol', 'musicVol'], ['data-ambvol', 'ambVol']]) {

@@ -66,11 +66,12 @@ kbd { font: 600 0.72em var(--f-ui); padding: 1px 4px; border-radius: 4px; border
   min-height: 48px; padding: 10px 18px; border-radius: 10px; border: 1.5px solid var(--brass);
   background: linear-gradient(#FFFDF7, #F1E9D6); color: #1F2A24; font: 700 1rem var(--f-ui); letter-spacing: 0.04em;
   box-shadow: 0 2px 0 rgba(110, 75, 30, 0.35), inset 0 1px 0 #FFF;
+  transition: transform var(--dur-press) var(--ease-press), filter var(--dur-press) var(--ease-press), box-shadow var(--dur-press) var(--ease-press);
 }
 .btn small { font: 400 0.78em var(--f-ui); letter-spacing: 0; color: #574A37; }
 .btn-tag { margin-left: 4px; padding: 0 8px; border-radius: 99px; border: 1px solid currentColor; font: 700 0.72rem / 1.4 var(--f-ui); letter-spacing: 0.02em; white-space: nowrap; }
-.btn:hover { filter: brightness(1.03); }
-.btn:active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(110, 75, 30, 0.35); }
+@media (hover: hover) { .btn:not([disabled]):hover { filter: brightness(1.03); } }
+.btn:not([disabled]):active { transform: translateY(1px); box-shadow: 0 1px 0 rgba(110, 75, 30, 0.35); }
 .btn.primary { background: linear-gradient(#A6422B, #7E2F1F); color: #FFF; border-color: var(--brass-hi); box-shadow: 0 2px 0 #4B1A10; }
 .btn.primary small { color: #F6E3C0; }
 .btn.quiet { background: transparent; color: inherit; border-color: rgba(184, 144, 47, 0.7); box-shadow: none; }
@@ -571,7 +572,7 @@ body.reduce .dialog, body.reduce .fact { animation: none; }
 .swap-bag b { color: var(--ink); }
 .swap-stall { margin: 8px 0 0; font-weight: 600; }
 .swap-tiles, .letters { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.stile { position: relative; width: 48px; height: 48px; border-radius: 9px; border: 1.5px solid var(--tile-line); background: var(--tile-bg); color: var(--tile-ink); font: 800 1.4rem var(--f-serif); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); transition: transform 120ms var(--ease-ceramic), background 120ms var(--ease-ceramic), border-color 120ms var(--ease-ceramic), box-shadow var(--dur-press) var(--ease-press); }
+.stile { position: relative; width: 48px; height: 48px; border-radius: 9px; border: 1.5px solid var(--tile-line); background: var(--tile-bg); color: var(--tile-ink); font: 800 1.4rem var(--f-serif); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); transition: transform 120ms var(--ease-ceramic), background 120ms var(--ease-ceramic), border-color 120ms var(--ease-ceramic), box-shadow var(--dur-press) var(--ease-press), filter var(--dur-press) var(--ease-press); }
 .stile.blank { display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 .stile.blank svg { width: 24px; height: 24px; display: block; }
 .stile.blank:not([aria-pressed="true"]) { background: linear-gradient(#E6F3F0, #CFE6E2); border-color: #5D968D; color: #144B48; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55), 0 2px 0 rgba(0, 0, 0, 0.35); }
@@ -1140,15 +1141,82 @@ body:not(.reduce) .over.arrive > :not(.over-art):not(.dlg-btns) { animation: arr
 .over-loss .mast-kicker { color: var(--muted); }
 .feat-list li:has(.fchip) { padding: 0; }
 .fchip { display: flex; flex-direction: column; align-items: flex-start; min-height: 44px; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.fchip:hover { background: rgba(138, 106, 30, 0.12); }
 .fchip small { text-decoration: underline; text-decoration-color: rgba(120, 100, 60, 0.5); }
 #preview .stall { color: #F3DD8B; }
 
+/* ---------- tactile hover/press states across secondary interactive controls (W5-S4-01, Ruling 30 hit-box stability) ---------- */
+.abtn, .iconbtn, .plaque, .springs-bar, .seg button, .tabs button, .opps .opp, .reg-item button, .wchip, .fchip, #toast button, #preview .bdbtn {
+  transition: filter var(--dur-press) var(--ease-press), background var(--dur-press) var(--ease-press), border-color var(--dur-press) var(--ease-press), box-shadow var(--dur-press) var(--ease-press), transform var(--dur-press) var(--ease-press);
+}
+.rtile canvas, .abtn > *, .iconbtn svg, .plaque > *, .springs-bar > *, .opps .opp > *, .reg-item button > *, .fchip > *, #toast button > * {
+  transition: transform var(--dur-press) var(--ease-press), filter var(--dur-press) var(--ease-press);
+}
+@media (hover: hover) {
+  .abtn:not([disabled]):not([aria-disabled="true"]):hover { filter: brightness(1.04); border-color: var(--brass-hi); }
+  .iconbtn:not([disabled]):hover { background: rgba(255, 248, 230, 0.18); border-color: var(--brass-hi); }
+  .sheet .iconbtn:not([disabled]):hover, .card .iconbtn:not([disabled]):hover, .seat .iconbtn:not([disabled]):hover { background: var(--panel-2); border-color: var(--brass); }
+  .rtile:not([disabled]):hover canvas { filter: brightness(1.05); }
+  .plaque:not([disabled]):hover, .springs-bar:not([disabled]):hover { filter: brightness(1.05); box-shadow: inset 0 1px 0 rgba(255, 245, 210, 0.5), 0 3px 8px rgba(0, 0, 0, 0.36); }
+  .stile:not([disabled]):hover { filter: brightness(1.04); border-color: var(--brass); }
+  .seg button:not([disabled]):not([aria-checked="true"]):hover { background: rgba(184, 144, 47, 0.16); }
+  .seg button[aria-checked="true"]:hover { filter: brightness(1.06); }
+  .tabs button:not([disabled]):not([aria-selected="true"]):hover { border-color: var(--brass); background: var(--panel-2); }
+  .tabs button[aria-selected="true"]:hover { filter: brightness(1.06); }
+  .opps .opp:not([disabled]):hover { border-color: var(--brass); background: var(--panel-2); }
+  .reg-item button:not([disabled]):hover { filter: brightness(1.04); border-color: var(--primary); }
+  .wchip:not([disabled]):hover { filter: brightness(1.05); border-color: var(--primary); }
+  .fchip:not([disabled]):hover { background: rgba(138, 106, 30, 0.14); }
+  #toast button:not([disabled]):hover { filter: brightness(1.04); }
+  #preview .bdbtn:not([disabled]):hover { background: rgba(243, 221, 139, 0.18); border-color: #F3DD8B; }
+}
+.iconbtn:not([disabled]):active,
+.plaque:not([disabled]):active,
+.springs-bar:not([disabled]):active,
+.opps .opp:not([disabled]):active,
+.reg-item button:not([disabled]):active,
+.fchip:not([disabled]):active,
+#toast button:not([disabled]):active { filter: brightness(0.95); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.22); }
+.iconbtn:not([disabled]):active svg,
+.plaque:not([disabled]):active > *,
+.springs-bar:not([disabled]):active > *,
+.opps .opp:not([disabled]):active > *,
+.reg-item button:not([disabled]):active > *,
+.fchip:not([disabled]):active > *,
+#toast button:not([disabled]):active > * { transform: translateY(1px) scale(0.97); }
+.stile:not([disabled]):active { filter: brightness(0.95); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.22); transform: translateY(1px) scale(0.97); }
+.stile[aria-pressed="true"]:not([disabled]):active { transform: translateY(-2px) scale(0.97); }
+.seg button:not([disabled]):active,
+.tabs button:not([disabled]):active,
+.wchip:not([disabled]):active,
+#preview .bdbtn:not([disabled]):active { filter: brightness(0.94); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.22); transform: translateY(1px) scale(0.97); }
+
 /* ---------- reduced motion: disable animations/transitions across every animated selector, keeping restrained non-vestibular cues ---------- */
+body.reduce .btn,
+body.reduce .abtn,
+body.reduce .abtn > *,
+body.reduce .iconbtn,
+body.reduce .iconbtn svg,
+body.reduce .rtile,
+body.reduce .rtile canvas,
+body.reduce .plaque,
+body.reduce .plaque > *,
+body.reduce .springs-bar,
+body.reduce .springs-bar > *,
+body.reduce .stile,
+body.reduce .seg button,
+body.reduce .tabs button,
+body.reduce .opps .opp,
+body.reduce .opps .opp > *,
+body.reduce .reg-item button,
+body.reduce .reg-item button > *,
+body.reduce .wchip,
+body.reduce .fchip,
+body.reduce .fchip > *,
+body.reduce #toast button,
+body.reduce #toast button > *,
+body.reduce #preview .bdbtn,
 body.reduce .check input,
 body.reduce .check input::after,
-body.reduce .rtile,
-body.reduce .stile,
 body.reduce .sbar-chev svg { transition: none; }
 body.reduce .thinking i,
 body.reduce .pcard.on,
@@ -1165,10 +1233,23 @@ body.reduce .dialog,
 body.reduce .fact,
 body.reduce .coach-target { animation: none; }
 body.reduce .thinking i { opacity: 1; }
-body.reduce .btn:active,
+body.reduce .btn:not([disabled]):active,
 body.reduce .rtile:not([disabled]):active canvas,
 body.reduce .abtn:not([disabled]):not([aria-disabled="true"]):active > *,
-body.reduce .stile[aria-pressed="true"] { transform: none; }
+body.reduce .iconbtn:not([disabled]):active svg,
+body.reduce .plaque:not([disabled]):active > *,
+body.reduce .springs-bar:not([disabled]):active > *,
+body.reduce .opps .opp:not([disabled]):active > *,
+body.reduce .reg-item button:not([disabled]):active > *,
+body.reduce .fchip:not([disabled]):active > *,
+body.reduce #toast button:not([disabled]):active > *,
+body.reduce .stile:not([disabled]):active,
+body.reduce .stile[aria-pressed="true"],
+body.reduce .stile[aria-pressed="true"]:not([disabled]):active,
+body.reduce .seg button:not([disabled]):active,
+body.reduce .tabs button:not([disabled]):active,
+body.reduce .wchip:not([disabled]):active,
+body.reduce #preview .bdbtn:not([disabled]):active { transform: none; }
 body.reduce .stile[aria-pressed="true"] { box-shadow: inset 0 0 0 2.5px var(--primary), 0 2px 0 rgba(110, 75, 30, 0.4); }
 body.reduce #preview.shake { box-shadow: inset 0 0 0 2.5px #FF8A7A, 0 0 0 2px rgba(154, 42, 28, 0.55); background: rgba(92, 22, 16, 0.9); color: #FFE6E0; }
 body.reduce .pcard .score.bump { background: rgba(217, 162, 58, 0.28); color: #1F2A24; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px var(--brass); }
@@ -1178,10 +1259,32 @@ body.reduce .pop,
 body.reduce .pop.themed { animation: pop-fade 0.95s ease-out forwards; }
 
 @media (prefers-reduced-motion: reduce) {
+  body:not(.motion-full) .btn,
+  body:not(.motion-full) .abtn,
+  body:not(.motion-full) .abtn > *,
+  body:not(.motion-full) .iconbtn,
+  body:not(.motion-full) .iconbtn svg,
+  body:not(.motion-full) .rtile,
+  body:not(.motion-full) .rtile canvas,
+  body:not(.motion-full) .plaque,
+  body:not(.motion-full) .plaque > *,
+  body:not(.motion-full) .springs-bar,
+  body:not(.motion-full) .springs-bar > *,
+  body:not(.motion-full) .stile,
+  body:not(.motion-full) .seg button,
+  body:not(.motion-full) .tabs button,
+  body:not(.motion-full) .opps .opp,
+  body:not(.motion-full) .opps .opp > *,
+  body:not(.motion-full) .reg-item button,
+  body:not(.motion-full) .reg-item button > *,
+  body:not(.motion-full) .wchip,
+  body:not(.motion-full) .fchip,
+  body:not(.motion-full) .fchip > *,
+  body:not(.motion-full) #toast button,
+  body:not(.motion-full) #toast button > *,
+  body:not(.motion-full) #preview .bdbtn,
   body:not(.motion-full) .check input,
   body:not(.motion-full) .check input::after,
-  body:not(.motion-full) .rtile,
-  body:not(.motion-full) .stile,
   body:not(.motion-full) .sbar-chev svg { transition: none; }
   body:not(.motion-full) .thinking i,
   body:not(.motion-full) .pcard.on,
@@ -1198,10 +1301,23 @@ body.reduce .pop.themed { animation: pop-fade 0.95s ease-out forwards; }
   body:not(.motion-full) .fact,
   body:not(.motion-full) .coach-target { animation: none; }
   body:not(.motion-full) .thinking i { opacity: 1; }
-  body:not(.motion-full) .btn:active,
+  body:not(.motion-full) .btn:not([disabled]):active,
   body:not(.motion-full) .rtile:not([disabled]):active canvas,
   body:not(.motion-full) .abtn:not([disabled]):not([aria-disabled="true"]):active > *,
-  body:not(.motion-full) .stile[aria-pressed="true"] { transform: none; }
+  body:not(.motion-full) .iconbtn:not([disabled]):active svg,
+  body:not(.motion-full) .plaque:not([disabled]):active > *,
+  body:not(.motion-full) .springs-bar:not([disabled]):active > *,
+  body:not(.motion-full) .opps .opp:not([disabled]):active > *,
+  body:not(.motion-full) .reg-item button:not([disabled]):active > *,
+  body:not(.motion-full) .fchip:not([disabled]):active > *,
+  body:not(.motion-full) #toast button:not([disabled]):active > *,
+  body:not(.motion-full) .stile:not([disabled]):active,
+  body:not(.motion-full) .stile[aria-pressed="true"],
+  body:not(.motion-full) .stile[aria-pressed="true"]:not([disabled]):active,
+  body:not(.motion-full) .seg button:not([disabled]):active,
+  body:not(.motion-full) .tabs button:not([disabled]):active,
+  body:not(.motion-full) .wchip:not([disabled]):active,
+  body:not(.motion-full) #preview .bdbtn:not([disabled]):active { transform: none; }
   body:not(.motion-full) .stile[aria-pressed="true"] { box-shadow: inset 0 0 0 2.5px var(--primary), 0 2px 0 rgba(110, 75, 30, 0.4); }
   body:not(.motion-full) #preview.shake { box-shadow: inset 0 0 0 2.5px #FF8A7A, 0 0 0 2px rgba(154, 42, 28, 0.55); background: rgba(92, 22, 16, 0.9); color: #FFE6E0; }
   body:not(.motion-full) .pcard .score.bump { background: rgba(217, 162, 58, 0.28); color: #1F2A24; border-radius: 6px; padding: 0 5px; box-shadow: inset 0 0 0 1.5px var(--brass); }
