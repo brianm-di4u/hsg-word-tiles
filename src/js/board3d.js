@@ -388,7 +388,8 @@ export function init(canvas, theme, hooks = {}) {
   scene.add(key); scene.add(key.target); B3.key = key;
   B3.fill = new THREE.DirectionalLight(0xcfe0ff, 0.5); B3.fill.position.set(12, 10, 16); scene.add(B3.fill);
   // counter and board slab (MeshStandardMaterial per CD-WF3-02 / CD-WF6-01; hero ceramic tiles keep MeshPhysicalMaterial clearcoat)
-  B3.table = new THREE.Mesh(new THREE.PlaneGeometry(64, 42), new THREE.MeshStandardMaterial({ roughness: 0.48, metalness: 0 }));
+  // W2-S5-09: 54x36 exact 3:2 plane matches native 1600x1066 counter.webp at repeat(1,1) with zero MirroredRepeatWrapping seams.
+  B3.table = new THREE.Mesh(new THREE.PlaneGeometry(54, 36), new THREE.MeshStandardMaterial({ roughness: 0.48, metalness: 0 }));
   B3.table.rotation.x = -Math.PI / 2; B3.table.receiveShadow = true; scene.add(B3.table);
   B3.boardCanvas = null;
   const boardRough = canvasTex(R.boardRoughnessTexture(), false);
@@ -537,17 +538,25 @@ export function setTheme(theme) {
   if (!B3.renderer) return;
   const dark = theme === 'dark';
   B3.dark = dark;
-  // the counter: the painted walnut when it has loaded, else a plain finish
+  // the counter: native resolution (1600x1066, no 2048x1365 upscale) mapped 1:1 (default ClampToEdgeWrapping, zero
+  // 2x2 MirroredRepeatWrapping seams) with subtle peripheral vignetting framing the board (W2-S5-09, wf-3 §2.2).
   const hasCounter = art.ready('counter');
   B3.counterArt = hasCounter;
-  const c = document.createElement('canvas'); c.width = 2048; c.height = 1365;
+  const cImg = hasCounter ? art.img('counter') : null;
+  const cw = cImg ? (cImg.naturalWidth || cImg.width || 1600) : 1024;
+  const ch = cImg ? (cImg.naturalHeight || cImg.height || 1066) : 682;
+  const c = document.createElement('canvas'); c.width = cw; c.height = ch;
   const g = c.getContext('2d');
-  if (hasCounter) g.drawImage(art.img('counter'), 0, 0, c.width, c.height);
-  else { const gr = g.createLinearGradient(0, 0, 2048, 1365); gr.addColorStop(0, '#5A3A22'); gr.addColorStop(1, '#3A2414'); g.fillStyle = gr; g.fillRect(0, 0, 2048, 1365); }
-  if (dark) { g.fillStyle = 'rgba(10,8,22,0.55)'; g.fillRect(0, 0, c.width, c.height); }
+  if (hasCounter) g.drawImage(cImg, 0, 0, cw, ch);
+  else { const gr = g.createLinearGradient(0, 0, cw, ch); gr.addColorStop(0, '#5A3A22'); gr.addColorStop(1, '#3A2414'); g.fillStyle = gr; g.fillRect(0, 0, cw, ch); }
+  if (dark) { g.fillStyle = 'rgba(10,8,22,0.55)'; g.fillRect(0, 0, cw, ch); }
+  const vig = g.createRadialGradient(cw * 0.5, ch * 0.48, ch * 0.28, cw * 0.5, ch * 0.48, cw * 0.56);
+  vig.addColorStop(0, dark ? 'rgba(6,5,16,0)' : 'rgba(18,10,4,0)');
+  vig.addColorStop(0.6, dark ? 'rgba(6,5,16,0.18)' : 'rgba(16,9,4,0.14)');
+  vig.addColorStop(1, dark ? 'rgba(6,5,16,0.52)' : 'rgba(12,7,3,0.44)');
+  g.fillStyle = vig; g.fillRect(0, 0, cw, ch);
   B3.table.material.map?.dispose(); B3.table.material.map = canvasTex(c);
-  
-  B3.table.material.map.wrapS = B3.table.material.map.wrapT = THREE.MirroredRepeatWrapping; B3.table.material.map.repeat.set(2, 2);
+  B3.table.material.map.repeat.set(1, 1);
   B3.table.material.needsUpdate = true;
   // W3-S2-02: refresh walnut woodgrain diffuse map on B3.frame's mitred along-rail UVs (counter-derived or procedural fallback)
   if (B3.frameWalnut && B3.frameWalnut.length) {
@@ -835,6 +844,29 @@ export function debug() {
     envIntensity: B3.scene ? B3.scene.environmentIntensity : 0,
     tileCoatRoughness: B3.bodyMat && B3.bodyMat.clearcoatRoughness != null ? B3.bodyMat.clearcoatRoughness : null,
     topMat: B3.top ? B3.top.type : null, tableMat: B3.table && B3.table.material ? B3.table.material.type : null,
+    tableMap: (() => {
+      const m = B3.table && B3.table.material && B3.table.material.map;
+      if (!m || !m.image) return null;
+      const cv = m.image, ctx = cv.getContext && cv.getContext('2d');
+      let centerLum = null, cornerLum = null;
+      if (ctx) {
+        const box = (x, y, s) => {
+          const d = ctx.getImageData(Math.round(x), Math.round(y), s, s).data;
+          let sum = 0; for (let i = 0; i < d.length; i += 4) sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+          return sum / (d.length / 4);
+        };
+        const s = 32, w = cv.width, h = cv.height;
+        centerLum = +box(w * 0.5 - s / 2, h * 0.48 - s / 2, s).toFixed(2);
+        cornerLum = +((box(8, 8, s) + box(w - s - 8, 8, s) + box(8, h - s - 8, s) + box(w - s - 8, h - s - 8, s)) / 4).toFixed(2);
+      }
+      return {
+        w: cv.width, h: cv.height,
+        repeatX: m.repeat.x, repeatY: m.repeat.y,
+        wrapS: m.wrapS, wrapT: m.wrapT,
+        planeW: B3.table.geometry?.parameters?.width || 0, planeH: B3.table.geometry?.parameters?.height || 0,
+        centerLum, cornerLum,
+      };
+    })(),
     bellMats: B3.bell ? B3.bell.children.map((m) => `${m.name}:${m.material.type}`) : null,
     topRoughness: B3.top ? B3.top.roughness : null,
     topRoughnessMap: !!(B3.top && B3.top.roughnessMap),

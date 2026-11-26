@@ -131,6 +131,30 @@ function octagonPath(ctx, x, y, w, cut = 0.26) {
   ctx.closePath();
 }
 
+// Art Deco stepped-fan L-bracket path in local corner coordinates ((0,0) = board corner, +x/+y inward along rails).
+// Stays strictly on the outer terrazzo border (<= innerR + 0.02*cell < f) so zero pixels enter the 15x15 marble grid (CD-WF2-03).
+function cornerBracketPath(ctx, outerR, innerR, f, cell) {
+  const bw = innerR - outerR;
+  const o = outerR - cell * 0.015, inR = innerR + cell * 0.02;
+  const L1 = f + cell * 0.16, L2 = f + cell * 0.42, L3 = f + cell * 0.66;
+  const y2a = o + bw * 0.18, y2b = inR - bw * 0.16;
+  const y3a = o + bw * 0.34, y3b = inR - bw * 0.32;
+  ctx.beginPath();
+  ctx.moveTo(o, o);
+  ctx.lineTo(L1, o); ctx.lineTo(L1, y2a);
+  ctx.lineTo(L2, y2a); ctx.lineTo(L2, y3a);
+  ctx.lineTo(L3, y3a); ctx.lineTo(L3, y3b);
+  ctx.lineTo(L2, y3b); ctx.lineTo(L2, y2b);
+  ctx.lineTo(L1, y2b); ctx.lineTo(L1, inR);
+  ctx.lineTo(inR, inR);
+  ctx.lineTo(inR, L1); ctx.lineTo(y2b, L1);
+  ctx.lineTo(y2b, L2); ctx.lineTo(y3b, L2);
+  ctx.lineTo(y3b, L3); ctx.lineTo(y3a, L3);
+  ctx.lineTo(y3a, L2); ctx.lineTo(y2a, L2);
+  ctx.lineTo(y2a, L1); ctx.lineTo(o, L1);
+  ctx.closePath();
+}
+
 // The Bathhouse Row emblem: a domed bathhouse front with an arched door, bold enough to read at 30 px.
 function rowEmblem(ctx, cx, cy, r) {
   ctx.save(); ctx.translate(cx, cy);
@@ -256,13 +280,65 @@ export function paintBoard(size, theme = 'light', mode3d = false) {
     drawEdge(edges.right, size - mid, false, -1);
     ctx.restore();
   }
-  // deco corner fans
-  for (const [sx, sy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-    ctx.save(); ctx.translate(sx ? size - f * 0.5 : f * 0.5, sy ? size - f * 0.5 : f * 0.5); ctx.rotate((sx ? (sy ? 2 : 1) : (sy ? 3 : 0)) * Math.PI / 2);
-    ctx.fillStyle = '#B8902F'; ctx.strokeStyle = '#6E4B1E'; ctx.lineWidth = Math.max(1, cell * 0.015);
-    ctx.beginPath(); ctx.arc(0, 0, f * 0.36, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    for (let k = 0; k < 5; k++) { const a = (k / 4) * Math.PI / 2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * f * 0.32, Math.sin(a) * f * 0.32); ctx.stroke(); }
-    ctx.restore();
+  // W2-S5-09: crisp Art Deco stepped-fan brass corner brackets strictly on the outer terrazzo border (CD-WF2-03).
+  {
+    const outerR = band * 0.18, innerR = f - cell * 0.06, bw = innerR - outerR;
+    const o = outerR - cell * 0.015, inR = innerR + cell * 0.02;
+    const L1 = f + cell * 0.16, L2 = f + cell * 0.42, L3 = f + cell * 0.66;
+    const midY = (o + inR) / 2, fx = o + bw * 0.08, fy = o + bw * 0.08, fanR = bw * 0.90;
+    for (const [sx, sy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      ctx.save();
+      ctx.translate(sx ? size : 0, sy ? size : 0);
+      ctx.scale(sx ? -1 : 1, sy ? -1 : 1);
+      // 1) Stepped 3-tier brass L-bracket plinth
+      const bg = ctx.createLinearGradient(o, o, L2, L2);
+      bg.addColorStop(0, '#F5DE8C'); bg.addColorStop(0.45, '#CCA03A'); bg.addColorStop(1, '#8F6A1D');
+      cornerBracketPath(ctx, outerR, innerR, f, cell);
+      ctx.fillStyle = bg; ctx.fill();
+      ctx.strokeStyle = '#4F3412'; ctx.lineWidth = Math.max(1.2, cell * 0.022); ctx.lineJoin = 'miter'; ctx.stroke();
+      // 2) Stepped Art Deco flutes along both bracket arms
+      ctx.lineCap = 'butt';
+      ctx.strokeStyle = '#FFF2BC'; ctx.lineWidth = Math.max(0.9, cell * 0.016);
+      ctx.beginPath();
+      ctx.moveTo(inR + bw * 0.10, midY); ctx.lineTo(L3 - cell * 0.05, midY);
+      ctx.moveTo(midY, inR + bw * 0.10); ctx.lineTo(midY, L3 - cell * 0.05);
+      ctx.stroke();
+      ctx.strokeStyle = '#5A3C10'; ctx.lineWidth = Math.max(0.8, cell * 0.012);
+      for (const sgn of [-1, 1]) {
+        const off = sgn * bw * 0.17;
+        ctx.beginPath();
+        ctx.moveTo(inR + bw * 0.06, midY + off); ctx.lineTo(L2 - cell * 0.04, midY + off);
+        ctx.moveTo(midY + off, inR + bw * 0.06); ctx.lineTo(midY + off, L2 - cell * 0.04);
+        ctx.stroke();
+      }
+      // Step-divider bars separating tiers 1 -> 2 -> 3
+      ctx.beginPath();
+      ctx.moveTo(L1, o + bw * 0.18); ctx.lineTo(L1, inR - bw * 0.16);
+      ctx.moveTo(L2, o + bw * 0.34); ctx.lineTo(L2, inR - bw * 0.32);
+      ctx.moveTo(o + bw * 0.18, L1); ctx.lineTo(inR - bw * 0.16, L1);
+      ctx.moveTo(o + bw * 0.34, L2); ctx.lineTo(inR - bw * 0.32, L2);
+      ctx.stroke();
+      // 3) Inset dark-bronze stepped quarter-fan medallion with 5 radiating gold sunburst flutes
+      ctx.beginPath(); ctx.moveTo(fx, fy); ctx.arc(fx, fy, fanR, 0, Math.PI / 2); ctx.closePath();
+      ctx.fillStyle = '#3E280D'; ctx.fill();
+      for (let k = 0; k < 5; k++) {
+        const a0 = (k / 5) * (Math.PI / 2) + 0.045, a1 = ((k + 1) / 5) * (Math.PI / 2) - 0.045;
+        const rRay = k % 2 === 0 ? fanR * 0.90 : fanR * 0.78;
+        ctx.beginPath(); ctx.moveTo(fx, fy); ctx.arc(fx, fy, rRay, a0, a1); ctx.closePath();
+        ctx.fillStyle = k % 2 === 0 ? '#F6E18F' : '#CFA33C';
+        ctx.fill();
+      }
+      // Concentric Art Deco stepped-fan arcs and corner keystone stud
+      ctx.strokeStyle = '#3E280D'; ctx.lineWidth = Math.max(0.9, cell * 0.015);
+      ctx.beginPath(); ctx.arc(fx, fy, fanR * 0.60, 0, Math.PI / 2); ctx.stroke();
+      ctx.strokeStyle = '#F5DE8C'; ctx.lineWidth = Math.max(0.9, cell * 0.014);
+      ctx.beginPath(); ctx.arc(fx, fy, fanR, 0, Math.PI / 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(fx, fy, fanR * 0.32, 0, Math.PI / 2);
+      ctx.lineTo(fx, fy); ctx.closePath();
+      ctx.fillStyle = '#FFF2BC'; ctx.fill();
+      ctx.strokeStyle = '#4F3412'; ctx.lineWidth = Math.max(0.8, cell * 0.013); ctx.stroke();
+      ctx.restore();
+    }
   }
   // grout under the cells
   const dark = theme === 'dark';
@@ -407,10 +483,15 @@ export function paintBoardRoughness(size = 512) {
   ctx.strokeRect(band * 0.18, band * 0.18, size - band * 0.36, size - band * 0.36);
   ctx.lineWidth = Math.max(1.5, cell * 0.08);
   ctx.strokeRect(f - cell * 0.06, f - cell * 0.06, size - (f - cell * 0.06) * 2, size - (f - cell * 0.06) * 2);
-  // glossy deco corner fans (0.22)
+  // glossy Art Deco stepped-fan corner brackets (0.22)
   ctx.fillStyle = gray(0.22);
   for (const [sx, sy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-    ctx.beginPath(); ctx.arc(sx ? size - f * 0.5 : f * 0.5, sy ? size - f * 0.5 : f * 0.5, f * 0.36, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.translate(sx ? size : 0, sy ? size : 0);
+    ctx.scale(sx ? -1 : 1, sy ? -1 : 1);
+    cornerBracketPath(ctx, band * 0.18, f - cell * 0.06, f, cell);
+    ctx.fill();
+    ctx.restore();
   }
   // matte grout bed under all 15x15 cells (0.85)
   ctx.fillStyle = gray(0.85); ctx.fillRect(f, f, cell * N, cell * N);
