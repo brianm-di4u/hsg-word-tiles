@@ -520,8 +520,13 @@ export function helpHtml(tab, lex, twos = [], opts = {}) {
 }
 
 // ---------- settings ----------
+const pct = (v) => `${Math.round(Math.max(0, Math.min(1, Number(v) || 0)) * 100)}%`;
 export function settingsHtml(st, canVibrate = false) {
   const seg = (key, opts, label) => `<div class="setrow"><span id="set-${key}">${label}</span><div class="seg" role="radiogroup" aria-labelledby="set-${key}">${opts.map(([v, t], i) => `<button role="radio" aria-checked="${st[key] === v}" tabindex="${i === Math.max(0, opts.findIndex((o) => o[0] === st[key])) ? 0 : -1}" data-set="${key}" data-val="${v}">${t}</button>`).join('')}</div></div>`;
+  const slider = (id, attr, val, label, aria) => {
+    const text = pct(val);
+    return `<div class="setrow"><span>${label}</span><div class="set-range"><input id="${id}" type="range" min="0" max="1" step="0.05" value="${val}" ${attr} aria-label="${aria}" aria-valuetext="${text}"><output for="${id}" data-out="${attr}">${text}</output></div></div>`;
+  };
   return `<div class="sheet settings">
     ${band()}
     <header class="sheet-head"><h1 tabindex="-1">Settings</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
@@ -529,10 +534,10 @@ export function settingsHtml(st, canVibrate = false) {
     ${seg('fx', [[true, 'On'], [false, 'Off']], 'Sound effects')}
     ${seg('music', [[true, 'On'], [false, 'Off']], 'Music')}
     ${seg('amb', [[true, 'On'], [false, 'Off']], 'Ambience')}
-    <div class="setrow"><span>Volume</span><input type="range" min="0" max="1" step="0.05" value="${st.vol}" data-vol aria-label="Volume"></div>
-    <div class="setrow"><span>Effects level</span><input type="range" min="0" max="1" step="0.05" value="${st.fxVol}" data-fxvol aria-label="Effects level, under the Volume"></div>
-    <div class="setrow"><span>Music level</span><input type="range" min="0" max="1" step="0.05" value="${st.musicVol}" data-musicvol aria-label="Music level, under the Volume"></div>
-    <div class="setrow"><span>Ambience level</span><input type="range" min="0" max="1" step="0.05" value="${st.ambVol}" data-ambvol aria-label="Ambience level, under the Volume"></div>
+    ${slider('set-vol', 'data-vol', st.vol, 'Volume', 'Volume')}
+    ${slider('set-fxvol', 'data-fxvol', st.fxVol, 'Effects level', 'Effects level, under the Volume')}
+    ${slider('set-musicvol', 'data-musicvol', st.musicVol, 'Music level', 'Music level, under the Volume')}
+    ${slider('set-ambvol', 'data-ambvol', st.ambVol, 'Ambience level', 'Ambience level, under the Volume')}
     ${seg('theme', [['auto', 'Auto'], ['light', 'Day'], ['dark', 'Night']], 'Theme')}
     ${seg('motion', [['system', 'Auto'], ['full', 'Full'], ['reduce', 'Reduced']], 'Motion')}
     ${canVibrate ? seg('vibrate', [[true, 'On'], [false, 'Off']], 'Vibration') : ''}

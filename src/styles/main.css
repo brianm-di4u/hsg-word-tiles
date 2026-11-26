@@ -668,9 +668,11 @@ body.theme-dark .tier-pts { color: #14121F; }
 .keys { list-style: none; padding: 0; columns: 2; } .keys li { margin: 4px 0; break-inside: avoid; }
 
 /* settings */
-.setrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px dotted var(--line); flex-wrap: wrap; }
+.setrow { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 0; border-bottom: 1px dotted var(--line); flex-wrap: wrap; }
 .setrow > span { font-weight: 700; }
-.setrow input[type="range"] { width: clamp(148px, 46vw, 200px); accent-color: var(--primary); min-height: 44px; }
+.set-range { display: flex; align-items: center; gap: 8px; max-width: 100%; margin-left: auto; }
+.setrow input[type="range"] { width: clamp(116px, 33vw, 200px); min-width: 0; flex: 1 1 auto; accent-color: var(--primary); min-height: 44px; }
+.set-range output { min-width: 3.2em; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
 
 /* register */
 .reg-nudge {

@@ -558,7 +558,13 @@ function wireScreen(name) {
     // Volume is the master; the effects, music and ambience levels sit under it independently (OQ-WF6-03)
     for (const [attr, key] of [['data-vol', 'vol'], ['data-fxvol', 'fxVol'], ['data-musicvol', 'musicVol'], ['data-ambvol', 'ambVol']]) {
       const r = scr.querySelector(`[${attr}]`);
-      r.addEventListener('input', (e) => { unlock(); G.settings[key] = +e.target.value; saveSettings(); });
+      const out = scr.querySelector(`[data-out="${attr}"]`);
+      const syncRange = (v) => {
+        const txt = `${Math.round(Math.max(0, Math.min(1, v)) * 100)}%`;
+        r.setAttribute('aria-valuetext', txt);
+        if (out) out.textContent = txt;
+      };
+      r.addEventListener('input', (e) => { unlock(); const v = +e.target.value; G.settings[key] = v; syncRange(v); saveSettings(); });
       if (key === 'vol' || key === 'fxVol') r.addEventListener('change', () => { unlock(); sfx('place'); });
     }
   }
@@ -579,11 +585,12 @@ function wireScreen(name) {
     scr.querySelectorAll('[data-fact]').forEach((b) => b.addEventListener('click', () => openFact(b.dataset.fact, b.dataset.form)));
     scr.querySelector('[data-review]')?.addEventListener('click', openReview);
     const again = scr.querySelector('[data-again]');
-    if (again) again.addEventListener('click', () => newGame({ mode: 'play', seats: G.s.players.map((p) => ({ kind: p.kind, name: p.name, persona: p.persona, level: p.level })), hints: G.s.players.some((p) => p.hints != null), hintsUnl: G.s.players.some((p) => p.unl), challenge: !!G.s.challenge }));
+    if (again) again.addEventListener('click', () => { unlock(); sfx('uiTap'); newGame({ mode: 'play', seats: G.s.players.map((p) => ({ kind: p.kind, name: p.name, persona: p.persona, level: p.level })), hints: G.s.players.some((p) => p.hints != null), hintsUnl: G.s.players.some((p) => p.unl), challenge: !!G.s.challenge }); });
     const nextOpp = scr.querySelector('[data-next-opp]');
     if (nextOpp) nextOpp.addEventListener('click', () => {
       const per = persona(nextOpp.dataset.nextOpp);
       if (!per) return;
+      unlock(); sfx('uiTap');
       const human = G.s.players.find((p) => p.kind === 'human');
       newGame({
         mode: 'play',
@@ -3031,12 +3038,12 @@ function onKey(e) {
   if (k === 'Escape' && $('#toast')?.classList.contains('on')) { e.preventDefault(); hideToast(); if (!G.staged.length) openDialog('pause'); return; }
   if (!humanCanAct()) { if (k === 'Escape') { e.preventDefault(); openDialog('pause'); } return; }
   const c = G.cursor;
-  const move = (dr, dc) => { const prev = c.i, wasOn = c.on; const r = Math.floor(c.i / N) + dr, col = (c.i % N) + dc; if (r >= 0 && r < N && col >= 0 && col < N) c.i = r * N + col; c.on = true; $('#board').focus({ preventScroll: true }); ensureVisible(c.i); draw(); sayCursor(c.i); if (c.i !== prev || !wasOn) sfx('tick', { pan: colPan(c.i) }); };   // the focus goes with the cursor, so Enter plays instead of pressing a button left focused
+  const move = (dr, dc) => { const prev = c.i, wasOn = c.on; const r = Math.floor(c.i / N) + dr, col = (c.i % N) + dc; if (r >= 0 && r < N && col >= 0 && col < N) c.i = r * N + col; c.on = true; $('#board').focus({ preventScroll: true }); ensureVisible(c.i); draw(); sayCursor(c.i); if (c.i !== prev || !wasOn) { unlock(); sfx('tick', { pan: colPan(c.i) }); } };   // the focus goes with the cursor, so Enter plays instead of pressing a button left focused
   if (k === 'ArrowLeft' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(0, -1); }
   else if (k === 'ArrowRight' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(0, 1); }
   else if (k === 'ArrowUp' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(-1, 0); }
   else if (k === 'ArrowDown' && !e.altKey && !e.ctrlKey && !e.metaKey) { e.preventDefault(); move(1, 0); }
-  else if (k === ' ') { e.preventDefault(); c.dir = c.dir === 1 ? N : 1; c.on = true; draw(); sfx('tick', { pan: colPan(c.i), rotate: true }); liveSay(`Direction: ${c.dir === 1 ? 'across' : 'down'}.`); }
+  else if (k === ' ') { e.preventDefault(); c.dir = c.dir === 1 ? N : 1; c.on = true; draw(); unlock(); sfx('tick', { pan: colPan(c.i), rotate: true }); liveSay(`Direction: ${c.dir === 1 ? 'across' : 'down'}.`); }
   else if (k === 'Enter') {
     e.preventDefault();
     if (G.selected != null && G.order.includes(G.selected)) {
