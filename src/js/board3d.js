@@ -735,11 +735,15 @@ export function render(d) {
     if (b && d.now < b.t0 + b.dur) {
       const u = Math.max(0, (d.now - b.t0) / b.dur);
       const dip = u < 0.22 ? Math.sin((u / 0.22) * (Math.PI / 2)) : Math.pow(1 - (u - 0.22) / 0.78, 1.8);
+      const rock = Math.sin(u * Math.PI * 3) * Math.pow(1 - u, 1.6) * 0.06;
       B3.bellBrass.position.y = -0.075 * dip;
       B3.bellBrass.scale.set(1 + 0.025 * dip, 1 - 0.06 * dip, 1 + 0.025 * dip);
+      B3.bellBrass.rotation.z = rock;
     } else {
       if (b) B3.bellBob = null;
-      if (B3.bellBrass.position.y !== 0) { B3.bellBrass.position.y = 0; B3.bellBrass.scale.set(1, 1, 1); }
+      if (B3.bellBrass.position.y !== 0 || B3.bellBrass.rotation.z !== 0) {
+        B3.bellBrass.position.y = 0; B3.bellBrass.scale.set(1, 1, 1); B3.bellBrass.rotation.z = 0;
+      }
     }
   }
   B3.renderer.render(B3.scene, B3.camera);
@@ -788,16 +792,17 @@ export function bellAt(x, y) {
   if (c <= 0) return true;
   return b <= 0 && b * b - c >= 0;
 }
-export function ringBell(animate = true, now = performance.now()) {
+export function stopBell() {
+  B3.bellBob = null;
+  if (B3.bellBrass) { B3.bellBrass.position.y = 0; B3.bellBrass.scale.set(1, 1, 1); B3.bellBrass.rotation.z = 0; }
+}
+export function ringBell(animate = true, now = performance.now(), opts = {}) {
   if (!B3.on || !B3.bell || !B3.bell.visible) return false;
-  if (B3.bellLastRing && now - B3.bellLastRing < BELL_BOB_MS) return false;
+  if (!opts.force && B3.bellLastRing && now - B3.bellLastRing < BELL_BOB_MS) return false;
   B3.bellLastRing = now;
   B3.bellRings = (B3.bellRings || 0) + 1;
   if (animate && B3.bellBrass) B3.bellBob = { t0: now, dur: BELL_BOB_MS };
-  else {
-    B3.bellBob = null;
-    if (B3.bellBrass) { B3.bellBrass.position.y = 0; B3.bellBrass.scale.set(1, 1, 1); }
-  }
+  else stopBell();
   return true;
 }
 export function bellAnimating(now = performance.now()) {
@@ -879,8 +884,10 @@ export function debug() {
       };
     })(),
     bellMats: B3.bell ? B3.bell.children.map((m) => `${m.name}:${m.material.type}`) : null,
-    bellBob: !!(B3.bellBob && B3.bellBrass && B3.bellBrass.position.y < -0.001),
+    bellBob: !!(B3.bellBob && B3.bellBrass && (B3.bellBrass.position.y < -0.001 || Math.abs(B3.bellBrass.rotation.z) > 0.0005)),
     bellY: B3.bellBrass ? +B3.bellBrass.position.y.toFixed(4) : 0,
+    bellScaleY: B3.bellBrass ? +B3.bellBrass.scale.y.toFixed(4) : 1,
+    bellRotZ: B3.bellBrass ? +B3.bellBrass.rotation.z.toFixed(4) : 0,
     bellRings: B3.bellRings || 0,
     topRoughness: B3.top ? B3.top.roughness : null,
     topRoughnessMap: !!(B3.top && B3.top.roughnessMap),

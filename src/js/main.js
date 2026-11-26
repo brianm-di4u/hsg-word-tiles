@@ -105,6 +105,7 @@ function applySettings() {
     clearFx();
     const fx = $('#fx'); if (fx) fx.getContext('2d').clearRect(0, 0, fx.width, fx.height);
     G.anim.clear(); G.animUntil = 0; G.lastPulse = null; G.badPulse = null; G.settle.clear(); G.settleUntil = 0;
+    B3.stopBell();
     cancelScoreRoll(); endFlip(); endReturn(); clearPlaqueFx();
     if (G.viewAnim) { R.view.zoom = G.viewAnim.to.zoom; R.view.cx = G.viewAnim.to.cx; R.view.cy = G.viewAnim.to.cy; G.viewAnim = null; R.clampView(); }
   }
@@ -615,6 +616,7 @@ function beginGame(s, intent) {
   clearTimeout(errFlashTimer); G.errFlash = false;
   clearTimeout(scoreHiTimer); G.scoreHi = null; cancelScoreRoll(); endFlip(); endReturn();
   clearTimeout(G.plaqueTimer); G.plaqueHi.clear(); G.plaqueSnap = null; clearPlaqueFx(); G.springsOpen = false;
+  B3.stopBell();
   clearFx(); steam.arcLog.length = 0;
   document.querySelectorAll('#boardwrap .pop').forEach((el) => el.remove());
   if (!G.settings.tipsSeen) store.put(KEYS.settings, G.settings); // the newcomer flag is written before the first save, so a tab closed mid-tips still counts as a newcomer
@@ -993,6 +995,8 @@ function celebrate(e, bark, wait = 0, prevPlaqueSnap = null, extra = {}) {
         }
       }
     }
+    // W4-S1-06: dip/rock the 3D brass desk bell in sync with Featured Spring bell cues (bypassed under reduced motion).
+    if (claimedFeats.length && animOn() && B3.ringBell(true, performance.now(), { force: true })) draw();
     emitPlaqueArcs(s, e, prevPlaqueSnap);
     scorePop(e, themed.length > 0);
   };
