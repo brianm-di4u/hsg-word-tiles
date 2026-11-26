@@ -87,6 +87,8 @@ function loadSettings() {
     if (!(k in raw)) continue;
     if (SETTING_OK[k](raw[k])) G.settings[k] = raw[k]; else bad = true;
   }
+  // the bed followed the Music level before it had its own slider: a record without one starts it there, so nobody's mix moves (OQ-WF7-W4-02)
+  if (!('ambVol' in raw)) G.settings.ambVol = G.settings.musicVol;
   // first-run tips are for a newcomer: anyone who already has a save, settings, register, daily or record of this game is not one
   // (the flag is written once a first game starts, so a tab closed mid-tips still counts as a newcomer next time)
   if (typeof raw.tipsSeen !== 'boolean') G.settings.tipsSeen = Object.values(KEYS).some((k) => store.get(k) != null) || (!!window.__TEST__ && !window.__TEST_TIPS__);

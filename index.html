@@ -11107,6 +11107,7 @@ function loadSettings() {
     if (!(k in raw)) continue;
     if (SETTING_OK[k](raw[k])) G.settings[k] = raw[k]; else bad = true;
   }
+  if (!('ambVol' in raw)) G.settings.ambVol = G.settings.musicVol;
   if (typeof raw.tipsSeen !== 'boolean') G.settings.tipsSeen = Object.values(KEYS).some((k) => store.get(k) != null) || (!!window.__TEST__ && !window.__TEST_TIPS__);
   if (bad) store.put(KEYS.settings, G.settings);
   applySettings();

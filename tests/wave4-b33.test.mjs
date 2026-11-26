@@ -66,4 +66,39 @@ export const tests = [
       t.expect(/2\.5px/.test(rest.still), `a brass ring 2.5 px wide at rest (${rest.still})`);
     },
   },
+  // ---------- W4-S5-05 / OQ-WF7-W4-02 ----------
+  {
+    name: "W4-S5-05 a settings record from before the Ambience slider starts it at that player's Music level, once; a saved Ambience level and new players are untouched",
+    viewports: ['desktop'],
+    initScript: () => { window.__TEST_TIPS__ = false; },
+    async run(t) {
+      await ready(t);
+      const KEY = 'hs-letters-settings-v1';
+      const cases = [
+        ['wave-3 player, Music 30%', { sound: false, ai: 'instant', vol: 0.5, musicVol: 0.3, theme: 'dark', tipsSeen: true }, 0.3],
+        ['wave-3 player, Music 0 (music and bed silent)', { sound: false, ai: 'instant', musicVol: 0, tipsSeen: true }, 0],
+        ['wave-3 player, Music left at 100%', { sound: false, ai: 'instant', vol: 0.35, tipsSeen: true }, 1],
+        ['a player who already set Ambience', { sound: false, ai: 'instant', musicVol: 0.3, ambVol: 0.8, tipsSeen: true }, 0.8],
+        ['a new player', null, 1],
+      ];
+      for (const [who, rec, want] of cases) {
+        await t.page.evaluate(([k, r]) => { localStorage.clear(); if (r) localStorage.setItem(k, JSON.stringify(r)); }, [KEY, rec]);
+        await t.reload(); await ready(t);
+        const got = await t.page.evaluate((k) => ({ amb: window.__G.settings.ambVol, stored: localStorage.getItem(k) }), KEY);
+        t.equal(got.amb, want, `${who}: Ambience level ${want}`);
+        if (rec) t.equal(got.stored, JSON.stringify(rec), `${who}: the stored record is not rewritten on load`);
+        await t.game('scene', 'settings');
+        t.equal(Number(await t.page.$eval('#screen [data-ambvol]', (el) => el.value)), want, `${who}: the Ambience slider shows it`);
+        await t.game('scene', 'title');
+      }
+      // once: after the player moves Music, the saved record carries its own Ambience level and it stays where it was
+      await t.page.evaluate((k) => { localStorage.clear(); localStorage.setItem(k, JSON.stringify({ sound: false, ai: 'instant', musicVol: 0.3, tipsSeen: true })); }, KEY);
+      await t.reload(); await ready(t);
+      await t.game('scene', 'settings');
+      await t.page.$eval('#screen [data-musicvol]', (el) => { el.value = '0.9'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+      await t.reload(); await ready(t);
+      const after = await t.page.evaluate((k) => ({ amb: window.__G.settings.ambVol, music: window.__G.settings.musicVol, stored: JSON.parse(localStorage.getItem(k)).ambVol }), KEY);
+      t.expect(after.music === 0.9 && after.amb === 0.3 && after.stored === 0.3, `Music moved to 90% later: Ambience stays at 30% (${JSON.stringify(after)})`);
+    },
+  },
 ];
