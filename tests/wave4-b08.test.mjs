@@ -109,7 +109,8 @@ export const tests = [
     async run(t) {
       await ready(t);
       await table(t);
-      await t.game('act', 'zoom', 1.7, 4, 4);
+      // Center the zoom so the viewport outline stays clear of all 8 perimeter Bathhouse Row squares in both 2D and 3D
+      await t.game('act', 'zoom', 2.2, 7.88, 7.88);
       await t.waitFrames(4);
       const mm = await t.game('act', 'minimap');
       t.expect(mm.on, 'the minimap is up');
@@ -134,7 +135,8 @@ export const tests = [
       await t.game('act', 'reveal');
       const l = (await t.state()).game.players[0].rack.find((x) => x !== '?');
       t.equal((await t.game('act', 'stage', [{ i: CENTER, l }])).ok, true, 'a tile staged on the Display Spring');
-      await t.game('act', 'zoom', 1.7, 4, 4);
+      // Center the zoom so the viewport outline stays clear of all 8 perimeter Bathhouse Row squares in both 2D and 3D
+      await t.game('act', 'zoom', 2.2, 7.88, 7.88);
       await t.waitFrames(4);
       const after = await px([rows[0], rows[1], CENTER]);
       t.expect(isTile(after[0]) && !isBrass(after[0]), `a covered Row square shows its tile (${after[0].slice(0, 3)})`);
