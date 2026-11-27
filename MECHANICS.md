@@ -129,20 +129,31 @@ word shows.
   perpendicular score cached. LeftPart walks prefixes up to the anchor's free left extent, ExtendRight
   completes words; down moves use the same code on the transposed board.
 - Every move is scored with the engine's own `score` function (bonuses included).
-- Levels:
-  - **Easy:** everyday SCOWL common words of 3–6 letters (`freeLen` 0, `maxLen` 6) plus 25 everyday two-letter words (`EASY_TWO` in `ai.js`); ignores the rack it keeps and Hot Springs bonus foresight (`bonusWeight` 0). It plays its best-scoring play except
-    about three turns in five (`slip` 0.60), when it picks at random from the 5th–35th percentile of its 30 best plays
-    (`pick: [0.05, 0.35]` in `ai.js`).
-  - **Medium:** common words plus every word of 2–4 letters (`freeLen` 5); maximises score + 0.65 × leave value.
-  - **Hard:** the whole dictionary; maximises score + leave value − 4 per empty Boiling Spring (and 1.5 per empty Steam square), and
+- Levels (five since 2026-11-27, owner decision OQ-POST-REL-01: the old levels were all too hard). Each computer seat starts at its
+  character's usual level, which can be changed in the setup sheet or in Settings during a game (from the next computer turn); a game
+  is recorded against the easiest level the opponent played in it (`lvlLow`). `tools/dev/ladder.mjs` measures the ladder: points a turn
+  Beginner 7.8, Easy 11.6, Medium 18.7, Hard 33.1, Expert 36.9 (before: Easy 19.3, Medium 32.8, Hard 37.0).
+  - **Beginner:** everyday SCOWL common words plus 25 everyday two-letter words (`EASY_TWO` in `ai.js`), never a word over four letters
+    (`wordMax` 4, main and cross words); ignores the rack it keeps and Hot Springs bonus foresight (`bonusWeight` 0); always picks at random
+    from the 60th–100th percentile of its 30 best plays (`slip` 1, `pick: [0.6, 1]`).
+  - **Easy:** the same words and limit. It plays its best-scoring play except most turns (`slip` 0.85), when it picks at random
+    from the 15th–55th percentile of its 30 best plays (`pick: [0.15, 0.55]` in `ai.js`).
+  - **Medium:** the same words; four letters at most, except a longer play that puts a new tile on a word multiplier (Steam or Boiling
+    Spring) or on a Bathhouse Row square under a Hot Springs word and beats its best short play by `LONG_GAIN` (10) points, and never
+    on two of its turns running (`longFor: 'premium'`). It maximises score + 0.65 × leave value, but on about half its turns
+    (`ease: [0.55, 2, 10]`) settles for one of its 2nd–10th best plays.
+  - **Hard:** no length limit; common words plus every word of 2–4 letters (`freeLen` 5); maximises score + leave value (about the old
+    Medium's strength).
+  - **Expert** (the old Hard): the whole dictionary; maximises score + leave value − 4 per empty Boiling Spring (and 1.5 per empty Steam square), and
     0.75 per empty Bathhouse Row square, its play leaves within reach (`DEFENSE` in `ai.js`); with the bag empty in a 2-player game it looks one reply ahead (the
     opponent's rack is known by then).
-- Featured Springs (`deducibleFeatured` in `lexicon.js`): Medium, Hard, the Spring Guide and the review count a plaque's +30 only once
+  - The Daily's par keeps the tiers it was set with (`PAR_LEVELS`: Hollis at the old Medium, Julian at the old Hard), so the par of every date is unchanged.
+- Featured Springs (`deducibleFeatured` in `lexicon.js`): Medium, Hard, Expert, the Spring Guide and the review count a plaque's +30 only once
   anyone could work it out: at most `READABLE_FOG` (2) letters hidden, and the category, length and clear letters leaving one lexicon
-  entry. Easy and the Daily's par never count it. Hidden words are not sent to the worker. A hidden one is still paid when a word happens to match it.
-  Hard's one-reply look-ahead leaves out a plaque its own play claims. The review uses the log's `known`, written turn by turn.
+  entry. Beginner, Easy and the Daily's par never count it. Hidden words are not sent to the worker. A hidden one is still paid when a word happens to match it.
+  Expert's one-reply look-ahead leaves out a plaque its own play claims. The review uses the log's `known`, written turn by turn.
 - Leave values (`leave-table.js`) are fitted by `tools/selfplay.mjs`.
-- Medium and Hard count plays within `TIE_WINDOW` (1.5) equity points of their best as tied and draw one of them with `rng.ai`, so
+- Medium, Hard and Expert count plays within `TIE_WINDOW` (1.5) equity points of their best as tied and draw one of them with `rng.ai`, so
   two opponents of one level do not always answer a position alike. Before wave 4 only plays with exactly equal equity were tied, and the one with the lowest key was taken.
   The Daily's par (`par.js`) passes `exact: true` and keeps that old order, so a date's par is unchanged.
 - Determinism: no wall-clock cutoffs; a node budget caps the search. A seed gives the same game every time: ties are drawn from the
@@ -150,7 +161,7 @@ word shows.
 
 ## 7. RNG
 mulberry32, two streams stored in the state: `rng.bag` (bag order, featured picks) and `rng.ai`
-(Easy's percentile pick, and the draw among tied plays for Medium and Hard). The Daily seed is a hash of the local date `YYYY-MM-DD`.
+(Beginner's and Easy's percentile pick, Medium's settling, and the draw among tied plays for Medium, Hard and Expert). The Daily seed is a hash of the local date `YYYY-MM-DD`.
 
 ## 8. Saves (`localStorage`, every call in try/catch; the game works without storage)
 | Key | Contents |

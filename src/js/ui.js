@@ -522,7 +522,9 @@ export function helpHtml(tab, lex, twos = [], opts = {}) {
 
 // ---------- settings ----------
 const pct = (v) => `${Math.round(Math.max(0, Math.min(1, Number(v) || 0)) * 100)}%`;
-export function settingsHtml(st, canVibrate = false) {
+// game: the computer seats of the game in progress ([{ k, name, persona, level }]) when Settings is opened from it, so their
+// difficulty can be changed mid-game; null elsewhere.
+export function settingsHtml(st, canVibrate = false, game = null) {
   const seg = (key, opts, label) => `<div class="setrow"><span id="set-${key}">${label}</span><div class="seg" role="radiogroup" aria-labelledby="set-${key}">${opts.map(([v, t], i) => `<button role="radio" aria-checked="${st[key] === v}" tabindex="${i === Math.max(0, opts.findIndex((o) => o[0] === st[key])) ? 0 : -1}" data-set="${key}" data-val="${v}"><span>${t}</span></button>`).join('')}</div></div>`;
   const slider = (id, attr, val, label, aria) => {
     const text = pct(val);
@@ -531,6 +533,7 @@ export function settingsHtml(st, canVibrate = false) {
   return `<div class="sheet settings">
     ${band()}
     <header class="sheet-head"><h1 tabindex="-1">Settings</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    ${game && game.length ? `<section class="set-diff" aria-labelledby="set-diff-h"><h2 id="set-diff-h">Computer difficulty <small>this game</small></h2>${game.map((g) => `<label class="field"><span>${esc(g.name)}</span><select data-difflevel="${g.k}">${Object.keys(LEVEL_NAME).map((l) => `<option value="${l}" ${l === g.level ? 'selected' : ''}>${LEVEL_NAME[l]}</option>`).join('')}</select></label><p class="seat-note" data-diff-note="${g.k}">${esc(LEVEL_BLURB[g.level] || '')}</p>`).join('')}<p class="note">The change starts with the next computer turn. Records count this game at the easiest level it was played on.</p></section>` : ''}
     ${seg('sound', [[true, 'On'], [false, 'Off']], 'Sound')}
     ${seg('fx', [[true, 'On'], [false, 'Off']], 'Sound effects')}
     ${seg('music', [[true, 'On'], [false, 'Off']], 'Music')}
@@ -594,7 +597,7 @@ export function recordsHtml(st, o) {
   const rate = st.games ? `${Math.round(100 * st.wins / st.games)}%` : '-';
   const avg = st.games ? Math.round(st.totalScore / st.games) : '-';
   const day = o.daily, days = Object.values(day.days || {});
-  const order = (k) => PERSONAS.findIndex((p) => p.id === k.split(':')[0]) * 3 + ['easy', 'medium', 'hard'].indexOf(k.split(':')[1]);
+  const order = (k) => PERSONAS.findIndex((p) => p.id === k.split(':')[0]) * 10 + Object.keys(LEVEL_NAME).indexOf(k.split(':')[1]);
   const rows = Object.entries(st.opp).filter(([k]) => persona(k.split(':')[0]) && LEVEL_NAME[k.split(':')[1]]).sort((a, b) => order(a[0]) - order(b[0]));
   return `<div class="sheet records">
     ${band()}

@@ -9,11 +9,12 @@ import { audio, unlock, sfx, pauseAudio, resumeAudio, setTune, holdAudio, releas
 import { art, loadArt } from './art.js';
 import { store, KEYS, createGameSaves, validRegister, validDaily, pruneDays } from './storage.js';
 import { startAi, aiMove, aiHint, aiReview, aiDailyPar, aiClient } from './aiclient.js';
-import { PERSONAS, PERSONA_MOTION, persona, personaMotion, LEVEL_NAME, seatLevel } from './personas.js';
+import { PERSONAS, PERSONA_MOTION, persona, personaMotion, LEVEL_NAME, LEVEL_BLURB, seatLevel } from './personas.js';
 import { barkFor, barkCue, endBark, greeting, SHORT } from './voices.js';
 import { cleanStats, applyGame, applyDaily, nextStreak, dayNumber } from './stats.js';
 import * as B3 from './board3d.js';
 import * as UI from './ui.js';
+import { easierLevel } from './ai.js';
 import { generateMoves } from './movegen.js';
 import { reviewSeat, reviewTurns, summarize } from './review.js';
 
@@ -428,7 +429,7 @@ function screenHtml(name) {
       const challengeOn = challengeLive();
       return UI.helpHtml(G.helpTab, lex, challengeOn ? [] : twoLetterWords(), { challengeOn });
     }
-    case 'settings': return UI.settingsHtml(G.settings, typeof navigator.vibrate === 'function');
+    case 'settings': return UI.settingsHtml(G.settings, typeof navigator.vibrate === 'function', diffSeats());
     case 'register': return UI.registerHtml(lex, register(), G.noSave, G.newerSave);
     case 'records': return UI.recordsHtml(stats(), { found: lex.data.words.filter((e) => e.forms.some((f) => register()[f])).length, total: lex.data.words.length, daily: dailyInfo(), today: today() });
     case 'about': return UI.aboutHtml(META);
@@ -443,6 +444,14 @@ function screenHtml(name) {
     }
   }
   return '';
+}
+
+// The computer seats whose difficulty Settings can change: those of a game in progress that Settings was opened from.
+function diffSeats() {
+  const s = G.s;
+  if (!s || s.over || s.mode !== 'play' || G.back !== 'game') return null;
+  const seats = s.players.map((p, k) => ({ p, k })).filter(({ p }) => p.kind === 'ai' && !p.wasHuman && LEVEL_NAME[p.level]);
+  return seats.map(({ p, k }) => ({ k, name: p.name, persona: p.persona, level: p.level }));
 }
 
 function defaultSetup() {
@@ -541,6 +550,17 @@ function wireScreen(name) {
   }
   if (name === 'help') scr.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { unlock(); sfx('uiTap'); G.helpTab = b.dataset.tab; showScene('help', { focus: `[data-tab="${G.helpTab}"]` }); }));
   if (name === 'settings') {
+    scr.querySelectorAll('[data-difflevel]').forEach((sel) => sel.addEventListener('change', () => {
+      unlock(); sfx('uiTap');
+      const p = G.s && G.s.players[+sel.dataset.difflevel];
+      if (!p || !LEVEL_NAME[sel.value] || p.level === sel.value) return;
+      p.lvlLow = easierLevel(p.lvlLow || p.level, sel.value);
+      p.level = sel.value;
+      save();
+      const note = scr.querySelector(`[data-diff-note="${sel.dataset.difflevel}"]`);
+      if (note) note.textContent = LEVEL_BLURB[p.level];
+      liveSay(`${p.name} now plays at ${LEVEL_NAME[p.level]}.`);
+    }));
     scr.querySelectorAll('[data-set]').forEach((b) => b.addEventListener('click', () => {
       const k = b.dataset.set, raw = b.dataset.val;
       G.settings[k] = raw === 'true' ? true : raw === 'false' ? false : isNaN(+raw) ? raw : +raw;

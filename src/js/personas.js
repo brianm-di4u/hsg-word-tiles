@@ -15,13 +15,16 @@ export const PERSONA_MOTION = Object.freeze({
 });
 export const personaMotion = (id) => PERSONA_MOTION[id] || PERSONA_MOTION.hollis;
 export const persona = (id) => PERSONAS.find((p) => p.id === id) || null;
-export const LEVEL_NAME = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
-// What each level means, shown under the Difficulty choice in the setup sheet. A seat's level is its own
-// choice: it starts at the character's usual level and can be set to any of the three.
+// Easiest first (ai.js LEVEL_ORDER).
+export const LEVEL_NAME = { beginner: 'Beginner', easy: 'Easy', medium: 'Medium', hard: 'Hard', expert: 'Expert' };
+// What each level means, shown under the Difficulty choice in the setup sheet and in Settings. A seat's level is its own
+// choice: it starts at the character's usual level and can be set to any of the five, before or during a game.
 export const LEVEL_BLURB = {
-  easy: 'Plays everyday words, and now and then misses a better one. A gentle game.',
-  medium: 'Knows the common words and all the short ones, and plays its best. A fair game.',
-  hard: 'Knows every word in the book, keeps a good rack and guards the Boiling Springs. A hard game.',
+  beginner: 'Plays short everyday words of four letters or fewer, and often not its best. The gentlest game.',
+  easy: 'Plays everyday words of four letters or fewer, and now and then its best. A gentle game.',
+  medium: 'Plays everyday words of four letters or fewer, and a longer one only onto a bonus square, never two turns running. A fair game.',
+  hard: 'Plays words of any length: the common ones and every short one. Plays its best and keeps a good rack. A hard game.',
+  expert: 'Knows every word in the book, guards the Boiling Springs and thinks ahead at the end. The hardest game.',
 };
 export const seatLevel = (seat) => (seat.level && LEVEL_NAME[seat.level] ? seat.level : persona(seat.persona).level);
 // Seat colours for humans (Okabe-Ito, colour-blind safe), always shown with a monogram and seat number.

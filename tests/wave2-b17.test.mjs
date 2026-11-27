@@ -85,8 +85,10 @@ export const tests = [
           const flip = g % 2 === 1;
           const opp = personas[(personas.indexOf(per) + 1 + (g % 3)) % 4];
           const seats = flip
-            ? [{ kind: 'ai', level: 'medium', persona: opp }, { kind: 'ai', level: 'medium', persona: per }]
-            : [{ kind: 'ai', level: 'medium', persona: per }, { kind: 'ai', level: 'medium', persona: opp }];
+            // measured at Hard, the tier the old Medium became (OQ-POST-REL-01): the new Medium settles for a lesser play on about half
+            // its turns, which blurs every habit alike
+            ? [{ kind: 'ai', level: 'hard', persona: opp }, { kind: 'ai', level: 'hard', persona: per }]
+            : [{ kind: 'ai', level: 'hard', persona: per }, { kind: 'ai', level: 'hard', persona: opp }];
           const s = createGame({ mode: 'play', seats, seed: 5100 + g }, c.lex);
           let guard = 0;
           while (!s.over && guard++ < 400) {
@@ -140,7 +142,7 @@ export const tests = [
       const opalBio = (await t.page.textContent('.seat[data-k="1"] .seat-note')).trim();
       const hardNote = (await t.page.textContent('[data-level-note="1"]')).trim();
       t.expect(/bathhouse|Bathhouse Row/i.test(opalBio) && !/plain, everyday/i.test(opalBio), `Opal+Hard bio is trade-grounded (${opalBio})`);
-      t.expect(/every word in the book/i.test(hardNote), `Hard blurb stays in difficulty note (${hardNote})`);
+      t.expect(/words of any length/i.test(hardNote), `Hard blurb stays in difficulty note (${hardNote})`);
 
       // Pair Julian with Easy: bio must describe his long words / balanced rack habit, never "Knows every word in the book"
       await t.page.click('[data-persona="1"][data-val="julian"]');

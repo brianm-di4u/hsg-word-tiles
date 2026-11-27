@@ -1,7 +1,7 @@
 // Runs the AI off the main thread: a Worker started from a Blob URL (works from file:// too), with the
 // same code on the main thread as a fallback (no Worker, a failed start, or ?worker=0).
 import { WORKER_SRC } from './worker-src.js';
-import { chooseAction, hintChoices } from './ai.js';
+import { chooseAction, hintChoices, longLastTurn, LEVELS } from './ai.js';
 import { dailyPar } from './par.js';
 import { bestOf, REVIEW_NODES_MAIN } from './review.js';
 import { deducibleFeatured } from './lexicon.js';
@@ -54,7 +54,7 @@ function call(msg) {
 
 // Copy of the state with only what the AI reads (and a fresh rng it may advance).
 // W1-S3-02, W6-S3-02 / CD-WF1-06: a Featured Spring goes along only once its plaque gives it away; hidden words never reach the AI or the hint.
-const slim = (s) => ({ mode: s.mode, daily: s.daily, board: s.board, players: s.players.map((p) => ({ kind: p.kind, rack: p.rack, level: p.level })), cur: s.cur, bag: s.bag, featured: deducibleFeatured(s.featured, aiClient.lex), rng: { ...s.rng } });
+const slim = (s) => ({ mode: s.mode, daily: s.daily, board: s.board, players: s.players.map((p, k) => ({ kind: p.kind, rack: p.rack, level: p.level, longLast: longLastTurn(s, k, LEVELS.medium.wordMax) })), cur: s.cur, bag: s.bag, featured: deducibleFeatured(s.featured, aiClient.lex), rng: { ...s.rng } });
 
 // Resolves { action, rngAi } for the current seat of s.
 export async function aiMove(s, level, persona) {

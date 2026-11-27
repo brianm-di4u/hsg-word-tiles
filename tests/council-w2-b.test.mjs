@@ -36,14 +36,21 @@ export const tests = [
     },
   },
   {
-    name: 'S3-02 Hard beats Medium between 60 and 75 percent of 100 games, inside the move-time budget', node: true,
+    // The old target (Hard over Medium 60-75%) was retired with the five-level ladder (owner, 2026-11-27, OQ-POST-REL-01): every
+    // step up now wins clearly, and the strongest level keeps inside the move-time budget.
+    name: 'S3-02 each level beats the one below it (Beginner < Easy < Medium < Hard < Expert), inside the move-time budget', node: true,
     async run(t) {
-      const r = await pairing('hard', 'medium', 100);
-      t.log(`hard over medium ${r.rate}`);
-      t.expect(r.rate >= 0.6 && r.rate <= 0.75, `Hard beats Medium ${r.rate} of 100 games (target 0.60 to 0.75)`);
-      const ms = r.st.ms.hard.slice().sort((a, b) => a - b);
-      const p95 = ms[Math.floor(0.95 * ms.length)];
-      t.expect(p95 < 250, `Hard's 95th percentile move time stays under 250 ms (${p95.toFixed(1)})`);
+      const steps = [['easy', 'beginner', 0.75], ['hard', 'medium', 0.85], ['expert', 'hard', 0.6]];
+      for (const [up, down, floor] of steps) {
+        const r = await pairing(up, down, 60);
+        t.log(`${up} over ${down} ${r.rate}`);
+        t.expect(r.rate >= floor, `${up} beats ${down} in ${r.rate} of 60 games (target >= ${floor})`);
+        if (up === 'expert') {
+          const ms = r.st.ms.expert.slice().sort((a, b) => a - b);
+          const p95 = ms[Math.floor(0.95 * ms.length)];
+          t.expect(p95 < 250, `Expert's 95th percentile move time stays under 250 ms (${p95.toFixed(1)})`);
+        }
+      }
     },
   },
   {
@@ -87,15 +94,16 @@ export const tests = [
       t.expect(/everyday words/.test(await t.page.textContent('[data-level-note="1"]')), 'a sentence says what Easy means');
       await t.page.click('[data-persona="1"][data-val="hollis"]');
       t.equal(await t.page.inputValue('[data-level="1"]'), 'medium', 'Hollis starts at Medium');
-      t.expect(/common words and all the short ones/.test(await t.page.textContent('[data-level-note="1"]')), 'a sentence says what Medium means');
-      await t.page.selectOption('[data-level="1"]', 'hard');
+      t.expect(/four letters or fewer, and a longer one only onto a bonus square/.test(await t.page.textContent('[data-level-note="1"]')), 'a sentence says what Medium means');
+      await t.page.selectOption('[data-level="1"]', 'expert');
       t.expect(/every word in the book/.test(await t.page.textContent('[data-level-note="1"]')), 'the sentence follows the level');
+      t.equal((await t.page.$$eval('[data-level="1"] option', (o) => o.map((x) => x.value))).join(','), 'beginner,easy,medium,hard,expert', 'five levels, easiest first (OQ-POST-REL-01)');
       await t.page.click('[data-persona="1"][data-val="lucky"]');
       t.equal(await t.page.inputValue('[data-level="1"]'), 'medium', 'another character starts at its own usual level (W6-S2-01; it used to keep Hard)');
       await t.page.selectOption('[data-level="1"]', 'hard');
       t.equal(await t.page.inputValue('[data-level="1"]'), 'hard', 'and the level chosen after the character stays');
       const cards = await t.page.$$eval('[data-persona="1"]', (o) => o.map((x) => x.textContent));
-      t.expect(cards.every((x) => /Usually (Easy|Medium|Hard)/.test(x)), 'each character card names only the level it usually plays at');
+      t.expect(cards.every((x) => /Usually (Beginner|Easy|Medium|Hard|Expert)/.test(x)), 'each character card names only the level it usually plays at');
       await t.checkLayout({ allowScrollY: true });
       await t.shot('S3-02-setup');
       await t.page.click('#screen [data-start]');

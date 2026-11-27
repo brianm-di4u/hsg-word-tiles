@@ -23,7 +23,8 @@ valley's springs, and earn extra points for Hot Springs words, each of which ope
    reach Turn 1 without scrolling past options, read every square's rule and the live score breakdown at a glance,
    and play by touch, mouse or keyboard?
 4. **Fair, distinct local opponents.** Does every computer play without seeing hidden information, keep a playing
-   style of its own apart from its level, and scale from a welcoming Easy (about 230–270 points) to a sharp Hard?
+   style of its own apart from its level, and scale over five levels from a gentle Beginner to a sharp Expert, with Easy never
+   playing a word over four letters (owner, 2026-11-27)?
 
 ### Anti-goals
 1. Never borrow a commercial crossword game's name, board, tile table, art or rules wording.
@@ -136,7 +137,10 @@ and ≤ 1.2 s (Hard) at 4× throttle.
 
 ### AI
 21. AI plays only legal moves (every AI move in 2,000 self-play games passes the engine check).
-22. Easy plays only common words; Hard beats Medium in ≥ 70 % and Medium beats Easy in ≥ 75 % of 2-player games.
+22. Beginner, Easy and Medium play only everyday words; Beginner and Easy never a word over four letters; Medium a longer one only
+    onto a word multiplier or Bathhouse Row square, never on two turns running; each level beats the one below it in most 2-player
+    games (Easy over Beginner ≥ 75 %, Medium over Easy ≥ 85 %, Hard over Medium ≥ 85 %, Expert over Hard ≥ 60 %); a computer's
+    difficulty can be changed in Settings during a game. (Before 2026-11-27: three levels, Easy about 230–270 points.)
 23. AI turns never block the UI (Web Worker; in-thread fallback works when Workers are unavailable).
 24. Hints (3 per game in Play) show a strong legal move on the board; Other plays steps through the next two best, with the tiles each keeps, at no extra charge.
 
