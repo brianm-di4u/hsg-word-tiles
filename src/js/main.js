@@ -1438,6 +1438,9 @@ function renderTurnline() {
       const lo = Math.min(par.m, par.h), hi = Math.max(par.m, par.h);
       const stars = UI.dailyStars(score, par);
       parsHtml = `<span class="daily-pars" aria-label="Star targets: 1 star over ${lo}, 2 stars over ${hi}${stars ? `, ${UI.plural(stars, 'star')} reached` : ''}"><span class="par-pip${score > lo ? ' met' : ''}" title="1 star: beat ${lo}">★ ${lo}</span><span class="par-pip${score > hi ? ' met' : ''}" title="2 stars: beat ${hi}">★★ ${hi}</span></span>`;
+    } else if (mobile) {
+      // Reserve the par pips' space in the mobile turn line before async dailyPar finishes so #topbar, #boardwrap and #rack never move (OQ-WF7-W5-05).
+      parsHtml = '<span class="daily-pars par-hold" aria-hidden="true"><span class="par-pip-hold">★ 000</span><span class="par-pip-hold">★★ 000</span></span>';
     }
     const turnBadge = s.over ? '<span class="daily-turn">Daily complete</span>' : `<span class="daily-turn">Turn ${turn} / ${E.DAILY_TURNS}</span>`;
     const priorHtml = prior != null ? `<span class="daily-prior" title="Practice replay — official score already recorded">${mobile ? `Practice · ${prior}` : `Practice replay · ${prior}`}</span>` : '';

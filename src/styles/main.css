@@ -291,11 +291,12 @@ body.theme-dark #turnline .bag.phase-empty { background: #D4AF37; border-color: 
 }
 #turnline .daily-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 3px 6px; font-size: 0.82em; color: #E6D8BC; margin-top: 2px; }
 #turnline .daily-pars { display: inline-flex; align-items: center; gap: 5px; flex: none; }
-#turnline .par-pip {
+#turnline .par-pip, #turnline .par-pip-hold {
   display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 99px;
   background: rgba(255, 248, 230, 0.12); color: #F6EFDF;
   font: 700 0.92em / 1.25 var(--f-ui); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
+#turnline .par-hold { visibility: hidden; pointer-events: none; }
 #turnline .par-pip.met { background: #DFBC5B; color: #1F1406; }
 #turnline .daily-prior { color: #F3DD8B; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
 #scores { grid-area: scores; display: flex; flex-direction: column; gap: 8px; }
