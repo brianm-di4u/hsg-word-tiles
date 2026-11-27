@@ -32,7 +32,7 @@ export const tests = [
         const R = await import(new URL('src/js/render2d.js', location.href).href);
         const size = 2048, cell = size / R.U, f = R.FRAME * cell, band = f * 0.78;
         const outerR = band * 0.18, innerR = f - cell * 0.06, bw = innerR - outerR;
-        const mid = (outerR + innerR) / 2;
+        const mid = (outerR + innerR) / 2, midY = (outerR - cell * 0.015 + innerR + cell * 0.02) / 2;
         const cv = R.paintBoard(size, 'light', false), ctx = cv.getContext('2d');
         const rv = R.boardRoughnessTexture(), rctx = rv.getContext('2d');
         const rScale = rv.width / size;
@@ -62,8 +62,9 @@ export const tests = [
           const mapPt = (lx, ly) => [sx ? size - lx : lx, sy ? size - ly : ly];
 
           // 1) Stepped tier-2 horizontal & vertical arms (x in [f+0.20*cell .. f+0.38*cell], beyond the old f*0.36 circle!)
-          const hArm2 = countBox(mapX(f + cell * 0.20, cell * 0.18), mapY(mid - bw * 0.16, bw * 0.32), cell * 0.18, bw * 0.32);
-          const vArm2 = countBox(mapX(mid - bw * 0.16, bw * 0.32), mapY(f + cell * 0.20, cell * 0.18), bw * 0.32, cell * 0.18);
+          // Sample the full tier-2 brass interior (midY +/- 0.33*bw) so a 1-px Skia CPU/GPU flute AA difference does not clip the ratio.
+          const hArm2 = countBox(mapX(f + cell * 0.20, cell * 0.18), mapY(midY - bw * 0.33, bw * 0.66), cell * 0.18, bw * 0.66);
+          const vArm2 = countBox(mapX(midY - bw * 0.33, bw * 0.66), mapY(f + cell * 0.20, cell * 0.18), bw * 0.66, cell * 0.18);
           // 2) Stepped tier-3 finial tongue center vs stepped-away outer edge (proves ziggurat step-down, not a flat bar)
           const hFinCenter = countBox(mapX(f + cell * 0.48, cell * 0.14), mapY(mid - bw * 0.08, bw * 0.16), cell * 0.14, bw * 0.16);
           const hFinOuter = countBox(mapX(f + cell * 0.48, cell * 0.14), mapY(outerR + bw * 0.10, bw * 0.14), cell * 0.14, bw * 0.14);
