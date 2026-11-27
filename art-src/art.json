@@ -12,52 +12,60 @@
    "name": "glass-w",
    "src": "glass-w.png",
    "w": 256,
-   "h": 256
+   "h": 256,
+   "canvas": true
   },
   {
    "name": "glass-h",
    "src": "glass-h.png",
    "w": 256,
-   "h": 256
+   "h": 256,
+   "canvas": true
   },
   {
    "name": "glass-s",
    "src": "glass-s.png",
    "w": 256,
-   "h": 256
+   "h": 256,
+   "canvas": true
   },
   {
    "name": "glass-b",
    "src": "glass-b.png",
    "w": 256,
-   "h": 256
+   "h": 256,
+   "canvas": true
   },
   {
    "name": "glass-c",
    "src": "glass-c.png",
    "w": 320,
-   "h": 320
+   "h": 320,
+   "canvas": true
   },
   {
    "name": "marble",
    "src": "marble.png",
    "w": 1024,
    "h": 1024,
-   "quality": 0.78
+   "quality": 0.78,
+   "canvas": true
   },
   {
    "name": "terrazzo",
    "src": "terrazzo.png",
-   "w": 768,
-   "h": 768,
-   "quality": 0.78
+   "w": 256,
+   "h": 256,
+   "quality": 0.76,
+   "canvas": true
   },
   {
    "name": "counter",
    "src": "counter.png",
    "w": 1600,
    "h": 1066,
-   "quality": 0.72
+   "quality": 0.72,
+   "canvas": true
   },
   {
    "name": "bath-superior",
@@ -69,7 +77,8 @@
     0.03,
     0.94,
     0.94
-   ]
+   ],
+   "canvas": true
   },
   {
    "name": "bath-hale",
@@ -81,7 +90,8 @@
     0.03,
     0.94,
     0.94
-   ]
+   ],
+   "canvas": true
   },
   {
    "name": "bath-maurice",
@@ -93,7 +103,8 @@
     0.03,
     0.94,
     0.94
-   ]
+   ],
+   "canvas": true
   },
   {
    "name": "bath-fordyce",
@@ -105,7 +116,8 @@
     0.03,
     0.94,
     0.94
-   ]
+   ],
+   "canvas": true
   },
   {
    "name": "bath-quapaw",
@@ -117,7 +129,8 @@
     0.03,
     0.94,
     0.94
-   ]
+   ],
+   "canvas": true
   },
   {
    "name": "bath-ozark",
@@ -129,7 +142,8 @@
     0.03,
     0.94,
     0.94
-   ]
+   ],
+   "canvas": true
   },
   {
    "name": "bath-buckstaff",
@@ -141,7 +155,8 @@
     0.03,
     0.94,
     0.94
-   ]
+   ],
+   "canvas": true
   },
   {
    "name": "bath-lamar",
@@ -153,13 +168,21 @@
     0.03,
     0.94,
     0.94
-   ]
+   ],
+   "canvas": true
   },
   {
    "name": "face-opal",
    "src": "face-opal.png",
    "w": 192,
    "h": 192,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ],
+   "circleMask": 1.5,
    "quality": 0.8
   },
   {
@@ -167,6 +190,13 @@
    "src": "face-hollis.png",
    "w": 192,
    "h": 192,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ],
+   "circleMask": 1.5,
    "quality": 0.8
   },
   {
@@ -174,6 +204,13 @@
    "src": "face-lucky.png",
    "w": 192,
    "h": 192,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ],
+   "circleMask": 1.5,
    "quality": 0.8
   },
   {
@@ -181,6 +218,13 @@
    "src": "face-julian.png",
    "w": 192,
    "h": 192,
+   "crop": [
+    0.03,
+    0.03,
+    0.94,
+    0.94
+   ],
+   "circleMask": 1.5,
    "quality": 0.8
   },
   {

@@ -168,11 +168,11 @@ export const tests = [
     async run(t) {
       await ready(t);
       const med = (p) => [...p].sort((x, y) => x - y)[p.length >> 1];
-      const render = async (n, vol) => { const p = []; for (let k = 0; k < 20; k++) p.push((await t.game('act', 'renderSfx', n, vol)).peak); return p; };
+      const render = async (n, vol, read = 'peak') => { const p = []; for (let k = 0; k < 20; k++) p.push((await t.game('act', 'renderSfx', n, vol))[read]); return p; };
       const typical = await render('fanfare', 0.35);
       t.log('fanfare typical median ' + med(typical));
       t.expect(med(typical) >= 0.2 && med(typical) <= 0.45, 'it is typically between 0.2 and 0.45 (median ' + med(typical) + ')');
-      const full = await render('play+fanfare@0.28', 1);
+      const full = await render('play+fanfare@0.28', 1, 'prePeak');   // before the ceiling, which would hide a cue that is too loud
       t.log('play+fanfare full-volume most ' + Math.max(...full));
       t.expect(Math.max(...full) < 0.95, 'it stays under 0.95 with the volume at full (' + Math.max(...full) + ')');
     },
@@ -269,7 +269,7 @@ export const tests = [
       t.equal(ROWS[1][9], 's', 'layout: a Steam square at row 2, column J'); t.equal(ROWS[0][4], 'b', 'layout: a Boiling Spring at row 1, column E');
       const near = (i) => [{ i, l: 'A' }];
       t.equal(openedPremium(board, near(steamAt + 2)), DEFENSE.steam, 'a tile two squares from a Steam square opens it');
-      t.equal(openedPremium(board, near(boilAt + 2)), DEFENSE.boiling, 'a tile two squares from a Boiling Spring opens it');
+      t.equal(openedPremium(board, near(boilAt - 2)), DEFENSE.boiling,   /* boilAt + 2 is also two squares from a Bathhouse Row square, which counts since W1-S4-08 */ 'a tile two squares from a Boiling Spring opens it');
       t.equal(openedPremium(board, near(CENTER)), 0, 'a tile far from both opens nothing');
       const taken = board.slice(); taken[steamAt] = { l: 'Z' };
       t.equal(openedPremium(taken, near(steamAt + 2)), 0, 'a Steam square that is already covered is not counted');

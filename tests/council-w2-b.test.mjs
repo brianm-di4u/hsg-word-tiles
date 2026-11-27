@@ -28,11 +28,11 @@ async function pairing(a, b, n) {
 
 export const tests = [
   {
-    name: 'S3-02 Medium beats Easy between 70 and 90 percent of 100 games, not every game', node: true,
+    name: 'S3-02 Medium decisively beats Easy (W1-S3-01 approachable ~230-260 pt beginner tier)', node: true,
     async run(t) {
       const r = await pairing('medium', 'easy', 100);
       t.log(`medium over easy ${r.rate}`);
-      t.expect(r.rate >= 0.7 && r.rate <= 0.9, `Medium beats Easy ${r.rate} of 100 games (target 0.70 to 0.90)`);
+      t.expect(r.rate >= 0.85, `Medium beats Easy ${r.rate} of 100 games (W1-S3-01 target >= 0.85; PRD >= 0.75)`);
     },
   },
   {
@@ -60,7 +60,7 @@ export const tests = [
     name: 'S3-02 the style is read from the persona, applies at every level and keeps moves legal', node: true,
     async run(t) {
       const c = await ctx();
-      t.expect(STYLES.lucky && !STYLES.hollis, 'only Lucky has a style of his own');
+      for (const id of ['opal', 'hollis', 'lucky', 'julian']) t.expect(!!STYLES[id], `${id} has an orthogonal trade style (W1-S5-02)`);
       for (const level of ['easy', 'medium', 'hard']) {
         const s = createGame({ mode: 'play', seats: [{ kind: 'ai', level, persona: 'lucky' }, { kind: 'ai', level: 'medium', persona: 'hollis' }], seed: 77 }, c.lex);
         let n = 0;
@@ -81,15 +81,19 @@ export const tests = [
     async run(t) {
       await ready(t);
       await t.page.click('#screen [data-go="setup"]');
-      t.equal(await opponent(t), 'hollis', 'the default opponent is Hollis');
-      t.equal(await t.page.inputValue('[data-level="1"]'), 'medium', 'his usual level is Medium');
+      t.equal(await opponent(t), 'opal', 'the default newcomer opponent is Opal (W2-S4-01)');
+      await t.page.click('.house-rules summary');
+      t.equal(await t.page.inputValue('[data-level="1"]'), 'easy', 'her usual level is Easy');
+      t.expect(/everyday words/.test(await t.page.textContent('[data-level-note="1"]')), 'a sentence says what Easy means');
+      await t.page.click('[data-persona="1"][data-val="hollis"]');
+      t.equal(await t.page.inputValue('[data-level="1"]'), 'medium', 'Hollis starts at Medium');
       t.expect(/common words and all the short ones/.test(await t.page.textContent('[data-level-note="1"]')), 'a sentence says what Medium means');
-      await t.page.click('[data-persona="1"][data-val="opal"]');
-      t.equal(await t.page.inputValue('[data-level="1"]'), 'easy', 'Opal starts at Easy');
       await t.page.selectOption('[data-level="1"]', 'hard');
       t.expect(/every word in the book/.test(await t.page.textContent('[data-level-note="1"]')), 'the sentence follows the level');
       await t.page.click('[data-persona="1"][data-val="lucky"]');
-      t.equal(await t.page.inputValue('[data-level="1"]'), 'hard', 'changing the character keeps the level the player chose');
+      t.equal(await t.page.inputValue('[data-level="1"]'), 'medium', 'another character starts at its own usual level (W6-S2-01; it used to keep Hard)');
+      await t.page.selectOption('[data-level="1"]', 'hard');
+      t.equal(await t.page.inputValue('[data-level="1"]'), 'hard', 'and the level chosen after the character stays');
       const cards = await t.page.$$eval('[data-persona="1"]', (o) => o.map((x) => x.textContent));
       t.expect(cards.every((x) => /Usually (Easy|Medium|Hard)/.test(x)), 'each character card names only the level it usually plays at');
       await t.checkLayout({ allowScrollY: true });
@@ -114,8 +118,8 @@ export const tests = [
       await t.page.evaluate((k) => localStorage.setItem(k, JSON.stringify({ lastSetup: { hints: true, seats: [{ kind: 'human', name: '' }, { kind: 'ai', persona: 'opal', level: 'godlike' }] } })), settingsKey);
       await t.reload();
       await t.page.click('#screen [data-go="setup"]');
-      t.equal(await opponent(t), 'hollis', 'the damaged setup is dropped');
-      t.equal(await t.page.inputValue('[data-level="1"]'), 'medium', 'with the default level');
+      t.equal(await opponent(t), 'opal', 'the damaged setup is dropped to newcomer default Opal');
+      t.equal(await t.page.inputValue('[data-level="1"]'), 'easy', 'with the default level');
     },
   },
   {

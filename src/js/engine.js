@@ -3,7 +3,8 @@
 import { TILES, BLANKS } from './tiles.js';
 import { seedState, rand, shuffle, hashString } from './rng.js';
 import { has } from './dict.js';
-import { N, RACK, VALUE, findWords, connectError, scorePlay } from './score.js';
+import { deducibleFeatured } from './lexicon.js';
+import { N, RACK, VALUE, findWords, connectError, scorePlay, isBath } from './score.js';
 
 export const DAILY_TURNS = 10;
 
@@ -113,10 +114,10 @@ export function evaluate(s, tiles, ctx) {
   if (found.error) return { ok: false, error: found.error };
   conn = connectError(s.board, tiles);
   if (conn) return { ok: false, error: conn };
-  // `skipDict` is for the live preview of a Challenge game, which must not tell the player whether a word is in the dictionary
+  // `skipDict` is for the live preview of a Challenge game, which must not tell the player whether a word is in the dictionary or leak Hot Springs / Featured bonuses
   const bad = ctx.skipDict ? null : found.words.find((w) => !has(ctx.dict, w.w));
   if (bad) return { ok: false, error: `${bad.w} is not in the dictionary.`, badWord: bad.w, words: found.words.map((w) => ({ w: w.w, cells: w.cells })) };
-  const sc = scorePlay(s.board, found, tiles.length, ctx.lex, s.featured);
+  const sc = scorePlay(s.board, found, tiles.length, ctx.skipDict ? null : ctx.lex, ctx.skipDict ? null : s.featured);
   return { ok: true, ...sc };
 }
 
@@ -124,7 +125,10 @@ export function evaluate(s, tiles, ctx) {
 export function apply(s, action, ctx) {
   if (s.over) return { ok: false, error: 'The game is over.' };
   const p = s.players[s.cur];
+  const fogWas = fogStep(s);
   const rack = p.rack.join('');   // kept in the log so the game can be looked back over (review.js)
+  // the Featured Springs a person could work out on this turn, also for review.js (only written when there is one)
+  const known = p.kind === 'human' ? deducibleFeatured(s.featured, ctx.lex).map((f) => f.word) : [];
   let entry;
   if (action.type === 'play') {
     const ev = evaluate(s, action.tiles, ctx);
@@ -132,14 +136,58 @@ export function apply(s, action, ctx) {
     for (const t of action.tiles) s.board[t.i] = { l: t.l, blank: !!t.blank, p: s.cur, t: s.move };
     p.rack = takeFromRack(p.rack, action.tiles.map((t) => (t.blank ? '?' : t.l)));
     p.score += ev.score;
-    if (ev.featured) { const f = s.featured.find((x) => x.word === ev.featured); f.by = s.cur; f.at = s.move; }
+    const claimedFeats = Array.isArray(ev.featuredAll) && ev.featuredAll.length
+      ? ev.featuredAll
+      : (ev.featured ? [ev.featured] : []);
+    for (const fw of claimedFeats) {
+      const f = s.featured.find((x) => x.word === fw && x.by == null);
+      if (f) { f.by = s.cur; f.at = s.move; }
+    }
     const top = ev.words.reduce((a, w) => (w.score + w.bonus > a.score + a.bonus ? w : a), ev.words[0]);
     if (!p.best || top.score + top.bonus > p.best.score) p.best = { word: top.w, score: top.score + top.bonus };
     entry = { p: s.cur, kind: 'play', n: s.move, tiles: action.tiles.map((t) => ({ i: t.i, l: t.l, blank: !!t.blank })),
       words: ev.words.map((w) => ({ w: w.w, score: w.score, bonus: w.bonus, themed: w.themed, bath: w.bath })),
-      score: ev.score, full: ev.full, themed: ev.themed, featured: ev.featured, rack };
+      score: ev.score, full: ev.full, themed: ev.themed, featured: ev.featured,
+      ...(claimedFeats.length > 1 ? { featuredAll: claimedFeats } : {}), rack };
     s.scoreless = ev.score > 0 ? 0 : s.scoreless + 1;
     draw(s, p);
+    // W1-S4-01: playing any Hot Springs word in an unclaimed plaque's category immediately clears +1 fogged letter on that plaque.
+    // W6-S2-03: record player-caused plaque reveals explicitly so board-to-plaque arcs fire only for claim/row/themed, never passive clearFog().
+    const revealedThisPlay = new Set();
+    const revealed = [];
+    if (ctx.lex && s.featured.length) {
+      const cats = new Set();
+      for (const w of ev.words) {
+        if (!w.themed) continue;
+        const en = ctx.lex.byId.get(w.themed);
+        if (en && en.cat) cats.add(en.cat);
+      }
+      s.featured.forEach((f, k) => {
+        if (f.by == null && cats.has(f.cat) && revealOneLetter(s, f)) {
+          revealedThisPlay.add(f);
+          revealed.push({ k, reason: 'themed' });
+        }
+      });
+    }
+    // W1-S2-11: covering an uncovered Bathhouse Row medallion with any valid word (non-scoring on plain words per CD-WF1-03;
+    // Hot Springs words keep their +20 ROW_BONUS per CD-WF0-09) clears +1 fogged letter on an unclaimed Featured Spring plaque.
+    let rowReveals = 0;
+    if (s.featured.length) {
+      const rowCovers = action.tiles.filter((t) => isBath(t.i)).length;
+      for (let k = 0; k < rowCovers; k++) {
+        const eligible = s.featured.filter((f) => f.by == null && f.shown.length < featuredRevealCap(s, f));
+        if (!eligible.length) break;
+        const fresh = eligible.filter((f) => !revealedThisPlay.has(f));
+        const pool = (fresh.length ? fresh : eligible).slice().sort((a, b) => (b.shown.length / b.word.length) - (a.shown.length / a.word.length));
+        if (revealOneLetter(s, pool[0])) {
+          rowReveals++;
+          revealedThisPlay.add(pool[0]);
+          revealed.push({ k: s.featured.indexOf(pool[0]), reason: 'row' });
+        }
+      }
+    }
+    if (rowReveals > 0) entry.rowReveal = rowReveals;
+    if (revealed.length) entry.revealed = revealed;
   } else if (action.type === 'swap') {
     const letters = action.letters || [];
     if (!letters.length) return { ok: false, error: 'Choose tiles to swap.' };
@@ -148,7 +196,11 @@ export function apply(s, action, ctx) {
     if (!left) return { ok: false, error: 'Those tiles are not on your rack.' };
     p.rack = left;
     draw(s, p);
+    // The returned tiles are mixed back into the bag (W1-S2-03), so they can come up again at any point. The shuffle's own stream starts from
+    // rng.bag and the move: a seed and the same turns give the same bag, whatever order the tiles were picked in, and rng.bag itself goes
+    // on as it would have, so a swap changes none of the letters a Daily's fog clears. The Daily's par (par.js) keeps the old order.
     s.bag.push(...letters.slice().sort());
+    if (!ctx.swapToEnd) shuffle({ rng: { bag: seedState(s.rng.bag ^ Math.imul(s.move + 1, 0x9e3779b9)) } }, 'bag', s.bag);
     entry = { p: s.cur, kind: 'swap', n: s.move, count: letters.length, score: 0, rack };
     s.scoreless++;
   } else if (action.type === 'pass') {
@@ -156,6 +208,7 @@ export function apply(s, action, ctx) {
     s.scoreless++;
   } else return { ok: false, error: 'Unknown action.' };
 
+  if (known.length) entry.known = known;
   s.log.push(entry);
   s.move++;
   // End checks
@@ -167,18 +220,43 @@ export function apply(s, action, ctx) {
   else if (s.scoreless >= 2 * s.players.length) finish(s, null, 'stalled');
   if (!s.over) {
     s.cur = (s.cur + 1) % s.players.length;
-    if (s.cur === 0) { s.round++; revealRound(s); }
+    if (s.cur === 0) s.round++;
+    for (let k = fogStep(s); k > fogWas; k--) clearFog(s);
   }
   return { ok: true, entry };
 }
 
-// One more letter of each unclaimed Featured Spring clears at each new round (never past length − 2).
-function revealRound(s) {
-  for (const f of s.featured) {
-    if (f.by != null || f.shown.length >= f.word.length - 2) continue;
-    const hidden = [...f.word].map((_, k) => k).filter((k) => !f.shown.includes(k));
-    f.shown.push(hidden[Math.floor(rand(s, 'bag') * hidden.length)]);
-  }
+// Maximum revealed letters allowed by fog clearing on an unclaimed Featured Spring:
+// length − 2 normally, or length − 1 once bag <= 20 tiles or Daily Turn 6+ (s.daily.turns <= 5).
+export function featuredRevealCap(s, f) {
+  const late = s.bag.length <= 20 || (s.mode === 'daily' && s.daily && s.daily.turns <= DAILY_TURNS - 5);
+  return Math.max(1, f.word.length - (late ? 1 : 2));
+}
+
+function revealOneLetter(s, f) {
+  if (!f || f.by != null || f.shown.length >= featuredRevealCap(s, f)) return false;
+  const hidden = [...f.word].map((_, k) => k).filter((k) => !f.shown.includes(k));
+  if (!hidden.length) return false;
+  f.shown.push(hidden[Math.floor(rand(s, 'bag') * hidden.length)]);
+  return true;
+}
+
+// How far the fog has lifted by itself (W6-S3-03). In a game of two to four it follows the bag: one step for every twelfth of the tiles
+// that were left in it after the deal, whoever draws them, so a plaque has cleared as far by the middle of the bag with four players
+// as with two. (It used to be a letter a round, and four players have about half the rounds.) The Daily has one player and ten
+// turns: one step a turn, as it always was, so a date clears the same letters on everyone's board. Read from the bag, so nothing is
+// stored and a game saved before this goes on from where its plaques are.
+export const FOG_STEPS = 12;
+const ALL_TILES = fullBag().length;
+export function fogStep(s) {
+  if (s.mode === 'daily') return s.daily ? DAILY_TURNS - s.daily.turns : 0;
+  const start = ALL_TILES - RACK * s.players.length;
+  return Math.max(0, Math.floor((FOG_STEPS * (start - s.bag.length)) / start));
+}
+
+// One more letter of each unclaimed Featured Spring clears at each step (up to featuredRevealCap).
+function clearFog(s) {
+  for (const f of s.featured) revealOneLetter(s, f);
 }
 
 function finish(s, outSeat, why) {

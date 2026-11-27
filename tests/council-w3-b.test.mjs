@@ -8,6 +8,7 @@ import { ctx, root } from './lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
 import { generateMoves } from '../src/js/movegen.js';
 import { reviewSeat, reviewSteps, summarize, MIN_MISS } from '../src/js/review.js';
+import { deducibleFeatured } from '../src/js/lexicon.js';
 
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
 // a pre-wave profile with a settings key: no first-run tips, no sound; the computer answers at once unless a test asks for a pace
@@ -26,16 +27,26 @@ export const tests = [
       await t.seed(5);
       await t.game('newGame', { seats: SEATS });
       await t.waitIdle(8000);
-      t.expect(await t.page.locator('[data-act="shuffle"]').count() === 1 && await t.page.locator('[data-act="recall"]').count() === 0, 'with nothing placed: Shuffle, no Recall');
+      if (t.viewport === 'desktop') {
+        t.expect(await t.page.locator('[data-act="shuffle"]').count() === 1 && await t.page.locator('[data-act="recall"]').count() === 1, 'desktop keeps constant 6-slot bar with Shuffle and Recall');
+        t.expect(await t.page.locator('[data-act="recall"]').isDisabled(), 'desktop Recall is disabled with nothing placed');
+      } else {
+        t.expect(await t.page.locator('[data-act="shuffle"]').count() === 1 && await t.page.locator('[data-act="recall"]').count() === 0, 'mobile Slot 1 starts as Shuffle with nothing placed');
+      }
       const [m] = await t.game('act', 'moves', 1);
       await t.game('act', 'stage', m.tiles.slice(0, 1));
       const before = await t.state();
       t.equal(before.staged.length, 1, 'one tile is placed');
-      t.expect(await t.page.locator('[data-act="shuffle"]').isVisible() && await t.page.locator('[data-act="recall"]').isVisible(), 'both Shuffle and Recall show');
+      if (t.viewport === 'desktop') {
+        t.expect(await t.page.locator('[data-act="shuffle"]').isVisible() && await t.page.locator('[data-act="recall"]').isVisible() && await t.page.locator('[data-act="recall"]').isEnabled(), 'desktop shows Shuffle beside enabled Recall');
+      } else {
+        t.expect(await t.page.locator('[data-act="shuffle"]').count() === 0 && await t.page.locator('[data-act="recall"]').isVisible(), 'mobile Slot 1 toggles in-place from Shuffle to Recall (CD-WF5-05)');
+      }
       await t.shot('S2-21-shuffle-and-recall');
       // the shuffle's dice: a fixed one, so the result is the same every run
       await t.page.evaluate(() => { window.__rand = Math.random; Math.random = () => 0; });
-      await t.page.click('[data-act="shuffle"]');
+      if (t.viewport === 'desktop') await t.page.click('[data-act="shuffle"]');
+      else await t.page.keyboard.press('Shift+R');
       await t.page.evaluate(() => { Math.random = window.__rand; });
       const after = await t.state();
       t.expect(JSON.stringify(after.order) !== JSON.stringify(before.order), 'the rack order changed');
@@ -219,10 +230,13 @@ export const tests = [
     name: 'S3-13 the review finds the best play for every turn the person took, as the board and rack stood then', node: true,
     async run(t) {
       const c = await ctx();
-      const s = createGame({ mode: 'play', seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', name: 'Opal' }], seed: 31 }, c.lex);
+      // W1-S3-06: Easy/Medium games prefer teachable common/Hot Springs misses; full-dictionary parity holds on Hard games.
+      const s = createGame({ mode: 'play', seats: [{ kind: 'human', name: 'You' }, { kind: 'ai', name: 'Julian', level: 'hard' }], seed: 31 }, c.lex);
       const want = [];   // what the game itself says is best on each of the person's turns, asked at the time
       for (let turn = 0; !s.over && turn < 40; turn++) {
-        const { moves } = generateMoves(c.dict, s.board, s.players[s.cur].rack, { lex: c.lex, featured: s.featured });
+        // CD-WF1-06: the review counts a Featured Spring only where its plaque could be worked out (W6-S3-02; before it, none was counted and
+        // turn 5 here read 44; the plaque is readable by then, and the best play pays 62, as the test had it before wave 2)
+        const { moves } = generateMoves(c.dict, s.board, s.players[s.cur].rack, { lex: c.lex, featured: deducibleFeatured(s.featured, c.lex) });
         let action;
         if (s.cur === 0) {
           // turn 2: the weakest play; turn 3: a pass; otherwise the best

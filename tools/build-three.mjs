@@ -14,13 +14,13 @@ const game = path.join(here, '..');
 const require = createRequire(path.join(here, 'dev', 'package.json'));
 const esbuild = require('esbuild');
 const NAMES = [
-  'WebGLRenderer', 'Scene', 'PerspectiveCamera', 'Group', 'Mesh',
+  'WebGLRenderer', 'Scene', 'PerspectiveCamera', 'Group', 'Mesh', 'InstancedMesh',
   'BufferGeometry', 'BufferAttribute', 'PlaneGeometry', 'BoxGeometry', 'SphereGeometry',
   'MeshStandardMaterial', 'MeshBasicMaterial', 'MeshPhysicalMaterial',
   'CanvasTexture', 'HemisphereLight', 'DirectionalLight', 'SpotLight',
-  'Color', 'Vector2', 'Vector3', 'Raycaster', 'Plane',
+  'Color', 'Vector2', 'Vector3', 'Matrix4', 'Raycaster', 'Plane',
   'SRGBColorSpace', 'NeutralToneMapping', 'PCFShadowMap', 'PMREMGenerator', 'BackSide', 'DoubleSide',
-  'RepeatWrapping', 'MirroredRepeatWrapping', 'LinearMipmapLinearFilter', 'REVISION',
+  'RepeatWrapping', 'LinearMipmapLinearFilter',
 ];
 const entry = `export { ${NAMES.join(', ')} } from ${JSON.stringify(path.join(game, 'vendor', 'three', 'three.module.js').split(path.sep).join('/'))};`;
 const res = await esbuild.build({

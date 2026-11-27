@@ -302,7 +302,9 @@ export const tests = [
       await t.game('act', 'recall');
       t.equal(await t.page.locator('#preview .bd').count(), 0, 'taking the tiles back removes it');
       await t.game('act', 'stage', m.tiles);
-      t.equal(await t.page.locator('#preview .bd').count(), 1, 'it stays open while the tiles are staged again');
+      t.equal(await t.page.locator('#preview .bd').count(), 0, 'it starts closed when the tiles are staged again (W5-P-N03: it used to stay pinned over the board)');
+      await t.page.keyboard.press('Shift+B');
+      t.equal(await t.page.locator('#preview .bd').count(), 1, 'and Shift+B opens it again');
       await t.game('act', 'play');
       await t.waitIdle(8000);
       await t.game('act', 'stage', (await t.game('act', 'moves', 1))[0].tiles);
@@ -443,10 +445,12 @@ export const tests = [
       for (let k = 0; k < 4; k++) { await t.game('act', 'zoom', 1); await t.waitFrames(3); }
       t.equal((await t.game('act', 'b3')).intervals.length, 0, 'frames drawn for other reasons are not timed');
       // a zoom-out animation is a run of chained frames; repeat it until some are timed (a slow machine may need more than one)
+      // W2-S3-03 hides duplicate #b-zoom on narrow viewports where #b-zoomin toggles zoom-out
+      const zoomOutSel = t.viewport === 'mobile' ? '#b-zoomin' : '#b-zoom';
       let iv = [];
       for (let k = 0; k < 8 && iv.length < 2; k++) {
         await t.game('act', 'zoom', 1.8, 7, 7);
-        await t.page.click('#b-zoom');
+        await t.page.click(zoomOutSel);
         await t.page.waitForFunction(() => !window.__G.viewAnim, null, { timeout: 5000 });
         iv = (await t.game('act', 'b3')).intervals;
       }
@@ -465,7 +469,7 @@ export const tests = [
       t.equal(await t.page.locator('select[data-persona]').count(), 0, 'no drop-down for the opponent');
       const cards = await t.page.$$eval('.opp[role="radio"]', (els) => els.map((e) => ({ val: e.dataset.val, on: e.getAttribute('aria-checked'), text: e.textContent, face: !!e.querySelector('img'), h: e.getBoundingClientRect().height })));
       t.equal(cards.length, 4, 'four characters');
-      t.equal(cards.filter((c) => c.on === 'true').map((c) => c.val).join(), 'hollis', 'Hollis is chosen to start');
+      t.equal(cards.filter((c) => c.on === 'true').map((c) => c.val).join(), 'opal', 'Opal is chosen to start for a newcomer (W2-S4-01)');
       t.expect(cards.every((c) => c.face && /Usually (Easy|Medium|Hard)/.test(c.text) && c.h >= 44), 'each card has a portrait, a usual level and a touch-sized body');
       t.expect(/Opal Vance/.test(cards.find((c) => c.val === 'opal').text) && /Bath attendant/.test(cards.find((c) => c.val === 'opal').text), 'a card names the character and the role');
       await t.page.focus('[data-persona="1"][data-val="julian"]');
@@ -473,7 +477,7 @@ export const tests = [
       t.equal(await t.page.getAttribute('[data-persona="1"][aria-checked="true"]', 'data-val'), 'julian', 'Enter on a focused card chooses it');
       t.equal(await t.page.evaluate(() => document.activeElement.dataset.val), 'julian', 'and the focus stays on it');
       t.equal(await t.page.inputValue('[data-level="1"]'), 'hard', 'the level follows the character until the player sets one');
-      t.expect(/Knows every word in the book/.test(await t.page.textContent('#screen .seat-note')), 'the character line shows under the cards');
+      t.expect(/long, sweeping words/i.test(await t.page.textContent('#screen .seat-note')), 'the character line shows under the cards');
       await t.page.click('[data-persona="1"][data-val="opal"]');
       await t.checkLayout({ allowScrollY: true });
       await t.shot('S4-06-setup');

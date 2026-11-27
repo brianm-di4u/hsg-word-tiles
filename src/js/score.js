@@ -75,7 +75,7 @@ export function findWords(board, tiles) {
 export function connectError(board, tiles) {
   const empty = !board.some(Boolean);
   if (empty) {
-    if (!tiles.some((t) => t.i === CENTER)) return 'The first word must cover the Display Spring at the centre.';
+    if (!tiles.some((t) => t.i === CENTER)) return 'The first word must cover the Display Spring at the center.';
     if (tiles.length < 2) return 'The first word needs at least two tiles.';
     return null;
   }
@@ -120,7 +120,7 @@ export function explainWord(board, add, word) {
 // Full scoring of a geometrically valid placement. `lex` may be null (no bonuses), `featured` is the
 // game's featured list (claimed ones are skipped). Returns totals and a per-word breakdown.
 export function scorePlay(board, found, tilesPlaced, lex, featured) {
-  let total = 0, themed = 0, feat = null;
+  let total = 0, themed = 0;
   const words = found.words.map((wd) => {
     const base = wordScore(board, found.add, wd);
     let bonus = 0, entry = null, bath = false;
@@ -135,13 +135,23 @@ export function scorePlay(board, found, tilesPlaced, lex, featured) {
     themed += bonus;
     return { w: wd.w, cells: wd.cells, score: base, bonus, themed: entry ? entry.id : null, bath };
   });
+  const featWords = [];
   if (featured) {
     for (const f of featured) {
       if (f.by != null) continue;
-      if (words.some((x) => x.w === f.word)) { feat = f.word; total += FEATURED_BONUS; break; }
+      const fid = f.id || (lex && lex.entry(f.word)?.id) || null;
+      if (words.some((x) => x.w === f.word || (fid != null && x.themed === fid))) {
+        featWords.push(f.word);
+        total += FEATURED_BONUS;
+      }
     }
   }
   const full = tilesPlaced === RACK ? FULL_SOAK : 0;
   total += full;
-  return { score: total, words, full, themed, featured: feat, featuredBonus: feat ? FEATURED_BONUS : 0 };
+  return {
+    score: total, words, full, themed,
+    featured: featWords[0] || null,
+    featuredAll: featWords,
+    featuredBonus: featWords.length * FEATURED_BONUS,
+  };
 }

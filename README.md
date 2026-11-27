@@ -45,13 +45,11 @@ Design docs: `PRD.md`, `MECHANICS.md`, `DEV-PLAN.md`, `SAMPLES.md`, `REPORT.md`,
 
 ## Paths outside this repo
 
-The game and its build use files inside this repo. The tools below can also use shared material from the Hot
-Springs Games workspace (`reference/`, `research/`, or a sibling checkout in `repos/`). They find the workspace through the
-`HSG_WORKSPACE` environment variable; when it is unset, the workspace is this repo's grandparent, which is right when the
-repo sits at `<workspace>/repos/<repo>`. When the workspace copy is not there, each tool falls back to a path in this repo or
-skips that step with a message.
+The game and its build use files inside this repo. Optional word-list lookups can also use shared material from the Hot
+Springs Games workspace (`reference/word-lists/`) when the `HSG_WORKSPACE` environment variable is explicitly set; when it
+is unset, tools stay strictly repo-local (falling back to `data/raw/` or skipping with a message).
 
-- `tools/raw-dir.mjs`: raw lists in `reference/word-lists/`, else `data/raw/` here. The word-list tools use it, and so do the dictionary tests in `npm test`, which skip when no `enable1.txt` is found.
+- `tools/raw-dir.mjs`: defaults to repo-local `data/raw/` (dictionary tests in `npm test` skip cleanly when `enable1.txt` is absent) and reads `$HSG_WORKSPACE/reference/word-lists/` only when `HSG_WORKSPACE` is explicitly set.
 
 ## Credits and licences
 
@@ -59,7 +57,7 @@ skips that step with a message.
 - Dictionary: the ENABLE word list (public domain). Common-word flags from SCOWL by Kevin Atkinson
   (`data/LICENSES/SCOWL-Copyright.txt`).
 - Fonts: Limelight, Fraunces and Josefin Sans (SIL Open Font License 1.1, `vendor/fonts/`).
-- Painted art: made for the collection with OpenAI image generation (`art-src/PROMPTS.md`); landmark vignettes from
+- Painted art: made for the collection with OpenAI and Gemini image generation (`art-src/PROMPTS.md`); 18 landmark vignettes from
   Bathhouse Barons.
 - Facts: the collection's audited trivia bank (`shared/data/trivia-questions.json`) and the research corpus copies in
   `research/`, each card citing its source.

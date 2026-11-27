@@ -31,7 +31,8 @@ export const DAILY_DAYS = 400;
 export function pruneDays(days, keep = DAILY_DAYS, also = null) {
   const dates = Object.keys(days).sort();
   if (dates.length <= keep) return days;
-  const best = dates.reduce((b, k) => (days[k].score > days[b].score ? k : b), dates[0]);
+  const official = (e) => (e.first != null ? e.first : e.score);
+  const best = dates.reduce((b, k) => (official(days[k]) > official(days[b]) ? k : b), dates[0]);
   const kept = new Set(dates.slice(dates.length - keep));
   kept.add(best); if (also != null && days[also]) kept.add(also);
   return Object.fromEntries(dates.filter((k) => kept.has(k)).map((k) => [k, days[k]]));

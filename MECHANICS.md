@@ -17,7 +17,7 @@ pause (700 ms minimum, Fast/Instant settings shorten it). The renderer only draw
   cur: seat, move: n, scoreless: n, over: false, result: null | { winners: [seat], ... },
   featured: [{ id, word, cat, shown: [letter indexes], by: null | seat, at: move }],
   log: [{ p, kind: 'play' | 'swap' | 'pass' | 'end', tiles, words: [{ w, score, bonus, themed }], score,
-          full, themed, featured, n }],
+          full, themed, featured, n, known?: [word] }],                 // known: Featured Springs a person could work out that turn
   daily: null | { date, turns: 10 },
 }
 ```
@@ -52,13 +52,20 @@ Racks are arrays of letters, `'?'` for a blank. A placed blank stores the letter
 - **Hot Springs bonus**: each formed word that is a form in `data/thermal-words.json` adds its tier
   bonus (+10 / +18 / +30). If that word covers a Bathhouse Row square with a tile from this play,
   it earns 20 more.
-- **Featured Spring**: forming the exact featured word adds +30 the first time anyone forms it in the game.
-  It's then revealed and marked with the player's name.
+- **Bathhouse Row cover**: first covering any uncovered Bathhouse Row square with any valid word (plain
+  or Hot Springs, non-scoring on plain words) immediately clears +1 fogged letter on an unclaimed Featured
+  Spring plaque (respecting the fog cap).
+- **Featured Spring**: forming any playable form sharing the featured entry's `id` adds +30 the first time anyone
+  forms it in the game (a single play that matches two unclaimed Featured Springs credits both, +60).
+  Each claimed plaque is then revealed and marked with the player's name.
 - The log entry keeps each word's base score and bonus separately, so the UI can show the breakdown.
 
 ### Swaps and passes
-- Swap 1–7 rack tiles while at least 7 tiles are in the bag: draw first, then the returned tiles go to the
-  **bottom** of the bag in alphabetical order (no shuffle, so a seed fixes the whole draw sequence).
+- Swap 1–7 rack tiles while at least 7 tiles are in the bag: draw first, then the returned tiles are
+  **mixed back into** the bag: it is shuffled by a stream started from `rng.bag` and the move number, which leaves `rng.bag`
+  itself as it was, so a seed and the same turns still fix the whole draw sequence (and the letters a Daily's fog clears).
+  Until wave 4 they went to the bottom in alphabetical order. The Daily's par still plays it that way (`swapToEnd` in
+  `par.js`), so a date's par is unchanged.
 - Pass: nothing changes.
 - **Challenge mode** (an option in the setup, off by default; a game keeps the rule it started with, `challenge: true` in its state): a play with a word that is not in the dictionary is not refused but costs the turn, as a pass, and the lost turn is logged with the word (`challenge`). While it is on, the live preview does not check the dictionary (`evaluate` with `skipDict`) and the Help word check is off. Never in the Daily.
 - A swap, a pass, or a play that scores 0 counts as scoreless.
@@ -73,8 +80,14 @@ Racks are arrays of letters, `'?'` for a blank. A placed blank stores the letter
 
 ### Featured Springs
 3 lexicon forms per game, chosen by `rng.bag` from tier ≥ 2 forms of 4–8 letters, from 3 different
-categories. Each plaque shows the category, the length and one letter; at the start of each full round
-one more letter clears, never past `length − 2` letters shown. Once claimed, the whole word shows.
+categories. Each plaque shows the category (icon + short label), the length and one letter. One more letter
+clears each time another twelfth of the bag (as it stood after the deal) has been drawn, by whichever seat, so two, three and
+four players see the fog lift at the same pace; in the Daily one clears each turn. First covering any uncovered Bathhouse Row square clears +1
+fogged letter on an unclaimed plaque, and playing any Hot Springs word in an unclaimed plaque's category
+immediately clears +1 extra fogged letter on that plaque. Fog clearing stops at `length − 2` early in the
+game, and clears down to `length − 1` once `bag <= 20` tiles (or Daily Turn 6+). Any playable form sharing
+the featured entry's `id` claims the plaque (+30 each; dual claims credit both). Once claimed, the whole
+word shows.
 
 ## 4. Input
 - **Pointer (mouse and touch):** drag a rack tile onto a square; drag a staged tile to move it or back
@@ -97,7 +110,8 @@ one more letter clears, never past `length − 2` letters shown. Once claimed, t
   while the computer's tiles are still landing stay put. Pinch 1×–2.4× is optional;
   one finger pans when zoomed; auto-pan near edges while dragging when zoomed.
 - **Keyboard:** arrow keys move a board cursor; letters place rack tiles at the cursor and advance it;
-  Space flips direction (→ / ↓); Backspace recalls the last staged tile; Enter plays; Esc recalls all;
+  Space flips direction (→ / ↓); Backspace recalls the last staged tile; Enter plays; Esc closes the score
+  breakdown if it is open, else recalls all;
   S swap, P pass, H hint, ? help, M menu. Every button is reachable with Tab.
 
 ## 5. Rendering
@@ -116,13 +130,17 @@ one more letter clears, never past `length − 2` letters shown. Once claimed, t
   completes words; down moves use the same code on the transposed board.
 - Every move is scored with the engine's own `score` function (bonuses included).
 - Levels:
-  - **Easy:** common words plus every word of 2–3 letters, any length; ignores the rack it keeps. It plays its best-scoring play except
-    about one turn in four (`slip` 0.25), when it picks at random from the 20th–50th percentile of its 30 best plays
-    (`pick: [0.2, 0.5]` in `ai.js`). Before wave 2 it drew from that window every turn.
-  - **Medium:** common words plus every word of 2–4 letters (`freeLen` 5); maximises score + ½ × leave value.
-  - **Hard:** the whole dictionary; maximises score + leave value − 4 per empty Boiling Spring (and 1.5 per empty Steam square) its
-    play leaves within reach (`DEFENSE` in `ai.js`); with the bag empty in a 2-player game it looks one reply ahead (the
+  - **Easy:** everyday SCOWL common words of 3–6 letters (`freeLen` 0, `maxLen` 6) plus 25 everyday two-letter words (`EASY_TWO` in `ai.js`); ignores the rack it keeps and Hot Springs bonus foresight (`bonusWeight` 0). It plays its best-scoring play except
+    about three turns in five (`slip` 0.60), when it picks at random from the 5th–35th percentile of its 30 best plays
+    (`pick: [0.05, 0.35]` in `ai.js`).
+  - **Medium:** common words plus every word of 2–4 letters (`freeLen` 5); maximises score + 0.65 × leave value.
+  - **Hard:** the whole dictionary; maximises score + leave value − 4 per empty Boiling Spring (and 1.5 per empty Steam square), and
+    0.75 per empty Bathhouse Row square, its play leaves within reach (`DEFENSE` in `ai.js`); with the bag empty in a 2-player game it looks one reply ahead (the
     opponent's rack is known by then).
+- Featured Springs (`deducibleFeatured` in `lexicon.js`): Medium, Hard, the Spring Guide and the review count a plaque's +30 only once
+  anyone could work it out: at most `READABLE_FOG` (2) letters hidden, and the category, length and clear letters leaving one lexicon
+  entry. Easy and the Daily's par never count it. Hidden words are not sent to the worker. A hidden one is still paid when a word happens to match it.
+  Hard's one-reply look-ahead leaves out a plaque its own play claims. The review uses the log's `known`, written turn by turn.
 - Leave values (`leave-table.js`) are fitted by `tools/selfplay.mjs`.
 - Medium and Hard count plays within `TIE_WINDOW` (1.5) equity points of their best as tied and draw one of them with `rng.ai`, so
   two opponents of one level do not always answer a position alike. Before wave 4 only plays with exactly equal equity were tied, and the one with the lowest key was taken.

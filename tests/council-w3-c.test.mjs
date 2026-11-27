@@ -104,6 +104,7 @@ export const tests = [
       await ready(t);
       await t.seed(7);
       await t.game('scene', 'setup');
+      if (!(await t.page.locator('.house-rules').evaluate((d) => d.open))) await t.page.click('.house-rules summary');
       t.expect(await t.page.isEnabled('[data-hints-unl]'), 'the allowance is offered while hints are on');
       await t.page.locator('[data-hints-unl]').scrollIntoViewIfNeeded();
       await t.shot('S2-15-setup-hints');

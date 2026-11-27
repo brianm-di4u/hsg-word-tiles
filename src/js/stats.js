@@ -31,10 +31,28 @@ export const hintsUsed = (p) => (p.unl ? Math.max(0, Math.floor(p.taken) || 0) :
 // be used once in any seven days (`rest` holds the date it was last used, so it is saved with the daily record).
 // Returns { streak, rest, rested } for playing on `date` with `d` = { streak, last, rest }.
 export const REST_EVERY = 7;   // days that must pass before another rest day can be used
-const dayNumber = (date) => { const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(date || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000 : NaN; };
+export const dayNumber = (date) => { const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(date || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000 : NaN; };
+const restSpare = (d, date) => {
+  const rest = d && typeof d.rest === 'string' ? d.rest : null;
+  return rest == null || !(dayNumber(date) - dayNumber(rest) < REST_EVERY);
+};
+// Live Daily Soak streak as of `todayDate`: active on the same day (0), the next day (1), a 1-day miss (2) with a spare rest day,
+// and when the device's date is behind the last day played (a negative gap: another time zone or a clock set back, OQ-WF7-W3-05).
+export function activeStreak(d, todayDate) {
+  if (!d || !(d.streak > 0) || !d.last || !todayDate) return 0;
+  const gap = dayNumber(todayDate) - dayNumber(d.last);
+  if (gap <= 1) return d.streak;
+  if (gap === 2 && restSpare(d, todayDate)) return d.streak;
+  return 0;
+}
+export function streakRestReady(d, todayDate) {
+  if (!d || !(d.streak > 0) || !d.last || !todayDate) return false;
+  return dayNumber(todayDate) - dayNumber(d.last) === 2 && restSpare(d, todayDate);
+}
 export function nextStreak(d, date) {
   const gap = dayNumber(date) - dayNumber(d.last), rest = typeof d.rest === 'string' ? d.rest : null;
-  const spare = rest == null || !(dayNumber(date) - dayNumber(rest) < REST_EVERY);
+  if (gap <= 0) return { streak: d.streak || 0, rest, rested: false };
+  const spare = restSpare(d, date);
   if (gap === 1) return { streak: (d.streak || 0) + 1, rest, rested: false };
   if (gap === 2 && spare && (d.streak || 0) > 0) return { streak: d.streak + 1, rest: date, rested: true };
   return { streak: 1, rest, rested: false };
@@ -43,8 +61,9 @@ export function nextStreak(d, date) {
 export const oppKey = (p) => `${p.persona}:${p.level || 'medium'}`;
 
 // Folds one finished game into the record. Returns { stats, pb } where pb says what the game set:
-// { first, score, play, word, held } (booleans), the first four's records true only when beaten in a game that is not the first.
-// A game in which the player took a hint counts as a game and a win but sets no best (`held` says it would have set one).
+// { first, score, play, word, held, heldBy } (first five booleans, heldBy is 'hint' | 'unlimited' | null).
+// Personal bests are unaided-only (OQ-WF6-01): taking any hint or enabling Unlimited hints excludes both career bests
+// and per-opponent bests (leaving any already-saved bests untouched), and reports `held` even on Game 1.
 // Games with no computer opponent or with two or more people are left out: the record is the player's own against the town.
 export function applyGame(prev, s) {
   const humans = s.players.filter((p) => p.kind === 'human');
@@ -53,33 +72,37 @@ export function applyGame(prev, s) {
   if (s.mode !== 'play' || humans.length !== 1 || !bots.length || !s.result) return { stats: st, pb: null };
   const k = s.players.indexOf(humans[0]), me = humans[0];
   const won = s.result.winners.includes(k), tied = won && s.result.winners.length > 1;
-  const pb = { first: st.games === 0, score: false, play: false, word: false, held: false };
-  const aided = hintsUsed(me) > 0 || !!me.unl;   // unlimited hints keep a game out of the bests whether or not one was taken
+  const pb = { first: st.games === 0, score: false, play: false, word: false, held: false, heldBy: null };
+  const usedHints = hintsUsed(me);
+  const aided = usedHints > 0 || !!me.unl;   // unlimited hints keep a game out of the bests whether or not one was taken
+  const hold = () => { pb.held = true; pb.heldBy = me.unl ? 'unlimited' : 'hint'; };
   st.games++; st.totalScore += me.score;
   if (won && !tied) { st.wins++; st.streak++; st.bestStreak = Math.max(st.bestStreak, st.streak); }
   else { if (tied) st.ties++; st.streak = 0; }
-  if (me.score > st.bestScore) { if (aided) pb.held = !pb.first; else { pb.score = !pb.first; st.bestScore = me.score; } }
+  if (me.score > st.bestScore) { if (aided) hold(); else { pb.score = !pb.first; st.bestScore = me.score; } }
   const plays = s.log.filter((e) => e.kind === 'play' && e.p === k);
   const top = plays.reduce((a, e) => (!a || e.score > a.score ? e : a), null);
-  if (top && top.score > (st.bestPlay ? st.bestPlay.score : 0)) { if (aided) pb.held = !pb.first; else { pb.play = !pb.first; st.bestPlay = { word: top.words[0].w, score: top.score }; } }
-  if (me.best && me.best.score > (st.bestWord ? st.bestWord.score : 0)) { if (aided) pb.held = !pb.first; else { pb.word = !pb.first; st.bestWord = { word: String(me.best.word).slice(0, 20), score: me.best.score }; } }
+  if (top && top.score > (st.bestPlay ? st.bestPlay.score : 0)) { if (aided) hold(); else { pb.play = !pb.first; st.bestPlay = { word: top.words[0].w, score: top.score }; } }
+  if (me.best && me.best.score > (st.bestWord ? st.bestWord.score : 0)) { if (aided) hold(); else { pb.word = !pb.first; st.bestWord = { word: String(me.best.word).slice(0, 20), score: me.best.score }; } }
   st.fullSoaks += plays.filter((e) => e.full).length;
   st.themed += plays.reduce((a, e) => a + e.words.filter((w) => w.themed).length, 0);
   st.featured += s.featured.filter((f) => f.by === k).length;
-  st.hints += hintsUsed(me);
+  st.hints += usedHints;
   for (const b of bots) {
     const row = st.opp[oppKey(b)] || oppRow(null);
     row.games++; row.total += me.score;
     if (me.score > b.score) row.wins++;
-    row.best = Math.max(row.best, me.score);
+    if (me.score > row.best) { if (aided) hold(); else row.best = me.score; }
     st.opp[oppKey(b)] = row;
   }
   return { stats: st, pb };
 }
 
 // The Daily Soak: one line, fed from the daily record's own totals.
-export function applyDaily(prev, score, streak) {
+// W1-P-N02: post-completion Practice replays leave official daily games and best untouched.
+export function applyDaily(prev, score, streak, opts = {}) {
   const st = cleanStats(prev);
+  if (opts && opts.replay) return st;
   st.daily.games++; st.daily.best = Math.max(st.daily.best, score); st.daily.bestStreak = Math.max(st.daily.bestStreak, streak);
   return st;
 }

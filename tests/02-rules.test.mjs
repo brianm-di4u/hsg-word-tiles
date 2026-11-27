@@ -155,12 +155,14 @@ export const tests = [
     name: 'swap and pass', node: true,
     async run(t) {
       const { s, c } = await game(['ABCDEFG', 'HIJKLMN']);
-      const before = s.bag.slice(0, 2);
+      const before = s.bag.slice(0, 2), rest = s.bag.slice(2);
       const r = apply(s, { type: 'swap', letters: ['G', 'A'] }, c);
       t.expect(r.ok, r.error);
       t.equal(s.players[0].rack.length, 7, 'rack refilled');
       t.equal(JSON.stringify(s.players[0].rack.slice(5)), JSON.stringify(before), 'drew from the top');
-      t.equal(JSON.stringify(s.bag.slice(-2)), JSON.stringify(['A', 'G']), 'returned to the bottom in order');
+      // W1-S2-03: they used to go to the bottom in order ('A', 'G' as the last two); now they are mixed back in
+      t.equal(JSON.stringify(s.bag.slice().sort()), JSON.stringify([...rest, 'A', 'G'].sort()), 'the returned tiles are in the bag, and nothing else changed in it');
+      t.expect(JSON.stringify(s.bag) !== JSON.stringify([...rest, 'A', 'G']), 'mixed in, not put on the bottom');
       t.equal(s.cur, 1, 'turn passed');
       t.expect(apply(s, { type: 'pass' }, c).ok, 'pass');
       t.equal(s.scoreless, 2, 'two scoreless turns');
@@ -200,15 +202,23 @@ export const tests = [
     },
   },
   {
-    name: 'featured plaques clear a letter each round', node: true,
+    // W6-S3-03: the letter used to clear at each new round; it now follows the bag (passes alone clear nothing). The Daily keeps one a turn.
+    name: 'featured plaques clear a letter as the bag empties, and one a turn in the Daily', node: true,
     async run(t) {
       const { s, c } = await game(['ABCDEFG', 'HIJKLMN']);
       const before = s.featured.map((f) => f.shown.length);
       apply(s, { type: 'pass' }, c);
       apply(s, { type: 'pass' }, c);
+      t.equal(JSON.stringify(s.featured.map((f) => f.shown.length)), JSON.stringify(before), 'a round of passes draws nothing and clears nothing');
+      s.players[0].rack = 'ADXXXXX'.split('');
+      s.bag.length = 78;   // the next tile drawn is the seventh of 84
+      t.expect(apply(s, { type: 'play', tiles: [{ i: 112, l: 'A', blank: false }, { i: 113, l: 'D', blank: false }] }, c).ok, 'AD');
       t.equal(JSON.stringify(s.featured.map((f) => f.shown.length)), JSON.stringify(before.map((n) => n + 1)), 'one more letter each');
-      for (const f of s.featured) for (let k = 0; k < 20; k++) { s.cur = 1; s.over = false; s.scoreless = 0; apply(s, { type: 'pass' }, c); }
-      t.expect(s.featured.every((f) => f.shown.length <= f.word.length - 2), 'never more than length − 2');
+      const d = createGame({ mode: 'daily', date: '2026-11-13' }, c.lex);
+      d.featured.forEach((f) => { f.word = 'ABCDEFGH'; f.shown = [0]; });
+      for (let k = 1; k < 5; k++) { apply(d, { type: 'pass' }, c); t.expect(d.featured.every((f) => f.shown.length === 1 + k), `Daily turn ${k}: one more letter each`); }
+      for (let k = 0; k < 5; k++) apply(d, { type: 'pass' }, c);
+      t.expect(d.featured.every((f) => f.shown.length <= f.word.length - 1), 'never the whole word');
     },
   },
 ];

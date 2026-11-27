@@ -32,6 +32,11 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
+      - name: Install build tools
+        working-directory: tools/dev
+        run: npm ci
+      - name: Check facts, pipeline, and generated artifact freshness
+        run: npm run check:facts && npm run check:pipeline -- --fresh
       - name: Test
         run: npm test -- --no-gallery --milestone ci
       - name: Upload screenshots and report

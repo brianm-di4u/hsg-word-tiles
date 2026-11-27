@@ -162,7 +162,7 @@ export const tests = [
       const text = await t.page.textContent('.sheet.records');
       t.expect(/61%/.test(text), 'the win rate is shown (14 of 23)'); t.expect(/325/.test(text), 'the average is shown (7480 / 23)');
       t.expect(/JUXTAPOSE/.test(text) && /MAGNOLIA/.test(text), 'the best word and best turn are shown');
-      t.expect((await t.page.locator('.opp tbody tr').count()) === 4, 'four opponent rows');
+      t.expect((await t.page.locator('.opp-table tbody tr').count()) === 4, 'four opponent rows');
       await t.shot('S3-01-records-full');
       await t.game('scene', 'title');
       await t.shot('S3-01-title');
@@ -226,7 +226,7 @@ export const tests = [
       t.expect(await card.isVisible(), 'the first tip shows on the first turn');
       const first = await t.page.textContent('#coach p');
       t.expect(words(first) <= 12, `tip one is ${words(first)} words: ${first}`);
-      t.expect(/centre/i.test(first) && /Score the most/.test(first), 'it names the goal and the centre square');
+      t.expect(/center/i.test(first) && /Score the most/.test(first), 'it names the goal and the center square');
       t.expect(await t.page.locator('#boardwrap.coach-target').count() === 1, 'the board is marked');
       t.expect(await t.page.locator('#coach [data-coach="skip"]').isVisible(), 'Skip tips is visible');
       t.expect((await t.page.locator('#live').textContent()).includes('Tip:'), 'the tip is announced');
@@ -246,6 +246,10 @@ export const tests = [
       const third = await t.page.textContent('#coach p');
       t.expect(/discs/i.test(third) && words(third) <= 12, `tip three is about the discs: ${third}`);
       await t.shot('S2-01-tip-discs');
+      await t.page.click('#coach [data-coach="got"]');
+      const town = await t.page.textContent('#coach p');
+      t.expect(/Hot Springs words/i.test(town) && /Row \+20/.test(town) && words(town) <= 12, `town beat teaches Hot Springs words & Bathhouse Row: ${town}`);
+      await t.shot('S2-01-tip-town');
       await t.page.click('#coach [data-coach="got"]');
       const fourth = await t.page.textContent('#coach p');
       t.expect(/Plaques/.test(fourth) && words(fourth) <= 12, `tip four is about the plaques: ${fourth}`);
@@ -367,9 +371,21 @@ export const tests = [
       await ready(t);
       await t.game('newGame', {});
       await t.waitForStable();
-      const anim = await t.page.evaluate(() => { const b = document.querySelector('#boardwrap'); return [getComputedStyle(b, '::after').animationName, getComputedStyle(b, '::after').boxShadow]; });
-      t.equal(anim[0], 'none', 'no animation on the board marker');
-      t.expect(anim[1] !== 'none', `the marker is still drawn (${anim[1]})`);
+      // W2-S5-01 replaced the coarse #boardwrap.coach-target::after full-frame inset border with the static
+      // H8 spotlight halo; verify #boardwrap does not pulse, and staging a tile leaves a static .coach-target
+      // outline on #actions .play with animationName === 'none'.
+      const boardAnim = await t.page.evaluate(() => getComputedStyle(document.querySelector('#boardwrap')).animationName);
+      t.equal(boardAnim, 'none', 'no animation on the board target');
+      const mv = await t.game('act', 'moves', 1);
+      await t.game('act', 'stage', mv[0].tiles);
+      await t.waitForStable();
+      const playMark = await t.page.evaluate(() => {
+        const b = document.querySelector('#actions .play.coach-target');
+        const cs = b && getComputedStyle(b);
+        return cs ? [cs.animationName, cs.outlineStyle] : ['missing', 'none'];
+      });
+      t.equal(playMark[0], 'none', 'no animation on the Play coach marker');
+      t.expect(playMark[1] !== 'none', `the static marker is still drawn (${playMark[1]})`);
     },
   },
   {

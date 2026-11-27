@@ -43,7 +43,11 @@ function check(t, s, label) {
     ks.add(st.k);
   }
   if (!g.over && g.players[g.cur].kind === 'human' && s.order.length + s.staged.length !== g.players[g.cur].rack.length) t.fail(`${label}: rack ${s.order.length} + staged ${s.staged.length} ≠ ${g.players[g.cur].rack.length}`);
-  for (const f of g.featured) if (f.by == null && f.shown.length > f.word.length - 2 && f.shown.length > 1) t.fail(`${label}: featured ${f.word} shows too much`);
+  const lateReveal = g.bag.length <= 20 || (g.mode === 'daily' && g.daily && g.daily.turns <= 5);
+  for (const f of g.featured) {
+    const cap = Math.max(1, f.word.length - (lateReveal ? 1 : 2));
+    if (f.by == null && f.shown.length > cap) t.fail(`${label}: featured ${f.word} shows too much (${f.shown.length}/${f.word.length})`);
+  }
 }
 
 export const tests = [

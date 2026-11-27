@@ -6,6 +6,7 @@
 // Reads games/<slug>/art-src/art.json:
 //   { "quality": 0.82, "items": [ { "name": "court-qh", "src": "court-qh.png", "w": 420, "h": 588,
 //       "fit": "cover"|"contain", "crop": [x, y, w, h] (0..1, optional), "keyWhite": 0..60 (optional),
+//       "circleMask": true|<featherPx> (optional, geometric radial circular alpha clip with feathered AA),
 //       "quality": 0.85 (optional) } ] }
 // Writes games/<slug>/assets/<name>.webp, games/<slug>/assets/manifest.json and a review contact
 // sheet at games/<slug>/art-src/sheet.png (open it with the Read tool).
@@ -22,7 +23,8 @@ const ROOT = path.resolve(HERE, '..', '..');
 const args = process.argv.slice(2);
 const target = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--only');
 const only = (() => { const i = args.indexOf('--only'); return i >= 0 ? args[i + 1].split(',') : null; })();
-if (!target) { console.error('usage: node shared/test-harness/art-pack.mjs games/<slug> [--only a,b]'); process.exit(2); }
+const allowMissing = args.includes('--allow-missing');
+if (!target) { console.error('usage: node shared/test-harness/art-pack.mjs games/<slug> [--only a,b] [--allow-missing]'); process.exit(2); }
 
 const gameDir = path.resolve(ROOT, target);
 const srcDir = path.join(gameDir, 'art-src');
@@ -93,6 +95,27 @@ for (const it of spec.items) {
     const k = fit === 'cover' ? Math.max(W / src.width, H / src.height) : Math.min(W / src.width, H / src.height);
     const dw = src.width * k, dh = src.height * k;
     g.drawImage(src, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    if (it.circleMask) {
+      // Geometric radial circular alpha clip with feathered AA (default 1.5 px) — preserves interior white rims (CD-WF3-01).
+      const feather = typeof it.circleMask === 'number' && it.circleMask > 0 ? it.circleMask : 1.5;
+      const d = g.getImageData(0, 0, W, H), p = d.data;
+      const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2;
+      for (let y = 0; y < H; y++) {
+        const dy = y + 0.5 - cy;
+        for (let x = 0; x < W; x++) {
+          const dx = x + 0.5 - cx;
+          const dist = Math.hypot(dx, dy);
+          if (dist >= R) {
+            p[(y * W + x) * 4 + 3] = 0;
+          } else if (dist > R - feather) {
+            const a = (R - dist) / feather;
+            const o = (y * W + x) * 4 + 3;
+            p[o] = Math.round(p[o] * a);
+          }
+        }
+      }
+      g.putImageData(d, 0, 0);
+    }
     return out.toDataURL('image/webp', q).split(',')[1];
   }, { url, it, q: it.quality || spec.quality || 0.82 });
   const buf = Buffer.from(b64, 'base64');
@@ -100,14 +123,26 @@ for (const it of spec.items) {
   manifest[it.name] = { file: it.name + '.webp', w: it.w, h: it.h, bytes: buf.length };
   console.log(`  packed   ${it.name.padEnd(22)} ${it.w}x${it.h}  ${(buf.length / 1024).toFixed(1)} KB`);
 }
-// Drop entries whose items were removed from the spec.
-for (const k of Object.keys(manifest)) if (!spec.items.some((i) => i.name === k)) delete manifest[k];
+// Drop entries whose items were removed from the spec, while preserving externally-sourced (`from`) entries
+// (e.g., vig-* vignettes copied from Bathhouse Barons) with uniform { file, w, h, bytes, from } metadata.
+for (const k of Object.keys(manifest)) {
+  const entry = manifest[k];
+  if (entry && entry.from) {
+    const file = entry.file || `${k}.webp`;
+    const fp = path.join(outDir, file);
+    if (fs.existsSync(fp)) {
+      manifest[k] = { file, w: entry.w || 320, h: entry.h || 320, bytes: fs.statSync(fp).size, from: entry.from };
+      continue;
+    }
+  }
+  if (!spec.items.some((i) => i.name === k)) delete manifest[k];
+}
 fs.writeFileSync(manPath, JSON.stringify(manifest, null, 1) + '\n');
-const total = Object.values(manifest).reduce((a, m) => a + m.bytes, 0);
+const total = Object.values(manifest).reduce((a, m) => a + (m.bytes || 0), 0);
 console.log(`  total    ${Object.keys(manifest).length} assets, ${(total / 1024 / 1024).toFixed(2)} MB`);
 
-// Contact sheet: every packed asset on a checkerboard, labelled.
-const names = Object.keys(manifest).sort();
+// Contact sheet: every asset in the manifest whose WebP exists on disk (including preserved `from` entries), labelled.
+const names = Object.keys(manifest).filter((n) => manifest[n]?.file && fs.existsSync(path.join(outDir, manifest[n].file))).sort();
 const cells = names.map((n) => ({ n, url: 'data:image/webp;base64,' + fs.readFileSync(path.join(outDir, manifest[n].file)).toString('base64') }));
 const sheet = await page.evaluate(async (cells) => {
   const cw = 200, chh = 230, cols = Math.min(6, Math.max(1, cells.length)), rows = Math.ceil(cells.length / cols);
@@ -124,4 +159,4 @@ const sheet = await page.evaluate(async (cells) => {
 }, cells);
 fs.writeFileSync(path.join(srcDir, 'sheet.png'), Buffer.from(sheet, 'base64'));
 await browser.close();
-process.exit(failed ? 1 : 0);
+process.exit(failed && !allowMissing ? 1 : 0);

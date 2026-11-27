@@ -4,6 +4,8 @@
 import { loadDict } from './dict.js';
 import { makeLexicon } from './lexicon.js';
 import { chooseAction, hintChoices } from './ai.js';
+import { dailyPar } from './par.js';
+import { bestOf } from './review.js';
 
 let dict = null, lex = null, ready = null;
 
@@ -23,5 +25,10 @@ self.onmessage = async (ev) => {
     self.postMessage({ type: 'move', id: m.id, action: r.action, rngAi: s.rng.ai, nodes: r.nodes, ms: performance.now() - t0 });
   } else if (m.type === 'hint') {
     self.postMessage({ type: 'hint', id: m.id, moves: hintChoices(dict, lex, m.state), ms: performance.now() - t0 });
+  } else if (m.type === 'review') {
+    self.postMessage({ type: 'review', id: m.id, ...bestOf(dict, lex, m.turn), ms: performance.now() - t0 });
+  } else if (m.type === 'dailyPar') {
+    const par = await dailyPar({ dict, lex }, m.date);
+    self.postMessage({ type: 'dailyPar', id: m.id, date: m.date, par, ms: performance.now() - t0 });
   }
 };

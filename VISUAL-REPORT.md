@@ -27,7 +27,8 @@ listed; it was verified by the test suite and a fresh capture (`screenshots/visu
   scoring discs, one gold emblem (a domed bathhouse front) for the Bathhouse Row squares, used everywhere the Row appears, a lamp pool and inner frame shadow baked into
   the face, a Blender walnut-and-brass frame on a walnut counter with towels and a desk bell.
 - **Tiles:** Blender-modelled ceramic tiles with letter faces drawn at 512 px, dark ink and bold point values; the
-  last move edged in gold; blanks in the same ivory with a teal letter.
+  last move edged in gold; blanks in a frosted sea-glass glaze with a deep teal
+  letter and engraved steam curls.
 - **Feedback:** bonus banners take over the strip under the board (never covering the board or scores); fact cards
   carry painted scenes; the results screen is a Steam Ledger masthead with a winner's medallion.
 - **Phone:** a square 3D board that runs the frame off the edges, tap-to-zoom with a magnifying loupe and an overview

@@ -1,11 +1,11 @@
 // HTML for screens, dialogs and panels. Pure string templates; main.js wires the events.
 import { PERSONAS, persona, LEVEL_NAME, LEVEL_BLURB, seatLevel, HUMAN_COLORS } from './personas.js';
-import { SHORT } from './voices.js';
+import { SHORT, BIG_PLAY } from './voices.js';
 import { TILES, BLANKS } from './tiles.js';
-import { N, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, explainWord } from './score.js';
+import { N, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, isBath, explainWord } from './score.js';
 import { DAILY_TURNS, unseen } from './engine.js';
 import { art } from './art.js';
-import { hintsUsed } from './stats.js';
+import { hintsUsed, activeStreak, streakRestReady } from './stats.js';
 
 export function qs(s, el = document) { return el.querySelector(s); }
 const ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -21,6 +21,7 @@ export const ICON = {
   pass: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12m-4-5 5 5-5 5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   hint: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3zM9.5 19h5M10.5 21.5h3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>',
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  zoomIn: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path class="zin" d="M10.5 7.5v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   zoomOut: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
   close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
   steam: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20c-2-3 2-5 0-8s2-5 0-8M12 20c-2-3 2-5 0-8s2-5 0-8M16 20c-2-3 2-5 0-8s2-5 0-8" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>',
@@ -29,18 +30,47 @@ export const ICON = {
     arch: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M11.4 2.5h1.2v2.6a4.6 4.6 0 0 1 4.2 4.3H7.2a4.6 4.6 0 0 1 4.2-4.3zM2.6 10.4h18.8v1.4h-1v9.4H3.6v-9.4h-1zM9.6 21.2v-4.6a2.4 2.4 0 0 1 4.8 0v4.6z"/></svg>',
     leaf: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19c0-9 6-14 15-14 0 9-5 15-14 15m0-1 8-8" fill="currentColor" stroke="currentColor" stroke-width="1"/></svg>',
     horseshoe: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V11a6 6 0 0 1 12 0v10h-3V11a3 3 0 0 0-6 0v10z" fill="currentColor"/></svg>',
-    dice: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5" fill="currentColor"/><g fill="#fff"><circle cx="8.5" cy="8.5" r="1.6"/><circle cx="15.5" cy="15.5" r="1.6"/><circle cx="12" cy="12" r="1.6"/></g></svg>',
+    dice: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M7 3.5h10A3.5 3.5 0 0 1 20.5 7v10a3.5 3.5 0 0 1-3.5 3.5H7A3.5 3.5 0 0 1 3.5 17V7A3.5 3.5 0 0 1 7 3.5ZM10.1 8.5a1.6 1.6 0 1 0-3.2 0 1.6 1.6 0 1 0 3.2 0ZM13.6 12a1.6 1.6 0 1 0-3.2 0 1.6 1.6 0 1 0 3.2 0ZM17.1 15.5a1.6 1.6 0 1 0-3.2 0 1.6 1.6 0 1 0 3.2 0Z"/></svg>',
     bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v5l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2 16a2 2 0 0 0 4 0z" fill="currentColor"/></svg>',
   },
 };
 
-// A round monogram badge for a seat: persona colour or seat colour, initials, seat number.
-export function badge(p, k, size = 40) {
+// Shared monogram initials helper (W3-S1-03): strips quotes and captures word-start capitals for badge() and portrait().
+export function initials(name) {
+  return (String(name || '').replace(/["\u201C\u201D]/g, '').match(/\b[A-Z]/g) || ['?']).slice(0, 2).join('');
+}
+
+// 'P1', 'P2'… for a seat left on its default name, so no two of them read alike
+function seatMono(name) {
+  const m = /^Player\s+(\d+)$/i.exec(String(name || '').trim());
+  return m ? `P${m[1]}` : '';
+}
+
+// Subtle reaction mood for a seat's badge (W3-S2-07): warm brass halo on big play/win, cool dim on pass/swap/loss.
+export function seatMood(s, k) {
+  if (!s || !Array.isArray(s.log)) return '';
+  if (s.over && s.result && s.mode !== 'daily') {
+    const wins = s.result.winners || [];
+    return wins.includes(k) ? 'win' : 'loss';
+  }
+  for (let i = s.log.length - 1; i >= 0; i--) {
+    const e = s.log[i];
+    if (e.kind === 'end' || e.p !== k) continue;
+    if (e.kind === 'play') return (e.score >= BIG_PLAY || e.full || e.featured) ? 'big' : '';
+    if (e.kind === 'pass' || e.kind === 'swap') return 'pass';
+    return '';
+  }
+  return '';
+}
+
+// A round monogram badge for a seat: persona colour or seat colour, initials, seat number, optional reaction mood.
+export function badge(p, k, size = 40, mood = '') {
   const per = p.persona ? persona(p.persona) : null;
   const color = per ? per.color : HUMAN_COLORS[k % HUMAN_COLORS.length];
   const face = per && art.has('face-' + per.id) ? `<img src="${art.src('face-' + per.id)}" alt="" width="${size}" height="${size}">` : '';
-  const initials = (p.name.replace(/["“”]/g, '').match(/\b[A-Z]/g) || ['?']).slice(0, 2).join('');
-  return `<span class="badge" style="--c:${color};--s:${size}px" aria-hidden="true">${face || `<b>${esc(initials)}</b>`}<i>${k + 1}</i></span>`;
+  const mon = (!per && seatMono(p.name)) || initials(p.name);
+  const cls = `badge${face ? ' has-face' : ''}${mood ? ` mood-${mood}` : ''}`;
+  return `<span class="${cls}" style="--c:${color};--s:${size}px" aria-hidden="true">${face || `<b>${esc(mon)}</b>`}<i>${k + 1}</i></span>`;
 }
 
 // shown where progress would be kept, when the browser will not store anything (a private window, blocked site data)
@@ -51,7 +81,7 @@ export const NEWER_SAVE = 'This visit is not being saved: your saved game comes 
 const band = () => (art.has('title') ? `<div class="sheet-art" style="background-image:url(${art.src('title')})" aria-hidden="true"></div>` : '');
 // a character's round portrait (the painted face, or the monogram when the painting is not there)
 function portrait(per, size) {
-  const face = art.has('face-' + per.id) ? `<img src="${art.src('face-' + per.id)}" alt="" width="${size}" height="${size}">` : `<b>${esc((per.name.replace(/["“”]/g, '').match(/[A-Z]/g) || ['?']).slice(0, 2).join(''))}</b>`;
+  const face = art.has('face-' + per.id) ? `<img src="${art.src('face-' + per.id)}" alt="" width="${size}" height="${size}">` : `<b>${esc(initials(per.name))}</b>`;
   return `<span class="badge" style="--c:${per.color};--s:${size}px" aria-hidden="true">${face}</span>`;
 }
 
@@ -71,7 +101,7 @@ export function titleHtml(o) {
     <nav class="menu" aria-label="Main menu">
       ${o.canContinue ? `<button class="btn primary" data-go="continue">Continue <small>${esc(o.continueLine)}</small></button>` : ''}
       <button class="btn ${o.canContinue ? '' : 'primary'}" data-go="setup">New game</button>
-      <button class="btn" data-go="daily">Daily Soak <small>${esc(o.dailyLine)}</small></button>
+      <button class="btn" data-go="daily">${o.dailyDone ? '<span>Daily Soak <span class="btn-tag">Practice replay</span></span>' : 'Daily Soak'} <small>${esc(o.dailyLine)}</small></button>
       <button class="btn" data-go="register">Bathhouse Register <small>${o.found} of ${o.total} words found</small></button>
       <button class="btn" data-go="records">Records <small>${esc(o.records)}</small></button>
       <div class="row2"><button class="btn quiet" data-go="help">How to play</button><button class="btn quiet" data-go="settings">Settings</button></div>
@@ -82,47 +112,67 @@ export function titleHtml(o) {
 }
 
 // ---------- setup ----------
-export function setupHtml(setup) {
+export function setupHtml(setup, opts = {}) {
+  const aiSeats = setup.seats.map((st, k) => ({ st, k })).filter((x) => x.st.kind === 'ai');
   const seat = (st, k) => {
     const human = st.kind === 'human';
     return `<li class="seat" data-k="${k}">
-      ${badge(human ? { name: st.name || `Player ${k + 1}` } : { name: persona(st.persona).name, persona: st.persona }, k, 44)}
-      <div class="seat-main">
+      ${badge(human ? { name: st.name || `Player ${k + 1}` } : { name: persona(st.persona).name, persona: st.persona }, k, 40)}
+      <div class="seat-main${human ? ' seat-human' : ''}">
         <div class="seg" role="radiogroup" aria-label="Seat ${k + 1} player">
-          <button role="radio" aria-checked="${human}" data-kind="human" data-k="${k}">Person</button>
-          <button role="radio" aria-checked="${!human}" data-kind="ai" data-k="${k}">Computer</button>
+          <button role="radio" aria-checked="${human}" tabindex="${human ? 0 : -1}" data-kind="human" data-k="${k}"><span>Person</span></button>
+          <button role="radio" aria-checked="${!human}" tabindex="${human ? -1 : 0}" data-kind="ai" data-k="${k}"><span>Computer</span></button>
         </div>
         ${human
           ? `<label class="field"><span>Name</span><input data-name="${k}" value="${esc(st.name || '')}" maxlength="16" placeholder="Player ${k + 1}" autocomplete="off"></label>`
-          : `<div class="field"><span id="opp-${k}">Opponent <em>(fictional character)</em></span><div class="opps" role="radiogroup" aria-labelledby="opp-${k}">${PERSONAS.map((p) => `<button type="button" class="opp" role="radio" aria-checked="${p.id === st.persona}" tabindex="${p.id === st.persona ? 0 : -1}" data-persona="${k}" data-val="${p.id}">${portrait(p, 44)}<b>${esc(p.name)}</b><small>${esc(p.role)}</small><em>Usually ${LEVEL_NAME[p.level]}</em></button>`).join('')}</div></div>
-             <p class="seat-note">${esc(persona(st.persona).role)}. ${esc(persona(st.persona).line)}</p>
-             <label class="field"><span>Difficulty</span><select data-level="${k}">${Object.keys(LEVEL_NAME).map((l) => `<option value="${l}" ${l === seatLevel(st) ? 'selected' : ''}>${LEVEL_NAME[l]}</option>`).join('')}</select></label>
-             <p class="seat-note" data-level-note="${k}">${esc(LEVEL_BLURB[seatLevel(st)])}</p>`}
+          : `<div class="field"><span id="opp-${k}">Opponent <em>(fictional character)</em></span><div class="opps" role="radiogroup" aria-labelledby="opp-${k}">${PERSONAS.map((p) => `<button type="button" class="opp" role="radio" aria-checked="${p.id === st.persona}" tabindex="${p.id === st.persona ? 0 : -1}" data-persona="${k}" data-val="${p.id}">${portrait(p, 40)}<b>${esc(p.name)}</b><small>${esc(p.role)}</small><em>Usually ${LEVEL_NAME[p.level]}</em></button>`).join('')}</div></div>
+             <p class="seat-note">${esc(persona(st.persona).role)}. ${esc(persona(st.persona).line)}</p>`}
       </div>
       ${setup.seats.length > 2 ? `<button class="iconbtn small" data-remove="${k}" aria-label="Remove seat ${k + 1}">${ICON.close}</button>` : ''}
     </li>`;
   };
   const humans = setup.seats.filter((s) => s.kind === 'human').length;
+  const customLevel = aiSeats.some(({ st }) => st.level && st.level !== persona(st.persona).level);
+  const houseOpen = !!(opts.houseOpen || setup.challenge || setup.hintsUnl || customLevel);
+  const houseTags = [];
+  if (setup.challenge) houseTags.push('Challenge on');
+  if (setup.hintsUnl && !setup.challenge) houseTags.push('Unlimited hints');
+  if (customLevel) houseTags.push('Custom difficulty');
+  const houseSummary = houseTags.length ? houseTags.join(' · ') : 'Difficulty, hints &amp; Challenge';
+  const diffControls = aiSeats.map(({ st, k }) => `<label class="field"><span>${aiSeats.length > 1 ? `Seat ${k + 1} (${esc(persona(st.persona).name)}) difficulty` : 'Opponent difficulty'}</span><select data-level="${k}">${Object.keys(LEVEL_NAME).map((l) => `<option value="${l}" ${l === seatLevel(st) ? 'selected' : ''}>${LEVEL_NAME[l]}</option>`).join('')}</select></label><p class="seat-note" data-level-note="${k}">${esc(LEVEL_BLURB[seatLevel(st)])}</p>`).join('');
   return `<div class="sheet setup">
     ${band()}
-    <header class="sheet-head"><h1>New game</h1><button class="iconbtn" data-go="title" aria-label="Back to the title screen">${ICON.close}</button></header>
+    <header class="sheet-head"><h1 tabindex="-1">New game</h1><button class="iconbtn" data-go="title" aria-label="Back to the title screen">${ICON.close}</button></header>
     <ol class="seats">${setup.seats.map(seat).join('')}</ol>
-    ${setup.seats.length < 4 ? '<button class="btn quiet add" data-add>Add a player</button>' : ''}
-    <label class="check"><input type="checkbox" data-hints ${setup.hints ? 'checked' : ''}> Spring Guide hints</label>
-    <label class="field hint-allow"><span>Hints for each player</span><select data-hints-unl ${setup.hints ? '' : 'disabled'}><option value="3" ${setup.hintsUnl ? '' : 'selected'}>Three</option><option value="unl" ${setup.hintsUnl ? 'selected' : ''}>Unlimited (a game with hints sets no personal best)</option></select></label>
-    <label class="check"><input type="checkbox" data-challenge ${setup.challenge ? 'checked' : ''}> Challenge mode: invalid words cost your turn</label>
-    <p class="seat-note">Off by default. When it is on, the board stops saying whether a word is in the dictionary: play one that is not and you lose the turn, like a pass.</p>
-    <p class="goal"><b>The goal:</b> score more than the others by building words.</p>
-    <p class="note">${humans >= 2 ? 'Pass and play: each person\'s tiles stay hidden until they tap to take their turn.' : humans === 1 ? 'You against the computer.' : 'Computers only: sit back and watch.'}</p>
-    <button class="btn primary big" data-start>Start</button>
-    <button class="btn link" data-go="help">How to play</button>
+    <div class="setup-bar">
+      <label class="check"><input type="checkbox" data-hints ${setup.hints && !setup.challenge ? 'checked' : ''} ${setup.challenge ? 'disabled' : ''}> Spring Guide hints</label>
+      ${setup.seats.length < 4 ? '<button class="btn quiet add" data-add>Add a player</button>' : ''}
+    </div>
+    <p class="seat-note" data-hints-note>${setup.challenge ? 'Spring Guide hints are off while Challenge mode is on.' : 'Personal bests are for unaided games: taking any hint, or turning Unlimited hints on, sets no personal best.'}</p>
+    <details class="house-rules"${houseOpen ? ' open' : ''}>
+      <summary>House rules &amp; more options <small>${houseSummary}</small></summary>
+      <div class="house-body">
+        ${diffControls}
+        <label class="field hint-allow"><span>Hints for each player</span><select data-hints-unl ${setup.hints && !setup.challenge ? '' : 'disabled'}><option value="3" ${setup.hintsUnl ? '' : 'selected'}>Three</option><option value="unl" ${setup.hintsUnl ? 'selected' : ''}>Unlimited</option></select></label>
+        <label class="check"><input type="checkbox" data-challenge ${setup.challenge ? 'checked' : ''}> Challenge mode: invalid words cost your turn</label>
+        <p class="seat-note">A Pass-and-Play and veteran strict-dictionary rule (off by default). The board hides word validity, Check a word and the two-letter list are locked, and Spring Guide hints are turned off; an invalid word costs your turn. Computer opponents play from the dictionary, so this rule hits human seats only.</p>
+      </div>
+    </details>
+    <p class="goal"><b>The goal:</b> score more than the others by building words. <span class="goal-mode">${humans >= 2 ? 'Pass and play: each person\'s tiles stay hidden until they tap to take their turn.' : humans === 1 ? 'You against the computer.' : 'Computers only: sit back and watch.'}</span></p>
+    <div class="sheet-foot">
+      <p class="foot-note" aria-hidden="true">Taking a hint sets no personal best.</p>
+      <button class="btn primary big" data-start>Start</button>
+      <button class="btn link" data-go="help">How to play</button>
+    </div>
   </div>`;
 }
 
 // ---------- game panels ----------
 // How a staged play adds up, word by word (the preview strip opens it): letters with the multiplier they earned,
 // the word multiplier, then the Hot Springs, Featured and Full Soak extras. `board` is the board without the staged tiles.
-export function breakdownHtml(p, board, staged) {
+const featuredList = (e) => (Array.isArray(e?.featuredAll) && e.featuredAll.length ? e.featuredAll : (e?.featured ? [e.featured] : []));
+
+export function breakdownHtml(p, board, staged, rowReveals = true) {
   const add = new Map(staged.map((t) => [t.i, { l: t.l, blank: t.blank }]));
   const rows = p.words.map((w) => {
     const x = explainWord(board, add, w);
@@ -130,42 +180,99 @@ export function breakdownHtml(p, board, staged) {
     return `<li><b>${esc(w.w)}</b> <span>${sum} = ${x.sum}${x.wm > 1 ? `, word ×${x.wm} = ${x.total}` : ''}</span></li>`;
   });
   for (const w of p.words) if (w.bonus) rows.push(`<li><b>Hot Springs</b> <span>${esc(w.w)} +${w.bonus}${w.bath ? ` (${w.bonus - ROW_BONUS} for the word, ${ROW_BONUS} for a Bathhouse Row square)` : ''}</span></li>`);
-  if (p.featured) rows.push(`<li><b>Featured Spring</b> <span>${esc(p.featured)} +${FEATURED_BONUS}</span></li>`);
+  if (staged.some((t) => isBath(t.i))) {
+    const notes = [rowReveals ? 'clears 1 fogged Featured Spring letter' : '', p.words.some((w) => w.bath) ? '' : `+${ROW_BONUS} with a Hot Springs word`].filter(Boolean);
+    if (notes.length) rows.push(`<li><b>Bathhouse Row</b> <span>${notes.join(' · ')}</span></li>`);
+  }
+  for (const fw of featuredList(p)) rows.push(`<li><b>Featured Spring</b> <span>${esc(fw)} +${FEATURED_BONUS}</span></li>`);
   if (p.full) rows.push(`<li><b>Full Soak</b> <span>all seven tiles +${FULL_SOAK}</span></li>`);
   return `<div class="bd" role="region" aria-label="How this play scores"><ul>${rows.join('')}<li class="tot"><b>Total</b> <span>${p.score} points</span></li></ul></div>`;
 }
 
 export function scoresHtml(s, compact) {
+  const showTiles = s.mode !== 'daily' && s.bag.length === 0;
   return s.players.map((p, k) => {
     const per = p.persona ? persona(p.persona) : null;
     const active = !s.over && k === s.cur;
     const sub = per ? `${LEVEL_NAME[p.level || per.level]} · fictional` : (p.kind === 'human' ? 'Person' : '');
+    const n = showTiles && Array.isArray(p.rack) ? p.rack.length : null;
+    const tileLabel = n != null ? plural(n, 'tile') : '';
+    const lowCls = n === 1 ? ' low' : '';
+    const mood = seatMood(s, k);
     return compact
-      ? `<div class="chip ${active ? 'on' : ''}" aria-current="${active}">${badge(p, k, 26)}<b class="score" data-score="${k}">${p.score}</b></div>`
-      : `<div class="pcard ${active ? 'on' : ''}" aria-current="${active}">${badge(p, k, 44)}<div class="pmeta"><b>${esc(p.name)}</b><small>${esc(sub)}</small></div><b class="score" data-score="${k}">${p.score}</b></div>`;
+      ? `<div class="chip ${active ? 'on' : ''}" aria-current="${active}" aria-label="${esc(p.name)}: ${p.score} points${n != null ? `, ${tileLabel} left` : ''}${active ? ', current turn' : ''}">${badge(p, k, 26, mood)}<span class="sr-only">${esc(p.name)} </span><b class="score" data-score="${k}">${p.score}</b>${n != null ? `<span class="ctiles${lowCls}" data-tiles="${k}" aria-hidden="true">${tileLabel}</span>` : ''}</div>`
+      : `<div class="pcard ${active ? 'on' : ''}" aria-current="${active}">${badge(p, k, 44, mood)}<div class="pmeta"><b>${esc(p.name)}</b><small>${esc(sub)}</small>${n != null ? `<span class="ptiles${lowCls}" data-tiles="${k}">${tileLabel}</span>` : ''}</div><b class="score" data-score="${k}">${p.score}</b></div>`;
   }).join('');
 }
 
-export function springsHtml(s, lex, compact) {
-  return `<h2 class="springs-title"><span>Featured Springs</span> <small>+${FEATURED_BONUS} each · a letter clears every round</small></h2><div class="plaques">${s.featured.map((f, k) => {
+export const CAT_SHORT = { baths: 'Row', springs: 'Springs', park: 'Park', track: 'Track', club: 'Club', town: 'Town' };
+const ownerShort = (p) => (p && p.persona && SHORT[p.persona]) || (p ? seatMono(p.name) || p.name.split(' ')[0] : '');
+
+// when a letter clears by itself (engine.js fogStep)
+const fogPace = (s) => (s.mode === 'daily' ? 'a letter clears every turn' : 'fog lifts as the bag empties');
+
+// Turn 1 of the Daily Soak (W1-S4-10): the kinds of word on its plaques (three kinds, engine.js pickFeatured), and what a Hot Springs word
+// of such a kind does. `say` is the same for the live region.
+export const dailyOpening = (s) => !!s.daily && !s.over && !s.log.length && s.featured.length > 0;
+export function todaysSprings(s, lex, compact, isToday) {
+  const title = isToday ? "Today's Springs" : 'Springs of the day', how = 'Hot Springs words of these kinds clear';
+  // W2-S4-16: what the Daily is and what any Hot Springs word pays, before the first turn (the tiers: data/thermal-words.json). Phones
+  // keep the strip's two lines for the kinds and what they do, and hear this in the live region (`rules`)
+  const tiers = Object.values(lex.data.tiers), rules = `${DAILY_TURNS} turns · same tiles for everyone · Hot Springs words earn +${Math.min(...tiers)} to +${Math.max(...tiers)} and open history cards`;
+  return {
+    rules,
+    html: `<span class="day"><b>${title}</b>${s.featured.map((f) => `<span class="extra">${ICON.cat[lex.categories[f.cat].icon]}${CAT_SHORT[f.cat]}</span>`).join('')}${compact ? '' : `<span class="rules">${rules}</span>`}<span class="said">${how} ${compact ? 'letters.' : 'plaque letters; so does covering a Bathhouse Row square.'}</span><span class="said">Start on the ${compact ? 'center square.' : 'Display Spring in the center.'}</span></span>`,
+    say: `${title}: ${s.featured.map((f) => lex.categories[f.cat].name).join(', ')}. ${how} plaque letters; so does covering a Bathhouse Row square.`,
+  };
+}
+
+export function springsHtml(s, lex, compact, open = false) {
+  const renderPlaque = (f, k) => {
     const cat = lex.categories[f.cat];
+    const shortCat = CAT_SHORT[f.cat] || cat.name;
     const claimed = f.by != null;
     const letters = [...f.word].map((ch, j) => (claimed || f.shown.includes(j) ? `<b>${ch}</b>` : '<b class="fog" aria-hidden="true"></b>')).join('');
     const label = claimed ? `${f.word}, found by ${s.players[f.by].name}` : `${f.word.length} letters, ${cat.name}: ${[...f.word].map((ch, j) => (f.shown.includes(j) ? ch : 'blank')).join(' ')}`;
-    return `<button class="plaque ${claimed ? 'claimed' : ''}" data-plaque="${k}" aria-label="Featured Spring ${k + 1}: ${esc(label)}" title="${esc(cat.name)}">
-      <span class="pcat">${ICON.cat[cat.icon]}</span><span class="pword">${letters}</span>${claimed ? `<span class="pby">${esc(s.players[f.by].name.split(' ')[0])}</span>` : ''}</button>`;
-  }).join('')}</div>`;
+    return `<button type="button" class="plaque ${claimed ? 'claimed' : ''}" data-plaque="${k}" aria-label="Featured Spring ${k + 1}: ${esc(label)}" title="${esc(cat.name)}">
+      <span class="pcat">${ICON.cat[cat.icon]}<span class="pcat-name">${esc(shortCat)}</span></span><span class="pword">${letters}</span>${claimed ? `<span class="pby">${esc(ownerShort(s.players[f.by]))}</span>` : ''}</button>`;
+  };
+  const list = s.featured.map(renderPlaque).join('');
+  if (!compact) {
+    return `<h2 class="springs-title"><span>Featured Springs</span> <small>+${FEATURED_BONUS} each · ${fogPace(s)}</small></h2><div class="plaques">${list}</div>`;
+  }
+  const claimedCount = s.featured.filter((f) => f.by != null).length;
+  const active = s.featured.filter((f) => f.by == null);
+  const lead = (active.length ? active.slice().sort((a, b) => (b.shown.length / b.word.length) - (a.shown.length / a.word.length))[0] : s.featured[0]) || null;
+  let preview = '';
+  if (lead) {
+    const cat = lex.categories[lead.cat];
+    const shortCat = CAT_SHORT[lead.cat] || cat.name;
+    const claimed = lead.by != null;
+    const letters = [...lead.word].map((ch, j) => (claimed || lead.shown.includes(j) ? `<b>${ch}</b>` : '<b class="fog" aria-hidden="true"></b>')).join('');
+    preview = active.length
+      ? `<span class="sbar-preview" aria-hidden="true"><span class="pcat">${ICON.cat[cat.icon]}<span class="pcat-name">${esc(shortCat)}</span></span><span class="pword">${letters}</span></span>`
+      : '<span class="sbar-preview sbar-done" aria-hidden="true">All 3 found</span>';
+  }
+  const summary = `Featured Springs, ${claimedCount} of ${s.featured.length} found, +${FEATURED_BONUS} each. ${open ? 'Hide plaques.' : 'Show all three plaques.'}`;
+  return `<button type="button" class="springs-bar" data-springs-toggle aria-expanded="${!!open}" aria-controls="springs-tray" aria-label="${esc(summary)}">
+    <span class="sbar-meta"><b>Featured</b><small>${claimedCount}/${s.featured.length} · +${FEATURED_BONUS}</small></span>${preview}<span class="sbar-chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+  </button><div id="springs-tray" class="plaques springs-drawer"${open ? '' : ' hidden'}><p class="springs-title"><span>Featured Springs</span> <small>+${FEATURED_BONUS} each · ${fogPace(s)}</small></p>${list}</div>`;
 }
 
 export function actionsHtml(o) {
   const b = (id, icon, text, key, extra = '') => `<button class="abtn ${id}" data-act="${id}" ${extra}>${icon}<span>${text}</span>${key ? `<kbd>${key}</kbd>` : ''}</button>`;
+  const slot1 = o.mobile
+    ? (o.staged ? b('recall', ICON.recall, 'Recall', 'Esc') : b('shuffle', ICON.shuffle, 'Shuffle', '⇧R'))
+    : b('shuffle', ICON.shuffle, 'Shuffle', '⇧R');
+  const slot2 = o.mobile ? '' : b('recall', ICON.recall, 'Recall', 'Esc', o.staged ? '' : 'disabled');
+  const playText = o.canPlay && o.playScore != null ? `Play <em class="play-pts">+${o.playScore}</em>` : 'Play';
   return [
-    b('shuffle', ICON.shuffle, 'Shuffle', '⇧R'),
-    o.staged ? b('recall', ICON.recall, 'Recall', 'Esc') : '',
+    slot1,
+    slot2,
     b('swap', ICON.swap, 'Swap', '⇧S', o.canSwap ? '' : 'disabled'),
     b('pass', ICON.pass, 'Pass', '⇧P'),
-    o.hints != null ? b('hint', ICON.hint, `Hint <em>${o.unlimited ? '∞' : o.hints}</em>`, '⇧H', o.hints > 0 || o.unlimited ? '' : 'disabled') : '',
-    b('play', ICON.play, 'Play', 'Enter', o.canPlay ? '' : 'aria-disabled="true"'),
+    o.hints != null ? b('hint', ICON.hint, `Hint <em>${o.unlimited ? '∞' : o.hints}</em>`, '⇧H', `${o.hints > 0 || o.unlimited ? '' : 'disabled '}title="Spring Guide hint (using any hint marks this game aided and sets no personal best)"`) : '',
+    b('play', ICON.play, playText, 'Enter', o.canPlay ? '' : 'aria-disabled="true"'),
   ].join('');
 }
 
@@ -173,8 +280,11 @@ export function logHtml(s, lex) {
   return s.log.slice().reverse().filter((e) => e.kind !== 'end').slice(0, 40).map((e) => {
     const p = s.players[e.p];
     if (e.kind === 'play') {
-      const ws = e.words.map((w) => `<span class="${w.themed ? 'themed' : ''}">${w.w}</span>`).join(', ');
-      const extras = [e.full ? `Full Soak +${FULL_SOAK}` : '', e.themed ? `Hot Springs +${e.themed}` : '', e.featured ? `Featured +${FEATURED_BONUS}` : ''].filter(Boolean).join(' · ');
+      const ws = e.words.map((w) => (w.themed
+        ? `<button type="button" class="themed-link" data-fact="${esc(w.themed)}" data-form="${esc(w.w)}" aria-label="${esc(w.w)}, Hot Springs word: read its history card">${ICON.steam}<span>${esc(w.w)}</span></button>`
+        : `<span>${esc(w.w)}</span>`)).join(', ');
+      const fCount = featuredList(e).length;
+      const extras = [e.full ? `Full Soak +${FULL_SOAK}` : '', e.themed ? `Hot Springs +${e.themed}` : '', fCount ? `Featured +${fCount * FEATURED_BONUS}` : '', e.rowReveal ? 'Row reveal' : ''].filter(Boolean).join(' · ');
       return `<li><b class="who">${esc(p.name)}</b> ${ws} <em>${e.score}</em>${extras ? `<small>${extras}</small>` : ''}</li>`;
     }
     return `<li><b class="who">${esc(p.name)}</b> ${e.kind === 'swap' ? `swapped ${plural(e.count, 'tile')}` : 'passed'}${e.challenge ? ` <small>(${esc(e.challenge)} is not a word)</small>` : ''}</li>`;
@@ -186,10 +296,11 @@ export function factHtml(entry, lex, form, extra = '') {
   const cat = lex.categories[entry.cat];
   const tier = lex.data.tiers[entry.tier];
   const pic = [VIGNETTE[entry.id], 'card-' + entry.id, 'card-' + entry.cat].find((n) => n && art.has(n));
+  const kind = pic ? (pic.startsWith('vig-') ? 'is-vig' : 'is-card') : 'is-vector';
   const vig = pic ? `<img class="vig" src="${art.src(pic)}" alt="">` : `<div class="vig vector cat-${entry.cat}" aria-hidden="true">${ICON.cat[cat.icon]}</div>`;
   const src = entry.fact.url ? `<a href="${esc(entry.fact.url)}" target="_blank" rel="noopener noreferrer">${esc(entry.fact.src)}</a>` : esc(entry.fact.src);
   return `<div class="card fact" role="document">
-    ${vig}
+    <div class="fact-art ${kind}">${vig}</div>
     <div class="fact-body">
       <p class="fact-cat">${ICON.cat[cat.icon]} <span>${esc(cat.name)}</span><b class="fact-pts">+${tier}</b></p>
       <h2>${esc(form || entry.forms[0])}</h2>
@@ -209,11 +320,22 @@ export const VIGNETTE = {
   radio: 'vig-arlington', water: 'vig-watertax', fire: 'vig-waterco', spring: 'vig-fordyce',
 };
 
-export function swapHtml(rack) {
+export function swapHtml(rack, s = null) {
+  const bag = s && Array.isArray(s.bag) ? s.bag : null;
+  let bagNote = '';
+  if (bag) {
+    let v = 0, bl = 0;
+    for (const l of bag) { if ('AEIOU'.includes(l)) v++; else if (l === '?') bl++; }
+    const c = bag.length - v - bl;
+    bagNote = `<p class="swap-bag">In the bag (${bag.length}): <b>${plural(v, 'vowel')}</b>, <b>${plural(c, 'consonant')}</b>${bl ? `, <b>${plural(bl, 'blank')}</b>` : ''}.</p>`;
+  }
+  const stall = s ? stallNote(s, 'swap') : '';
   return `<div class="card dialog swap" role="dialog" aria-modal="true" aria-labelledby="swap-h">
     <h2 id="swap-h">Swap tiles</h2>
     <p>Choose the tiles to put back. You draw the same number, and your turn ends.</p>
-    <div class="swap-tiles" role="group" aria-label="Your tiles">${rack.map((l, k) => `<button class="stile" data-sw="${k}" aria-pressed="false" aria-label="${l === '?' ? 'Blank' : l}">${l === '?' ? '' : l}</button>`).join('')}</div>
+    ${bagNote}
+    ${stall ? `<p class="note warn swap-stall" role="alert">${esc(stall)}</p>` : ''}
+    <div class="swap-tiles" role="group" aria-label="Your tiles">${rack.map((l, k) => `<button class="stile${l === '?' ? ' blank' : ''}" data-sw="${k}" aria-pressed="false" aria-label="${l === '?' ? 'Blank' : l}">${l === '?' ? ICON.steam : l}</button>`).join('')}</div>
     <div class="dlg-btns"><button class="btn quiet" data-close>Cancel</button><button class="btn primary" data-swap-go disabled>Swap</button></div>
   </div>`;
 }
@@ -233,18 +355,16 @@ export function pauseHtml(o) {
     <h2 id="pause-h">Paused</h2>
     <nav class="menu">
       <button class="btn primary" data-close>Resume</button>
-      <button class="btn" data-open="ledger">Steam ledger</button>
-      <button class="btn" data-open="boardtext">Read the board</button>
+      <div class="row2"><button class="btn" data-open="ledger">Steam ledger</button><button class="btn" data-open="boardtext">Read the board</button></div>
       ${o.tracker ? '<button class="btn" data-open="tracker">Unseen tiles</button>' : ''}
-      <button class="btn" data-go="help">How to play</button>
-      <button class="btn" data-go="settings">Settings</button>
+      <div class="row2"><button class="btn" data-go="help">How to play</button><button class="btn" data-go="settings">Settings</button></div>
       <button class="btn quiet" data-go="title">Save and quit to title</button>
     </nav>
   </div>`;
 }
 
 export function ledgerHtml(s, lex) {
-  return `<div class="card dialog ledger-dlg" role="dialog" aria-modal="true" aria-labelledby="ledger-h"><h2 id="ledger-h">Steam ledger</h2><ol class="log">${logHtml(s, lex) || '<li>No plays yet.</li>'}</ol><div class="dlg-btns"><button class="btn primary" data-close>Close</button></div></div>`;
+  return `<div class="card dialog ledger-dlg" role="dialog" aria-modal="true" aria-labelledby="ledger-h"><h2 id="ledger-h">Steam ledger</h2><ol class="log">${logHtml(s, lex) || '<li>No plays yet.</li>'}</ol><div class="dlg-btns"><button class="btn quiet" data-open="pause">Back</button><button class="btn primary" data-close>Close</button></div></div>`;
 }
 
 // The board as words (S2-08), for a screen reader: a square is its column letter and row number (H8 is the centre), and a tile
@@ -255,15 +375,37 @@ export function tileSpeech(s, staged, i) {
   if (t) return `tile ${t.l}${t.blank ? ', a blank' : ''}`;
   return st ? `your tile ${st.l}${st.blank ? ', a blank' : ''}, not played yet` : 'empty';
 }
-export function boardTextHtml(s, staged) {
+export function boardTextHtml(s, staged = [], rack) {
   const rows = [];
   for (let r = 0; r < N; r++) {
     const bits = [];
-    for (let c = 0; c < N; c++) { const i = r * N + c, t = s.board[i] || staged.find((x) => x.i === i); if (t) bits.push(`${squareName(i)} ${t.l}${s.board[i] ? '' : ' (not played yet)'}`); }
+    for (let c = 0; c < N; c++) {
+      const i = r * N + c, placed = s.board[i], t = placed || staged.find((x) => x.i === i);
+      if (t) bits.push(`${squareName(i)} ${t.l}${t.blank ? ' (blank)' : ''}${placed ? '' : ' (not played yet)'}`);
+    }
     rows.push(`<li><b>Row ${r + 1}:</b> ${bits.length ? bits.join(', ') : 'empty'}</li>`);
   }
+  let tiles = rack;
+  if (tiles === undefined && s && Array.isArray(s.players)) {
+    const p = s.players[s.cur];
+    if (p && p.kind === 'human' && Array.isArray(p.rack)) {
+      const used = new Set(staged.map((x) => x.k).filter((k) => Number.isInteger(k)));
+      if (used.size) tiles = p.rack.filter((_, k) => !used.has(k));
+      else {
+        tiles = p.rack.slice();
+        for (const st of staged) {
+          const ix = tiles.indexOf(st.blank ? '?' : st.l);
+          if (ix >= 0) tiles.splice(ix, 1);
+        }
+      }
+    } else tiles = null;
+  }
+  const rackLine = Array.isArray(tiles)
+    ? `<p class="bt-rack"><b>Your rack:</b> ${tiles.length ? tiles.map((l) => (l === '?' ? 'Blank' : esc(l))).join(', ') : 'empty'}</p>`
+    : '';
   return `<div class="card dialog boardtext" role="dialog" aria-modal="true" aria-labelledby="bt-h"><h2 id="bt-h">The board, as text</h2>
-    <p>Columns run A to O and rows 1 to 15, so H8 is the centre square. Only squares with a tile are listed.</p>
+    <p>Columns run A to O and rows 1 to 15, so H8 is the center square. Only squares with a tile are listed.</p>
+    ${rackLine}
     <ul class="log">${rows.join('')}</ul>
     <div class="dlg-btns"><button class="btn quiet" data-open="pause">Back</button><button class="btn primary" data-close>Close</button></div></div>`;
 }
@@ -279,7 +421,7 @@ export function trackerHtml(s, seat) {
 }
 
 export function privacyHtml(p, k) {
-  return `<div class="privacy-card">${badge(p, k, 64)}<h2>${esc(p.name)}'s turn</h2><p>Pass the device to ${esc(p.name)}. Tiles stay hidden until you tap.</p><button class="btn primary big" data-reveal>Show my tiles</button></div>`;
+  return `<div class="privacy-card">${badge(p, k, 64)}<h2 id="priv-h">${esc(p.name)}'s turn</h2><p>Pass the device to ${esc(p.name)}. Tiles stay hidden until you tap.</p><button class="btn primary big" data-reveal>Show my tiles</button></div>`;
 }
 
 // ---------- help ----------
@@ -289,11 +431,20 @@ function workedExample() {
   const parts = cells.map(([l, q]) => TILES[l].value * (q === 'w' ? 2 : 1));
   const sum = parts.reduce((a, b) => a + b, 0), total = sum * 2;
   const label = `FIND laid across four squares: the I on a Warm square, the D on a Steam square. ${cells.map(([l, q]) => `${l} ${TILES[l].value}${q === 'w' ? ' doubled' : ''}`).join(', ')}, then the word doubled: ${total} points.`;
-  return `<div class="example"><div class="eg" role="img" aria-label="${label}">${cells.map(([l, q]) => `<span class="eg-cell"><span class="tchip"><b>${l}</b><i>${TILES[l].value}</i></span>${q ? `<span class="sq sq-${q}${q === 's' ? ' word' : ''}" aria-hidden="true"><i>×2</i></span>` : '<span class="sq-none" aria-hidden="true"></span>'}</span>`).join('')}</div>
+  return `<div class="example"><div class="eg" role="img" aria-label="${label}">${cells.map(([l, q]) => `<span class="eg-cell"><span class="tchip"><b>${l}</b><i>${TILES[l].value}</i></span>${q ? `<span class="sq sq-${q}${q === 's' ? ' word' : ''}" aria-hidden="true"><i>${q === 's' ? '2W' : '2L'}</i></span>` : '<span class="sq-none" aria-hidden="true"></span>'}</span>`).join('')}</div>
     <p><b>A worked play.</b> FIND scores ${parts.join(' + ')} = ${sum}. The Steam square then doubles the whole word: <b>${total} points</b>.</p></div>`;
 }
 
-export function helpHtml(tab, lex, twos = []) {
+// Bathhouse Row octagonal painted medallion swatch matching the board's dark-espresso/gold bezel + '+20' pip (W2-S5-08 / CD-WF2-01).
+export function bathMedallionHtml(name = 'Fordyce', pip = true) {
+  const key = 'bath-' + String(name).toLowerCase();
+  const inner = art.has(key)
+    ? `<img class="row-med" src="${art.src(key)}" alt="">`
+    : `<span class="row-fallback">${ICON.cat.arch}</span>`;
+  return `<span class="row-bez"><span class="row-dark"><span class="row-rim"><span class="row-win">${inner}</span></span></span></span>${pip ? `<b class="row-pip">+${ROW_BONUS}</b>` : ''}`;
+}
+
+export function helpHtml(tab, lex, twos = [], opts = {}) {
   const tierList = Object.values(lex.data.tiers).join(' / ');
   const tabs = [['rules', 'How to play'], ['squares', 'Squares and scoring'], ['words', 'Hot Springs words'], ['keys', 'Controls']];
   const tileRow = Object.entries(TILES).map(([l, t]) => `<span class="tchip"><b>${l}</b><i>${t.value}</i><small>×${t.count}</small></span>`).join('');
@@ -303,15 +454,17 @@ export function helpHtml(tab, lex, twos = []) {
       <p>Each player holds seven tiles. On your turn, either <b>play</b> tiles to make words, <b>swap</b> tiles with the bag, or <b>pass</b>.</p>
       <ol class="steps">
         <li>Lay one or more tiles in a single row or a single column, with no empty squares between them.</li>
-        <li>The first word of the game must cover the <b>Display Spring</b> at the centre and use at least two tiles.</li>
+        <li>The first word of the game must cover the <b>Display Spring</b> at the center and use at least two tiles.</li>
         <li>After that, every play must touch tiles already on the board.</li>
         <li>Every run of two or more tiles your play creates, across and down, must be a word. You score all of them.</li>
         <li>Draw back up to seven tiles from the bag.</li>
       </ol>
       ${workedExample()}
-      <p>Words come from the public-domain ENABLE list (168,000 words; no proper nouns) with a few additions: the two-letter words below and some everyday ones such as EMAIL, APP and BLOG. A play with a word that isn't on the list is handed back and you keep your turn (unless you chose Challenge mode in the setup: then the strip does not say whether a word is valid, and a word that isn't on the list costs you the turn). While you place tiles, the strip under the board shows the words, the score and any bonus.</p>
-      <p>Stuck? The <b>Spring Guide</b> (Hint) sets a strong play on the board for you to keep, move or take back. <b>Other plays</b> under the board shows its next two choices, and the tiles each one keeps, for no extra charge. Three hints per player in a game against the computer or pass-and-play (or unlimited, if you choose that in the setup; such a game sets no personal best), none in the Daily Soak.</p>
-      ${twos.length ? `<h2>Two-letter words</h2>
+      <p>Words come from the public-domain ENABLE list (168,000 words; no proper nouns) with a few additions: the two-letter words below and some everyday ones such as EMAIL, APP and BLOG. A play with a word that isn't on the list is handed back and you keep your turn (unless you chose Challenge mode in the setup: then the strip does not say whether a word is valid, Spring Guide hints, Check a word and the two-letter list are off, and a word that isn't on the list costs you the turn). While you place tiles, the strip under the board shows the words, the score and any bonus.</p>
+      <p>Stuck? The <b>Spring Guide</b> (Hint) sets a strong play on the board for you to keep, move or take back. <b>Other plays</b> under the board shows its next two choices, and the tiles each one keeps, for no extra charge. Three hints per player in a game against the computer or pass-and-play (or unlimited in the setup), none in the Daily Soak. Personal bests are for unaided games: taking any hint, or turning Unlimited hints on, sets no personal best.</p>
+      ${opts.challengeOn
+        ? '<h2>Two-letter words</h2><p class="note" data-twos-hidden>Hidden while a Challenge game is in progress.</p>'
+        : twos.length ? `<h2>Two-letter words</h2>
       <p>All ${twos.length} of these are playable. QI and ZA help when you are holding a lone Q or Z.</p>
       <p class="twos">${twos.join(' ')}</p>` : ''}
       <h2>Check a word</h2>
@@ -324,61 +477,76 @@ export function helpHtml(tab, lex, twos = []) {
       <p>The game ends when a player uses their last tile and the bag is empty, or when everyone has passed or swapped twice in a row. Tiles left on a rack count against their owner; whoever went out collects their value.</p>
       <p class="fine">Bathhouse Letters is an original game. Its board, tiles, bonuses and rules are game logic made for this town; the facts on its cards are history, with sources.</p>`,
     squares: `<h2>The springs</h2>
-      <p>The board has one square for each of the valley's 47 hot springs, as Wikipedia counts them: the <b>Display Spring</b> in the centre and 46 premium squares that swirl out from it. A premium counts only on the turn a tile first covers it. A <b>cream disc</b> multiplies a letter; a <b>dark disc</b> multiplies the whole word.</p>
+      <p>The board has one square for each of the valley's 47 hot springs, as Wikipedia counts them: the <b>Display Spring</b> in the center and 46 premium squares that swirl out from it. A premium counts only on the turn a tile first covers it. A <b>cream circle (2L, 3L)</b> multiplies a letter; a <b>dark octagon (2W, 3W)</b> multiplies the whole word.</p>
       <ul class="legend">
-        <li><span class="sq sq-w"><i>×2</i></span><span><b>Warm</b> doubles the letter on it.</span></li>
-        <li><span class="sq sq-h"><i>×3</i></span><span><b>Hot</b> triples the letter on it.</span></li>
-        <li><span class="sq sq-s word"><i>×2</i></span><span><b>Steam</b> doubles the whole word.</span></li>
-        <li><span class="sq sq-b word"><i>×3</i></span><span><b>Boiling Spring</b> triples the whole word.</span></li>
-        <li><span class="sq sq-B"><i class="row">${ICON.cat.arch}</i></span><span><b>Bathhouse Row</b>: eight squares named for the eight historic bathhouses. A Hot Springs word that covers one earns ${ROW_BONUS} more.</span></li>
+        <li><span class="sq sq-w"><i>2L</i></span><span><b>Warm (2L)</b> doubles the letter on it.</span></li>
+        <li><span class="sq sq-h"><i>3L</i></span><span><b>Hot (3L)</b> triples the letter on it.</span></li>
+        <li><span class="sq sq-s word"><i>2W</i></span><span><b>Steam (2W)</b> doubles the whole word.</span></li>
+        <li><span class="sq sq-b word"><i>3W</i></span><span><b>Boiling Spring (3W)</b> triples the whole word.</span></li>
+        <li><span class="sq sq-B" aria-hidden="true">${bathMedallionHtml('Fordyce', true)}</span><span><b>Bathhouse Row</b>: eight squares named for the eight historic bathhouses. Covering one clears a fogged Featured Spring letter; a Hot Springs word that covers one earns ${ROW_BONUS} more.</span></li>
       </ul>
       <h2>Bonuses</h2>
       <ul class="legend plain">
         <li><b>Full Soak +${FULL_SOAK}</b>: use all seven tiles in one turn.</li>
         <li><b>Hot Springs word +${tierList}</b>: any word you form that belongs to the town (see the next tab).</li>
-        <li><b>Featured Spring +${FEATURED_BONUS}</b>: three secret words per game, hidden in steam on the plaques. A letter clears every round. The first to form one claims it.</li>
+        <li><b>Featured Spring +${FEATURED_BONUS}</b>: three secret words per game, hidden in steam on the plaques. Letters clear as the bag empties (every turn in the Daily Soak), when you cover a Bathhouse Row square, and when you play a Hot Springs word in that category; any form of the word claims it.</li>
       </ul>
       <h2>The tiles</h2>
       <p>${TILES ? Object.values(TILES).reduce((a, t) => a + t.count, 0) : 0} lettered tiles and ${BLANKS} blank <b>Steam tiles</b>, which stand for any letter and score nothing. Counts and points were worked out from how often each letter appears in playable words.</p>
       <div class="tchips">${tileRow}</div>`,
     words: `<h2>Hot Springs words</h2>
       ${art.has('card-baths') ? `<img class="help-vig" src="${art.src('card-baths')}" alt="A bathhouse hall with a marble fountain, steam and a stained-glass dome">` : ''}
-      <p>${lex.data.words.length} groups of everyday words belong to the town: <b>spring</b>, <b>steam</b>, <b>bathhouse</b>, <b>tufa</b>, <b>novaculite</b>, <b>derby</b>, <b>magnolia</b> and more. Form one, across or down, and it pays a bonus and opens a card from the town's history, with its source.</p>
-      <ul class="legend plain">${Object.entries(lex.categories).map(([k, c]) => `<li><span class="cat-ic">${ICON.cat[c.icon]}</span><b>${esc(c.name)}</b></li>`).join('')}</ul>
-      <p>Every word you find goes into your <b>Bathhouse Register</b>, from the title screen.</p>`,
+      <p>${lex.data.words.length} groups of everyday words belong to the town: <b>spring</b>, <b>steam</b>, <b>bathhouse</b>, <b>tufa</b>, <b>novaculite</b>, <b>derby</b>, <b>magnolia</b> and more. Form one, across or down, and it pays a bonus (+${tierList}) and opens a card from the town's history, with its source.</p>
+      <p class="note">Browse the six themes below to see which word families earn bonuses. Plurals and common forms count too; each word's history card stays unspoiled until you play it.</p>
+      <div class="word-ref">${Object.entries(lex.categories).map(([k, c]) => {
+        const entries = lex.data.words.filter((w) => w.cat === k);
+        const byTier = [1, 2, 3].map((tr) => {
+          const list = entries.filter((e) => e.tier === tr).map((e) => e.forms[0]).sort();
+          return list.length ? `<div class="tier-row"><span class="tier-pts">+${lex.data.tiers[tr]}</span><span class="tier-words">${list.map((w) => esc(w)).join(' · ')}</span></div>` : '';
+        }).join('');
+        return `<details class="cat-ref" data-cat-ref="${esc(k)}"><summary><span class="cat-ic">${ICON.cat[c.icon]}</span><b>${esc(c.name)}</b><small>${entries.length} word families</small></summary><div class="cat-ref-body">${byTier}</div></details>`;
+      }).join('')}</div>
+      <p>Every word you find goes into your <b>Bathhouse Register</b>, from the title screen. You can toggle the subtle rack cue in <b>Settings</b>.</p>`,
     keys: `<h2>Mouse and touch</h2>
       <ul class="legend plain"><li>Drag a tile from your rack to the board, or tap a tile and then tap a square.</li><li>Tap a tile you've placed to take it back, or drag it somewhere else.</li><li>On a phone the tile floats above your finger, and the square it will land on lights up. Pinch to zoom if you like.</li></ul>
       <h2>Keyboard</h2>
-      <ul class="keys"><li><kbd>←↑→↓</kbd> move the cursor</li><li><kbd>A</kbd>–<kbd>Z</kbd> place that letter from your rack (with none left, press it twice to use your blank)</li><li><kbd>Space</kbd> switch between across and down</li><li><kbd>Backspace</kbd> take back the last tile</li><li><kbd>Enter</kbd> play (with a button focused, <kbd>Enter</kbd> or <kbd>Space</kbd> presses that button instead)</li><li><kbd>Esc</kbd> take back all tiles</li><li><kbd>Shift</kbd>+<kbd>R</kbd> shuffle the tiles still on your rack</li><li><kbd>Shift</kbd>+<kbd>S</kbd> swap · <kbd>Shift</kbd>+<kbd>P</kbd> pass · <kbd>Shift</kbd>+<kbd>H</kbd> hint</li><li><kbd>Shift</kbd>+<kbd>B</kbd> how the placed tiles score (or tap the strip under the board)</li><li><kbd>Space</kbd> or <kbd>Enter</kbd>, or a tap on the board, while the computer is playing: let its move land at once</li><li><kbd>?</kbd> help · <kbd>Esc</kbd> menu (when nothing is placed)</li></ul>`,
+      <ul class="keys"><li><kbd>←↑→↓</kbd> move the cursor</li><li><kbd>A</kbd>–<kbd>Z</kbd> place that letter from your rack (with none left, press it twice to use your blank)</li><li><kbd>Space</kbd> switch between across and down</li><li><kbd>Backspace</kbd> take back the last tile</li><li><kbd>Enter</kbd> place a selected rack tile at the cursor, or play (with a button focused, <kbd>Enter</kbd> or <kbd>Space</kbd> presses that button instead)</li><li><kbd>←→</kbd> <kbd>Home</kbd> <kbd>End</kbd> on a focused rack tile or action button: step along that row</li><li><kbd>Alt</kbd>+<kbd>←→</kbd> on a focused rack tile: move it left or right on your rack</li><li><kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd> zoom in, zoom out, or show the whole board</li><li><kbd>Esc</kbd> close the score breakdown if it is open, else take back all tiles</li><li><kbd>Shift</kbd>+<kbd>R</kbd> shuffle the tiles still on your rack</li><li><kbd>Shift</kbd>+<kbd>S</kbd> swap · <kbd>Shift</kbd>+<kbd>P</kbd> pass · <kbd>Shift</kbd>+<kbd>H</kbd> hint · <kbd>Shift</kbd>+<kbd>U</kbd> unseen tiles</li><li><kbd>Shift</kbd>+<kbd>B</kbd> how the placed tiles score (or tap the strip under the board)</li><li><kbd>Space</kbd> or <kbd>Enter</kbd>, or a tap on the board, while the computer is playing: let its move land at once</li><li><kbd>?</kbd> help · <kbd>Esc</kbd> menu (when nothing is placed)</li></ul>`,
   }[tab];
   return `<div class="sheet help">
     ${band()}
-    <header class="sheet-head"><h1>How to play</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
-    <div class="tabs" role="tablist">${tabs.map(([k, t]) => `<button role="tab" aria-selected="${k === tab}" data-tab="${k}">${t}</button>`).join('')}</div>
-    <div class="help-body" role="tabpanel">${body}</div>
+    <header class="sheet-head"><h1 id="help-h" tabindex="-1">How to play</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    <div class="tabs" role="tablist" aria-labelledby="help-h">${tabs.map(([k, t]) => `<button role="tab" id="help-tab-${k}" aria-controls="help-panel" aria-selected="${k === tab}" tabindex="${k === tab ? 0 : -1}" data-tab="${k}"><span>${t}</span></button>`).join('')}</div>
+    <div class="help-body" id="help-panel" role="tabpanel" aria-labelledby="help-tab-${tab}">${body}</div>
   </div>`;
 }
 
 // ---------- settings ----------
+const pct = (v) => `${Math.round(Math.max(0, Math.min(1, Number(v) || 0)) * 100)}%`;
 export function settingsHtml(st, canVibrate = false) {
-  const seg = (key, opts, label) => `<div class="setrow"><span>${label}</span><div class="seg" role="radiogroup" aria-label="${label}">${opts.map(([v, t]) => `<button role="radio" aria-checked="${st[key] === v}" data-set="${key}" data-val="${v}">${t}</button>`).join('')}</div></div>`;
+  const seg = (key, opts, label) => `<div class="setrow"><span id="set-${key}">${label}</span><div class="seg" role="radiogroup" aria-labelledby="set-${key}">${opts.map(([v, t], i) => `<button role="radio" aria-checked="${st[key] === v}" tabindex="${i === Math.max(0, opts.findIndex((o) => o[0] === st[key])) ? 0 : -1}" data-set="${key}" data-val="${v}"><span>${t}</span></button>`).join('')}</div></div>`;
+  const slider = (id, attr, val, label, aria) => {
+    const text = pct(val);
+    return `<div class="setrow"><span>${label}</span><div class="set-range"><input id="${id}" type="range" min="0" max="1" step="0.05" value="${val}" style="--p:${text}" ${attr} aria-label="${aria}" aria-valuetext="${text}"><output for="${id}" data-out="${attr}">${text}</output></div></div>`;
+  };
   return `<div class="sheet settings">
     ${band()}
-    <header class="sheet-head"><h1>Settings</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    <header class="sheet-head"><h1 tabindex="-1">Settings</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     ${seg('sound', [[true, 'On'], [false, 'Off']], 'Sound')}
     ${seg('fx', [[true, 'On'], [false, 'Off']], 'Sound effects')}
     ${seg('music', [[true, 'On'], [false, 'Off']], 'Music')}
     ${seg('amb', [[true, 'On'], [false, 'Off']], 'Ambience')}
-    <div class="setrow"><span>Volume</span><input type="range" min="0" max="1" step="0.05" value="${st.vol}" data-vol aria-label="Volume"></div>
-    <div class="setrow"><span>Effects level</span><input type="range" min="0" max="1" step="0.05" value="${st.fxVol}" data-fxvol aria-label="Effects level, under the Volume"></div>
-    <div class="setrow"><span>Music level</span><input type="range" min="0" max="1" step="0.05" value="${st.musicVol}" data-musicvol aria-label="Music and ambience level, under the Volume"></div>
+    ${slider('set-vol', 'data-vol', st.vol, 'Volume', 'Volume')}
+    ${slider('set-fxvol', 'data-fxvol', st.fxVol, 'Effects level', 'Effects level, under the Volume')}
+    ${slider('set-musicvol', 'data-musicvol', st.musicVol, 'Music level', 'Music level, under the Volume')}
+    ${slider('set-ambvol', 'data-ambvol', st.ambVol, 'Ambience level', 'Ambience level, under the Volume')}
     ${seg('theme', [['auto', 'Auto'], ['light', 'Day'], ['dark', 'Night']], 'Theme')}
     ${seg('motion', [['system', 'Auto'], ['full', 'Full'], ['reduce', 'Reduced']], 'Motion')}
     ${canVibrate ? seg('vibrate', [[true, 'On'], [false, 'Off']], 'Vibration') : ''}
     ${seg('text', [[1, '100%'], [1.15, '115%'], [1.3, '130%']], 'Text size')}
     ${seg('board3d', [['auto', 'Auto'], ['on', '3D'], ['off', 'Flat']], 'Board')}
     ${seg('ai', [['normal', 'Normal'], ['fast', 'Fast'], ['instant', 'Instant']], 'Computer speed')}
-    <div class="setrow"><span>Tips</span><button class="btn quiet" data-tips>${st.tipsSeen ? 'Show tips again' : 'Tips will show in a game'}</button></div>
+    ${seg('townCue', [[true, 'On'], [false, 'Off']], 'Hot Springs rack cue')}
+    <div class="setrow"><span>Tips</span><button class="btn quiet" data-tips${st.tipsSeen ? '' : ' disabled'}>${st.tipsSeen ? 'Show tips again' : 'Tips will show in a game'}</button></div>
   </div>`;
 }
 
@@ -387,18 +555,35 @@ export function registerHtml(lex, reg, noSave, newerSave) {
   const groups = Object.entries(lex.categories).map(([ck, c]) => {
     const entries = lex.data.words.filter((w) => w.cat === ck);
     const found = entries.filter((e) => e.forms.some((f) => reg[f]));
-    return `<section class="reg-cat"><h2>${ICON.cat[c.icon]} ${esc(c.name)} <small>${found.length} / ${entries.length}${found.length === entries.length ? ' · complete' : ''}</small></h2><ul class="reg-list">${entries.map((e) => {
+    const pct = entries.length ? Math.round((100 * found.length) / entries.length) : 0;
+    const banner = art.has('card-' + ck)
+      ? `<div class="reg-banner" style="background-image:url(${art.src('card-' + ck)})" aria-hidden="true"></div>`
+      : `<div class="reg-banner vector cat-${esc(ck)}" aria-hidden="true"></div>`;
+    return `<section class="reg-cat" data-reg-cat="${esc(ck)}">
+      <div class="reg-head">
+        ${banner}
+        <div class="reg-head-bar">
+          <h2>${ICON.cat[c.icon]} ${esc(c.name)} <small>${found.length} / ${entries.length}${found.length === entries.length ? ' · complete' : ''}</small></h2>
+          <div class="reg-progress" role="progressbar" aria-valuenow="${found.length}" aria-valuemin="0" aria-valuemax="${entries.length}" aria-label="${esc(c.name)}: ${found.length} of ${entries.length} words found"><span style="width:${pct}%"></span></div>
+        </div>
+      </div>
+      <ul class="reg-list">${entries.map((e) => {
       const forms = e.forms.filter((f) => reg[f]);
-      if (!forms.length) return `<li class="reg-item locked" aria-label="Not found yet: ${e.forms[0].length} letters"><b aria-hidden="true">${'<i></i>'.repeat(e.forms[0].length)}</b></li>`;
+      const tier = lex.data.tiers[e.tier];
+      if (!forms.length) {
+        const len = e.forms[0].length;
+        return `<li class="reg-item locked"><button type="button" class="reg-lock" data-reg-locked="${esc(e.id)}" data-cat="${esc(ck)}" data-len="${len}" data-tier="${tier}" aria-label="Not found yet: ${len}-letter ${esc(c.name)} word, +${tier} points"><b aria-hidden="true">${'<i></i>'.repeat(len)}</b><span class="reg-meta"><span class="reg-len">${len} letters</span><span class="reg-tier">+${tier}</span></span></button></li>`;
+      }
       const best = Math.max(...forms.map((f) => reg[f].best));
-      return `<li class="reg-item"><button data-reg="${e.id}"><span class="stamp" aria-hidden="true">${ICON.steam}</span><b>${forms.join(' · ')}</b><small>best ${best} · ${esc(reg[forms[0]].first)}</small></button></li>`;
+      return `<li class="reg-item"><button type="button" data-reg="${e.id}"><span class="stamp" aria-hidden="true">${ICON.steam}</span><b>${forms.join(' · ')}</b><small>best ${best} · ${esc(reg[forms[0]].first)}</small></button></li>`;
     }).join('')}</ul></section>`;
   }).join('');
   return `<div class="sheet register">
     ${band()}
-    <header class="sheet-head"><h1>Bathhouse Register</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    <header class="sheet-head"><h1 tabindex="-1">Bathhouse Register</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     ${noSave ? `<p class="note warn" role="status">${NO_SAVE}</p>` : newerSave ? `<p class="note warn" role="status">${NEWER_SAVE}</p>` : ''}
-    <p class="note">Every Hot Springs word you play is signed in here. Tap a word to read its card.</p>
+    <p class="note">Every Hot Springs word you play is signed in here. Tap a word to read its card, or tap a blank slot to see its category, length and bonus.</p>
+    <p class="reg-nudge" role="status" aria-live="polite" hidden></p>
     ${groups}
   </div>`;
 }
@@ -413,7 +598,7 @@ export function recordsHtml(st, o) {
   const rows = Object.entries(st.opp).filter(([k]) => persona(k.split(':')[0]) && LEVEL_NAME[k.split(':')[1]]).sort((a, b) => order(a[0]) - order(b[0]));
   return `<div class="sheet records">
     ${band()}
-    <header class="sheet-head"><h1>Records</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    <header class="sheet-head"><h1 tabindex="-1">Records</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     ${st.games ? '' : '<p class="note">No games on the record yet. Finish a game against the computer and your score, wins and best plays are written here.</p>'}
     <h2>Games against the town</h2>
     <div class="stats">${stat(st.games, 'games')}${stat(st.wins, 'wins')}${stat(rate, 'win rate')}${stat(st.bestScore || '-', 'best score')}${stat(avg, 'average score')}${stat(`${st.streak} / ${st.bestStreak}`, 'win streak / best')}</div>
@@ -426,13 +611,14 @@ export function recordsHtml(st, o) {
       <li><span>Hints used</span><b>${st.hints}</b></li>
     </ul>
     <h2>By opponent</h2>
-    ${rows.length ? `<table class="opp"><thead><tr><th scope="col">Opponent</th><th scope="col">Games</th><th scope="col">Won</th><th scope="col">Best</th></tr></thead><tbody>${rows.map(([k, r]) => {
+    ${rows.length ? `<table class="opp-table"><thead><tr><th scope="col">Opponent</th><th scope="col">Games</th><th scope="col">Won</th><th scope="col">Best</th></tr></thead><tbody>${rows.map(([k, r]) => {
       const [pid, lv] = k.split(':');
-      return `<tr><th scope="row">${esc(persona(pid).name)} <small>${LEVEL_NAME[lv]}</small></th><td>${r.games}</td><td>${r.wins}</td><td>${r.best}</td></tr>`;
+      return `<tr><th scope="row">${esc(persona(pid).name)} <small>${LEVEL_NAME[lv]}</small></th><td>${r.games}</td><td>${r.wins}</td><td>${r.best || '-'}</td></tr>`;
     }).join('')}</tbody></table><p class="note">A win counts when your score beats that opponent's.</p>` : '<p class="note">Each opponent and difficulty you play gets a line here.</p>'}
     <h2>Daily Soak</h2>
-    <div class="stats">${stat(days.length, 'days played')}${stat(days.length ? Math.max(...days.map((d) => d.score)) : '-', 'best day')}${stat(day.streak || 0, 'day streak')}${stat(Math.max(day.streak || 0, st.daily.bestStreak), 'best streak')}</div>
+    <div class="stats cols4">${stat(days.length, 'days played')}${stat(days.length ? Math.max(...days.map((d) => (d.first != null ? d.first : d.score))) : '-', 'best day')}${stat(activeStreak(day, o.today), 'day streak')}${stat(Math.max(day.streak || 0, st.daily.bestStreak), 'best streak')}</div>
     ${dailyStrip(day.days || {}, o.today)}
+    ${streakRestReady(day, o.today) ? `<p class="note rest-cue">Rest day ready: play today to keep your ${activeStreak(day, o.today)}-day streak going.</p>` : ''}
     <p class="note">Miss a single day and a rest day keeps your streak going, once in any seven days.</p>
     <h2>Bathhouse Register</h2>
     <p>${o.found} of ${o.total} Hot Springs words found.</p>
@@ -443,10 +629,10 @@ export function recordsHtml(st, o) {
 export function aboutHtml(meta) {
   return `<div class="sheet about">
     ${band()}
-    <header class="sheet-head"><h1>About</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
+    <header class="sheet-head"><h1 tabindex="-1">About</h1><button class="iconbtn" data-back aria-label="Close">${ICON.close}</button></header>
     <p><b>Bathhouse Letters</b> is part of Hot Springs Games, an open-source (MIT) collection of browser games set in Hot Springs, Arkansas. It's an original crossword word-tile game: the board, tiles, bonuses and rules were made for it, and nothing here is endorsed by any park, business or bathhouse.</p>
     <h2>Words</h2>
-    <p>The dictionary is the ENABLE word list (public domain), ${meta.words.toLocaleString('en-US')} words of 2–15 letters, minus slurs and crude words${meta.added ? `, plus ${meta.added} added by the game: the two-letter words QI, ZA, OK, EW, KI, FE, GI and OI, and everyday words such as EMAIL, ONLINE, APP, BLOG and EMOJI` : ''}. Common words for the computer opponents are marked using SCOWL by Kevin Atkinson (© 2000–2018, used under its permissive licence).</p>
+    <p>The dictionary is the ENABLE word list (public domain), ${meta.words.toLocaleString('en-US')} words of 2–15 letters, minus slurs and crude words${meta.added ? `, plus ${meta.added} added by the game: the two-letter words QI, ZA, OK, EW, KI, FE, GI and OI, and everyday words such as EMAIL, ONLINE, APP, BLOG and EMOJI` : ''}. Common words for the computer opponents are marked using SCOWL by Kevin Atkinson (© 2000–2018, used under its permissive license).</p>
     <h2>History</h2>
     <p>Each Hot Springs word card cites its source: the National Park Service, the Encyclopedia of Arkansas, Wikipedia, and other sources checked for the collection's trivia game. The opponents are fictional characters.</p>
     <h2>Type and art</h2>
@@ -481,7 +667,7 @@ export function stallNote(s, passing) {
   if (!s || s.over || s.mode === 'daily' || !s.players) return '';
   const n = s.players.length, left = 2 * n - (s.scoreless || 0);
   if (left > n) return '';
-  if (passing) return left <= 1 ? 'Passing now ends the game.' : `After this, ${left - 1} more ${left - 1 === 1 ? 'turn' : 'turns'} without a score would end the game.`;
+  if (passing) return left <= 1 ? (passing === 'swap' ? 'Swapping now ends the game.' : 'Passing now ends the game.') : `After this, ${left - 1} more ${left - 1 === 1 ? 'turn' : 'turns'} without a score would end the game.`;
   return left <= 1 ? 'A turn with no score now ends the game.' : `${left} more turns without a score end the game.`;
 }
 
@@ -503,7 +689,7 @@ export function decisiveLine(s) {
   if (margin <= 0) return 'The scores finished level.';
   const tally = (k) => {
     const t = { themed: 0, full: 0, feat: 0, best: 0 };
-    for (const e of s.log) if (e.kind === 'play' && e.p === k) { t.themed += e.themed || 0; t.full += e.full ? 1 : 0; t.feat += e.featured ? 1 : 0; t.best = Math.max(t.best, e.score); }
+    for (const e of s.log) if (e.kind === 'play' && e.p === k) { t.themed += e.themed || 0; t.full += e.full ? 1 : 0; t.feat += featuredList(e).length; t.best = Math.max(t.best, e.score); }
     return t;
   };
   const x = tally(a.k), y = tally(b.k), adj = (s.result.adjust[a.k] || 0) - (s.result.adjust[b.k] || 0);
@@ -519,6 +705,22 @@ export function decisiveLine(s) {
   return d >= Math.max(10, margin * 0.4) ? `${esc(who)} won by ${margin}: ${say(d)}.` : `${esc(who)} won by ${margin}, with no one play deciding it.`;
 }
 
+export function nextFunnel(s, dailyPlayed = false) {
+  if (!s || s.mode === 'daily' || !s.result) return null;
+  const oc = outcome(s);
+  const humans = s.players.filter((p) => p.kind === 'human');
+  const ais = s.players.filter((p) => p.kind === 'ai');
+  if (oc === 'win' && humans.length === 1 && ais.length === 1) {
+    const ix = PERSONAS.findIndex((p) => p.id === ais[0].persona);
+    if (ix >= 0 && ix < PERSONAS.length - 1) {
+      const next = PERSONAS[ix + 1];
+      return { kind: 'challenge', persona: next.id, level: next.level, label: `Challenge ${next.name}` };
+    }
+  }
+  if (!dailyPlayed) return { kind: 'daily', label: "Try today's Daily Soak" };
+  return null;
+}
+
 export function overHtml(s, lex, dinfo, extra = {}) {
   const order = s.players.map((p, k) => ({ p, k })).sort((a, b) => b.p.score - a.p.score);
   const win = s.result.winners;
@@ -532,28 +734,38 @@ export function overHtml(s, lex, dinfo, extra = {}) {
   const say = (k) => (extra.barks && extra.barks[k] ? `<small class="bark"><b>${esc(SHORT[s.players[k].persona] || '')}:</b> “${esc(extra.barks[k].text)}”</small>` : '');
   const pbs = extra.pb && extra.pb.length ? `<ul class="pbs" aria-label="Personal bests">${extra.pb.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '';
   const oc = outcome(s), why2 = daily ? '' : decisiveLine(s);
+  const nextCta = !daily ? nextFunnel(s, !!extra.dailyPlayed) : null;
+  const nextBtn = !nextCta ? '' : nextCta.kind === 'challenge'
+    ? `<button class="btn" data-next-opp="${esc(nextCta.persona)}">${esc(nextCta.label)}</button>`
+    : `<button class="btn" data-go="daily">${esc(nextCta.label)}</button>`;
+  const dOfficial = dinfo ? (dinfo.official != null ? dinfo.official : (dinfo.first != null ? dinfo.first : dinfo.best)) : 0;
+  const dReplay = !!(dinfo && dinfo.isReplay);
   return `<div class="sheet over over-${oc}">
     ${art.has('title') ? `<div class="over-art" style="background-image:url(${art.src('title')})" aria-hidden="true"></div>` : ''}
-    <header class="masthead"><p class="mast-kicker">${daily ? 'The Steam Ledger' : KICKER[oc]}</p><h1>${daily ? 'Daily Soak' : 'Final Soak'}</h1><p class="mast-sub">${esc(why)}</p>${why2 ? `<p class="decisive">${why2}</p>` : ''}</header>
-    ${dinfo ? `<div class="daily-box"><p class="daily-date">${esc(dinfo.label)}</p><div class="daily-stats"><div><b>${s.players[0].score}</b><small>this soak</small></div><div><b>${dinfo.best}</b><small>best today</small></div><div><b>${dinfo.streak}</b><small>day streak</small></div></div><p class="note">Everyone gets the same tiles today. Come back tomorrow for a new soak.</p>${dinfo.par ? `<p class="par">${esc(persona('hollis').name)} scored ${dinfo.par.m} and ${esc(persona('julian').name)} ${dinfo.par.h} on these tiles.</p>` : ''}${dinfo.plays > 1 && dinfo.first != null ? `<p class="par">Your first try today: ${dinfo.first}.</p>` : ''}${dinfo.rested ? '<p class="note rest-note">You missed a day, and a rest day kept your streak going. You get one in any seven days.</p>' : ''}</div>` : ''}
-    ${daily ? '' : `<div class="winner">${badge(top.p, top.k, 92)}<div class="wmeta"><span class="ribbon">${win.length > 1 ? 'Tied for first' : 'Winner'}</span><b>${win.map((k) => esc(s.players[k].name)).join(' &amp; ')}</b><small class="wlines">${line(top.p, top.k)}</small>${say(top.k)}</div><b class="wscore">${top.p.score}</b></div>`}
+    <header class="masthead"><p class="mast-kicker">${daily ? (dReplay ? 'Practice replay' : 'The Steam Ledger') : KICKER[oc]}</p><h1 tabindex="-1">${daily ? 'Daily Soak' : 'Final Soak'}</h1><p class="mast-sub">${esc(why)}</p>${why2 ? `<p class="decisive">${why2}</p>` : ''}</header>
+    ${dinfo ? `<div class="daily-box"><p class="daily-date">${esc(dinfo.label)}${dReplay ? ' · <strong>Practice replay</strong>' : ''}</p><div class="daily-stats"><div><b>${s.players[0].score}</b><small>${dReplay ? 'practice replay' : 'this soak'}</small></div><div><b>${dOfficial}</b><small>official today</small></div><div><b>${dinfo.streak}</b><small>day streak</small></div></div><p class="note">${dReplay ? "Today's official score is already locked to your first run. Practice replays do not change Records." : 'Everyone gets the same tiles today. Come back tomorrow for a new soak.'}</p>${dinfo.par ? `<p class="par" data-par-line="1">${esc(persona('hollis').name)} scored ${dinfo.par.m} and ${esc(persona('julian').name)} ${dinfo.par.h} on these tiles.</p>` : ''}${dinfo.plays > 1 && dinfo.first != null ? `<p class="par">Your first try today: ${dinfo.first}.</p>` : ''}${dReplay && dinfo.replayBest != null ? `<p class="par">Best practice replay today: ${dinfo.replayBest}.</p>` : ''}${dinfo.rested ? '<p class="note rest-note">You missed a day, and a rest day kept your streak going. You get one in any seven days.</p>' : ''}</div>` : ''}
+    ${daily ? '' : `<div class="winner">${badge(top.p, top.k, 92, 'win')}<div class="wmeta"><span class="ribbon">${win.length > 1 ? 'Tied for first' : 'Winner'}</span><b>${win.map((k) => esc(s.players[k].name)).join(' &amp; ')}</b><small class="wlines">${line(top.p, top.k)}</small>${say(top.k)}</div><b class="wscore">${top.p.score}</b></div>`}
     ${pbs}
-    <ol class="final">${order.slice(daily ? 0 : 1).map(({ p, k }) => `<li>${badge(p, k, 40)}<div><b>${esc(p.name)}</b><small class="wlines">${line(p, k)}</small>${say(k)}</div><b class="fscore">${p.score}</b></li>`).join('')}</ol>
+    <ol class="final">${order.slice(daily ? 0 : 1).map(({ p, k }) => `<li>${badge(p, k, 40, daily ? '' : (win.includes(k) ? 'win' : 'loss'))}<div><b>${esc(p.name)}</b><small class="wlines">${line(p, k)}</small>${say(k)}</div><b class="fscore">${p.score}</b></li>`).join('')}</ol>
     <div class="over-cols">
-      <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}">${t.w} <small>+${t.pts}</small></button>`).join('')}</div>` : '<p class="note">None this game. A word like SPA, STEAM or ROCK pays a bonus and opens a card of local history.</p>'}</section>
+      <section><h2>Hot Springs words</h2>${themed.length ? `<div class="wchips">${themed.map((t) => `<button class="wchip" data-fact="${t.id}" data-form="${t.w}"><span>${t.w} <small>+${t.pts}</small></span></button>`).join('')}</div>` : '<p class="note">None this game. A word like SPA, STEAM or ROCK pays a bonus and opens a card of local history.</p>'}</section>
       ${s.featured.length ? `<section><h2>Featured Springs</h2><ul class="feat-list">${s.featured.map((f) => { const id = lex.entry(f.word)?.id, inner = `<b>${f.word}</b><small>${f.by != null ? `found by ${esc(s.players[f.by].name)}` : 'stayed hidden'}${id ? ' · read the card' : ''}</small>`; return `<li class="${f.by != null ? 'got' : ''}">${id ? `<button type="button" class="fchip" data-fact="${id}" data-form="${f.word}">${inner}</button>` : inner}</li>`; }).join('')}</ul></section>` : ''}
     </div>
-    <div class="dlg-btns">${daily ? '' : '<button class="btn primary" data-again>Play again</button>'}${extra.review ? '<button class="btn" data-review>What you missed</button>' : ''}<button class="btn ${daily ? 'primary' : ''}" data-go="title">Title screen</button></div>
+    <div class="dlg-btns">${daily ? '' : '<button class="btn primary" data-again>Play again</button>'}${nextBtn}<button class="btn mini" data-go="setup">${daily || !s.players.some((p) => p.kind === 'ai') ? 'New game' : 'Change opponent'}</button><button class="btn mini" data-go="register">Bathhouse Register</button>${extra.review ? '<button class="btn mini" data-review>What you missed</button>' : ''}<button class="btn mini${daily ? ' primary' : ''}" data-go="title">Title screen</button></div>
   </div>`;
 }
 
 // The look back over a finished game (review.js): how often the best-scoring play was found, and the biggest misses. r is null while it is worked out.
 export function reviewHtml(r) {
+  const did = (m) => (m.kind === 'play' ? `You played <em>${esc(m.word)}</em> for ${m.score}.`
+    : m.kind === 'swap' ? 'You swapped tiles.'
+      : m.challenge ? `You tried <em>${esc(m.challenge)}</em>, not in the dictionary, and lost the turn.` : 'You passed.');
+  const where = (b) => (b.at == null ? '' : `, ${b.dir} from ${squareName(b.at)}`);
   const body = !r ? '<p role="status">Looking back over your turns…</p>'
     : !r.total ? '<p>There is nothing to look back over.</p>'
-    : `<p class="rv-rate"><b>${r.found} of ${r.total}</b> ${r.total === 1 ? 'turn' : 'turns'}: you made the highest-scoring play your tiles allowed.</p>
-      ${r.misses.length ? `<ol class="rv-list">${r.misses.map((m) => `<li><b>Turn ${m.turn}</b> ${m.kind === 'play' ? `You played <em>${esc(m.word)}</em> for ${m.score}.` : m.kind === 'swap' ? 'You swapped tiles.' : 'You passed.'} <em>${esc(m.best.word)}</em> would have scored ${m.best.score}.</li>`).join('')}</ol>` : '<p>No play left more than a few points behind the best one on offer.</p>'}
-      <p class="note">This counts points only. A smaller play that keeps good tiles can be the better one.${r.skipped ? ` ${plural(r.skipped, 'turn')} from before this was kept could not be looked at.` : ''}</p>`;
+    : `<p class="rv-rate"><b>${r.found} of ${r.total}</b> ${r.total === 1 ? 'turn' : 'turns'}: you made the highest-scoring play ${r.casual ? 'in everyday and Hot Springs words, or a better one' : 'your tiles allowed'}.</p>
+      ${r.misses.length ? `<ol class="rv-list">${r.misses.map((m) => `<li><b>Turn ${m.turn}</b> ${did(m)} <em>${esc(m.best.word)}</em> would have scored ${m.best.score}${where(m.best)}.</li>`).join('')}</ol>` : '<p>No play left more than a few points behind the best one on offer.</p>'}
+      <p class="note">${r.misses.length ? 'Columns run A to O and rows 1 to 15, so H8 is the center square. ' : ''}This counts points only. A smaller play that keeps good tiles can be the better one.${r.cut ? ` ${plural(r.cut, 'turn')} had too many plays to look through here.` : ''}${r.skipped ? ` ${plural(r.skipped, 'turn')} from before this was kept could not be looked at.` : ''}</p>`;
   return `<div class="card dialog review" role="dialog" aria-modal="true" aria-labelledby="rv-h"><h2 id="rv-h">What you missed</h2>${body}<div class="dlg-btns"><button class="btn primary" data-close>Close</button></div></div>`;
 }
 
@@ -579,7 +791,13 @@ export function dailyStrip(days, today) {
   return `<h3 class="dhead">Last 14 days</h3><ol class="dstrip">${cells.join('')}</ol><p class="note">Your first try each day. ${flipped ? `One star beats the lower of ${esc(persona('hollis').name)}'s and ${esc(persona('julian').name)}'s scores on that day's tiles, two beat both.` : `One star beats ${esc(persona('hollis').name)} on that day's tiles, two beat ${esc(persona('julian').name)}.`}</p>`;
 }
 
-export function dailyLine(d) {
-  if (d.today) return `Today: ${d.today.score} pts · streak ${d.streak}`;
-  return d.streak ? `${DAILY_TURNS} turns · streak ${d.streak}` : `${DAILY_TURNS} turns, the same tiles for everyone`;
+export function dailyLine(d, todayDate = d && d.todayDate) {
+  const streak = todayDate ? activeStreak(d, todayDate) : (d.streak || 0);
+  const restReady = todayDate ? streakRestReady(d, todayDate) : false;
+  if (d.today) {
+    const official = d.today.first != null ? d.today.first : d.today.score;
+    return streak ? `Today: ${official} pts · streak ${streak}` : `Today: ${official} pts`;
+  }
+  if (streak && restReady) return `${DAILY_TURNS} turns · streak ${streak} · rest day ready`;
+  return streak ? `${DAILY_TURNS} turns · streak ${streak}` : `${DAILY_TURNS} turns, the same tiles for everyone`;
 }

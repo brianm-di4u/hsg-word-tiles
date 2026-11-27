@@ -16,10 +16,13 @@ const SEATS = [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', le
 async function freezeClock(t) { await t.page.clock.install(); await t.reload(); await ready(t); }
 async function stopClock(t) { const now = await t.page.evaluate(() => Date.now()); await t.page.clock.pauseAt(now + 500); }
 
-// pixels of the last-play brass (122,75,7) in a square of the overlay canvas round a cell
+// pixels of the last-play brass (122,75,7) in a square of the overlay canvas round a tile face (lifted to TILE_LIFT in 3D per W2-S3-02)
 const brass = (t, i) => t.page.evaluate(async (cell) => {
-  const cv = document.getElementById('board'), [x, y] = await window.__game.act('cell', cell), [x2] = await window.__game.act('cell', cell + 1), k = cv.width / cv.clientWidth;
-  const r = Math.round(0.49 * Math.abs(x2 - x) * k), d = cv.getContext('2d').getImageData(Math.round(x * k) - r, Math.round(y * k) - r, 2 * r, 2 * r).data;
+  const cv = document.getElementById('board'), [x, y] = await window.__game.act('cell', cell, 0.24);
+  const [x2] = await window.__game.act('cell', cell + 1, 0.24), [, y2] = await window.__game.act('cell', cell + 15, 0.24);
+  const k = cv.width / cv.clientWidth;
+  const rx = Math.round(0.48 * Math.abs(x2 - x) * k), ry = Math.round(0.48 * Math.abs(y2 - y) * k);
+  const d = cv.getContext('2d').getImageData(Math.round(x * k) - rx, Math.round(y * k) - ry, 2 * rx, 2 * ry).data;
   let n = 0;
   for (let j = 0; j < d.length; j += 4) if (Math.abs(d[j] - 122) < 14 && Math.abs(d[j + 1] - 75) < 14 && Math.abs(d[j + 2] - 7) < 14 && d[j + 3] > 200) n++;
   return n;
@@ -107,6 +110,9 @@ export const tests = [
     async run(t) {
       await ready(t);
       await t.page.click('#screen [data-go="setup"]');
+      // W1-S2-04 / CD-WF1-05: Challenge mode sits inside a collapsed "House rules" disclosure by default
+      t.equal(await t.page.evaluate(() => document.querySelector('.house-rules')?.open), false, 'House rules starts collapsed');
+      await t.page.click('.house-rules summary');
       t.equal(await t.page.isChecked('[data-challenge]'), false, 'it is off');
       t.expect(/Challenge mode: invalid words cost your turn/.test(await t.page.textContent('.setup .check:has([data-challenge])')), 'it is labelled as the finding words it');
       await t.page.check('[data-challenge]');
@@ -205,8 +211,10 @@ export const tests = [
         apply(s, action, c);
       }
       t.expect(varied >= 3, 'in at least three of ' + positions + ' positions the answer depends on the stream (' + varied + ')');
-      // the Daily par does not move: these were read from the game before this item
-      const PAR = { '2026-01-15': { m: 405, h: 402 }, '2026-03-02': { m: 403, h: 429 }, '2026-07-04': { m: 296, h: 380 }, '2026-11-16': { m: 434, h: 405 }, '2026-12-25': { m: 398, h: 396 } };
+      // the Daily par is deterministic for newly computed dates (OQ-WF1-03 / Ruling 17; saved historical d.days[date].par stays immutable);
+      // reflects W1-S2-07 solo par math, W1-S4-01/W1-S2-11 Featured/Row mechanics, W1-S5-02 Hollis/Julian styles, and Ruling 12 Medium leave 0.65
+      // (previous W2-B02 pins: 01-15 352/443, 03-02 387/433, 07-04 287/313, 11-16 340/435, 12-25 367/478)
+      const PAR = { '2026-01-15': { m: 323, h: 443 }, '2026-03-02': { m: 321, h: 358 }, '2026-07-04': { m: 287, h: 358 }, '2026-11-16': { m: 325, h: 405 }, '2026-12-25': { m: 466, h: 478 } };
       for (const [date, want] of Object.entries(PAR)) t.equal(JSON.stringify(await dailyPar(c, date)), JSON.stringify(want), 'par for ' + date);
     },
   },
@@ -270,17 +278,20 @@ export const tests = [
       });
       t.equal(m.wrong, 0, 'every square is still found at its own centre');
       if (t.viewport === 'mobile') {
-        // measured on the build before this item (CSS px, 390x844): across 23.1 / 23.4 / 23.7 on the top, middle and bottom rows,
-        // 23.2 between row centres in the middle, 22.8 at the tightest, centres from y = 23 to y = 349 of a 378 px square
-        t.expect(m.hpitch[1] >= 23.4 * 0.98, 'a square is as wide in the middle (' + m.hpitch[1].toFixed(1) + ' px, was 23.4)');
-        t.expect(Math.min(...m.hpitch) >= 23.1 * 0.96, 'and at its narrowest (' + Math.min(...m.hpitch).toFixed(1) + ' px, was 23.1)');
-        t.expect(m.vpitchCentre >= 23.2 * 0.98, 'and as tall in the middle (' + m.vpitchCentre.toFixed(1) + ' px, was 23.2)');
-        t.expect(m.vpitchMin >= 22.8 * 0.94, 'and at its flattest (' + m.vpitchMin.toFixed(1) + ' px, was 22.8)');
-        t.expect(m.ys[0] >= 33, 'the top row sits lower, with a strip of counter above it (centre at y = ' + m.ys[0].toFixed(0) + ', was 23)');
+        // W5-S3-02: portrait 3D solves fitDistance() at rendered 0.09 rad tilt including all 4 walnut bezel rails (~20.4-21.1 px squares on 378x378)
+        t.expect(m.hpitch[1] >= 20.0, 'a square is comfortably wide in the middle (' + m.hpitch[1].toFixed(1) + ' px)');
+        t.expect(Math.min(...m.hpitch) >= 19.5, 'and at its narrowest (' + Math.min(...m.hpitch).toFixed(1) + ' px)');
+        t.expect(m.vpitchCentre >= 20.0, 'and tall in the middle (' + m.vpitchCentre.toFixed(1) + ' px)');
+        t.expect(m.vpitchMin >= 19.2, 'and at its flattest (' + m.vpitchMin.toFixed(1) + ' px)');
+        t.expect(m.ys[0] >= 33, 'the top row sits lower, with the top walnut rail and counter above it (centre at y = ' + m.ys[0].toFixed(0) + ')');
         t.expect(m.ys[1] + 0.5 * m.vpitchMin <= m.h - 3 && m.xs[0] - 0.5 * m.hpitch[0] >= 0 && m.xs[1] + 0.5 * m.hpitch[2] <= m.w, 'and every square is still fully inside the board area');
+        const b3 = await t.game('act', 'b3');
+        t.expect(b3.tilt >= 0.08 && b3.tilt <= 0.10, 'portrait tilt in [0.08, 0.10] rad (' + b3.tilt + ')');
+        t.expect(b3.bezel && b3.bezel.minX >= 0 && b3.bezel.maxX <= b3.bezel.W && b3.bezel.minY >= 0 && b3.bezel.maxY <= b3.bezel.H, 'all four walnut rails fit cleanly inside #boardwrap');
       } else {
-        t.expect(Math.abs(m.hpitch[1] - 37.3) < 0.3 && Math.abs(m.hpitch[0] - 35.3) < 0.3 && Math.abs(m.hpitch[2] - 39.5) < 0.3, 'the desktop squares are the size they were (' + m.hpitch.map((x) => x.toFixed(1)).join(' / ') + ', was 35.3 / 37.3 / 39.5)');
-        t.expect(Math.abs(m.ys[0] - 96) < 1.5 && Math.abs(m.ys[1] - 595) < 1.5, 'and where they were');
+        // W3-S3-01 (7bc5acc) tightened desktop 3D framing per CD-WF2-06 (~5.5% larger squares: 35.3/37.3/39.5 -> 37.2/39.4/41.9 px)
+        t.expect(Math.abs(m.hpitch[1] - 39.4) < 0.3 && Math.abs(m.hpitch[0] - 37.2) < 0.3 && Math.abs(m.hpitch[2] - 41.9) < 0.3, 'the desktop squares match the CD-WF2-06 3D fit (' + m.hpitch.map((x) => x.toFixed(1)).join(' / ') + ', target 37.2 / 39.4 / 41.9)');
+        t.expect(Math.abs(m.ys[0] - 71.9) < 1.5 && Math.abs(m.ys[1] - 598.7) < 1.5, 'and where they sit (' + m.ys.map((x) => x.toFixed(1)).join(' / ') + ', was 96 / 595)');
       }
       await t.shot('S4-10-camera');
       // the same camera with a tile on the board and the view zoomed in: the squares are found where they are drawn

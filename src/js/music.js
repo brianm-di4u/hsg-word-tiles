@@ -1,5 +1,5 @@
 // Bathhouse Letters: generative music and ambience, all synthesized (adapted from the Hot Springs Games audio kit).
-// Three tunes (the lobby, the table, the results) and one place (the bathhouse) are written below as data;
+// Four tunes (the lobby, the table, the results and the results after a loss) and one place (the bathhouse) are written below as data;
 // `makeAudioKit` plays them into whatever bus the game gives it and `measureAudio` renders them for the tests.
 
 export function makeAudioKit(ctx, out, opt = {}) {
@@ -14,9 +14,9 @@ export function makeAudioKit(ctx, out, opt = {}) {
   const lowpass = (f, to, type = 'lowpass', q = 0.7) => { const n = ctx.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q; if (to) n.connect(to); return n; };
   const noiseBuf = ctx.createBuffer(1, sr * 2, sr);
   { const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = rnd() * 2 - 1; }
-  const noise = (t, dur) => { const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true; s.start(t, rr(0, 1.9)); if (dur) s.stop(t + dur); return s; };
+  const noise = (t, dur, from = rr(0, 1.9)) => { const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true; s.start(t, from); if (dur) s.stop(t + dur); return s; };
 
-  let mLevel = opt.music ?? 0.5, aLevel = opt.ambience ?? 0.5, inten = 0, held = false, timer = 0;
+  let mLevel = opt.music ?? 0.5, aLevel = opt.ambience ?? 0.5, inten = 0, held = false, running = false, timer = 0, cleanTimer = 0, duckUntil = 0;
   const musicBus = gain(mLevel, out), ambBus = gain(aLevel, out);
   const dead = [];   // { at, nodes }: sub-buses to disconnect once their fade-out has finished
   const retire = (bus, nodes, at, fade) => {
@@ -31,6 +31,8 @@ export function makeAudioKit(ctx, out, opt = {}) {
     pad:    { waves: ['triangle', 'sine'], det: 6, sus: true, a: 0.9, r: 1.8, lp: 1500 },
     organ:  { waves: ['sine'], parts: [[2, 0.4], [3, 0.15]], sus: true, a: 0.04, r: 0.25 },
     flute:  { waves: ['sine'], parts: [[2, 0.07]], sus: true, a: 0.06, r: 0.3, vib: 5 },
+    clarinet: { waves: ['sine'], parts: [[2, 0.04], [3, 0.3], [5, 0.09], [7, 0.03]], sus: true, a: 0.05, r: 0.22, lp: 1700 },   // odd partials, no vibrato
+    vibes:  { waves: ['sine'], parts: [[4, 0.09]], a: 0.008, decay: 1.4, lp: 2200 },   // a soft mallet, longer and rounder than `mallet`
     brass:  { waves: ['sawtooth', 'square'], det: 5, sus: true, a: 0.03, r: 0.12, lp: 1900 },
     mallet: { waves: ['sine'], parts: [[3, 0.16], [4.2, 0.05]], a: 0.004, decay: 1.1 },
     piano:  { waves: ['triangle'], parts: [[2, 0.22], [3, 0.07]], a: 0.004, decay: 0.75 },
@@ -58,7 +60,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
     k: (m, t, v) => { const o = ctx.createOscillator(), e = gain(0.0001, m.lp); o.frequency.setValueAtTime(115, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.11); e.gain.setValueAtTime(v, t); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.16); o.connect(e); o.start(t); o.stop(t + 0.2); },
     s: (m, t, v) => { const e = gain(0.0001, lowpass(1900, m.inp, 'bandpass', 0.8)); e.gain.setValueAtTime(v * 0.9, t); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.13); noise(t, 0.15).connect(e); },
     h: (m, t, v) => { const e = gain(0.0001, lowpass(6500, m.lp, 'highpass')); e.gain.setValueAtTime(v * 0.35, t); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.04); noise(t, 0.06).connect(e); },
-    b: (m, t, v) => { const e = gain(0.0001, lowpass(3200, m.inp, 'bandpass', 0.5)); e.gain.setValueAtTime(0.0001, t); e.gain.linearRampToValueAtTime(v * 0.4, t + 0.03); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.2); noise(t, 0.22).connect(e); },   // brush
+    b: (m, t, v) => { const e = gain(0.0001, lowpass(3200, m.inp, 'bandpass', 0.5)); e.gain.setValueAtTime(0.0001, t); e.gain.linearRampToValueAtTime(v * 0.4, t + 0.03); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.2); noise(t, 0.22, (t * 7.3) % 1.9).connect(e); },   // brush (takes no random number: it joins the tune without changing it)
   };
 
   // ------------------------------------------------------------------------------------------------- music
@@ -69,9 +71,10 @@ export function makeAudioKit(ctx, out, opt = {}) {
   //                                                               // ([degree, bars] holds a chord for longer),
   //     pad:  { inst: 'pad', gain: 0.05 },
   //     bass: { inst: 'bass', pattern: 'root' | 'two' | 'walk', gain: 0.12 },
-  //     comp: { inst: 'piano', at: [1, 3] (beats), gain: 0.04 },
+  //     comp: { inst: 'piano', at: [1, 3] (beats), gain: 0.04, on: 'B' (only in the sections named; all when left out) },
   //     lead: { inst: 'mallet', gain: 0.09, oct: 1, lo: -2, hi: 9, classes: [0,1,2,4,5], vary: 0.3, rest: 0.15,
-  //             rhythms: [[0,3,4,6], ...] (steps in the bar) },
+  //             wide: 0.5 (chance that a note on the beat reaches for a chord tone not heard yet, so no tune stays on five
+  //             pitches), rhythms: [[0,3,4,6], ...] (steps in the bar) },
   //     perc: { k: [0, 2], s: [1, 3], h: [0.5, 1.5, 2.5, 3.5], gain: 0.5 }, perc2: {...} (added at high intensity),
   //     lp: 4200, delay: 0.18 (echo level, 0 for none), delayBeats: 0.75 }
   // The lead is composed once per section bar and remembered, so A sounds like A each time it returns; on
@@ -98,7 +101,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
       const fb = gain(0.3, d), wet = gain(score.delay ?? 0.18, lp); inp.connect(d); d.connect(fb); d.connect(wet); nodes.push(d, fb, wet);
     }
     bus.gain.setValueAtTime(0.0001, at); bus.gain.linearRampToValueAtTime(1, at + Math.max(fade, 0.02));
-    return { score, bus, lp, inp, nodes, bars: buildBars(score), t: at, bar: 0, mem: {}, rh: {}, prev: 4, dir: 1, sigs: new Set(), pitches: new Set(), notes: 0 };
+    return { score, bus, lp, inp, nodes, bars: buildBars(score), t: at, bar: 0, mem: {}, rh: {}, prev: 4, dir: 1, heard: new Set(), sigs: new Set(), pitches: new Set(), notes: 0 };
   }
   function genMotif(m, B, spbar, spb) {
     const s = m.score, L = s.lead, classes = L.classes || [0, 1, 2, 4, 5], lo = L.lo ?? -2, hi = L.hi ?? 9;
@@ -118,7 +121,8 @@ export function makeAudioKit(ctx, out, opt = {}) {
       if (st % spb === 0 || B.end) {   // on the beat: a chord tone near the last note, preferring to move
         const near = (B.end ? strong.filter((k) => cls(k) !== tones[2]) : strong).slice().sort((x, y) => Math.abs(x - m.prev) - Math.abs(y - m.prev));
         const moved = near.filter((k) => k !== m.prev), c = moved.length ? moved : near;
-        d = c[rnd() < 0.65 || c.length < 2 ? 0 : 1];
+        const fresh = L.wide ? c.filter((k) => !m.heard.has(k) && Math.abs(k - m.prev) <= 5) : [];
+        d = fresh.length && rnd() < L.wide ? fresh[0] : c[rnd() < 0.65 || c.length < 2 ? 0 : 1];
       } else {                         // off the beat: step along the scale, mostly keeping direction
         if (m.prev >= hi - 1) m.dir = -1; else if (m.prev <= lo + 1) m.dir = 1; else if (rnd() < 0.35) m.dir = -m.dir;
         const i = ladder.reduce((best, k, ix) => (Math.abs(k - m.prev) < Math.abs(ladder[best] - m.prev) ? ix : best), 0);
@@ -126,7 +130,7 @@ export function makeAudioKit(ctx, out, opt = {}) {
       }
       const next = j + 1 < rh.length ? rh[j + 1] : spbar;
       mot.push({ st, d, len: B.end ? Math.min(spbar, spb * 3) : Math.max(1, next - st) });
-      m.prev = d;
+      m.prev = d; m.heard.add(d);
     });
     return mot;
   }
@@ -158,8 +162,8 @@ export function makeAudioKit(ctx, out, opt = {}) {
         for (let b = 0; b < beats; b++) voice(m, at(b * spb), line[b % 4], beat * 0.9, ins, g * (b ? 0.85 : 1), 0, true);
       }
     }
-    if (s.comp) for (const b of s.comp.at || [1, 3]) { const st = Math.round(b * spb); for (const d of chord) voice(m, at(st), fold(deg(d), s.key + 12 * (s.comp.oct || 0)), beat * (s.comp.len || 0.4), INST[s.comp.inst || 'piano'], (s.comp.gain ?? 0.04), s.comp.pan || 0, false); }
-    for (const P of [s.perc, inten > 0.5 ? s.perc2 : null]) if (P) for (const key of Object.keys(DRUM)) for (const b of P[key] || []) DRUM[key](m, at(Math.round(b * spb)), (P.gain ?? 0.5) * 0.3);
+    if (s.comp && (!s.comp.on || s.comp.on.includes(B.label))) for (const b of s.comp.at || [1, 3]) { const st = Math.round(b * spb); for (const d of chord) voice(m, at(st), fold(deg(d), s.key + 12 * (s.comp.oct || 0)), beat * (s.comp.len || 0.4), INST[s.comp.inst || 'piano'], (s.comp.gain ?? 0.04), s.comp.pan || 0, false); }
+    for (const P of [s.perc, inten >= 0.5 ? s.perc2 : null]) if (P) for (const key of Object.keys(DRUM)) for (const b of P[key] || []) DRUM[key](m, at(Math.round(b * spb)), (P.gain ?? 0.5) * 0.3);
     if (s.lead) {
       const L = s.lead, key = B.label + ':' + B.i; let mot = m.mem[key];
       if (!mot) mot = m.mem[key] = genMotif(m, B, spbar, spb); else if (rnd() < (L.vary ?? 0.3)) mot = varyMotif(m, mot, B, spbar);
@@ -175,11 +179,22 @@ export function makeAudioKit(ctx, out, opt = {}) {
       if (cur && cur.score === score) return;
       if (cur) retire(cur.bus, cur.nodes, at, fade);
       cur = score ? mStart(score, at, fade) : null;
+      syncTimer();
     },
     stop(fade = 1) { music.play(null, { fade }); },
-    level(v) { mLevel = v; if (!held) musicBus.gain.setTargetAtTime(v, ctx.currentTime, 0.05); },
-    duck(db = 6, ms = 400) { if (held) return; const t = ctx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.setTargetAtTime(mLevel * 10 ** (-db / 20), t, 0.02); musicBus.gain.setTargetAtTime(mLevel, t + ms / 1000, 0.25); },
+    level(v) { mLevel = v; if (!held) musicBus.gain.setTargetAtTime(v, ctx.currentTime, 0.05); syncTimer(); },
+    duck(db = 6, ms = 400, delay = 0) {
+      if (held) return;
+      const t = ctx.currentTime + Math.max(0, delay || 0);
+      const end = Math.max(duckUntil, t + ms / 1000);
+      duckUntil = end;
+      musicBus.gain.cancelScheduledValues(t);
+      musicBus.gain.setTargetAtTime(mLevel * 10 ** (-db / 20), t, 0.02);
+      musicBus.gain.setTargetAtTime(mLevel, end, 0.25);
+    },
     intensity(x) { inten = Math.max(0, Math.min(1, x)); },
+    get inten() { return inten; },
+    get gain() { return musicBus.gain.value; },
     get score() { return cur && cur.score; },
     // For tests: how much the lead has really varied so far.
     info() { return cur ? { bars: cur.bar, formBars: cur.bars.length, distinctBars: cur.sigs.size, notes: cur.notes, pitches: cur.pitches.size } : null; },
@@ -197,8 +212,28 @@ export function makeAudioKit(ctx, out, opt = {}) {
     drip: (dst, t, v) => { const f = rr(1100, 2300), o = ctx.createOscillator(), e = gain(0.0001, dst); o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.55, t + 0.03); o.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.09); e.gain.setValueAtTime(v, t); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.12); o.connect(e); o.start(t); o.stop(t + 0.14); },
     bird: (dst, t, v) => { const n = 2 + ((rnd() * 3) | 0), base = rr(2600, 4200); for (let i = 0; i < n; i++) { const s = t + i * rr(0.09, 0.16), o = ctx.createOscillator(), e = gain(0.0001, dst); o.frequency.setValueAtTime(base * rr(0.9, 1.1), s); o.frequency.exponentialRampToValueAtTime(base * rr(1.15, 1.5), s + 0.06); e.gain.setValueAtTime(0.0001, s); e.gain.linearRampToValueAtTime(v * 0.7, s + 0.015); e.gain.exponentialRampToValueAtTime(0.0001, s + 0.08); o.connect(e); o.start(s); o.stop(s + 0.1); } },
     hiss: (dst, t, v) => { const d = rr(0.7, 1.8), e = gain(0.0001, lowpass(rr(3500, 6000), dst, 'highpass')); e.gain.setValueAtTime(0.0001, t); e.gain.linearRampToValueAtTime(v * 0.6, t + d * 0.3); e.gain.exponentialRampToValueAtTime(0.0001, t + d); noise(t, d + 0.05).connect(e); },
-    bell: (dst, t, v) => { const f = rr(700, 1100); for (const [mult, pg, dec] of [[1, 1, 2.2], [2.76, 0.4, 1.3], [5.4, 0.18, 0.7]]) { const o = ctx.createOscillator(), e = gain(0.0001, dst); o.frequency.value = f * mult; e.gain.setValueAtTime(v * pg * 0.6, t); e.gain.exponentialRampToValueAtTime(0.0001, t + dec); o.connect(e); o.start(t); o.stop(t + dec + 0.05); } },
+    bell: (dst, t, v) => {
+      const f = rr(420, 540), lp = lowpass(1300, dst), dry = gain(1, lp);
+      const dly = ctx.createDelay(0.25); dly.delayTime.value = 0.075;
+      const wet = gain(0.22, lp); dry.connect(dly); dly.connect(wet);
+      for (const [mult, pg, dec] of [[1, 1, 2.1], [2.76, 0.28, 1.1], [5.4, 0.08, 0.45]]) {
+        const o = ctx.createOscillator(), e = gain(0.0001, dry);
+        o.frequency.value = f * mult; e.gain.setValueAtTime(v * pg * 0.55, t); e.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+        o.connect(e); o.start(t); o.stop(t + dec + 0.05);
+      }
+    },
     cricket: (dst, t, v) => { const f = rr(4200, 5200), n = 3 + ((rnd() * 4) | 0); for (let i = 0; i < n; i++) { const s = t + i * 0.055, o = ctx.createOscillator(), e = gain(0.0001, dst); o.frequency.value = f; e.gain.setValueAtTime(v * 0.35, s); e.gain.exponentialRampToValueAtTime(0.0001, s + 0.03); o.connect(e); o.start(s); o.stop(s + 0.04); } },
+    // Ultra-faint muffled indoor transom night pulse (OQ-WF6-03, CD-WF4-05): strictly <= 2800 Hz (2200 Hz lowpass,
+    // 1950-2450 Hz tone, gain <= 0.008) so the 3.3-5.2 kHz ceramic/steam SFX band stays completely clean.
+    transom: (dst, t, v) => {
+      const f = rr(1950, 2450), n = 3 + ((rnd() * 3) | 0), lp = lowpass(2200, dst, 'lowpass', 0.7);
+      for (let i = 0; i < n; i++) {
+        const s = t + i * 0.062, o = ctx.createOscillator(), e = gain(0.0001, lp);
+        o.frequency.value = f;
+        e.gain.setValueAtTime(0.0001, s); e.gain.linearRampToValueAtTime(v * 0.35, s + 0.008); e.gain.exponentialRampToValueAtTime(0.0001, s + 0.036);
+        o.connect(e); o.start(s); o.stop(s + 0.045);
+      }
+    },
     swell: (dst, t, v) => { const d = rr(2.5, 5), e = gain(0.0001, lowpass(rr(500, 900), dst, 'bandpass', 0.6)); e.gain.setValueAtTime(0.0001, t); e.gain.linearRampToValueAtTime(v, t + d * 0.45); e.gain.linearRampToValueAtTime(0.0001, t + d); noise(t, d + 0.05).connect(e); },
   };
   let scene = null;
@@ -210,28 +245,58 @@ export function makeAudioKit(ctx, out, opt = {}) {
       src.connect(f); nodes.push(src, g, f);
       if (b.lfo) { const l = ctx.createOscillator(); l.frequency.value = b.lfo.rate; l.connect(gain((b.gain ?? 0.05) * b.lfo.depth * 0.5, g.gain)); l.start(at); nodes.push(l); }
       if (b.flfo) { const l = ctx.createOscillator(); l.frequency.value = b.flfo.rate; l.connect(gain(b.flfo.depth, f.frequency)); l.start(at); nodes.push(l); }
-      beds.push({ def: b, g });
+      beds.push({ def: b, g, f });
     }
     bus.gain.setValueAtTime(0.0001, at); bus.gain.linearRampToValueAtTime(1, at + Math.max(fade, 0.02));
     const sc = { def, bus, nodes, beds, spots: (def.spots || []).map((d) => ({ d, next: at + rr(0.3, d.every[1]) })) };
     for (const k of Object.keys(params)) applyParam(sc, k, params[k], at, 0.01);
     return sc;
   }
-  function applyParam(sc, name, v, t, tc) { for (const b of sc.beds) if (b.def.param === name) { const r = b.def.range || [0, 1]; b.g.gain.setTargetAtTime((b.def.gain ?? 0.05) * (r[0] + (r[1] - r[0]) * v), t, tc); } }
+  function applyParam(sc, name, v, t, tc) {
+    for (const b of sc.beds) {
+      if (b.def.param === name) { const r = b.def.range || [0, 1]; b.g.gain.setTargetAtTime((b.def.gain ?? 0.05) * (r[0] + (r[1] - r[0]) * v), t, tc); }
+      if (b.def.fparam === name && b.f) { const fr = b.def.frange || [b.def.freq || 600, b.def.freq || 600]; b.f.frequency.setTargetAtTime(fr[0] + (fr[1] - fr[0]) * v, t, tc); }
+    }
+  }
   const amb = {
     play(def, o = {}) {
       const at = o.at ?? ctx.currentTime + 0.03, fade = o.fade ?? 2;
       if (scene && scene.def === def) return;
       if (scene) { const old = scene; retire(old.bus, old.nodes, at, fade); }
       scene = def ? aStart(def, at, fade) : null;
+      syncTimer();
     },
     stop(fade = 1.5) { amb.play(null, { fade }); },
-    level(v) { aLevel = v; if (!held) ambBus.gain.setTargetAtTime(v, ctx.currentTime, 0.05); },
+    level(v) { aLevel = v; if (!held) ambBus.gain.setTargetAtTime(v, ctx.currentTime, 0.05); syncTimer(); },
     set(name, v, tc = 0.5) { params[name] = v; if (scene) applyParam(scene, name, v, ctx.currentTime, tc); },
+    param(name) { return params[name] ?? 0; },
+    get gain() { return ambBus.gain.value; },
     get scene() { return scene && scene.def; },
   };
 
   // --------------------------------------------------------------------------------------------- scheduler
+  function flushDead() {
+    const now = ctx.currentTime;
+    for (let i = dead.length - 1; i >= 0; i--) if (dead[i].at <= now) {
+      for (const n of dead[i].nodes) { try { if (n.stop) n.stop(); } catch (e) { /* already stopped */ } try { n.disconnect(); } catch (e) { /* already gone */ } }
+      dead.splice(i, 1);
+    }
+  }
+  function scheduleClean() {
+    clearTimeout(cleanTimer); cleanTimer = 0;
+    if (!running || held || timer || !dead.length) return;
+    const wait = Math.max(20, Math.ceil((Math.max(...dead.map((d) => d.at)) - ctx.currentTime) * 1000) + 50);
+    cleanTimer = setTimeout(() => { cleanTimer = 0; flushDead(); if (dead.length && running && !held && !timer) scheduleClean(); }, wait);
+  }
+  function syncTimer() {
+    if (running && !held && ((cur && mLevel > 0) || (scene && aLevel > 0))) {
+      clearTimeout(cleanTimer); cleanTimer = 0;
+      if (!timer) timer = setInterval(() => { if (ctx.state === 'running') scheduleUntil(ctx.currentTime + 0.25); }, 25);
+    } else {
+      if (timer) { clearInterval(timer); timer = 0; }
+      scheduleClean();
+    }
+  }
   function scheduleUntil(T) {
     const now = ctx.currentTime;
     if (!held) {
@@ -241,12 +306,15 @@ export function makeAudioKit(ctx, out, opt = {}) {
         let guard = 0;
         while (sp.next < T && guard++ < 400) {
           const on = sp.d.param ? (params[sp.d.param] ?? 0) : 1;
-          if (on > 0 && rnd() < on) { const p = sp.d.pan || [-0.5, 0.5], dst = panTo(rr(p[0], p[1]), scene.bus), v = (sp.d.gain ?? 0.05) * rr(0.6, 1); if (typeof sp.d.make === 'function') sp.d.make(ctx, dst, sp.next, rnd, v); else SPOT[sp.d.make](dst, sp.next, v); }
-          sp.next += rr(sp.d.every[0], sp.d.every[1]);
+          const sl = sp.d.slow ? (params[sp.d.slow.param] ?? 0) : 0;
+          const gScale = sl > 0 && sp.d.slow.gain != null ? 1 + (sp.d.slow.gain - 1) * sl : 1;
+          if (on > 0 && rnd() < on) { const p = sp.d.pan || [-0.5, 0.5], dst = panTo(rr(p[0], p[1]), scene.bus), v = (sp.d.gain ?? 0.05) * gScale * rr(0.6, 1); if (typeof sp.d.make === 'function') sp.d.make(ctx, dst, sp.next, rnd, v); else SPOT[sp.d.make](dst, sp.next, v); }
+          const pace = sl > 0 && sp.d.slow.factor ? 1 + (sp.d.slow.factor - 1) * sl : 1;
+          sp.next += rr(sp.d.every[0], sp.d.every[1]) * pace;
         }
       }
     }
-    for (let i = dead.length - 1; i >= 0; i--) if (dead[i].at < now) { for (const n of dead[i].nodes) { try { if (n.stop) n.stop(); } catch (e) { /* already stopped */ } try { n.disconnect(); } catch (e) { /* already gone */ } } dead.splice(i, 1); }
+    flushDead();
   }
 
   return {
@@ -254,12 +322,13 @@ export function makeAudioKit(ctx, out, opt = {}) {
     // Cue variation for the game's own tone() and noise(): multiply the frequency by f and the gain by g, start
     // a noise buffer at offset o (seconds), so no two repeats of a cue are sample-identical.
     jit(cents = 25, db = 1.5) { return { f: 2 ** (rr(-cents, cents) / 1200), g: 10 ** (rr(-db, 0) / 20), o: rr(0, 1.5) }; },
-    start() { if (!timer) timer = setInterval(() => { if (ctx.state === 'running') scheduleUntil(ctx.currentTime + 0.25); }, 25); },
-    stop() { if (timer) clearInterval(timer); timer = 0; },
+    start() { running = true; syncTimer(); },
+    stop() { running = false; if (timer) { clearInterval(timer); timer = 0; } clearTimeout(cleanTimer); cleanTimer = 0; },
     // Pause card or hidden tab: fade both buses out and schedule nothing until release().
-    hold(tc = 0.08) { held = true; const t = ctx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.setTargetAtTime(0, t, tc); ambBus.gain.setTargetAtTime(0, t, tc); },
-    release(tc = 0.3) { held = false; const t = ctx.currentTime; musicBus.gain.setTargetAtTime(mLevel, t, tc); ambBus.gain.setTargetAtTime(aLevel, t, tc); },
+    hold(tc = 0.08) { held = true; duckUntil = 0; syncTimer(); const t = ctx.currentTime; musicBus.gain.cancelScheduledValues(t); musicBus.gain.setTargetAtTime(0, t, tc); ambBus.gain.setTargetAtTime(0, t, tc); },
+    release(tc = 0.3) { held = false; duckUntil = 0; const t = ctx.currentTime; musicBus.gain.setTargetAtTime(mLevel, t, tc); ambBus.gain.setTargetAtTime(aLevel, t, tc); syncTimer(); },
     get held() { return held; },
+    get ticking() { return !!timer; },
   };
 }
 
@@ -294,21 +363,25 @@ export async function measureAudio(build, seconds, o = {}) {
 // ------------------------------------------------------------------------------------------------ this game's pieces
 // Chord roots are scale degrees: 0 = I, 1 = ii, 2 = iii, 3 = IV, 4 = V, 5 = vi (6 = VII in the modes below).
 export const SCORES = {
-  // The title and the sheets: a lobby radio playing a soft piano tune over a held pad.
-  // 16 bars at 62 bpm, about 62 s, key of G.
+  // The title and the sheets: a hotel lobby at dusk, a soft mallet over a held pad, lightly swung; the piano comes in
+  // under the middle section only. 16 bars at 62 bpm, about 62 s, key of G.
   lobby: {
-    bpm: 62, key: 67, sevenths: [4, 1], form: 'AABA', sections: { A: [0, 5, 3, 4], B: [5, 3, 1, 4] },
-    pad: { inst: 'pad', gain: 0.021 }, bass: { inst: 'bass', pattern: 'root', gain: 0.049 },
-    lead: { inst: 'piano', gain: 0.042, vary: 0.5, rest: 0.1, oct: 1 },
+    bpm: 62, swing: 0.13, key: 67, sevenths: [4, 1], form: 'AABA', sections: { A: [0, 5, 3, 4], B: [5, 3, 1, 4] },
+    pad: { inst: 'pad', gain: 0.02 }, bass: { inst: 'bass', pattern: 'root', gain: 0.049 },
+    comp: { inst: 'piano', on: 'B', at: [1, 3], gain: 0.006, len: 0.6, oct: -1 },
+    lead: { inst: 'vibes', gain: 0.032, pan: -0.1, vary: 0.5, rest: 0.06, oct: 1, classes: [0, 1, 2, 3, 4, 5, 6], lo: -4, hi: 6, wide: 0.9 },
     lp: 3000, delay: 0.14, delayBeats: 1,
   },
-  // Play: unhurried and open, a flute over a pad in F mixolydian (a flat seventh keeps it from sounding like a hymn).
-  // 32 bars at 72 bpm, about 107 s.
+  // Play: unhurried and open, a clarinet over a pad in F mixolydian (a flat seventh keeps it from sounding like a hymn),
+  // lightly swung. The A sections leave room to think; a whisper of piano under the B section. The brush (perc2) and the
+  // octave lift are for the end of a game only: see moodUpdate in main.js. 32 bars at 72 bpm, about 107 s.
   table: {
-    bpm: 72, key: 65, scale: [0, 2, 4, 5, 7, 9, 10], form: 'AABA',
+    bpm: 72, swing: 0.13, key: 65, scale: [0, 2, 4, 5, 7, 9, 10], form: 'AABA',
     sections: { A: [0, 5, 3, 6, 0, 5, 3, 0], B: [3, 1, 5, 2, 3, 6, 4, 0] },
     pad: { inst: 'pad', gain: 0.018 }, bass: { inst: 'bass', pattern: 'root', gain: 0.042 },
-    lead: { inst: 'flute', gain: 0.042, vary: 0.35, rest: 0.22, oct: 1 },
+    comp: { inst: 'piano', on: 'B', at: [1, 3], gain: 0.007, len: 0.6, oct: -1 },
+    lead: { inst: 'clarinet', gain: 0.036, vary: 0.35, rest: 0.22, oct: 0, lo: 3, hi: 12, lift: true },
+    perc2: { b: [0.5, 1.5, 2.5, 3.5], gain: 0.26 },
     lp: 3200, delay: 0.22, delayBeats: 0.75,
   },
   // The results sheet: a little brighter and a little quicker, mallets over a two-note bass. 20 bars at 84 bpm, about 57 s, key of A.
@@ -319,16 +392,30 @@ export const SCORES = {
     lead: { inst: 'mallet', gain: 0.045, vary: 0.3, rest: 0.12, oct: 1 },
     lp: 3600, delay: 0.2, delayBeats: 0.75,
   },
+  // The results sheet after a loss ("Dusk on the Row"): slower and darker, a soft low piano over a warm pad, coming to rest.
+  // 16 bars at 66 bpm, about 58 s, D dorian.
+  dusk: {
+    bpm: 66, swing: 0.12, key: 62, scale: [0, 2, 3, 5, 7, 9, 10], form: 'AABA', sections: { A: [0, 3, 4, 0], B: [2, 6, 3, 4] },
+    pad: { inst: 'pad', gain: 0.024 }, bass: { inst: 'bass', pattern: 'root', gain: 0.047 },
+    lead: { inst: 'piano', gain: 0.042, vary: 0.3, rest: 0.12, oct: 1, lo: -3, hi: 6 },
+    lp: 2600, delay: 0.18, delayBeats: 1,
+  },
 };
 export const SCENES = {
   // Inside the bathhouse: a low wash of water, thin steam air, drips, the odd vent and, rarely, the front-desk bell.
-  // The steam bed swells as the board fills (amb.set('steam', 0..1)).
+  // The steam bed swells as the board fills (amb.set('steam', 0..1)); Night theme warms the bed cutoffs, softens
+  // drip/vent cadence, and adds an ultra-faint <= 2800 Hz muffled transom pulse (OQ-WF6-03, CD-WF4-05).
   bathhouse: {
     beds: [
-      { type: 'lowpass', freq: 520, gain: 0.045, lfo: { rate: 0.07, depth: 0.5 }, flfo: { rate: 0.05, depth: 140 } },
-      { type: 'bandpass', freq: 2400, q: 0.6, gain: 0.011, pan: 0.3, lfo: { rate: 0.11, depth: 0.8 }, param: 'steam', range: [0.5, 1.6] },
-      { type: 'lowpass', freq: 190, gain: 0.025, pan: -0.2, lfo: { rate: 0.04, depth: 0.4 } },
+      { type: 'lowpass', freq: 520, fparam: 'night', frange: [520, 340], gain: 0.045, lfo: { rate: 0.07, depth: 0.5 }, flfo: { rate: 0.05, depth: 140 } },
+      { type: 'bandpass', freq: 2400, fparam: 'night', frange: [2400, 1500], q: 0.6, gain: 0.011, pan: 0.3, lfo: { rate: 0.11, depth: 0.8 }, param: 'steam', range: [0.5, 1.6] },
+      { type: 'lowpass', freq: 190, fparam: 'night', frange: [190, 160], gain: 0.025, pan: -0.2, lfo: { rate: 0.04, depth: 0.4 } },
     ],
-    spots: [{ make: 'drip', every: [1.8, 6], gain: 0.04 }, { make: 'hiss', every: [9, 20], gain: 0.03 }, { make: 'bell', every: [25, 50], gain: 0.03, pan: [-0.3, 0.3] }],
+    spots: [
+      { make: 'drip', every: [1.8, 6], gain: 0.04, slow: { param: 'night', factor: 1.55, gain: 0.78 } },
+      { make: 'hiss', every: [9, 20], gain: 0.03, slow: { param: 'night', factor: 1.45, gain: 0.75 } },
+      { make: 'bell', every: [45, 90], gain: 0.028, pan: [-0.3, 0.3] },
+      { make: 'transom', every: [14, 28], gain: 0.007, pan: [-0.45, 0.45], param: 'night' },
+    ],
   },
 };

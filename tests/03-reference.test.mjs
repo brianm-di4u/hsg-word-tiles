@@ -39,7 +39,7 @@ export const tests = [
         s.players[s.cur].rack = saved;
         const grid = Array.from({ length: N }, (_, y) => Array.from({ length: N }, (_, x) => s.board[y * N + x]));
         const ref = refPlay(grid, tiles.map((x) => ({ r: Math.floor(x.i / N), c: x.i % N, l: x.l, blank: !!x.blank })), words, themed,
-          s.featured.filter((f) => f.by == null).map((f) => f.word));
+          s.featured.filter((f) => f.by == null).map((f) => c.lex.byId.get(f.id)?.forms || [f.word]));
         if (ev.ok !== ref.ok || (ev.ok && ev.score !== ref.score)) {
           mismatches++;
           if (mismatches <= 10) t.fail(`mismatch: ${JSON.stringify(tiles)} engine ${ev.ok ? ev.score : ev.error} ref ${ref.ok ? ref.score : ref.reason + ' ' + (ref.word || '')}`);

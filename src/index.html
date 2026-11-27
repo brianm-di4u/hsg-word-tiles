@@ -9,12 +9,13 @@
 <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
-<div id="app" hidden>
+<main id="app" hidden>
+  <h1 class="sr-only">Bathhouse Letters</h1>
   <header id="topbar">
-    <button id="b-menu" class="iconbtn" aria-label="Menu (Esc)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+    <button id="b-menu" class="iconbtn" aria-label="Menu (Esc)" title="Menu (Esc)"></button>
     <div id="turnline" aria-live="off"></div>
-    <button id="b-zoomin" class="iconbtn" aria-label="Zoom in on the board" data-mode="in"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path class="zin" d="M10.5 7.5v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-    <button id="b-sound" class="iconbtn" aria-label="Sound"></button>
+    <button id="b-zoomin" class="iconbtn" aria-label="Zoom in on the board" title="Zoom in on the board" data-mode="in"></button>
+    <button id="b-sound" class="iconbtn" aria-label="Sound" title="Sound"></button>
   </header>
   <section id="scores" aria-label="Scores"></section>
   <section id="springs" aria-label="Featured Springs"></section>
@@ -22,17 +23,17 @@
     <canvas id="gl" aria-hidden="true" hidden></canvas>
     <canvas id="board" tabindex="0" role="application" aria-label="Game board, 15 by 15 squares. Use the arrow keys to move the cursor, type letters to place tiles, Space to switch direction and Enter to play."></canvas>
     <canvas id="fx" aria-hidden="true"></canvas>
-    <button id="b-zoom" class="iconbtn small" aria-label="Show the whole board" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <button id="b-zoom" class="iconbtn small" aria-label="Show the whole board" title="Show the whole board" hidden></button>
   </div>
-  <div id="preview" aria-hidden="true"></div>
+  <div id="preview"></div>
   <div id="toast" aria-hidden="true"></div>
   <div id="coach"></div>
-  <section id="ledger" aria-label="Steam ledger"><h2>Steam ledger</h2><ol id="log" class="log"></ol></section>
+  <section id="ledger" aria-label="Steam ledger"><h2><span>Steam ledger</span><button type="button" id="b-ledger" class="ledger-all" aria-label="Show full Steam ledger">All</button></h2><ol id="log" class="log"></ol></section>
   <div id="rackbar"><div id="rack" role="toolbar" aria-label="Your tiles"></div></div>
   <div id="actions" role="toolbar" aria-label="Actions"></div>
-  <div id="privacy" hidden></div>
-</div>
+</main>
 <main id="screen"></main>
+<div id="privacy" hidden role="dialog" aria-modal="true" aria-labelledby="priv-h"></div>
 <div id="modal" hidden></div>
 <canvas id="ghost" aria-hidden="true" hidden></canvas>
 <div id="live" class="sr-only" aria-live="polite"></div>

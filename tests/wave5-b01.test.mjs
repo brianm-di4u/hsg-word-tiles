@@ -1,0 +1,397 @@
+// Wave 5, batch W5-B01:
+// - W6-P-N01: Challenge Mode live preview hides Hot Springs dictionary validity, bonuses, category reveals, and hidden Featured Springs until Play is committed.
+import { ctx } from './lib.mjs';
+import { createGame, evaluate, apply } from '../src/js/engine.js';
+import { CENTER, FULL_SOAK, FEATURED_BONUS, ROW_BONUS, VALUE } from '../src/js/score.js';
+
+const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
+const quiet = () => {
+  window.__TEST_TIPS__ = false;
+  if (!localStorage.getItem('hs-letters-settings-v1')) {
+    localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'instant', sound: false }));
+  }
+};
+const across = (word, at = CENTER - 1) => [...word].map((l, k) => ({ i: at + k, l }));
+const baseSum = (word) => [...word].reduce((a, l) => a + VALUE[l], 0);
+
+export const tests = [
+  // ---------- W6-P-N01 ----------
+  {
+    name: 'W6-P-N01 evaluate() with skipDict hides Hot Springs, Bathhouse Row, and Featured Spring bonuses while preserving base + Full Soak scores and full commit scoring (Node)',
+    node: true,
+    async run(t) {
+      const c = await ctx();
+      const seats = [{ kind: 'human', name: 'Ann' }, { kind: 'human', name: 'Bo' }];
+      const s = createGame({ mode: 'play', seats, seed: 7, challenge: true }, c.lex);
+      s.featured = [
+        { id: 'steam', word: 'STEAM', cat: 'springs', shown: [0], by: null, at: null },
+        { id: 'quapaw', word: 'QUAPAW', cat: 'baths', shown: [0], by: null, at: null },
+        { id: 'oaklawn', word: 'OAKLAWN', cat: 'track', shown: [0], by: null, at: null },
+      ];
+      s.players[0].rack = 'SPASXYZ'.split('');
+
+      const spasTiles = across('SPAS', CENTER - 1);
+      const pvSpas = evaluate(s, spasTiles, { ...c, skipDict: true });
+      const realSpas = evaluate(s, spasTiles, c);
+      t.equal(pvSpas.ok, true, 'SPAS preview evaluates cleanly under skipDict');
+      t.equal(pvSpas.score, baseSum('SPAS'), `skipDict SPAS scores base letters only (${pvSpas.score} === ${baseSum('SPAS')})`);
+      t.equal(pvSpas.themed, 0, 'skipDict SPAS hides Hot Springs themed bonus');
+      t.equal(pvSpas.words[0].themed, null, 'skipDict SPAS hides word.themed entry id');
+      t.equal(pvSpas.words[0].bonus, 0, 'skipDict SPAS hides word.bonus');
+      t.equal(pvSpas.words[0].bath, false, 'skipDict SPAS hides word.bath');
+      t.expect(realSpas.themed > 0 && realSpas.score > pvSpas.score, `full evaluate awards Hot Springs bonus (${realSpas.score} > ${pvSpas.score})`);
+
+      // Unclaimed Featured Spring (STEAM): skipDict hides both Hot Springs and Featured +30
+      s.players[0].rack = 'STEAMXQ'.split('');
+      const steamTiles = across('STEAM', CENTER - 2);
+      const pvSteam = evaluate(s, steamTiles, { ...c, skipDict: true });
+      const realSteam = evaluate(s, steamTiles, c);
+      t.equal(pvSteam.score, baseSum('STEAM'), `skipDict STEAM scores base letters only (${pvSteam.score})`);
+      t.equal(pvSteam.themed, 0, 'skipDict STEAM hides themed bonus');
+      t.equal(pvSteam.featured, null, 'skipDict STEAM hides featured word');
+      t.equal(pvSteam.featuredAll.length, 0, 'skipDict STEAM hides featuredAll');
+      t.equal(pvSteam.featuredBonus, 0, 'skipDict STEAM hides featuredBonus');
+      t.equal(realSteam.featured, 'STEAM', 'full evaluate identifies Featured Spring STEAM');
+      t.equal(realSteam.featuredBonus, FEATURED_BONUS, 'full evaluate awards +30 Featured bonus');
+
+      // 7-tile play (Full Soak) still counts +40 Full Soak under skipDict while hiding themed/featured
+      s.players[0].rack = 'SPRINGS'.split('');
+      const soakTiles = across('SPRINGS', CENTER - 3);
+      const pvSoak = evaluate(s, soakTiles, { ...c, skipDict: true });
+      t.equal(pvSoak.full, FULL_SOAK, 'skipDict preserves Full Soak +40');
+      t.equal(pvSoak.themed, 0, 'skipDict still hides themed bonus on 7-tile Hot Springs word');
+      t.equal(pvSoak.score, baseSum('SPRINGS') + FULL_SOAK, 'skipDict 7-tile score equals base + Full Soak only');
+
+      // Committing STEAM via apply() in Challenge mode awards the full score and claims the Featured Spring
+      s.players[0].rack = 'STEAMXQ'.split('');
+      const applied = apply(s, { type: 'play', tiles: steamTiles }, c);
+      t.equal(applied.ok, true, 'Challenge commit succeeds for STEAM');
+      t.equal(applied.entry.score, realSteam.score, `committed Challenge play awards full score (${applied.entry.score})`);
+      t.equal(applied.entry.featured, 'STEAM', 'committed Challenge play claims Featured Spring');
+      t.equal(s.featured[0].by, 0, 'Featured Spring plaque marked claimed after commit');
+    },
+  },
+  {
+    name: 'W6-P-N01 Challenge-mode staging of SPAS (center & Row) and an unclaimed Featured Spring hides themed, featured, and catReveal signals until Play commits',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', {
+        seed: 7,
+        challenge: true,
+        seats: [{ kind: 'human', name: 'Ann' }, { kind: 'human', name: 'Bo' }],
+      });
+      await t.waitIdle(6000);
+      await t.game('act', 'reveal');
+
+      const s = await t.state();
+      t.equal(s.game.challenge, true, 'Challenge mode is active');
+      s.game.featured = [
+        { id: 'steam', word: 'STEAM', cat: 'springs', shown: [0], by: null, at: null },
+        { id: 'quapaw', word: 'QUAPAW', cat: 'baths', shown: [0], by: null, at: null },
+        { id: 'oaklawn', word: 'OAKLAWN', cat: 'track', shown: [0], by: null, at: null },
+      ];
+      s.game.players[0].rack = 'SPASXYZ'.split('');
+      await t.game('setState', { game: s.game });
+      await t.waitIdle(4000);
+
+      // 1) Stage SPAS on center (H8): must NOT leak .themed, steam icon, +10, or 'Row · clears 1 plaque letter'
+      await t.game('act', 'stage', across('SPAS', CENTER - 1));
+      await t.waitFrames(2);
+      const spasUi = await t.page.evaluate(() => {
+        const pv = document.querySelector('#preview');
+        const playBtn = document.querySelector('#actions .abtn.play');
+        return {
+          preview: window.__G.preview,
+          text: pv.textContent.replace(/\s+/g, ' ').trim(),
+          themedCount: pv.querySelectorAll('.words b.themed').length,
+          steamCount: pv.querySelectorAll('.words svg, .extra svg').length,
+          playText: playBtn.textContent.replace(/\s+/g, ' ').trim(),
+        };
+      });
+      const spasBase = baseSum('SPAS');
+      t.equal(spasUi.preview.ok, true, 'SPAS preview is ok');
+      t.equal(spasUi.preview.score, spasBase, `SPAS preview score is base only (${spasUi.preview.score} === ${spasBase})`);
+      t.equal(spasUi.preview.themed, 0, 'SPAS preview themed bonus is 0');
+      t.equal(spasUi.themedCount, 0, 'SPAS has no .themed styling in Challenge preview');
+      t.equal(spasUi.steamCount, 0, 'SPAS has no steam icons in Challenge preview');
+      t.expect(spasUi.text.includes('words checked when you play'), `Challenge notice remains visible (${spasUi.text})`);
+      t.expect(!/\+10|clears 1 plaque letter|Featured/i.test(spasUi.text), `SPAS Challenge preview leaks zero Hot Springs / category-reveal cues (${spasUi.text})`);
+      t.expect(spasUi.playText.includes(`+${spasBase}`), `Play button shows base +${spasBase} only (${spasUi.playText})`);
+
+      // Open How it scores: zero Hot Springs bonus row leaked
+      await t.page.click('#preview .bdbtn');
+      await t.waitFrames(2);
+      const spasBd = await t.page.textContent('#preview .bd');
+      t.expect(!/Hot Springs|Featured Spring/i.test(spasBd) && spasBd.includes(`${spasBase} points`), `SPAS breakdown leaks zero Hot Springs bonus (${spasBd.trim()})`);
+      await t.game('act', 'recall');
+
+      // 2) Stage SPAS across a Bathhouse Row square (cell 8): rowPlain ('+20 with a Hot Springs word') stays suppressed in #preview
+      const sRow = await t.state();
+      sRow.game.board[CENTER] = { l: 'A', blank: false, p: 1, t: 0 };
+      sRow.game.board[23] = { l: 'A', blank: false, p: 1, t: 0 }; // (row 1, col 8) directly below Bathhouse Row square 8 (row 0, col 8)
+      sRow.game.move = 1;
+      sRow.game.cur = 0;
+      sRow.game.players[0].rack = 'SPASXYZ'.split('');
+      await t.game('setState', { game: sRow.game });
+      await t.waitIdle(3000);
+      await t.game('act', 'stage', [
+        { i: 6, l: 'S' },
+        { i: 7, l: 'P' },
+        { i: 8, l: 'A' }, // Bathhouse Row square (Superior)
+        { i: 9, l: 'S' },
+      ]);
+      await t.waitFrames(2);
+      const rowText = (await t.page.textContent('#preview')).replace(/\s+/g, ' ').trim();
+      t.expect(!/\+20 with a Hot Springs word|\+30|\+10/.test(rowText), `Bathhouse Row Challenge preview suppresses rowPlain and Hot Springs bonuses (${rowText})`);
+      t.expect(rowText.includes('words checked when you play'), `Bathhouse Row Challenge preview keeps check notice (${rowText})`);
+      await t.game('act', 'recall');
+
+      // 3) Stage unclaimed Featured Spring STEAM on center H8: hides Featured +30 and Hot Springs +18 until Play commits
+      const sFeat = await t.state();
+      sFeat.game.board = sFeat.game.board.map(() => null);
+      sFeat.game.move = 0;
+      sFeat.game.cur = 0;
+      sFeat.game.players[0].rack = 'STEAMXQ'.split('');
+      await t.game('setState', { game: sFeat.game });
+      await t.waitIdle(3000);
+      await t.game('act', 'stage', across('STEAM', CENTER - 2));
+      await t.waitFrames(2);
+      const steamBase = baseSum('STEAM');
+      const steamUi = await t.page.evaluate(() => {
+        const pv = document.querySelector('#preview');
+        return {
+          preview: window.__G.preview,
+          text: pv.textContent.replace(/\s+/g, ' ').trim(),
+          themedCount: pv.querySelectorAll('.words b.themed').length,
+          playText: document.querySelector('#actions .abtn.play').textContent.replace(/\s+/g, ' ').trim(),
+        };
+      });
+      t.equal(steamUi.preview.score, steamBase, `STEAM preview score is base only (${steamUi.preview.score} === ${steamBase})`);
+      t.equal(steamUi.preview.featured, null, 'STEAM preview hides unclaimed Featured Spring');
+      t.equal(steamUi.preview.themed, 0, 'STEAM preview hides Hot Springs bonus');
+      t.equal(steamUi.themedCount, 0, 'STEAM has no .themed styling in Challenge preview');
+      t.expect(!/Featured|\+30|\+18|clears 1 plaque letter/i.test(steamUi.text), `STEAM Challenge preview leaks zero Featured/themed cues (${steamUi.text})`);
+      t.expect(steamUi.playText.includes(`+${steamBase}`), `Play button shows base +${steamBase} (${steamUi.playText})`);
+      if (t.viewport === 'desktop') await t.shot('w5-b01-challenge-preview');
+
+      // Open breakdown on STEAM: zero Featured Spring or Hot Springs rows
+      await t.page.click('#preview .bdbtn');
+      await t.waitFrames(2);
+      const steamBd = await t.page.textContent('#preview .bd');
+      t.expect(!/Featured Spring|Hot Springs/i.test(steamBd) && steamBd.includes(`${steamBase} points`), `STEAM breakdown hides Featured and Hot Springs rows (${steamBd.trim()})`);
+
+      // Commit Play: full Hot Springs + Featured Spring bonuses now apply!
+      const playRes = await t.game('act', 'play');
+      t.equal(playRes.ok, true, 'STEAM commits legally in Challenge mode');
+      const after = await t.state();
+      const entry = after.game.log[0];
+      t.expect(entry.themed > 0 && entry.featured === 'STEAM', `committed entry awards Hot Springs (+${entry.themed}) and Featured Spring (${entry.featured})`);
+      t.equal(entry.score, steamBase + entry.themed + FEATURED_BONUS, `committed score includes full bonuses (${entry.score})`);
+      t.equal(after.game.featured[0].by, 0, 'Featured Spring plaque claimed on commit');
+      t.expect(after.toast.includes('Featured Spring: STEAM'), `post-commit toast celebrates claimed Featured Spring (${after.toast})`);
+    },
+  },
+
+  // ---------- W6-P-N02 ----------
+  {
+    name: 'W6-P-N02 stale turn toasts retire on subsequent actions, newer turn toasts preempt older non-keep toasts, keep chips survive, and G.fast skips transient toasts',
+    viewports: ['desktop', 'mobile'],
+    initScript: quiet,
+    async run(t) {
+      await ready(t);
+      await t.game('newGame', {
+        seed: 12,
+        seats: [{ kind: 'human', name: 'Ann' }, { kind: 'human', name: 'Bo' }],
+      });
+      await t.waitIdle(6000);
+      await t.game('act', 'reveal');
+
+      const s = await t.state();
+      s.game.featured = s.game.featured.filter((f) => f.id !== 'steam');
+      s.game.players[0].rack = 'STEAMXQ'.split('');
+      s.game.players[1].rack = 'AEIOURN'.split('');
+      await t.game('setState', { game: s.game });
+      await t.waitIdle(3000);
+
+      // 1) Turn N (move 0): Ann plays STEAM -> themed toast appears
+      await t.game('act', 'stage', across('STEAM', CENTER - 2));
+      t.equal((await t.game('act', 'play')).ok, true, 'Turn N plays STEAM');
+      await t.page.waitForSelector('#toast.on', { timeout: 3000 });
+      t.expect((await t.page.textContent('#toast')).includes('STEAM'), 'Turn N shows STEAM toast');
+
+      // 2) Turn N+1 (move 1): Bo passes -> afterAction() calls clearToasts(), retiring Turn N's STEAM toast immediately
+      await t.game('act', 'reveal');
+      t.equal(await t.game('act', 'pass'), true, 'Turn N+1 resolves');
+      const afterN1 = await t.page.evaluate(() => ({
+        on: document.querySelector('#toast').classList.contains('on'),
+        text: document.querySelector('#toast').textContent,
+        toasting: document.querySelector('#app').classList.contains('toasting'),
+        qLen: window.__G.toastQ.length,
+      }));
+      t.equal(afterN1.on, false, 'Turn N+1 clears Turn N transient toast');
+      t.equal(afterN1.toasting, false, '#app.toasting cleared so #preview is uncovered');
+      t.equal(afterN1.qLen, 0, 'no stale Turn N toast left queued');
+
+      // 3) Turn N+2 (move 2): Ann passes -> #toast still never resurfaces Turn N's move
+      await t.game('act', 'reveal');
+      t.equal(await t.game('act', 'pass'), true, 'Turn N+2 resolves');
+      const afterN2 = await t.page.evaluate(() => ({
+        on: document.querySelector('#toast').classList.contains('on'),
+        text: document.querySelector('#toast').textContent,
+      }));
+      t.equal(afterN2.on, false, 'Turn N+2 never displays stale Turn N toast');
+      t.expect(!afterN2.text.includes('STEAM'), `Turn N move absent from #toast after Turn N+2 (${afterN2.text})`);
+
+      // 4) Preemption in showToast(): newer non-keep turn toast preempts active older non-keep toast instead of queuing behind it
+      await t.game('act', 'toast', { kind: 'bark', title: 'Maestro Julian Fitch: JAY +47', sub: '“A bar to remember.”', turn: 10 });
+      await t.page.waitForSelector('#toast.on', { timeout: 3000 });
+      await t.game('act', 'toast', { kind: 'bark', title: 'Opal Vance: WEDGED +19', sub: '“Cleanly placed.”', turn: 12 });
+      const preempt = await t.page.evaluate(() => ({
+        text: document.querySelector('#toast').textContent,
+        qLen: window.__G.toastQ.length,
+      }));
+      t.expect(preempt.text.includes('WEDGED +19') && !preempt.text.includes('JAY +47'), `newer turn toast preempted older toast (${preempt.text})`);
+      t.equal(preempt.qLen, 0, 'preempted toast did not remain queued');
+
+      // 5) keep: true Register completion chip survives subsequent afterAction() and is NOT preempted by non-keep toasts
+      await t.game('act', 'toast', { kind: 'themed', title: 'Bathhouse Row: complete', sub: 'All its words are in your Register.', keep: true });
+      // Clear the non-keep WEDGED toast so the keep chip becomes active
+      await t.game('act', 'pass');
+      await t.game('act', 'reveal');
+      const keepBefore = await t.page.evaluate(() => ({
+        on: document.querySelector('#toast').classList.contains('on'),
+        text: document.querySelector('#toast').textContent,
+      }));
+      t.equal(keepBefore.on, true, 'keep: true completion toast promoted and stays visible across afterAction()');
+      t.expect(keepBefore.text.includes('Bathhouse Row: complete'), `keep toast text intact (${keepBefore.text})`);
+      await t.game('act', 'toast', { kind: 'bark', title: 'Opal Vance: TEA +12', sub: '“Nice.”', turn: 20 });
+      const keepAfter = await t.page.textContent('#toast');
+      t.expect(keepAfter.includes('Bathhouse Row: complete'), `non-keep toast did not preempt active keep: true chip (${keepAfter})`);
+      await t.page.click('#toast [data-toast-dismiss]');
+
+      // 6) G.fast skips transient toast enqueueing directly and across multi-turn autoplay
+      const fastDirect = await t.page.evaluate(() => {
+        const beforeQ = window.__G.toastQ.length;
+        window.__G.fast = true;
+        try {
+          window.__game.act('toast', { kind: 'bark', title: 'Fast suppressed', sub: 'Should not enqueue', turn: 21 });
+          return {
+            on: document.querySelector('#toast').classList.contains('on'),
+            qDelta: window.__G.toastQ.length - beforeQ,
+            hasSup: window.__G.toastQ.some((q) => q.title === 'Fast suppressed'),
+          };
+        } finally {
+          window.__G.fast = false;
+        }
+      });
+      t.equal(fastDirect.on, false, 'G.fast skips showing transient toast');
+      t.equal(fastDirect.qDelta, 0, 'G.fast skips enqueueing transient toast');
+      t.equal(fastDirect.hasSup, false, 'suppressed toast absent from queue');
+
+      await t.game('newGame', {
+        seed: 42,
+        seats: [{ kind: 'human', name: 'Ann' }, { kind: 'human', name: 'Bo' }],
+      });
+      await t.waitIdle(6000);
+      await t.game('act', 'reveal');
+      await t.game('act', 'toast', { kind: 'bark', title: 'Maestro Julian Fitch: JAY +47', sub: '“Old turn.”', turn: 0 });
+      await t.page.waitForSelector('#toast.on', { timeout: 3000 });
+      await t.game('act', 'autoplay', 6);
+      await t.waitIdle(8000);
+      const afterFast = await t.page.evaluate(() => ({
+        on: document.querySelector('#toast').classList.contains('on'),
+        text: document.querySelector('#toast').textContent,
+        toasting: document.querySelector('#app').classList.contains('toasting'),
+        qNonKeep: window.__G.toastQ.filter((q) => !q.keep).length,
+      }));
+      t.equal(afterFast.on, false, 'G.fast autoplay leaves zero stale transient toasts pinned over #preview');
+      t.equal(afterFast.toasting, false, '#app.toasting is false after autoplay');
+      t.equal(afterFast.qNonKeep, 0, 'zero transient toasts enqueued during G.fast autoplay');
+      t.expect(!afterFast.text.includes('JAY +47'), `pre-autoplay stale toast retired (${afterFast.text})`);
+    },
+  },
+  // W5-B05-hotfix follow-up 3 of verifier 2 (OQ-WF7-W5-01): the player's own discovery and Featured Spring toasts stay at least
+  // about 2.5 s, or until they act; every other older toast still retires at once when the computer moves.
+  {
+    name: 'W6-P-N02 the player\'s own Register discovery toast stays at least 2.5 s through the computer\'s reply (Normal speed), other older toasts retire at once, and a person acting retires it at once',
+    viewports: ['desktop', 'mobile'],
+    initScript: () => {
+      window.__TEST_TIPS__ = false;
+      if (!localStorage.getItem('hs-letters-settings-v1')) localStorage.setItem('hs-letters-settings-v1', JSON.stringify({ ai: 'normal', sound: false }));
+    },
+    async run(t) {
+      await ready(t);
+      const seats = [{ kind: 'human', name: 'You' }, { kind: 'ai', persona: 'opal', level: 'easy' }];
+      // records, in the page, when #toast shows and hides what, and when the computer's move lands (G.s.move), per animation frame
+      const watch = () => t.page.evaluate(() => {
+        const log = window.__toastLog = { shows: [], moves: [] };
+        const el = document.querySelector('#toast');
+        const note = () => log.shows.push({ at: performance.now(), on: el.classList.contains('on'), text: el.textContent, own: !!(window.__G.toastNow && window.__G.toastNow.own) });
+        note();
+        new MutationObserver(note).observe(el, { attributes: true, attributeFilter: ['class'], childList: true });
+        let last = window.__G.s.move;
+        const tick = () => { const m = window.__G.s.move; if (m !== last) { last = m; log.moves.push({ at: performance.now(), move: m, text: el.classList.contains('on') ? el.textContent : '' }); } requestAnimationFrame(tick); };
+        requestAnimationFrame(tick);
+      });
+      const setRack = async (letters, dropFeatured) => {
+        const s = await t.state();
+        if (dropFeatured) s.game.featured = s.game.featured.filter((f) => f.id !== dropFeatured);
+        s.game.players[0].rack = letters.split('');
+        await t.game('setState', { game: s.game });
+        await t.waitIdle(3000);
+      };
+
+      // 1) You play STEAM, new in your Register; Opal replies at Normal speed well inside 2.5 s
+      await t.page.evaluate(() => localStorage.removeItem('hs-letters-register-v1'));
+      await t.game('newGame', { seed: 12, seats });
+      await t.waitIdle(6000);
+      await setRack('STEAMXQ', 'steam');
+      await watch();
+      await t.game('act', 'stage', across('STEAM', CENTER - 2));
+      t.equal((await t.game('act', 'play')).ok, true, 'you play STEAM');
+      await t.page.waitForFunction(() => window.__toastLog.moves.some((m) => m.move >= 2) && !window.__toastLog.shows.slice(-1)[0].text.includes('STEAM'), null, { timeout: 15000 });
+      const a = await t.page.evaluate(() => window.__toastLog);
+      const shown = a.shows.find((x) => x.on && x.text.includes('STEAM'));
+      const gone = a.shows.find((x) => shown && x.at > shown.at && !x.text.includes('STEAM'));
+      const reply = a.moves.find((m) => m.move === 2);
+      t.expect(shown && /New in your Register/.test(shown.text) && shown.own, `your STEAM toast is a Register discovery, marked as your own (${shown && shown.text})`);
+      t.expect(reply && gone, 'Opal replied and the toast went afterwards');
+      if (reply && shown && gone) {
+        const replyIn = reply.at - shown.at, stayed = gone.at - shown.at;
+        t.log(`own toast: Opal's move ${replyIn.toFixed(0)} ms after it showed; it stayed ${stayed.toFixed(0)} ms (wave 5 before this fix: about 900)`);
+        t.expect(reply.text.includes('STEAM'), `when Opal's move lands your toast is still up (${reply.text})`);
+        t.expect(stayed >= 2450, `your own discovery toast stays at least about 2.5 s (${stayed.toFixed(0)} ms)`);
+        if (replyIn < 2450) t.expect(stayed < 5000, `and, as Opal has moved, it goes when the 2.5 s are up, not at its full 5.2 s (${stayed.toFixed(0)} ms)`);
+      }
+
+      // 2) Any other older toast retires the moment the computer moves (here: a banner from your own pass)
+      await t.waitIdle(8000);
+      await t.page.waitForFunction(() => window.__G.s.cur === 0 && !window.__G.aiBusy, null, { timeout: 15000 });
+      const passTurn = (await t.state()).game.move;
+      t.equal(await t.game('act', 'pass'), true, 'you pass');
+      await t.game('act', 'toast', { kind: 'bark', title: 'An older banner', sub: 'not a discovery', turn: passTurn });
+      t.expect((await t.page.textContent('#toast')).includes('An older banner'), 'the older banner is showing while Opal thinks');
+      await t.page.waitForFunction((m) => window.__toastLog.moves.some((x) => x.move === m), passTurn + 2, { timeout: 15000 });
+      const b = await t.page.evaluate((m) => window.__toastLog.moves.find((x) => x.move === m), passTurn + 2);
+      t.expect(!b.text.includes('An older banner'), `it is gone in the frame Opal's move lands (${JSON.stringify(b.text)})`);
+
+      // 3) A person acting retires your own toast at once: a press on your rack while Opal thinks
+      await t.waitIdle(8000);
+      await t.page.waitForFunction(() => window.__G.s.cur === 0 && !window.__G.aiBusy, null, { timeout: 15000 });
+      await t.page.evaluate(() => localStorage.removeItem('hs-letters-register-v1'));
+      await t.game('newGame', { seed: 12, seats });
+      await t.waitIdle(6000);
+      await setRack('STEAMXQ', 'steam');
+      await t.game('act', 'stage', across('STEAM', CENTER - 2));
+      t.equal((await t.game('act', 'play')).ok, true, 'a new game: you play STEAM again, new in your Register again');
+      await t.page.waitForFunction(() => document.querySelector('#toast').classList.contains('on') && document.querySelector('#toast').textContent.includes('New in your Register'), null, { timeout: 5000 });
+      const r0 = await t.game('act', 'rackTile', 0);
+      t.expect(Array.isArray(r0), 'your rack is there to press while Opal thinks');
+      await t.page.mouse.click(r0[0], r0[1]);
+      const c = await t.page.evaluate(() => ({ on: document.querySelector('#toast').classList.contains('on'), text: document.querySelector('#toast').textContent, ai: window.__G.aiBusy || window.__G.s.cur !== 0 }));
+      t.expect(!c.on || !c.text.includes('STEAM'), `pressing your rack retires your own toast at once (${c.text})`);
+    },
+  },
+];

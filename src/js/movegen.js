@@ -40,14 +40,18 @@ function edgeFor(E, node, letter) {
   }
 }
 
-// rack: array of letters ('?' = blank). opts: { featured, lex, budget, commonOnly, freeLen, maxLen }
+// rack: array of letters ('?' = blank). opts: { featured, lex, bonusWeight, budget, commonOnly, freeLen, allowTwo, maxLen }
 export function generateMoves(d, board, rack, opts = {}) {
   const E = d.edges, root = d.root;
   const lex = opts.lex || null;
-  const featured = (opts.featured || []).filter((f) => f.by == null).map((f) => f.word);
+  const bonusWeight = opts.bonusWeight ?? 1;
+  const featured = (opts.featured || [])
+    .filter((f) => f.by == null)
+    .map((f) => ({ word: f.word, id: f.id || (lex && lex.entry(f.word)?.id) || null }));
   const budget = opts.budget || 2e6;
   // commonOnly: every word formed must be common, except words shorter than freeLen (Medium knows the short ones)
-  const commonOnly = !!opts.commonOnly, freeLen = opts.freeLen || 0, maxLen = opts.maxLen || N;
+  // or two-letter words in allowTwo (Easy uses an explicit everyday two-letter allowlist).
+  const commonOnly = !!opts.commonOnly, freeLen = opts.freeLen || 0, maxLen = opts.maxLen || N, allowTwo = opts.allowTwo || null;
   const counts = new Int8Array(27);
   for (const l of rack) counts[l === '?' ? 26 : l.charCodeAt(0) - 65]++;
   const rackSize = rack.length;
@@ -132,10 +136,17 @@ export function generateMoves(d, board, rack, opts = {}) {
       words.unshift(word);
       if (lex) { const en = lex.byForm.get(word); if (en) bonus += lex.bonusOf(en) + (anyBath ? ROW_BONUS : 0); }
       if (words.some((w) => BLOCKED.has(w))) return;
-      if (commonOnly && !words.every((w) => w.length < freeLen || isCommonWord(w))) return;
-      for (const f of featured) if (words.includes(f)) { feat = FEATURED_BONUS; break; }
+      if (commonOnly && !words.every((w) => w.length < freeLen || (allowTwo && w.length === 2 ? allowTwo.has(w) : isCommonWord(w)))) return;
+      if (featured.length) {
+        for (const f of featured) {
+          if (words.some((w) => w === f.word || (f.id != null && lex && lex.byForm.get(w)?.id === f.id))) feat += FEATURED_BONUS;
+        }
+      }
       const full = placed === RACK ? FULL_SOAK : 0;
-      moves.push({ tiles, score: sum * mult + cross + full + bonus + feat, words, bonus, full, featured: feat });
+      const base = sum * mult + cross + full + feat;
+      const score = base + bonus;
+      const evalScore = bonusWeight === 1 ? score : base + bonus * bonusWeight;
+      moves.push({ tiles, score, evalScore, words, bonus, full, featured: feat });
     };
 
     const extend = (c, node, eow, len) => {
@@ -218,9 +229,9 @@ export function generateMoves(d, board, rack, opts = {}) {
       }
     }
   }
-  // Fixed order: best score first, ties by a key from the tiles.
+  // Fixed order: best perceived score first, ties by a key from the tiles.
   const key = (m) => m.tiles.map((t) => t.i * 64 + (t.l.charCodeAt(0) - 64) + (t.blank ? 32 : 0)).join(',');
   for (const m of moves) m.key = key(m);
-  moves.sort((a, b) => b.score - a.score || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  moves.sort((a, b) => b.evalScore - a.evalScore || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   return { moves, nodes, stopped };
 }

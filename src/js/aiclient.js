@@ -2,6 +2,9 @@
 // same code on the main thread as a fallback (no Worker, a failed start, or ?worker=0).
 import { WORKER_SRC } from './worker-src.js';
 import { chooseAction, hintChoices } from './ai.js';
+import { dailyPar } from './par.js';
+import { bestOf, REVIEW_NODES_MAIN } from './review.js';
+import { deducibleFeatured } from './lexicon.js';
 
 export const aiClient = { mode: 'none', worker: null, pending: new Map(), seq: 0, ready: null, dict: null, lex: null };
 
@@ -10,16 +13,18 @@ export function startAi(dictB64, lexData, local) {
   aiClient.dict = local.dict; aiClient.lex = local.lex;
   const noWorker = /[?&]worker=0\b/.test(location.search) || typeof Worker === 'undefined';
   if (!noWorker) {
+    let url = null;
+    const revoke = () => { if (url) { const u = url; url = null; try { URL.revokeObjectURL(u); } catch (e) { /* gone */ } } };
     try {
-      const url = URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' }));
+      url = URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' }));
       const w = new Worker(url);
       aiClient.worker = w;
       aiClient.mode = 'worker';
       w.onmessage = (ev) => { const p = aiClient.pending.get(ev.data.id); if (p) { aiClient.pending.delete(ev.data.id); p(ev.data); } };
       w.onerror = (e) => { e.preventDefault(); fallBack('worker error'); };
-      aiClient.ready = call({ type: 'init', dict: dictB64, lex: lexData });
+      aiClient.ready = call({ type: 'init', dict: dictB64, lex: lexData }).then((r) => { revoke(); return r; });
       return aiClient.ready;
-    } catch (e) { /* fall through */ }
+    } catch (e) { revoke(); /* fall through */ }
   }
   fallBack('no worker');
   return aiClient.ready;
@@ -48,7 +53,8 @@ function call(msg) {
 }
 
 // Copy of the state with only what the AI reads (and a fresh rng it may advance).
-const slim = (s) => ({ board: s.board, players: s.players.map((p) => ({ rack: p.rack, level: p.level })), cur: s.cur, bag: s.bag, featured: s.featured, rng: { ...s.rng } });
+// W1-S3-02, W6-S3-02 / CD-WF1-06: a Featured Spring goes along only once its plaque gives it away; hidden words never reach the AI or the hint.
+const slim = (s) => ({ mode: s.mode, daily: s.daily, board: s.board, players: s.players.map((p) => ({ kind: p.kind, rack: p.rack, level: p.level })), cur: s.cur, bag: s.bag, featured: deducibleFeatured(s.featured, aiClient.lex), rng: { ...s.rng } });
 
 // Resolves { action, rngAi } for the current seat of s.
 export async function aiMove(s, level, persona) {
@@ -71,4 +77,25 @@ export async function aiHint(s) {
     if (r.type !== 'retry') return r.moves;
   }
   return hintChoices(aiClient.dict, aiClient.lex, slim(s));
+}
+
+// Resolves one turn of the look back over a game (review.js reviewTurns) with its best play: in the worker, else here with a shorter search.
+export async function aiReview(turn) {
+  await aiClient.ready;
+  if (aiClient.mode === 'worker') {
+    const r = await call({ type: 'review', turn });
+    if (r.type !== 'retry') return { ...turn.did, best: r.best, ...(r.partial ? { partial: true } : {}) };
+  }
+  await new Promise((res) => setTimeout(res, 0)); // a turn at a time, so the page stays awake
+  return { ...turn.did, ...bestOf(aiClient.dict, aiClient.lex, turn, REVIEW_NODES_MAIN) };
+}
+
+// Resolves { m, h } par scores for a Daily Soak date, off the main thread when the Worker is running.
+export async function aiDailyPar(date) {
+  await aiClient.ready;
+  if (aiClient.mode === 'worker') {
+    const r = await call({ type: 'dailyPar', date });
+    if (r.type !== 'retry') return r.par;
+  }
+  return dailyPar({ dict: aiClient.dict, lex: aiClient.lex }, date, () => new Promise((res) => setTimeout(res, 0)));
 }

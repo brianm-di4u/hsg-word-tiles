@@ -79,7 +79,7 @@ export const tests = [
     },
   },
   {
-    name: 'S4-19 under reduced motion there is no sweep and no long pop, but the Register note stays',
+    name: 'S4-19 under reduced motion there is no sweep and no long rising pop, only a static 0px pop fade, and the Register note stays',
     viewports: ['desktop'],
     reducedMotion: true,
     initScript: quiet,
@@ -88,7 +88,14 @@ export const tests = [
       await t.game('act', 'stage', across('SPRING')); await t.game('act', 'play');
       const s = await t.state();
       t.equal(s.sweeps, 0, 'no sweep');
-      t.equal(await t.page.locator('.pop').count(), 0, 'no pop');
+      t.equal(await t.page.locator('.pop.themed').count(), 0, 'no long rising themed pop');
+      const pop = await t.page.evaluate(() => {
+        const el = document.querySelector('.pop');
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        return { staticCls: el.classList.contains('static'), anim: cs.animationName, rise: el.style.getPropertyValue('--rise') };
+      });
+      t.expect(!!pop && pop.staticCls && pop.anim === 'pop-fade' && pop.rise === '0%', 'static 0px espresso-pill pop crossfade replaces rising pop');
       t.expect(/New in your Register/.test(s.toast), 'the text is still there');
     },
   },
@@ -166,11 +173,13 @@ export const tests = [
       t.expect(/Display Spring/.test(await say(CENTER)), 'the Display Spring is named by its name');
       await t.shot('S2-02-square-info');
       if (t.viewport === 'mobile') {
-        // with a tile placed the strip is for the play, not for a square
+        // W6-S2-05: tapping an empty premium square while staging keeps the live play preview intact and adds a quiet .sq-tip sub-line
         await t.game('act', 'stage', [{ i: CENTER, l: (await t.game('act', 'rackTile', 0))[2] }]);
         const [x, y] = await at(4);
         await t.tap([x, y]);
-        t.expect(!/Boiling|Steam|Warm|Hot spring/.test(await t.page.textContent('#preview')), 'a tap with tiles placed leaves the strip alone');
+        await t.page.waitForFunction(() => /Boiling|Steam|Warm|Hot spring/.test(document.querySelector('#preview .sq-tip')?.textContent || ''), null, { timeout: 3000 });
+        t.expect(/Boiling|Steam|Warm|Hot spring/.test(await t.page.textContent('#preview .sq-tip')), 'a tap with tiles placed shows the square rule as a quiet .sq-tip sub-line');
+        t.expect(/two letters|word|pts/i.test(await t.page.textContent('#preview')), 'the staged play preview stays visible above the sub-line');
       }
     },
   },
@@ -239,11 +248,15 @@ export const tests = [
     async run(t) {
       await start(t);
       const cat = await t.page.evaluate(() => { const f = window.__G.s.featured[0]; return { cat: window.__G.lex.categories[f.cat].name, len: f.word.length }; });
+      if (await t.page.locator('#springs [data-springs-toggle]').count()) {
+        await t.page.click('#springs [data-springs-toggle]');
+      }
       await t.page.click('[data-plaque="0"]');
       const txt = (await t.page.textContent('#preview')).trim();
       t.expect(txt.includes(cat.cat) && txt.includes(cat.len + ' letters') && /\+30/.test(txt), 'the strip says the category, the length and +30 (' + txt + ')');
       const vis = await t.page.evaluate(() => { const b = document.querySelector('.plaque'); return { label: b.getAttribute('aria-label'), cat: getComputedStyle(b.querySelector('.pcat')).display, h: Math.round(b.getBoundingClientRect().height) }; });
       t.expect(/Featured Spring 1/.test(vis.label) && vis.label.includes(cat.cat), 'a screen reader hears it too');
+      t.expect(vis.h >= 44, `plaque touch target >= 44 px (${vis.h} px)`);
       await t.shot('S2-09-plaques');
     },
   },

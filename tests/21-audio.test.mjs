@@ -16,7 +16,8 @@ export const tests = [
         const full = await t.game('act', 'renderSfx', n, 1);
         rows.push(`${n} peak ${def.peak}/${full.peak} ${def.ms} ms`);
         t.expect(def.peak > 0.005, `${n} is audible at the default volume`);
-        t.expect(full.peak < 0.98, `${n} does not clip at full volume (${full.peak})`);
+        // before the ceiling after the limiter, which never lets the heard peak reach 0.95
+        t.expect(full.prePeak < 0.98, `${n} does not clip at full volume (${full.prePeak})`);
         t.expect(def.ms < 1800, `${n} is short (${def.ms} ms)`);
       }
       t.log(rows.join('; '));

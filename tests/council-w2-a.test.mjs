@@ -1,6 +1,6 @@
 // Wave 2, batch A: S5-01 (music and ambience) and S5-03 (cue variation).
 const ready = (t) => t.page.waitForFunction(() => window.__game && window.__game.getState().ready, null, { timeout: 15000 });
-const BPM = { lobby: 62, table: 72, finale: 84 };   // the bar is four beats
+const BPM = { lobby: 62, table: 72, finale: 84, dusk: 66 };   // the bar is four beats
 const settingsKey = 'hs-letters-settings-v1';
 const stored = (t) => t.page.evaluate((k) => JSON.parse(localStorage.getItem(k) || '{}'), settingsKey);
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
@@ -13,7 +13,7 @@ export const tests = [
     async run(t) {
       await ready(t);
       const l = await t.game('audioList');
-      t.equal(JSON.stringify(l.music), JSON.stringify(['lobby', 'table', 'finale']), 'three tunes: the lobby, the table and the results');
+      t.equal(JSON.stringify(l.music), JSON.stringify(['lobby', 'table', 'finale', 'dusk']), 'four tunes: the lobby, the table, the results and (W4-S5-02) the results after a loss');
       t.equal(JSON.stringify(l.ambience), JSON.stringify(['bathhouse']), 'one bed');
     },
   },
@@ -72,14 +72,14 @@ export const tests = [
       }
       for (const n of Object.keys(peaks)) t.expect(med(peaks[n]) <= 0.45 && Math.max(...peaks[n]) <= 0.45 * SPREAD, `${n} is typically under 0.45 and never more than 1.5 dB over it (median ${med(peaks[n])}, most ${Math.max(...peaks[n])})`);
       // With the Volume slider at full the loudest cues must still clear the limiter: before the cue volume was tapered
-      // above the shipped setting, steam and place reached 1.03 in 60 repeats.
+      // above the shipped setting, steam and place reached 1.03 in 60 repeats. (Measured before the ceiling, which would hide it.)
       for (const n of ['steam', 'place', 'pick', 'swap', 'play', 'featured']) {
-        const full = []; for (let k = 0; k < 20; k++) full.push((await t.game('act', 'renderSfx', n, 1)).peak);
+        const full = []; for (let k = 0; k < 20; k++) full.push((await t.game('act', 'renderSfx', n, 1)).prePeak);
         t.expect(Math.max(...full) < 0.95, `${n} stays under 0.95 with the volume at full, over 20 repeats (${Math.max(...full)})`);
       }
       const loudest = Math.max(...Object.values(peaks).map((p) => Math.max(...p)));
       const bed = (await t.game('audioRender', 'bathhouse', 30)).peak;
-      for (const n of ['lobby', 'table', 'finale']) {
+      for (const n of ['lobby', 'table', 'finale', 'dusk']) {
         const m = (await t.game('audioRender', n, 60)).peak;
         t.expect(m + bed + loudest < 0.95, `${n} + bed + loudest cue stays under 0.95 (${(m + bed + loudest).toFixed(2)})`);
       }
@@ -100,7 +100,13 @@ export const tests = [
       t.expect(sigs.size >= 29, `30 renders of place are all different (${sigs.size})`);
       t.expect(zc.size >= 12, `they differ in timbre (${zc.size} zero-crossing counts)`);
       t.expect(spreadDb >= 1, `the level varies by at least 1 dB (${spreadDb.toFixed(1)})`);
-      t.expect(mean(high.map((r) => r.zc)) > mean(flat.map((r) => r.zc)) * 1.1, 'ten tiles up a word the sound is higher');
+      // The climb is measured on the dry cue (no early-reflection send): since 8cf5af6 (W4-S4-01) the 0.24 s reverb tail adds about 700
+      // pitch-independent zero crossings to the 2 s render, below 0.001 for most of it, which hide the climb from a whole-buffer count
+      // (heard: x1.02; dry: about x2; heard up to the last audible sample: about x1.65). The 1.1 factor is unchanged (W4-B33-hotfix).
+      const dflat = [], dhigh = [];
+      for (let k = 0; k < 30; k++) { dflat.push(await t.game('act', 'renderSfx', 'place', 0.35, { dry: true })); dhigh.push(await t.game('act', 'renderSfx', 'place', 0.35, { dry: true, step: 10 })); }
+      t.log(`dry place: step 10 averages ${mean(dhigh.map((r) => r.zc)).toFixed(0)} crossings, step 0 ${mean(dflat.map((r) => r.zc)).toFixed(0)}`);
+      t.expect(mean(dhigh.map((r) => r.zc)) > mean(dflat.map((r) => r.zc)) * 1.1, 'ten tiles up a word the sound is higher');
       for (const n of ['pick', 'recall', 'turn', 'error']) {
         const a = [];
         for (let k = 0; k < 8; k++) a.push((await t.game('act', 'renderSfx', n, 0.35)).sig);

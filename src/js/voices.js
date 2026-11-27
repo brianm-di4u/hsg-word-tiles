@@ -28,7 +28,7 @@ export const BARKS = {
     open: ["Folks, I've got a feeling about this one.", "Place your bets. I'm backing the Boiling Springs.", "The odds look sweet. Let's play.", 'Clean tiles, clean track. Off we go.', 'Ten to one I find a good square.', 'I never bet on a slow start.'],
     big: ['Pays at long odds, that one!', 'I told you. Money on the big square.', 'Down the stretch and over the line!', "That's a winner, folks, no photo needed.", 'Big square, big payout.', 'Put that in the books at a fine price.'],
     soak: ['Seven tiles! The whole card, every race!', 'Full Soak! Pay the man at the window.', "A clean sweep. I'll take the pot.", 'All seven home, and not a scratch.', "That's the long shot of the day, folks.", 'Never saw it coming, and I called it.'],
-    themed: ['A sure thing from the springs, folks.', 'Hot tip, hot word. Both came in.', 'The town word paid at the window.', "That one's a local favourite.", 'I had that word at good odds.', "Steam rising. That's a good sign."],
+    themed: ['A sure thing from the springs, folks.', 'Hot tip, hot word. Both came in.', 'The town word paid at the window.', "That one's a local favorite.", 'I had that word at good odds.', "Steam rising. That's a good sign."],
     pass: ["No bet this race. I'll sit it out.", "The odds aren't right. Not this turn.", "I'm scratching this turn.", 'Even I know when to hold.', 'Waiting for a better price.', 'Nothing worth a wager yet.'],
     out: ['Last tile! Past the post!', "I'm out, folks. Collect your tickets.", "That's the final furlong. Done.", 'Rack empty, pockets full.', 'Out, and the crowd goes quiet.', "That's my last tile. Good racing."],
     win: ['A winner! Drinks are on someone else.', "Told you I'd pick it. Thanks for the race.", 'First past the post, friend. Good game.', 'The odds were with me this time.', 'Another ticket cashed. Same again?', 'Lucky? No, just well placed.'],
@@ -42,13 +42,19 @@ export const BARKS = {
     pass: ['A rest. Even a band must breathe.', "I'll sit out this bar.", "Nothing to play, so I'll keep time.", 'A pause for the clarinets.', 'Holding the tempo. Not this turn.', 'Rests make the music, friends.'],
     out: ["Final bar! That's the last note.", 'Out. The band takes its bow.', 'Last tile down. Curtain, please.', 'The final chord, my friends.', 'Rack clear. Cue the applause.', 'And that is the last of my tiles.'],
     win: ["Applause, please. A fine evening's work.", 'The band wins. Thank you, thank you.', 'A rousing finish for the maestro.', 'Tempo kept, game won. Bravo, all.', "Encore? I'd be delighted.", 'Good game. The last note was mine.'],
-    lose: ['You took the solo. Bravo.', 'A lovely finish. I tip my hat.', 'You kept better time tonight.', 'Well played. The encore is yours.', 'Applause for you, friend.', "I'll practise. You earned that bar."],
+    lose: ['You took the solo. Bravo.', 'A lovely finish. I tip my hat.', 'You kept better time tonight.', 'Well played. The encore is yours.', 'Applause for you, friend.', "I'll practice. You earned that bar."],
   },
 };
 const EVENTS = Object.keys(BARKS.opal);
 const mix = (a, b) => { let h = (a ^ Math.imul(b + 0x9e3779b9, 0x85ebca6b)) >>> 0; h = Math.imul(h ^ (h >>> 15), 0xc2b2ae35) >>> 0; return (h ^ (h >>> 13)) >>> 0; };
 const seedOf = (s) => (s.seed != null ? s.seed : s.rng.bag) >>> 0;
 const base = (s, p, event) => mix(mix(seedOf(s), EVENTS.indexOf(event)), p.persona.length * 31 + p.persona.charCodeAt(0));
+// The seat that greets the table before a person's opening play: the first character, when a person plays first.
+const greeter = (s) => (s.players[0].kind === 'human' ? s.players.findIndex((p) => p.persona && BARKS[p.persona]) : -1);
+export function greeting(s) {
+  const k = s.move === 0 && !s.over ? greeter(s) : -1, p = s.players[k];
+  return p ? { persona: p.persona, text: BARKS[p.persona].open[base(s, p, 'open') % BARKS[p.persona].open.length] } : null;
+}
 const kindOf = (s, e, last) => {
   if (e.kind !== 'play') return 'pass';
   if (last && s.over && s.result && s.result.why === 'out' && s.result.out === e.p) return 'out';
@@ -68,7 +74,7 @@ export function barkFor(s, entry) {
   let event = kindOf(s, entry, at < 0 || at === mine.length - 1);
   if (!event && !earlier.length) event = 'open';
   if (!event) return null;
-  const prior = earlier.filter((e) => kindOf(s, e, false) === event).length;
+  const prior = event === 'open' ? (greeter(s) === entry.p ? 1 : 0) : earlier.filter((e) => kindOf(s, e, false) === event).length;   // an opening line once greeted with is not said again
   const list = lines[event];
   return { event, text: list[(base(s, p, event) + prior) % list.length] };
 }
@@ -78,4 +84,9 @@ export function endBark(s, seat) {
   if (!lines || !s.result) return null;
   const event = s.result.winners.includes(seat) ? 'win' : 'lose', list = lines[event];
   return { event, text: list[base(s, p, event) % list.length] };
+}
+// Persona sonic micro-touchpoint (W4-S5-06): returns the persona id when an opponent speaks a big, themed, or Full Soak bark.
+export function barkCue(bark) {
+  if (!bark || !bark.persona || !BARKS[bark.persona]) return null;
+  return bark.event === 'big' || bark.event === 'themed' || bark.event === 'soak' ? bark.persona : null;
 }

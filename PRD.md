@@ -4,6 +4,36 @@
 An original crossword word-tile game for 1–4 players, set among the hot springs of Hot Springs,
 Arkansas. Players build crossing words on a marble bathhouse board whose premium squares are the
 valley's springs, and earn extra points for Hot Springs words, each of which opens a sourced fact card.
+
+### Target experience (locked in the 2026-11 design review)
+- **Primary: approachable, tactile crossword craft.** Brisk, readable scoring on our own 47-spring marble board, where
+  the maths of every play, the trade-off of the tiles kept and the way back from behind are clear to casual players
+  (12+), families and daily-puzzle players, with depth left for veterans.
+- **Secondary: discovering Hot Springs.** Finding the 107 sourced Hot Springs words, racing to clear the steam from the
+  Featured Springs, routing across the 8 Bathhouse Row squares, and filling the Bathhouse Register over many games.
+
+### Pillars: four yes-or-no questions every change must pass
+1. **Our own thermal board and economy.** Does it keep our 47-spring pinwheel (the Display Spring unmultiplied, word
+   multipliers at least 8 squares apart on a line), the 98-tile bag computed from the dictionary, and nothing borrowed
+   from a commercial game?
+2. **The town in every play.** Does it tie the crossword to Hot Springs words (+10 / +18 / +30), the 8 Bathhouse Row
+   squares (+20 with a Hot Springs word, and a Featured Spring letter for any word), the Featured Springs (+30) and the Register, without an unreviewed fact,
+   a change to the owner's approved wording or a change to the bonus tiers?
+3. **Warm, tactile clarity on phone and desktop.** Can a first-time player on a 390×844 phone or a 1280×800 desktop
+   reach Turn 1 without scrolling past options, read every square's rule and the live score breakdown at a glance,
+   and play by touch, mouse or keyboard?
+4. **Fair, distinct local opponents.** Does every computer play without seeing hidden information, keep a playing
+   style of its own apart from its level, and scale from a welcoming Easy (about 230–270 points) to a sharp Hard?
+
+### Anti-goals
+1. Never borrow a commercial crossword game's name, board, tile table, art or rules wording.
+2. Never put obscure tournament words (MEINY, ZAX, XU) in front of newcomers: not from Easy, not as the Spring
+   Guide's first suggestion, not on the default setup.
+3. Never pad the three verbs (Play, Swap, Pass) with paid mini-swaps, extra flat Row payouts or hidden penalties on
+   the default path; Challenge mode stays an opt-in house rule.
+4. Never let a computer opponent peek at hidden plaques or racks, change a date's Daily deal, or break a saved game.
+
+### Design principles
 1. **Our own game.** An original board (47 springs swirling from the Display Spring, 8 Bathhouse Row
    squares), a tile set computed from the dictionary, our own scoring bonuses and rules text. No
    commercial game's name, board, tile table, art or wording.
@@ -20,7 +50,12 @@ Casual word-game players (12+), families, local-history fans, daily-puzzle playe
 - **Play:** 2–4 seats, each Human or AI (persona and level). One human with AI = solo. Two or more
   humans = pass-and-play with a privacy screen.
 - **Daily Soak:** one player, 10 turns, the same tiles for everyone on a date; best score and streak.
-- Options: AI speed (Normal / Fast / Instant), hints on/off (3 "Spring Guide" hints per game in Play).
+  Turn 1 names "Today's Springs", the kinds of word on the day's three plaques, so the ten turns have Hot Springs
+  words to hunt. On wide screens it also says "10 turns · same tiles for everyone · Hot Springs words earn +10 to +30 and
+  open history cards" (phones hear it in the live region).
+- Options: AI speed (Normal / Fast / Instant), hints on/off (3 "Spring Guide" hints per game in Play). Setup keeps
+  the rest in a collapsed "House rules & more options": each computer's difficulty, Unlimited hints and Challenge
+  mode (invalid words cost the turn; off by default, never in the Daily).
 
 ## 4. Rules
 As specified in `MECHANICS.md` §3 (placement, words, scoring, bonuses, swaps, ending), shown in the
@@ -43,15 +78,15 @@ Featured Springs, new game / title). Daily → Daily results (score, words, stre
 
 ## 7. Art direction
 - Day theme from `gilded-spa`, night theme from `deco-neon`, springs from `thermal-water`.
-- Board: polished white marble slab with gray veining, brass inlay grid, terrazzo border, set on a
+- Board: honed warm travertine marble slab (twilight warm slate-marble in Night theme) with subtle veining, brass inlay grid, seamless terrazzo border, set on a
   bathhouse counter (walnut and marble) in 3D, lit by a warm lamp.
 - Premium squares: leaded stained-glass medallions (Warm/Hot turquoise-teal glass, Steam/Boiling amber-copper
   glass), each with its label and a distinct pattern (ring count) so colour is never the only cue.
 - Bathhouse Row squares: one small medallion per building (motifs in town-content §2).
 - Tiles: glazed ivory ceramic with a bevel, Fraunces letters in wrought-iron black-green, value in
   the corner; blanks are clear "steam glass" tiles with a ghosted letter.
-- Painted art (Codex, pilot first): title painting, counter texture, persona portraits, Register
-  ledger, steam sprites; 31 landmark vignettes reused from Barons for fact cards.
+- Painted art (OpenAI and Gemini image generation, pilot first): title painting, counter texture, terrazzo border swatch, bathhouse medallions, persona portraits,
+  category fact-card paintings; 18 landmark vignettes reused from Barons for fact cards.
 - Type: Limelight (display), Fraunces (tiles, headings), Josefin Sans (UI). All OFL, vendored.
 
 ## 8. Audio
@@ -88,7 +123,7 @@ and ≤ 1.2 s (Hard) at 4× throttle.
 12. Engine scores match an independent reference scorer on 50,000 random plays.
 
 ### Turns and ending
-13. Swap 1–7 tiles when the bag has ≥ 7; the turn passes; swapped tiles go to the bag bottom.
+13. Swap 1–7 tiles when the bag has ≥ 7; the turn passes; the swapped tiles are mixed back into the bag.
 14. Pass ends the turn.
 15. The game ends when a player goes out on an empty bag or after two scoreless rounds; rack penalties and the go-out bonus apply.
 16. The game-over screen shows final scores, winner(s), each player's best word and the bonus words played.
@@ -107,7 +142,7 @@ and ≤ 1.2 s (Hard) at 4× throttle.
 
 ### Hot Springs content
 25. Every bonus word opens a fact card with its source; every card passes `check-facts`.
-26. Featured Spring plaques show category, length and one letter, and clear one more letter each round.
+26. Featured Spring plaques show category, length and one letter, and clear one more letter each time another twelfth of the bag has been drawn (each turn in the Daily).
 27. The Bathhouse Register lists every bonus word played, with date, best score and the card.
 28. All bonus forms are dictionary words; no blocklisted word is playable.
 
@@ -130,5 +165,5 @@ and ≤ 1.2 s (Hard) at 4× throttle.
 40. `index.html` ≤ 2 MB; performance budgets in §10 are met (or the gap is reported).
 
 ## 12. Out of scope
-Online multiplayer, accounts, leaderboards, word definitions, challenge mode, timed games,
+Online multiplayer, accounts, leaderboards, word definitions, timed games,
 languages other than English, custom dictionaries.
