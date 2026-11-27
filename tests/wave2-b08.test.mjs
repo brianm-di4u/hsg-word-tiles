@@ -113,20 +113,22 @@ export const tests = [
       await t.game('setState', { game: stPlay.game });
       await t.waitIdle(5000);
       await t.game('act', 'stage', [...'SPRING'].map((l, k) => ({ l, i: CENTER - 2 + k })));
-      await t.game('act', 'play');
-      await t.waitFrames(2);
+      // Freeze FX immediately after play (swAt + 50 ms) before any slow software-GL frame can expire SWEEP_MS (650 ms)
+      const swAt = await t.page.evaluate(async () => {
+        const g = window.__game;
+        await g.act('play');
+        const t0 = g.getState().sweepAt;
+        if (t0 != null) await g.act('freezeFx', t0 + 50);
+        return t0;
+      });
       // Reveal next seat so #privacy does not obscure the board screenshot
       await t.game('act', 'reveal');
-      await t.waitFrames(2);
+      await t.waitFrames(3);
 
-      // Freeze FX early (swAt + 50 ms) when goldSweep peaks right on the first cell (CENTER-2) and steam puffs have barely started
-      const swAt = (await t.state()).sweepAt;
       const firstCell = CENTER - 2;
       const fp0 = await t.game('act', 'cell', firstCell, 0);
       const fp24 = await t.game('act', 'cell', firstCell, 0.24);
       if (swAt != null) {
-        await t.game('act', 'freezeFx', swAt + 50);
-        await t.waitFrames(3);
         const sweep = await overlayCentroid(t, '#fx', fp24[0], fp0[1], cellPx * 0.55, cellPx * 0.85,
           'a > 40 && r > 225 && g > 195 && (r - b) > 45');
         t.expect(sweep.count >= 40, `goldSweep pixels rendered on #fx (${sweep.count})`);
