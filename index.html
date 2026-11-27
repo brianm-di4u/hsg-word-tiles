@@ -869,6 +869,9 @@ body[data-scene="over"] #screen { display: grid; place-items: center; }
   #turnline .bag.phase-final, #turnline .bag.phase-empty { align-self: center; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; padding: 1px 7px; }
   #turnline .daily-turn { font-size: 0.78rem; padding: 2px 8px; }
   #turnline .daily-sub { justify-content: center; font-size: 0.76em; }
+  /* W5-B09: lock mobile par-pip widths to the placeholder pills so .daily-sub never re-wraps when async par arrives */
+  #turnline .par-pip, #turnline .par-pip-hold { justify-content: center; min-width: calc(3ch + 1.25em + 12px); }
+  #turnline .par-pip:last-child, #turnline .par-pip-hold:last-child { min-width: calc(3ch + 2.15em + 12px); }
   .springs-drawer .plaque { min-height: 44px; width: 100%; min-width: 0; padding: 6px 10px; gap: 8px; }
   .springs-drawer .pword b { width: 19px; height: 23px; font-size: 0.84em; border-radius: 3px; }
   #preview { min-height: 56px; padding: 4px 10px; font-size: 0.92em; }   /* two lines (was 40px, one): a refusal or a bark no longer moves the rack and the buttons under a thumb */
