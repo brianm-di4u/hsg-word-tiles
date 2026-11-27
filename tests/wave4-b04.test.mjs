@@ -35,6 +35,24 @@ const plainRack = (t) => t.page.evaluate(() => {
   p.className = cls; p.innerHTML = html;
   return top;
 });
+// Wait for async Daily par pips (#turnline .par-pip), fonts, and two consecutive frames with an unchanged #rack top
+// so strip(t) and plainRack(t) compare the banner against idle on the same settled layout (never a fixed sleep).
+const dailySettled = async (t) => {
+  await t.waitIdle(8000);
+  await t.page.waitForFunction(() => document.querySelectorAll('#turnline .par-pip').length === 2, null, { timeout: 15000 });
+  await t.page.evaluate(() => document.fonts.ready);
+  await t.page.evaluate(() => new Promise((res) => {
+    let prev = null, stable = 0;
+    const step = () => {
+      const top = document.querySelector('#rack')?.getBoundingClientRect().top;
+      if (prev != null && Math.abs(top - prev) < 0.01) { if (++stable >= 2) { res(); return; } }
+      else stable = 0;
+      prev = top;
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }));
+};
 const kinds = (s) => [...new Set(s.featured.map((f) => f.cat))];
 
 export const tests = [
@@ -70,8 +88,7 @@ export const tests = [
     async run(t) {
       await ready(t);
       await t.game('newGame', { mode: 'daily' });
-      await t.waitIdle(8000);
-      await t.waitFrames(2);
+      await dailySettled(t);
       const s = (await t.state()).game, g = await strip(t);
       t.equal(s.daily.date, today(), 'today\'s Daily');
       t.expect(g.day && g.title === "Today's Springs", `the strip opens on Today's Springs (${g.text})`);
@@ -79,7 +96,9 @@ export const tests = [
       for (const p of g.parts.slice(0, -1)) t.equal(p.state, 'whole', `${p.text}: whole`);
       t.expect(g.parts.at(-1).state !== 'cut', `where to start is whole or left out, never cut (${g.parts.at(-1).state})`);
       for (const f of s.featured) t.expect(!g.text.includes(f.word), 'no hidden word in the strip');
-      t.expect(Math.abs((await plainRack(t)) - g.rack) <= 0.5, 'the rack does not move for it');
+      const plain = await plainRack(t);
+      const at = `${t.vp.width}x${t.vp.height} 100% ${s.daily.date}`;
+      t.expect(Math.abs(plain - g.rack) <= 0.5, `${at}: the rack does not move for it (banner ${g.rack.toFixed(2)} px, plain ${plain.toFixed(2)} px, diff ${(plain - g.rack).toFixed(2)} px)`);
       await t.page.waitForFunction(() => /^Today's Springs: /.test(document.querySelector('#live').textContent), null, { timeout: 3000 });
       t.expect(/clear plaque letters; so does covering a Bathhouse Row square\./.test(await t.page.textContent('#live')), 'the live region reads it');
       const cr = await t.contrastReport({ selector: '#preview', min: 4.5, largeMin: 3 });
@@ -117,15 +136,15 @@ export const tests = [
           await t.page.setViewportSize({ width, height });
           for (const date of ['2026-01-04', '2026-07-04', '2026-11-25']) {
             await t.game('newGame', { mode: 'daily', date });
-            await t.waitIdle(8000);
-            await t.waitFrames(2);
+            await dailySettled(t);
             const g = await strip(t), at = `${width}x${height} ${text * 100}% ${date}`;
             t.expect(g.day, `${at}: banner`);
             t.equal(g.parts.filter((p) => p.state === 'cut').map((p) => p.text).join(' | '), '', `${at}: nothing cut`);
             t.equal(g.parts[0].state, 'whole', `${at}: the title shows`);
             t.expect(g.parts.filter((p) => p.cls === 'extra').every((p) => p.state === 'whole'), `${at}: every kind shows`);
             if (text === 1 && width >= 360 && height > 520) t.equal(g.parts.find((p) => p.cls === 'said').state, 'whole', `${at}: and what such a word does`);
-            t.expect(Math.abs((await plainRack(t)) - g.rack) <= 0.5, `${at}: the rack does not move`);
+            const plain = await plainRack(t);
+            t.expect(Math.abs(plain - g.rack) <= 0.5, `${at}: the rack does not move (banner ${g.rack.toFixed(2)} px, plain ${plain.toFixed(2)} px, diff ${(plain - g.rack).toFixed(2)} px)`);
           }
         }
       }
