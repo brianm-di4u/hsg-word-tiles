@@ -625,9 +625,9 @@ export function destroy(opts = {}) {
 }
 
 export function setTheme(theme) {
-  if (!B3.renderer) return;
   const dark = theme === 'dark';
   B3.dark = dark;
+  if (!B3.renderer) return;
   // the counter: native resolution (1600x1066, no 2048x1365 upscale) mapped 1:1 (default ClampToEdgeWrapping, zero
   // 2x2 MirroredRepeatWrapping seams) with subtle peripheral vignetting framing the board (W2-S5-09, wf-3 §2.2).
   const hasCounter = art.ready('counter');

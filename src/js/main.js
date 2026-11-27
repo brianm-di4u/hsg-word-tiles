@@ -124,8 +124,8 @@ function applySettings() {
   }
   R.invalidateBoardTexture();
   R.invalidateTileCache();
-  if (B3.B3.on) B3.setTheme(dark() ? 'dark' : 'light');
-  else B3.invalidateFaceCache();
+  B3.setTheme(dark() ? 'dark' : 'light');
+  if (!B3.B3.on) B3.invalidateFaceCache();
   layout();
   if (!red && G.scene === 'game' && G.s) startSteam();
 }

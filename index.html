@@ -9873,9 +9873,9 @@ function destroy(opts = {}) {
 }
 
 function setTheme(theme) {
-  if (!B3.renderer) return;
   const dark = theme === 'dark';
   B3.dark = dark;
+  if (!B3.renderer) return;
   const hasCounter = art.ready('counter');
   B3.counterArt = hasCounter;
   const cImg = hasCounter ? art.img('counter') : null;
@@ -11172,8 +11172,8 @@ function applySettings() {
   }
   R.invalidateBoardTexture();
   R.invalidateTileCache();
-  if (B3.B3.on) B3.setTheme(dark() ? 'dark' : 'light');
-  else B3.invalidateFaceCache();
+  B3.setTheme(dark() ? 'dark' : 'light');
+  if (!B3.B3.on) B3.invalidateFaceCache();
   layout();
   if (!red && G.scene === 'game' && G.s) startSteam();
 }
