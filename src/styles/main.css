@@ -704,6 +704,9 @@ body.theme-dark .tier-pts { color: #14121F; }
 /* settings */
 .setrow { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 0; border-bottom: 1px dotted var(--line); flex-wrap: wrap; }
 .setrow > span { font-weight: 700; }
+.set-diff { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 12px; border-bottom: 1px dotted var(--line); }
+.set-diff h2 { margin: 6px 0 2px; }
+.set-diff h2 small { font: 400 0.8rem var(--f-ui); color: var(--muted); margin-left: 6px; }
 .set-range { display: flex; align-items: center; gap: 8px; max-width: 100%; margin-left: auto; }
 .setrow input[type="range"] {
   appearance: none; -webkit-appearance: none; width: clamp(116px, 33vw, 200px); min-width: 0; flex: 1 1 auto;

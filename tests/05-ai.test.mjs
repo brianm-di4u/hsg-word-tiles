@@ -1,8 +1,9 @@
-// AI: every action from every level is legal over many games; Easy plays only common words or words of
-// two or three letters; Medium only common words or words of up to four letters; the leave table is sane.
+// AI: every action from every level is legal over many games; Beginner, Easy and Medium play only everyday words (and the
+// everyday two-letter words), Beginner and Easy never a word over four letters, Medium a longer one only onto a premium square
+// and never on two turns running (owner, 2026-11-27, OQ-POST-REL-01); the leave table is sane.
 import { ctx } from './lib.mjs';
 import { createGame, apply } from '../src/js/engine.js';
-import { chooseAction, leaveValue, LEVELS, EASY_TWO } from '../src/js/ai.js';
+import { chooseAction, leaveValue, LEVELS, EASY_TWO, usesPremium } from '../src/js/ai.js';
 import { isCommon } from '../src/js/dict.js';
 
 async function games(levels, n, from, onPlay) {
@@ -33,20 +34,33 @@ export const tests = [
       n += await games(['medium', 'hard'], 80, 200);
       n += await games(['hard', 'easy'], 80, 300);
       n += await games(['easy', 'medium', 'hard', 'hard'], 60, 400);
+      n += await games(['beginner', 'expert'], 40, 450);
       t.log(`${n} AI actions, all legal`);
     },
   },
   {
-    name: 'Easy and Medium keep to their vocabularies', node: true,
+    name: 'Beginner, Easy and Medium keep to their vocabularies and word lengths', node: true,
     async run(t) {
-      let easy = 0, medium = 0;
-      await games(['easy', 'medium'], 60, 500, (level, e, c) => {
-        for (const w of e.words) {
-          if (level === 'easy') { easy++; if (!(w.w.length === 2 ? EASY_TWO.has(w.w) : (w.w.length < LEVELS.easy.freeLen || isCommon(c.dict, w.w)))) t.fail(`Easy played ${w.w}`); }
-          if (level === 'medium') { medium++; if (!(w.w.length < LEVELS.medium.freeLen || isCommon(c.dict, w.w))) t.fail(`Medium played ${w.w}`); }
+      const n = { beginner: 0, easy: 0, medium: 0 };
+      let mediumLong = 0, mediumPlays = 0;
+      const lastLong = {};
+      const everyday = (w, c) => (w.length === 2 ? EASY_TWO.has(w) : isCommon(c.dict, w));
+      await games(['beginner', 'easy', 'medium'], 40, 500, (level, e, c) => {
+        if (!(level in n)) return;
+        const longest = Math.max(...e.words.map((w) => w.w.length));
+        for (const w of e.words) { n[level]++; if (!everyday(w.w, c)) t.fail(`${level} played ${w.w}`); }
+        if (level !== 'medium') { if (longest > 4) t.fail(`${level} played ${e.words.map((w) => w.w).join(',')} (over four letters)`); return; }
+        mediumPlays++;
+        const long = longest > LEVELS.medium.wordMax;
+        if (long) {
+          mediumLong++;
+          if (lastLong[e.p]) t.fail(`Medium went past four letters on two turns running (${e.words[0].w})`);
+          if (!usesPremium({ tiles: e.tiles, bonus: e.words.reduce((a, w) => a + w.bonus, 0) })) t.fail(`Medium played ${e.words[0].w} without a premium square`);
         }
+        lastLong[e.p] = long;
       });
-      t.log(`${easy} Easy words, ${medium} Medium words checked`);
+      t.expect(mediumLong > 0 && mediumLong < mediumPlays / 4, `Medium goes long now and then, not often (${mediumLong} of ${mediumPlays} plays)`);
+      t.log(`${n.beginner} Beginner, ${n.easy} Easy and ${n.medium} Medium words checked; Medium went long on ${mediumLong} of ${mediumPlays} plays`);
     },
   },
   {

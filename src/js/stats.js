@@ -58,7 +58,8 @@ export function nextStreak(d, date) {
   return { streak: 1, rest, rested: false };
 }
 
-export const oppKey = (p) => `${p.persona}:${p.level || 'medium'}`;
+// A game counts at the easiest level the opponent played in it: `lvlLow` is set when its difficulty is changed during the game.
+export const oppKey = (p) => `${p.persona}:${p.lvlLow || p.level || 'medium'}`;
 
 // Folds one finished game into the record. Returns { stats, pb } where pb says what the game set:
 // { first, score, play, word, held, heldBy } (first five booleans, heldBy is 'hint' | 'unlimited' | null).

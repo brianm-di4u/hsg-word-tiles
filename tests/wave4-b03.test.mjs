@@ -132,7 +132,7 @@ export const tests = [
   },
   // ---------- W1-S4-08 ----------
   {
-    name: 'W1-S4-08 Hard counts the open Bathhouse Row squares a play puts in reach, for less than a Steam square; Hollis\'s spring habit does not (Node)',
+    name: 'W1-S4-08 Expert (the old Hard, OQ-POST-REL-01) counts the open Bathhouse Row squares a play puts in reach, for less than a Steam square; Hollis\'s spring habit does not (Node)',
     node: true,
     async run(t) {
       const c = await ctx();
@@ -147,16 +147,16 @@ export const tests = [
       // Hollis (any level): the same habit whether the Row square beside his play is open or covered, as before
       const move = { tiles, words: ['AX'] }, s = (b) => ({ board: b, bag: ['E'], players: [{}, {}] });
       t.equal(styleBonus(STYLES.hollis, move, [], s(board), c.lex), styleBonus(STYLES.hollis, move, [], s(taken), c.lex), 'Hollis has no Row habit');
-      // the choice itself: positions from seeded games, Hard with the Row's weight against Hard without it
+      // the choice itself: positions from seeded games, Expert with the Row's weight against Expert without it
       const was = DEFENSE.row, row = (b, ts) => (openedPremium(b, ts, 1) - openedPremium(b, ts, 0));
       let positions = 0, differ = 0, fewer = 0, more = 0, medium = 0, daily = 0;
       try {
         for (let seed = 1; seed <= 30; seed++) {
-          const seats = [{ kind: 'ai', level: 'hard' }, { kind: 'ai', level: 'hard' }];
+          const seats = [{ kind: 'ai', level: 'expert' }, { kind: 'ai', level: 'expert' }];
           const g = createGame({ mode: 'play', seats, seed }, c.lex);
           for (let k = 0; !g.over && k < 24; k++) {
             const ask = (w, level, st) => { DEFENSE.row = w; return chooseAction(c.dict, c.lex, JSON.parse(json(st)), { level, exact: true }).action; };
-            const on = ask(was, 'hard', g), off = ask(0, 'hard', g);
+            const on = ask(was, 'expert', g), off = ask(0, 'expert', g);
             positions++;
             if (json(on) !== json(off)) {
               differ++;
@@ -166,7 +166,7 @@ export const tests = [
             if (k < 8) {
               if (json(ask(5, 'medium', g)) !== json(ask(0, 'medium', g))) medium++;
               const solo = { ...g, players: [g.players[g.cur]], cur: 0, mode: 'daily', daily: { date: '2026-01-01', turns: 5 } };
-              if (json(ask(5, 'hard', solo)) !== json(ask(0, 'hard', solo))) daily++;
+              if (json(ask(5, 'expert', solo)) !== json(ask(0, 'expert', solo))) daily++;
             }
             DEFENSE.row = was;
             apply(g, off, c);
@@ -174,8 +174,8 @@ export const tests = [
         }
       } finally { DEFENSE.row = was; }
       t.log(`${differ} of ${positions} positions answered another way: ${fewer} open fewer Row squares, ${more} more`);
-      t.expect(fewer >= 5 && more === 0, `Hard gives up fewer Row squares (${fewer} of ${differ} other choices) and never more (${more})`);
-      t.equal(medium + daily, 0, 'Medium, and Hard alone at the Daily, play as they did');
+      t.expect(fewer >= 5 && more === 0, `Expert gives up fewer Row squares (${fewer} of ${differ} other choices) and never more (${more})`);
+      t.equal(medium + daily, 0, 'Medium, and Expert alone at the Daily, play as they did');
     },
   },
   {

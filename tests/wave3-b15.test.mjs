@@ -65,12 +65,14 @@ export const tests = [
       const c = await ctx();
       const seats = (level) => [{ kind: 'ai', level }, { kind: 'ai', level }];
       const pick = (level, shown, by, feat) => { const s = casino(c, seats(level), shown, by); if (feat) s.featured = feat; return chooseAction(c.dict, c.lex, s, { level, exact: true }); };
-      for (const level of ['easy', 'medium', 'hard']) {
+      for (const level of ['beginner', 'easy', 'medium', 'hard', 'expert']) {
         const none = json(pick(level, [0], null, []).action);
         for (const n of [1, 2, 3]) t.equal(json(pick(level, first('CASINO', n)).action), none, `${level}: ${n} letters of CASINO change nothing`);
         t.equal(json(pick(level, first('CASINO', 5), 1).action), none, `${level}: nor does a claimed plaque`);
         const read = pick(level, first('CASINO', 4));
-        if (level === 'easy') { t.equal(json(read.action), none, 'Easy does not chase a readable one either'); continue; }
+        if (level === 'easy' || level === 'beginner') { t.equal(json(read.action), none, `${level} does not chase a readable one either`); continue; }
+        // OQ-POST-REL-01: CASINO is over Medium's four letters, so the plaque can only matter when its long-word rule lets the play through
+        if (level === 'medium' && read.move.featured !== FEATURED_BONUS) { t.equal(json(read.action), none, 'medium: the six-letter CASINO stays out of reach here, so the plaque changes nothing'); continue; }
         t.equal(read.move.featured, FEATURED_BONUS, `${level}: the readable plaque is worth +30 in the search`);
         const s = casino(c, seats(level), first('CASINO', 4));
         const r = apply(s, read.action, c);

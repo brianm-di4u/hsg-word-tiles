@@ -3,7 +3,7 @@ import { ctx, root } from './lib.mjs';
 import { createGame, evaluate, apply } from '../src/js/engine.js';
 import fs from 'node:fs';
 import path from 'node:path';
-import { chooseAction, LEVELS, DEFENSE, tiedWithBest } from '../src/js/ai.js';
+import { chooseAction, LEVELS, DEFENSE, tiedWithBest, LONG_GAIN } from '../src/js/ai.js';
 import { seedState } from '../src/js/rng.js';
 import { dailyPar } from '../src/js/par.js';
 import { validSavedGame } from '../src/js/storage.js';
@@ -174,7 +174,8 @@ export const tests = [
       t.expect(doc.includes('from the ' + pct(lo) + '–' + pct(hi) + ' percentile of its 30 best plays'), 'the document gives Easy\'s window as ' + pct(lo) + '–' + pct(hi));
       t.expect(doc.includes('`slip` ' + LEVELS.easy.slip), 'and its slip of ' + LEVELS.easy.slip);
       t.expect(doc.includes('`pick: [' + lo + ', ' + hi + ']`'), 'and the setting itself');
-      t.expect(doc.includes('every word of 2–' + (LEVELS.medium.freeLen - 1) + ' letters (`freeLen` ' + LEVELS.medium.freeLen + ')'), 'and Medium\'s short words');
+      t.expect(doc.includes('every word of 2–' + (LEVELS.hard.freeLen - 1) + ' letters (`freeLen` ' + LEVELS.hard.freeLen + ')'), 'and Hard short words');
+      t.expect(doc.includes('`wordMax` ' + LEVELS.easy.wordMax) && doc.includes('`LONG_GAIN` (' + LONG_GAIN + ')'), 'and the word-length limits (OQ-POST-REL-01)');
       t.expect(doc.includes('− ' + DEFENSE.boiling + ' per empty Boiling Spring (and ' + DEFENSE.steam + ' per empty Steam square)'), 'and Hard\'s penalties');
       t.expect(!/50th–80th/.test(doc), 'and nothing says 50th-80th any more');
     },

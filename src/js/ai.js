@@ -14,18 +14,70 @@ export const EASY_TWO = new Set([
   'ME', 'MY', 'NO', 'OF', 'OK', 'ON', 'OR', 'SO', 'TO', 'UP', 'US', 'WE',
 ]);
 
-// Easy plays everyday SCOWL common words (3–6 letters) plus the 25 everyday two-letter words in EASY_TWO,
-// ignores the rack it keeps, and slips ~60% of turns into the 5th–35th percentile of its 30 best plays
-// (W1-S3-01, OQ-WF7-W2-01 Option B: recalibrated to an approachable ~250 pt beginner tier). Medium knows common words plus every
-// word of 2–4 letters (`freeLen` 5), always plays its best, and weighs its leave. Hard knows the whole
-// dictionary, weighs the rack it keeps, the Boiling Springs it opens and the endgame. Medium and Hard play the
-// best play by their own measure (equity); plays within TIE_WINDOW equity points of it count as tied and the
-// choice among them is drawn from state.rng.ai.
+// The difficulty ladder (owner direction, 2026-11-27: Easy never plays a word over four letters; Medium only reaches past four letters
+// for a premium square, and never on two turns running; Hard lifts those limits; Beginner and Expert widen the ladder).
+//   Beginner: everyday words of 2–4 letters (and the 25 everyday two-letter words in EASY_TWO), one of its weaker plays.
+//   Easy:     the same words, a fair play, now and then its best.
+//   Medium:   everyday words; four letters at most, except a longer word onto a word multiplier or a Bathhouse Row square that beats
+//             its best short play by LONG_GAIN, never two turns running; its best play by score and rack about half the time.
+//   Hard:     no length limit: common words plus every word of 2–4 letters, its best play, a balanced rack (about the old Medium).
+//   Expert:   the whole dictionary; also guards the Boiling Springs and looks one reply ahead at the end (the old Hard).
+// Measured with tools/dev/ladder.mjs (24 games a pairing, 2026-11-27), points a turn: Beginner 7.8, Easy 11.6, Medium 18.7, Hard 33.1,
+// Expert 36.9 (before: Easy 19.3, Medium 32.8, Hard 37.0); each level beat the one below it in 75-100% of games.
+// `wordMax` caps every word a play makes (main and cross words); `longFor` lets Medium past it as described. Plays within TIE_WINDOW
+// equity points of the best count as tied and the choice among them is drawn from state.rng.ai.
 export const LEVELS = {
-  easy: { commonOnly: true, freeLen: 0, allowTwo: EASY_TWO, maxLen: 6, leave: 0, bonusWeight: 0, pick: [0.05, 0.35], slip: 0.60, budget: 900000 },
-  medium: { commonOnly: true, freeLen: 5, leave: 0.65, bonusWeight: 0.5, budget: 900000 },  // freeLen was 4 before wave 2; leave tuned 0.5->0.65 for S3-02 (Ruling 12)
-  hard: { leave: 1, defense: true, endgame: true, bonusWeight: 1, budget: 1500000 },
+  beginner: { commonOnly: true, freeLen: 0, allowTwo: EASY_TWO, maxLen: 4, wordMax: 4, leave: 0, bonusWeight: 0, pick: [0.6, 1], slip: 1, budget: 900000 },
+  easy: { commonOnly: true, freeLen: 0, allowTwo: EASY_TWO, maxLen: 4, wordMax: 4, leave: 0, bonusWeight: 0, pick: [0.15, 0.55], slip: 0.85, budget: 900000 },
+  medium: { commonOnly: true, freeLen: 0, allowTwo: EASY_TWO, wordMax: 4, longFor: 'premium', leave: 0.65, bonusWeight: 0.5, ease: [0.55, 2, 10], budget: 900000 },
+  hard: { commonOnly: true, freeLen: 5, leave: 1, bonusWeight: 1, budget: 1500000 },
+  expert: { leave: 1, defense: true, endgame: true, bonusWeight: 1, budget: 1500000 },
 };
+// Easiest first: the order of the Difficulty choice, and what "the easiest level a game was played on" compares.
+export const LEVEL_ORDER = ['beginner', 'easy', 'medium', 'hard', 'expert'];
+export const easierLevel = (a, b) => (LEVEL_ORDER.indexOf(b) >= 0 && (LEVEL_ORDER.indexOf(a) < 0 || LEVEL_ORDER.indexOf(b) < LEVEL_ORDER.indexOf(a)) ? b : a);
+
+// The Daily Soak's par keeps the tiers it was set with before the ladder changed, so the par of every date stays what it was:
+// Hollis at the old Medium (common words plus every word of 2–4 letters) and Julian at the old Hard (now Expert).
+export const PAR_LEVELS = {
+  parMedium: { commonOnly: true, freeLen: 5, leave: 0.65, bonusWeight: 0.5, budget: 900000 },
+  parHard: LEVELS.expert,
+};
+
+// The longest word a play makes.
+const longest = (m) => m.words.reduce((a, w) => Math.max(a, w.length), 0);
+
+// Whether the seat's own last play made a word over `max` letters: from the log, or from `longLast` when the state is a slim copy.
+export function longLastTurn(s, k, max) {
+  const p = s.players[k];
+  if (p && typeof p.longLast === 'boolean') return p.longLast;
+  for (let n = (s.log || []).length - 1; n >= 0; n--) {
+    const e = s.log[n];
+    if (e.p !== k || e.kind === 'end') continue;
+    return e.kind === 'play' && e.words.some((w) => w.w.length > max);
+  }
+  return false;
+}
+
+// Whether a play puts a new tile on a premium square worth reaching for: a word multiplier (Steam or Boiling Spring) or a
+// Bathhouse Row square under a Hot Springs word. Letter multipliers don't count: with them Medium went past four letters on
+// 35-42% of its plays.
+export const usesPremium = (m) => m.tiles.some((t) => {
+  const q = SQUARE[t.i];
+  return q === 's' || q === 'b' || (q === 'B' && m.bonus > 0);
+});
+// A longer play has to beat Medium's best short play by this many points to be worth it.
+export const LONG_GAIN = 10;
+
+// The plays a level may make: words of `wordMax` letters at most, except (Medium) a longer play that uses a premium square and
+// beats its best short play by LONG_GAIN points, when its own last play stayed within the limit.
+export function withinLevel(L, moves, s) {
+  if (!L.wordMax) return moves;
+  const short = moves.filter((m) => longest(m) <= L.wordMax);
+  if (L.longFor !== 'premium' || longLastTurn(s, s.cur, L.wordMax)) return short;
+  const bar = (short.length ? Math.max(...short.map((m) => m.score)) : 0) + LONG_GAIN;
+  return moves.filter((m) => longest(m) <= L.wordMax || (usesPremium(m) && m.score >= bar));
+}
 
 // Each character's own trade habit, laid orthogonally over whatever difficulty level they play at (W1-S5-02):
 //   - Opal Vance (bath attendant): favours baths/springs bonus words and Bathhouse Row squares.
@@ -129,7 +181,7 @@ const rackScore = (rack) => rack.reduce((a, l) => a + (l === '?' ? 0 : VALUE[l])
 // state: engine state (only board, players, cur, bag, featured and rng.ai are read; rng.ai advances).
 export function chooseAction(dict, lex, s, opts = {}) {
   const p = s.players[s.cur];
-  const L = LEVELS[opts.level || p.level || 'medium'];
+  const L = LEVELS[opts.level || p.level || 'medium'] || PAR_LEVELS[opts.level] || LEVELS.medium;
   const style = STYLES[opts.persona || p.persona] || null;
   // W1-S3-02, W6-S3-02 / CD-WF1-06: only a Featured Spring anyone can work out from its plaque is worth +30 in the search (and not to
   // Easy, which plays without Hot Springs foresight); a hidden one is earned only by chance, when a word is played on its own merit.
@@ -137,7 +189,8 @@ export function chooseAction(dict, lex, s, opts = {}) {
   // W1-S2-08: scale Hot Springs lexicon-bonus foresight by tier (Easy 0%, Medium 50%, Hard 100%).
   const bonusWeight = L.bonusWeight ?? 1;
   const known = bonusWeight > 0 && opts.plaques !== false ? deducibleFeatured(s.featured, lex) : [];
-  const { moves, nodes } = generateMoves(dict, s.board, p.rack, { lex, featured: known, bonusWeight, commonOnly: L.commonOnly, freeLen: L.freeLen, allowTwo: L.allowTwo, maxLen: L.maxLen, budget: L.budget });
+  const gen = generateMoves(dict, s.board, p.rack, { lex, featured: known, bonusWeight, commonOnly: L.commonOnly, freeLen: L.freeLen, allowTwo: L.allowTwo, maxLen: L.maxLen, budget: L.budget });
+  const moves = withinLevel(L, gen.moves, s), nodes = gen.nodes;
   const bag = s.bag.length;
   if (!moves.length) return { action: fallback(p.rack, bag), nodes };
 
@@ -192,7 +245,12 @@ export function chooseAction(dict, lex, s, opts = {}) {
 
   // varied: a seeded draw among the plays tied with the best (the Daily's par passes exact: true, so a date keeps one answer)
   const near = opts.exact ? [] : tiedWithBest(ranked);
-  const pick = near.length > 1 ? near[Math.floor(rand(s, 'ai') * near.length)] : ranked[0];
+  let pick = near.length > 1 ? near[Math.floor(rand(s, 'ai') * near.length)] : ranked[0];
+  // ease [p, from, to] (Medium): on a share p of its turns it settles for one of its from-th to to-th best plays instead
+  if (L.ease && !opts.exact && ranked.length > L.ease[1] - 1 && rand(s, 'ai') < L.ease[0]) {
+    const lo = L.ease[1] - 1, hi = Math.min(ranked.length, L.ease[2]);
+    pick = ranked[lo + Math.floor(rand(s, 'ai') * (hi - lo))];
+  }
   // a weak play with a bad rack: swap instead (Medium and Hard; never on the final turn of a Daily Soak)
   if (bag >= RACK && (dailyTurns == null || dailyTurns > 1) && (pick.m.evalScore ?? pick.m.score) < 8 && leaveValue(p.rack) < -6) return { action: fallback(p.rack, bag), nodes };
   return { action: { type: 'play', tiles: pick.m.tiles }, nodes, move: pick.m };
@@ -218,11 +276,11 @@ export function isTeachableWord(dict, lex, word) {
   return !!(lex && lex.byForm && lex.byForm.has(word)) || isCommon(dict, word) || (word.length === 2 && EASY_TWO.has(word));
 }
 
-// Easy/Medium games, Pass-and-Play, and Daily Soak coach with everyday and Hot Springs vocabulary (W1-S3-06 / CD-WF1-05);
-// games against a Hard AI opponent coach with the full dictionary.
+// Beginner/Easy/Medium games, Pass-and-Play, and Daily Soak coach with everyday and Hot Springs vocabulary (W1-S3-06 / CD-WF1-05);
+// games against a Hard or Expert computer opponent coach with the full dictionary.
 export function casualAudience(s) {
   if (!s || !Array.isArray(s.players)) return true;
-  return !s.players.some((p) => p && p.kind !== 'human' && p.level === 'hard');
+  return !s.players.some((p) => p && p.kind !== 'human' && (p.level === 'hard' || p.level === 'expert'));
 }
 
 // The hint: up to three different plays for a human seat, best Medium-strength play first (score plus half the value of the tiles kept),
